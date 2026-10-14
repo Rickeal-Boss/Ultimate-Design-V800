@@ -1,0 +1,431 @@
+{
+  "sourceImage": "C:\\Users\\WB\\Desktop\\huawei-zunjie-v800-design-black-2x.jpg",
+  "zonesDir": "C:\\Users\\16896\\WorkBuddy\\2026-10-14-13-25-01\\brake-v800\\.img2threejs\\details",
+  "detailInventory": {
+    "scanMethod": "grid-3x3+cross-image",
+    "targetMinDetails": 16,
+    "details": [
+      {
+        "id": "d-headlamp-star",
+        "kind": "emissive",
+        "description": "竖向圆角矩形大灯总成：纵向白 LED 灯带×2 + 星点发光纹理 + 钻石切割反射面",
+        "region": {
+          "x": 0.04,
+          "y": 0.52,
+          "width": 0.1,
+          "height": 0.2,
+          "units": "normalized"
+        },
+        "scale": "identity",
+        "affects": "silhouette",
+        "mapsTo": {
+          "type": "component.localFeatures",
+          "ref": "headlamp-l"
+        },
+        "evidenceRef": "C:\\Users\\16896\\WorkBuddy\\2026-10-14-13-25-01\\brake-v800\\.img2threejs\\details\\zone-r0c0.png",
+        "confidence": 0.95
+      },
+      {
+        "id": "d-maextro-mark",
+        "kind": "decal",
+        "description": "镀铬上沿饰条内嵌 MAEXTRO 发光字标（宽间距白光）",
+        "region": {
+          "x": 0.05,
+          "y": 0.42,
+          "width": 0.22,
+          "height": 0.07,
+          "units": "normalized"
+        },
+        "scale": "identity",
+        "affects": "silhouette",
+        "mapsTo": {
+          "type": "component.localFeatures",
+          "ref": "front-end"
+        },
+        "evidenceRef": "C:\\Users\\16896\\WorkBuddy\\2026-10-14-13-25-01\\brake-v800\\.img2threejs\\details\\zone-r0c1.png",
+        "confidence": 0.95
+      },
+      {
+        "id": "d-shield-logo",
+        "kind": "decal",
+        "description": "前脸中央盾形镀铬竖标",
+        "region": {
+          "x": 0.03,
+          "y": 0.6,
+          "width": 0.04,
+          "height": 0.14,
+          "units": "normalized"
+        },
+        "scale": "identity",
+        "affects": "silhouette",
+        "mapsTo": {
+          "type": "component.localFeatures",
+          "ref": "front-end"
+        },
+        "evidenceRef": "C:\\Users\\16896\\WorkBuddy\\2026-10-14-13-25-01\\brake-v800\\.img2threejs\\details\\zone-r0c2.png",
+        "confidence": 0.9
+      },
+      {
+        "id": "d-tail-lantern",
+        "kind": "emissive",
+        "description": "纵向宫灯尾灯：镀铬圆角外框 + 红点阵 + 羽翼发光纹理",
+        "region": {
+          "x": 0.93,
+          "y": 0.3,
+          "width": 0.05,
+          "height": 0.3,
+          "units": "normalized"
+        },
+        "scale": "identity",
+        "affects": "silhouette",
+        "mapsTo": {
+          "type": "component.localFeatures",
+          "ref": "taillamp-l"
+        },
+        "evidenceRef": "C:\\Users\\16896\\WorkBuddy\\2026-10-14-13-25-01\\brake-v800\\.img2threejs\\details\\zone-r1c0.png",
+        "confidence": 0.95
+      },
+      {
+        "id": "d-doorhandles",
+        "kind": "linework",
+        "description": "通长横贯式镀铬门把手（前门+滑门，门缝分断）",
+        "region": {
+          "x": 0.38,
+          "y": 0.55,
+          "width": 0.28,
+          "height": 0.05,
+          "units": "normalized"
+        },
+        "scale": "identity",
+        "affects": "silhouette",
+        "mapsTo": {
+          "type": "component.localFeatures",
+          "ref": "handle-front-l"
+        },
+        "evidenceRef": "C:\\Users\\16896\\WorkBuddy\\2026-10-14-13-25-01\\brake-v800\\.img2threejs\\details\\zone-r1c1.png",
+        "confidence": 0.9
+      },
+      {
+        "id": "d-dpillar",
+        "kind": "linework",
+        "description": "D 柱银白宽包边包裹角窗（悬浮车顶视觉）",
+        "region": {
+          "x": 0.72,
+          "y": 0.18,
+          "width": 0.16,
+          "height": 0.42,
+          "units": "normalized"
+        },
+        "scale": "identity",
+        "affects": "silhouette",
+        "mapsTo": {
+          "type": "component.localOverrides",
+          "ref": "dpillar-silver"
+        },
+        "evidenceRef": "C:\\Users\\16896\\WorkBuddy\\2026-10-14-13-25-01\\brake-v800\\.img2threejs\\details\\zone-r1c2.png",
+        "confidence": 0.95
+      },
+      {
+        "id": "d-wheel-disc",
+        "kind": "contour",
+        "description": "大饼式密辐轮圈（约12粗银辐 + 抛光面 + 悬浮中心标）",
+        "region": {
+          "x": 0.24,
+          "y": 0.62,
+          "width": 0.13,
+          "height": 0.3,
+          "units": "normalized"
+        },
+        "scale": "identity",
+        "affects": "silhouette",
+        "mapsTo": {
+          "type": "component.localFeatures",
+          "ref": "wheel-fl"
+        },
+        "evidenceRef": "C:\\Users\\16896\\WorkBuddy\\2026-10-14-13-25-01\\brake-v800\\.img2threejs\\details\\zone-r2c0.png",
+        "confidence": 0.95
+      },
+      {
+        "id": "d-chrome-belt",
+        "kind": "linework",
+        "description": "贯穿腰线镀铬亮条（翼子板→尾灯）",
+        "region": {
+          "x": 0.02,
+          "y": 0.66,
+          "width": 0.95,
+          "height": 0.03,
+          "units": "normalized"
+        },
+        "scale": "identity",
+        "affects": "silhouette",
+        "mapsTo": {
+          "type": "component.localFeatures",
+          "ref": "chrome-belt-l"
+        },
+        "evidenceRef": "C:\\Users\\16896\\WorkBuddy\\2026-10-14-13-25-01\\brake-v800\\.img2threejs\\details\\zone-r2c1.png",
+        "confidence": 0.9
+      },
+      {
+        "id": "d-fender-badge",
+        "kind": "decal",
+        "description": "翼子板小镀铬标识（前门缝前）",
+        "region": {
+          "x": 0.3,
+          "y": 0.58,
+          "width": 0.04,
+          "height": 0.04,
+          "units": "normalized"
+        },
+        "scale": "micro",
+        "affects": "detail",
+        "mapsTo": {
+          "type": "component.localFeatures",
+          "ref": "chrome-belt-l"
+        },
+        "evidenceRef": "C:\\Users\\16896\\WorkBuddy\\2026-10-14-13-25-01\\brake-v800\\.img2threejs\\details\\zone-r2c2.png",
+        "confidence": 0.75
+      },
+      {
+        "id": "d-fuel-door",
+        "kind": "linework",
+        "description": "油箱盖圆角矩形片（后翼子板）",
+        "region": {
+          "x": 0.78,
+          "y": 0.5,
+          "width": 0.05,
+          "height": 0.09,
+          "units": "normalized"
+        },
+        "scale": "micro",
+        "affects": "detail",
+        "mapsTo": {
+          "type": "component.localFeatures",
+          "ref": "chrome-belt-l"
+        },
+        "evidenceRef": "C:\\Users\\16896\\WorkBuddy\\2026-10-14-13-25-01\\brake-v800\\.img2threejs\\details\\zone-r0c0.png",
+        "confidence": 0.8
+      },
+      {
+        "id": "d-roof-rail",
+        "kind": "linework",
+        "description": "车顶银色行李架纵轨（前后贯穿）",
+        "region": {
+          "x": 0.3,
+          "y": 0.1,
+          "width": 0.55,
+          "height": 0.04,
+          "units": "normalized"
+        },
+        "scale": "meso",
+        "affects": "detail",
+        "mapsTo": {
+          "type": "component.localFeatures",
+          "ref": "roof-rails"
+        },
+        "evidenceRef": "C:\\Users\\16896\\WorkBuddy\\2026-10-14-13-25-01\\brake-v800\\.img2threejs\\details\\zone-r0c1.png",
+        "confidence": 0.9
+      },
+      {
+        "id": "d-lidar-wedge",
+        "kind": "decal",
+        "description": "车顶前部激光雷达楔形块",
+        "region": {
+          "x": 0.32,
+          "y": 0.06,
+          "width": 0.06,
+          "height": 0.05,
+          "units": "normalized"
+        },
+        "scale": "identity",
+        "affects": "silhouette",
+        "mapsTo": {
+          "type": "component.localFeatures",
+          "ref": "roof-rails"
+        },
+        "evidenceRef": "C:\\Users\\16896\\WorkBuddy\\2026-10-14-13-25-01\\brake-v800\\.img2threejs\\details\\zone-r0c2.png",
+        "confidence": 0.9
+      },
+      {
+        "id": "d-rocker-step",
+        "kind": "linework",
+        "description": "下裙黑色护板台阶（车门下沿内凹）",
+        "region": {
+          "x": 0.25,
+          "y": 0.85,
+          "width": 0.55,
+          "height": 0.08,
+          "units": "normalized"
+        },
+        "scale": "meso",
+        "affects": "detail",
+        "mapsTo": {
+          "type": "component.localFeatures",
+          "ref": "body-lower"
+        },
+        "evidenceRef": "C:\\Users\\16896\\WorkBuddy\\2026-10-14-13-25-01\\brake-v800\\.img2threejs\\details\\zone-r1c0.png",
+        "confidence": 0.85
+      },
+      {
+        "id": "d-third-brakelight",
+        "kind": "emissive",
+        "description": "高位宽刹车灯（尾门上沿）",
+        "region": {
+          "x": 0.8,
+          "y": 0.14,
+          "width": 0.12,
+          "height": 0.03,
+          "units": "normalized"
+        },
+        "scale": "micro",
+        "affects": "detail",
+        "mapsTo": {
+          "type": "component.localFeatures",
+          "ref": "tailgate"
+        },
+        "evidenceRef": "C:\\Users\\16896\\WorkBuddy\\2026-10-14-13-25-01\\brake-v800\\.img2threejs\\details\\zone-r1c1.png",
+        "confidence": 0.8
+      },
+      {
+        "id": "d-steering-dualtone",
+        "kind": "stitch",
+        "description": "三辐双色方向盘：红棕车削木外圈 + 米白真皮内圈 + 银色盾标",
+        "region": {
+          "x": 0.0,
+          "y": 0.0,
+          "width": 0.0,
+          "height": 0.0,
+          "units": "normalized"
+        },
+        "scale": "identity",
+        "affects": "silhouette",
+        "mapsTo": {
+          "type": "component.localFeatures",
+          "ref": "steering"
+        },
+        "evidenceRef": "",
+        "confidence": 0.95
+      },
+      {
+        "id": "d-triscreen",
+        "kind": "stitch",
+        "description": "贯穿三联屏（仪表-中控-副驾，暗色 HarmonyOS UI）",
+        "region": {
+          "x": 0.0,
+          "y": 0.0,
+          "width": 0.0,
+          "height": 0.0,
+          "units": "normalized"
+        },
+        "scale": "identity",
+        "affects": "silhouette",
+        "mapsTo": {
+          "type": "component.localFeatures",
+          "ref": "tri-screen"
+        },
+        "evidenceRef": "",
+        "confidence": 0.95
+      },
+      {
+        "id": "d-starlight-headliner",
+        "kind": "stitch",
+        "description": "星空顶：深棕麂皮穿孔 + 数百星点白灯（大小不一）",
+        "region": {
+          "x": 0.0,
+          "y": 0.0,
+          "width": 0.0,
+          "height": 0.0,
+          "units": "normalized"
+        },
+        "scale": "identity",
+        "affects": "silhouette",
+        "mapsTo": {
+          "type": "component.localFeatures",
+          "ref": "headliner-front"
+        },
+        "evidenceRef": "",
+        "confidence": 0.95
+      },
+      {
+        "id": "d-quilted-seats",
+        "kind": "stitch",
+        "description": "后排菱格绗缝航空座椅×2（打孔中央 + 独立头枕压标 + 腿托）",
+        "region": {
+          "x": 0.0,
+          "y": 0.0,
+          "width": 0.0,
+          "height": 0.0,
+          "units": "normalized"
+        },
+        "scale": "identity",
+        "affects": "silhouette",
+        "mapsTo": {
+          "type": "component.localFeatures",
+          "ref": "seat-rear-l"
+        },
+        "evidenceRef": "",
+        "confidence": 0.95
+      },
+      {
+        "id": "d-curtain-pleats",
+        "kind": "stitch",
+        "description": "后窗帘米白竖褶（可收拢垂坠）",
+        "region": {
+          "x": 0.0,
+          "y": 0.0,
+          "width": 0.0,
+          "height": 0.0,
+          "units": "normalized"
+        },
+        "scale": "identity",
+        "affects": "silhouette",
+        "mapsTo": {
+          "type": "component.localFeatures",
+          "ref": "curtain-l"
+        },
+        "evidenceRef": "",
+        "confidence": 0.9
+      },
+      {
+        "id": "d-ambient-strip",
+        "kind": "stitch",
+        "description": "顶棚两侧纵向暖橙氛围灯带 + 门板圆形金属点阵音响罩",
+        "region": {
+          "x": 0.0,
+          "y": 0.0,
+          "width": 0.0,
+          "height": 0.0,
+          "units": "normalized"
+        },
+        "scale": "meso",
+        "affects": "detail",
+        "mapsTo": {
+          "type": "component.localFeatures",
+          "ref": "headliner-front"
+        },
+        "evidenceRef": "",
+        "confidence": 0.9
+      },
+      {
+        "id": "d-crystal-shift",
+        "kind": "stitch",
+        "description": "水晶换挡旋钮 + P 键 + 双镀铬圈杯架（木纹底座）",
+        "region": {
+          "x": 0.0,
+          "y": 0.0,
+          "width": 0.0,
+          "height": 0.0,
+          "units": "normalized"
+        },
+        "scale": "identity",
+        "affects": "silhouette",
+        "mapsTo": {
+          "type": "component.localFeatures",
+          "ref": "tunnel-front"
+        },
+        "evidenceRef": "",
+        "confidence": 0.9
+      }
+    ]
+  },
+  "authoringInstruction": "Open each zone crop under zonesDir and replace every detail stub's kind, description, scale, affects, mapsTo, and confidence with what is actually observed. Add more detail entries per zone if a single zone contains multiple distinct marks; do not leave stubs unfilled or unlinked (mapsTo must reference a real component.localFeatures or material.localOverrides entry)."
+}

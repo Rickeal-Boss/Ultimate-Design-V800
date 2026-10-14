@@ -12,9 +12,9 @@ import { CYCLE_VIEWS, CameraRig } from '../render/CameraRig';
 import type { CameraMode } from '../render/CameraRig';
 import { Postfx } from '../render/Postfx';
 import { createRenderer } from '../render/Renderer';
-import { Car } from '../render/scene/Car';
+import { createV800CarAdapter, type CarLike } from '../model/V800Adapter';
 import { Environment } from '../render/scene/Environment';
-import { Interior } from '../render/scene/Interior';
+
 import { Lighting } from '../render/scene/Lighting';
 import { Road } from '../render/scene/Road';
 import { Terrain } from '../render/scene/Terrain';
@@ -37,8 +37,7 @@ export class Game {
   private readonly env: Environment;
   private readonly lighting: Lighting;
   private readonly road: Road;
-  private readonly car: Car;
-  private readonly interior: Interior;
+  private readonly car: CarLike;
   private readonly fx: FxSystems;
   private readonly crashWorld: World;
   private readonly sfx = new Sfx();
@@ -82,10 +81,8 @@ export class Game {
     this.lighting = new Lighting(this.scene, quality, this.env.sunDirection);
     this.road = new Road(this.scene, this.renderer.capabilities.getMaxAnisotropy());
     new Terrain(this.scene);
-    this.car = new Car(quality.tier);
+    this.car = createV800CarAdapter();
     this.scene.add(this.car.root);
-    this.interior = new Interior();
-    this.car.body.add(this.interior.group);
     this.fx = new FxSystems(this.scene, quality.tier);
 
     this.postfx = new Postfx(this.renderer, this.scene, this.rig.camera, quality);
@@ -323,13 +320,12 @@ export class Game {
     this.road.update(this.time);
 
     // ---- 内饰仪表 ----
-    this.interior.updateCluster(
+    this.car.updateCluster(
       this.sm.phase === 'crashed' ? this.crashWorld.carSpeed * MS_TO_KMH : this.sm.speedKmh,
       this.sm.pedal.pedalForce,
       Math.abs(vehicle.accel) / 9.81,
       braking ? 'B' : 'D'
     );
-    this.interior.setSteer(0);
 
     // ---- 结算段自动机位：crash 2s → side 2s → orbit；stopped: side 2s → orbit ----
     if (this.sm.phase === 'stopped' || this.sm.phase === 'crashed') {

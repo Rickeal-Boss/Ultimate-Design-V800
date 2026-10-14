@@ -1,0 +1,14 @@
+{
+  "admitted": true,
+  "reasons": [],
+  "provenance": {
+    "viewpoint": "reference",
+    "sourcePath": "C:\\Users\\WB\\Desktop\\huawei-zunjie-v800-design-black-2x.jpg",
+    "width": 2525,
+    "height": 908,
+    "foregroundCoverage": 0.7472,
+    "largestComponentFraction": 0.9995,
+    "pHash": 18127534689506931888,
+    "duplicateOfHash": null
+  }
+}

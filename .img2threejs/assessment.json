@@ -1,0 +1,706 @@
+{
+  "targetName": "Zunjie V800 Luxury MPV",
+  "sourceImage": "C:/Users/WB/Desktop/huawei-zunjie-v800-design-black-2x.jpg",
+  "preSpecAssessment": {
+    "objectClass": {
+      "primaryType": "vehicle-automobile",
+      "primaryDomain": "object",
+      "formLanguage": [
+        "geometric",
+        "lofted-rounded-cuboid",
+        "formal-luxury-MPV"
+      ],
+      "structureKind": [
+        "rigid-shell",
+        "glazed-greenhouse",
+        "wheel-assembly",
+        "interior-cabin"
+      ],
+      "motionPotential": [
+        "wheels-spin",
+        "steering-minor",
+        "lamp-emissive-states",
+        "suspension-static"
+      ],
+      "materialFamilies": [
+        "metallic-paint-clearcoat",
+        "chrome",
+        "dark-glass",
+        "rubber",
+        "leather",
+        "wood-turned",
+        "fabric-curtain",
+        "carpet-plush",
+        "emissive-lamps",
+        "crystal"
+      ],
+      "notes": "5495×2006×1850mm 轴距3430；双色车身（金/黑两官方涂装）；四座舱；由里及外全复刻目标。"
+    },
+    "complexity": {
+      "tier": "ultra-complex",
+      "scores": {
+        "silhouetteComplexity": 2,
+        "componentCount": 3,
+        "hierarchyDepth": 3,
+        "repetitionDensity": 3,
+        "materialLayerCount": 3,
+        "localDetailDensity": 3,
+        "occlusionRisk": 2,
+        "actionReadinessNeed": 2
+      },
+      "estimatedCounts": {
+        "macroComponents": 6,
+        "mesoComponents": 18,
+        "microFeatureGroups": 14,
+        "materialLayers": 12,
+        "repetitionSystems": 5
+      },
+      "reasoning": [
+        "外观：lofted 圆角壳体 + 6 大宏观组件 + 18 中观子件（饰条/灯具/把手/轮圈等）",
+        "内饰：四座舱 8+ 组件（仪表台/三联屏/方向盘/中岛/航空座椅×2/星空顶/窗帘/门板）",
+        "重复系统：星点阵、4×轮圈辐组、缝线网格、出风口栅格、点阵音响罩",
+        "材质 12 族跨外观内饰；大量 emissive 局部细节（宫灯/星点/字标/氛围灯）"
+      ]
+    },
+    "specDepthDecision": {
+      "requiredDepth": "ultra-complex",
+      "minimumComponentLevels": [
+        "macro",
+        "meso",
+        "micro"
+      ],
+      "needsRepetitionSystems": true,
+      "needsMaterialLocalOverrides": true,
+      "needsMultipleReviewViews": true,
+      "needsActionReadyHierarchy": true,
+      "rationale": "Choose simple/moderate/complex/ultra-complex from observed structure, not from a hardcoded domain."
+    },
+    "unknownsToResolveBeforeImplementation": [],
+    "detailInventory": {
+      "scanMethod": "component-zones",
+      "targetMinDetails": 16,
+      "note": "Enumerate every identity-defining small detail before authoring the spec. Each detail must map to a component.localFeatures entry or material.localOverrides entry, never prose only. Use forge/stage1_intake/build_detail_inventory.py to scan zones.",
+      "details": [
+        {
+          "id": "d-headlamp-star",
+          "kind": "emissive",
+          "description": "竖向圆角矩形大灯总成：纵向白 LED 灯带×2 + 星点发光纹理 + 钻石切割反射面",
+          "region": {
+            "x": 0.04,
+            "y": 0.52,
+            "width": 0.1,
+            "height": 0.2,
+            "units": "normalized"
+          },
+          "scale": "identity",
+          "affects": "silhouette",
+          "mapsTo": {
+            "type": "component.localFeatures",
+            "ref": "headlamp-l"
+          },
+          "evidenceRef": "C:\\Users\\16896\\WorkBuddy\\2026-10-14-13-25-01\\brake-v800\\.img2threejs\\details\\zone-r0c0.png",
+          "confidence": 0.95
+        },
+        {
+          "id": "d-maextro-mark",
+          "kind": "decal",
+          "description": "镀铬上沿饰条内嵌 MAEXTRO 发光字标（宽间距白光）",
+          "region": {
+            "x": 0.05,
+            "y": 0.42,
+            "width": 0.22,
+            "height": 0.07,
+            "units": "normalized"
+          },
+          "scale": "identity",
+          "affects": "silhouette",
+          "mapsTo": {
+            "type": "component.localFeatures",
+            "ref": "front-end"
+          },
+          "evidenceRef": "C:\\Users\\16896\\WorkBuddy\\2026-10-14-13-25-01\\brake-v800\\.img2threejs\\details\\zone-r0c1.png",
+          "confidence": 0.95
+        },
+        {
+          "id": "d-shield-logo",
+          "kind": "decal",
+          "description": "前脸中央盾形镀铬竖标",
+          "region": {
+            "x": 0.03,
+            "y": 0.6,
+            "width": 0.04,
+            "height": 0.14,
+            "units": "normalized"
+          },
+          "scale": "identity",
+          "affects": "silhouette",
+          "mapsTo": {
+            "type": "component.localFeatures",
+            "ref": "front-end"
+          },
+          "evidenceRef": "C:\\Users\\16896\\WorkBuddy\\2026-10-14-13-25-01\\brake-v800\\.img2threejs\\details\\zone-r0c2.png",
+          "confidence": 0.9
+        },
+        {
+          "id": "d-tail-lantern",
+          "kind": "emissive",
+          "description": "纵向宫灯尾灯：镀铬圆角外框 + 红点阵 + 羽翼发光纹理",
+          "region": {
+            "x": 0.93,
+            "y": 0.3,
+            "width": 0.05,
+            "height": 0.3,
+            "units": "normalized"
+          },
+          "scale": "identity",
+          "affects": "silhouette",
+          "mapsTo": {
+            "type": "component.localFeatures",
+            "ref": "taillamp-l"
+          },
+          "evidenceRef": "C:\\Users\\16896\\WorkBuddy\\2026-10-14-13-25-01\\brake-v800\\.img2threejs\\details\\zone-r1c0.png",
+          "confidence": 0.95
+        },
+        {
+          "id": "d-doorhandles",
+          "kind": "linework",
+          "description": "通长横贯式镀铬门把手（前门+滑门，门缝分断）",
+          "region": {
+            "x": 0.38,
+            "y": 0.55,
+            "width": 0.28,
+            "height": 0.05,
+            "units": "normalized"
+          },
+          "scale": "identity",
+          "affects": "silhouette",
+          "mapsTo": {
+            "type": "component.localFeatures",
+            "ref": "handle-front-l"
+          },
+          "evidenceRef": "C:\\Users\\16896\\WorkBuddy\\2026-10-14-13-25-01\\brake-v800\\.img2threejs\\details\\zone-r1c1.png",
+          "confidence": 0.9
+        },
+        {
+          "id": "d-dpillar",
+          "kind": "linework",
+          "description": "D 柱银白宽包边包裹角窗（悬浮车顶视觉）",
+          "region": {
+            "x": 0.72,
+            "y": 0.18,
+            "width": 0.16,
+            "height": 0.42,
+            "units": "normalized"
+          },
+          "scale": "identity",
+          "affects": "silhouette",
+          "mapsTo": {
+            "type": "component.localOverrides",
+            "ref": "dpillar-silver"
+          },
+          "evidenceRef": "C:\\Users\\16896\\WorkBuddy\\2026-10-14-13-25-01\\brake-v800\\.img2threejs\\details\\zone-r1c2.png",
+          "confidence": 0.95
+        },
+        {
+          "id": "d-wheel-disc",
+          "kind": "contour",
+          "description": "大饼式密辐轮圈（约12粗银辐 + 抛光面 + 悬浮中心标）",
+          "region": {
+            "x": 0.24,
+            "y": 0.62,
+            "width": 0.13,
+            "height": 0.3,
+            "units": "normalized"
+          },
+          "scale": "identity",
+          "affects": "silhouette",
+          "mapsTo": {
+            "type": "component.localFeatures",
+            "ref": "wheel-fl"
+          },
+          "evidenceRef": "C:\\Users\\16896\\WorkBuddy\\2026-10-14-13-25-01\\brake-v800\\.img2threejs\\details\\zone-r2c0.png",
+          "confidence": 0.95
+        },
+        {
+          "id": "d-chrome-belt",
+          "kind": "linework",
+          "description": "贯穿腰线镀铬亮条（翼子板→尾灯）",
+          "region": {
+            "x": 0.02,
+            "y": 0.66,
+            "width": 0.95,
+            "height": 0.03,
+            "units": "normalized"
+          },
+          "scale": "identity",
+          "affects": "silhouette",
+          "mapsTo": {
+            "type": "component.localFeatures",
+            "ref": "chrome-belt-l"
+          },
+          "evidenceRef": "C:\\Users\\16896\\WorkBuddy\\2026-10-14-13-25-01\\brake-v800\\.img2threejs\\details\\zone-r2c1.png",
+          "confidence": 0.9
+        },
+        {
+          "id": "d-fender-badge",
+          "kind": "decal",
+          "description": "翼子板小镀铬标识（前门缝前）",
+          "region": {
+            "x": 0.3,
+            "y": 0.58,
+            "width": 0.04,
+            "height": 0.04,
+            "units": "normalized"
+          },
+          "scale": "micro",
+          "affects": "detail",
+          "mapsTo": {
+            "type": "component.localFeatures",
+            "ref": "chrome-belt-l"
+          },
+          "evidenceRef": "C:\\Users\\16896\\WorkBuddy\\2026-10-14-13-25-01\\brake-v800\\.img2threejs\\details\\zone-r2c2.png",
+          "confidence": 0.75
+        },
+        {
+          "id": "d-fuel-door",
+          "kind": "linework",
+          "description": "油箱盖圆角矩形片（后翼子板）",
+          "region": {
+            "x": 0.78,
+            "y": 0.5,
+            "width": 0.05,
+            "height": 0.09,
+            "units": "normalized"
+          },
+          "scale": "micro",
+          "affects": "detail",
+          "mapsTo": {
+            "type": "component.localFeatures",
+            "ref": "chrome-belt-l"
+          },
+          "evidenceRef": "C:\\Users\\16896\\WorkBuddy\\2026-10-14-13-25-01\\brake-v800\\.img2threejs\\details\\zone-r0c0.png",
+          "confidence": 0.8
+        },
+        {
+          "id": "d-roof-rail",
+          "kind": "linework",
+          "description": "车顶银色行李架纵轨（前后贯穿）",
+          "region": {
+            "x": 0.3,
+            "y": 0.1,
+            "width": 0.55,
+            "height": 0.04,
+            "units": "normalized"
+          },
+          "scale": "meso",
+          "affects": "detail",
+          "mapsTo": {
+            "type": "component.localFeatures",
+            "ref": "roof-rails"
+          },
+          "evidenceRef": "C:\\Users\\16896\\WorkBuddy\\2026-10-14-13-25-01\\brake-v800\\.img2threejs\\details\\zone-r0c1.png",
+          "confidence": 0.9
+        },
+        {
+          "id": "d-lidar-wedge",
+          "kind": "decal",
+          "description": "车顶前部激光雷达楔形块",
+          "region": {
+            "x": 0.32,
+            "y": 0.06,
+            "width": 0.06,
+            "height": 0.05,
+            "units": "normalized"
+          },
+          "scale": "identity",
+          "affects": "silhouette",
+          "mapsTo": {
+            "type": "component.localFeatures",
+            "ref": "roof-rails"
+          },
+          "evidenceRef": "C:\\Users\\16896\\WorkBuddy\\2026-10-14-13-25-01\\brake-v800\\.img2threejs\\details\\zone-r0c2.png",
+          "confidence": 0.9
+        },
+        {
+          "id": "d-rocker-step",
+          "kind": "linework",
+          "description": "下裙黑色护板台阶（车门下沿内凹）",
+          "region": {
+            "x": 0.25,
+            "y": 0.85,
+            "width": 0.55,
+            "height": 0.08,
+            "units": "normalized"
+          },
+          "scale": "meso",
+          "affects": "detail",
+          "mapsTo": {
+            "type": "component.localFeatures",
+            "ref": "body-lower"
+          },
+          "evidenceRef": "C:\\Users\\16896\\WorkBuddy\\2026-10-14-13-25-01\\brake-v800\\.img2threejs\\details\\zone-r1c0.png",
+          "confidence": 0.85
+        },
+        {
+          "id": "d-third-brakelight",
+          "kind": "emissive",
+          "description": "高位宽刹车灯（尾门上沿）",
+          "region": {
+            "x": 0.8,
+            "y": 0.14,
+            "width": 0.12,
+            "height": 0.03,
+            "units": "normalized"
+          },
+          "scale": "micro",
+          "affects": "detail",
+          "mapsTo": {
+            "type": "component.localFeatures",
+            "ref": "tailgate"
+          },
+          "evidenceRef": "C:\\Users\\16896\\WorkBuddy\\2026-10-14-13-25-01\\brake-v800\\.img2threejs\\details\\zone-r1c1.png",
+          "confidence": 0.8
+        },
+        {
+          "id": "d-steering-dualtone",
+          "kind": "stitch",
+          "description": "三辐双色方向盘：红棕车削木外圈 + 米白真皮内圈 + 银色盾标",
+          "region": {
+            "x": 0.0,
+            "y": 0.0,
+            "width": 0.0,
+            "height": 0.0,
+            "units": "normalized"
+          },
+          "scale": "identity",
+          "affects": "silhouette",
+          "mapsTo": {
+            "type": "component.localFeatures",
+            "ref": "steering"
+          },
+          "evidenceRef": "",
+          "confidence": 0.95
+        },
+        {
+          "id": "d-triscreen",
+          "kind": "stitch",
+          "description": "贯穿三联屏（仪表-中控-副驾，暗色 HarmonyOS UI）",
+          "region": {
+            "x": 0.0,
+            "y": 0.0,
+            "width": 0.0,
+            "height": 0.0,
+            "units": "normalized"
+          },
+          "scale": "identity",
+          "affects": "silhouette",
+          "mapsTo": {
+            "type": "component.localFeatures",
+            "ref": "tri-screen"
+          },
+          "evidenceRef": "",
+          "confidence": 0.95
+        },
+        {
+          "id": "d-starlight-headliner",
+          "kind": "stitch",
+          "description": "星空顶：深棕麂皮穿孔 + 数百星点白灯（大小不一）",
+          "region": {
+            "x": 0.0,
+            "y": 0.0,
+            "width": 0.0,
+            "height": 0.0,
+            "units": "normalized"
+          },
+          "scale": "identity",
+          "affects": "silhouette",
+          "mapsTo": {
+            "type": "component.localFeatures",
+            "ref": "headliner-front"
+          },
+          "evidenceRef": "",
+          "confidence": 0.95
+        },
+        {
+          "id": "d-quilted-seats",
+          "kind": "stitch",
+          "description": "后排菱格绗缝航空座椅×2（打孔中央 + 独立头枕压标 + 腿托）",
+          "region": {
+            "x": 0.0,
+            "y": 0.0,
+            "width": 0.0,
+            "height": 0.0,
+            "units": "normalized"
+          },
+          "scale": "identity",
+          "affects": "silhouette",
+          "mapsTo": {
+            "type": "component.localFeatures",
+            "ref": "seat-rear-l"
+          },
+          "evidenceRef": "",
+          "confidence": 0.95
+        },
+        {
+          "id": "d-curtain-pleats",
+          "kind": "stitch",
+          "description": "后窗帘米白竖褶（可收拢垂坠）",
+          "region": {
+            "x": 0.0,
+            "y": 0.0,
+            "width": 0.0,
+            "height": 0.0,
+            "units": "normalized"
+          },
+          "scale": "identity",
+          "affects": "silhouette",
+          "mapsTo": {
+            "type": "component.localFeatures",
+            "ref": "curtain-l"
+          },
+          "evidenceRef": "",
+          "confidence": 0.9
+        },
+        {
+          "id": "d-ambient-strip",
+          "kind": "stitch",
+          "description": "顶棚两侧纵向暖橙氛围灯带 + 门板圆形金属点阵音响罩",
+          "region": {
+            "x": 0.0,
+            "y": 0.0,
+            "width": 0.0,
+            "height": 0.0,
+            "units": "normalized"
+          },
+          "scale": "meso",
+          "affects": "detail",
+          "mapsTo": {
+            "type": "component.localFeatures",
+            "ref": "headliner-front"
+          },
+          "evidenceRef": "",
+          "confidence": 0.9
+        },
+        {
+          "id": "d-crystal-shift",
+          "kind": "stitch",
+          "description": "水晶换挡旋钮 + P 键 + 双镀铬圈杯架（木纹底座）",
+          "region": {
+            "x": 0.0,
+            "y": 0.0,
+            "width": 0.0,
+            "height": 0.0,
+            "units": "normalized"
+          },
+          "scale": "identity",
+          "affects": "silhouette",
+          "mapsTo": {
+            "type": "component.localFeatures",
+            "ref": "tunnel-front"
+          },
+          "evidenceRef": "",
+          "confidence": 0.9
+        }
+      ]
+    },
+    "anatomy": {
+      "applies": false,
+      "styleHeads": 0.0,
+      "proportions": {
+        "headUnit": 0.0,
+        "torso": 0.0,
+        "legs": 0.0,
+        "shoulderWidth": 0.0,
+        "hipWidth": 0.0
+      },
+      "pose": {
+        "type": "unassessed",
+        "jointAngles": {}
+      },
+      "faceLandmarks": {
+        "eyeLine": 0.0,
+        "eyeSpacing": 0.0,
+        "noseBase": 0.0,
+        "mouthLine": 0.0,
+        "hairline": 0.0
+      },
+      "features": [],
+      "confidence": 0.0,
+      "note": "Only meaningful when objectClass.primaryDomain is character or hybrid. Set applies=true and fill from forge/stage1_intake/extract_landmarks.py. See grimoire/character/reconstruction.md and grimoire/character/likeness_maximization.md."
+    },
+    "sourceImage": "C:/Users/WB/Desktop/huawei-zunjie-v800-design-black-2x.jpg"
+  },
+  "qualityContract": {
+    "qualityBar": "ultra-complex",
+    "definitionOfDone": [
+      "The rendered model matches the reference silhouette, primary proportions, visible component hierarchy, material response, and most recognizable local features for the selected fidelity tier."
+    ],
+    "minimumSpecDepth": {
+      "macroComponents": 5,
+      "mesoComponents": 16,
+      "microFeatureGroups": 8,
+      "materialLayers": 4,
+      "repetitionSystems": 2,
+      "reviewViewpoints": 5
+    },
+    "featureGroups": [
+      {
+        "id": "overall-silhouette",
+        "name": "Overall silhouette and proportions",
+        "required": true,
+        "qualityCriteria": [
+          "Bounding shape, dominant curves, negative spaces, and scale relationships are explicitly described."
+        ],
+        "evidenceRefs": [
+          "full-object"
+        ],
+        "failureModes": [
+          "model reads as a generic placeholder instead of the reference object",
+          "major proportions are guessed without evidence"
+        ]
+      },
+      {
+        "id": "primary-structure",
+        "name": "Primary structure and hierarchy",
+        "required": true,
+        "qualityCriteria": [
+          "Major parts, joints, seams, contact points, and parent-child relationships are named before code generation."
+        ],
+        "evidenceRefs": [
+          "full-object"
+        ],
+        "failureModes": [
+          "large visible parts are merged into one mesh",
+          "component hierarchy is too shallow for the observed complexity"
+        ]
+      },
+      {
+        "id": "attachment-joint-correctness",
+        "name": "Attachment and joint correctness",
+        "required": true,
+        "qualityCriteria": [
+          "Every visible child appendage, branch, limb, handle, connector, tube, cable, horn, wing, leg, or hinged part has an attachment contract with parent socket, localStart/localEnd, contact type, embed/overlap, and gap tolerance."
+        ],
+        "evidenceRefs": [
+          "full-object"
+        ],
+        "failureModes": [
+          "child part root floats away from the parent",
+          "branch/limb/tube is centered in space instead of pivoting from its root",
+          "parent-child transform mixes world and local coordinates"
+        ]
+      },
+      {
+        "id": "surface-material-response",
+        "name": "Surface material response",
+        "required": true,
+        "qualityCriteria": [
+          "Albedo zones, roughness, normal/bump/displacement intent, cavity dirt, edge wear, and local overrides are specified where visible.",
+          "Important materials define independent albedo, roughness, height/normal, and AO responses instead of reusing one texture for unrelated PBR channels.",
+          "Surface response is decomposed into macro, meso, and micro frequency bands with scale and amplitude tied to object scale."
+        ],
+        "evidenceRefs": [
+          "full-object"
+        ],
+        "failureModes": [
+          "surface looks like flat plastic",
+          "local material variation is missing or not tied to image evidence"
+        ]
+      },
+      {
+        "id": "reference-lookdev",
+        "name": "Reference color, material, and lighting response",
+        "required": true,
+        "qualityCriteria": [
+          "Material-pass names the reference-derived albedo palette, roughness variation, tactile normal/bump/displacement response, and local masks.",
+          "When a source image is available, run reference PBR extraction and require confidence >= 0.7 before treating maps as implementation-ready.",
+          "Lighting-pass names key/fill/rim or environment light, exposure, tone mapping, background, and contact shadow behavior.",
+          "Neutral, grazing-angle, and reference-matched renders prove that surface relief survives relighting and is not painted into albedo."
+        ],
+        "evidenceRefs": [
+          "full-object"
+        ],
+        "failureModes": [
+          "model has acceptable shape but reads as flat shaded or plastic",
+          "colors are a generic average instead of reference-observed local color zones",
+          "lighting is evenly ambient and cannot reproduce the source value range"
+        ]
+      }
+    ],
+    "visualDeltaChecks": [
+      "silhouette and negative-space delta",
+      "component hierarchy depth delta",
+      "repetition density and distribution delta",
+      "material albedo/roughness/normal response delta",
+      "local feature placement and scale delta"
+    ],
+    "antiShallowSpecRules": [
+      "Do not proceed to code if qualityContract.qualityBar is unassessed.",
+      "Do not proceed to code if the spec only contains a root component for a moderate or complex object.",
+      "Do not proceed to code if required featureGroups are not represented by componentTree, materials, or repetitionSystems.",
+      "Do not proceed to code if visible local features are described only in prose and not attached to components/materials/evidenceRefs.",
+      "Do not proceed past structural-pass if attached child parts lack attachment.parentSocket, localStart, localEnd, embedDepth/overlap, and gapTolerance.",
+      "Do not pass material look-dev when albedo is reused as roughness, height, normal, or AO.",
+      "Do not pass material look-dev without macro, meso, and micro surface frequency bands for close-up materials.",
+      "Do not pass reference-fidelity material look-dev from a source image without usable referencePbr maps or an explicit documented limitation.",
+      "Do not patch a spec with extracted PBR maps when extraction confidence is below the target threshold unless the user explicitly accepts lower fidelity.",
+      "Do not place adjacent separate-geometry parts below 0.02 world-unit seam overlap (source: grimoire/build/geometry_patterns.md).",
+      "Do not satisfy raised or recessed relief, fasteners, or grip structure with a map alone when the feature affects form; use geometry or displacement (source: grimoire/build/geometry_patterns.md)."
+    ],
+    "intendedUse": "real-time browser game vehicle (hero exterior + full interior cabin, free-view from any angle incl. driver-seat view)",
+    "finishStyle": "luxury-MPV, dual-tone paint, clearcoat metallic, dense emissive lamp details",
+    "targetPlatforms": [
+      "desktop-browser-60fps",
+      "mobile-45fps"
+    ],
+    "triangleBudget": {
+      "total": 120000,
+      "exterior": 70000,
+      "interior": 45000
+    },
+    "drawCallBudgetDelta": 40,
+    "fidelityTargets": {
+      "silhouette": 0.9,
+      "identityFeatures": 0.9,
+      "materialResponse": 0.85,
+      "interiorDetail": 0.85
+    },
+    "colorMaterialRecipe": {
+      "paintDualTone": {
+        "upperChampagneGold": "#C9A86B",
+        "lowerDeepBrown": "#221A14",
+        "blackVariant": "#0E0E12"
+      },
+      "chrome": "#E8E9EC",
+      "glass": "#101418",
+      "interiorLeather": "#A05A2C",
+      "ivory": "#E8E0D0",
+      "wood": "#6B3418",
+      "carpet": "#8A5A30",
+      "headlinerSuede": "#3A2A20"
+    },
+    "reviewViews": [
+      "side-left",
+      "front-45-high",
+      "rear-45",
+      "front-face",
+      "cabin-driver",
+      "cabin-rear-starlight",
+      "rear-seats-close"
+    ]
+  },
+  "authoringInstruction": {
+    "emission": "src/model/createV800Model.ts (three r186 factory, Group hierarchy, deterministic seeds)",
+    "notes": "由里及外：内饰舱（含星空顶/窗帘/座椅）与外观壳体同 Group 树；外观件可按视角系统开合（cabin 视角隐藏 exterior 组由集成层处理，模型导出 includeExterior/includeInterior 开关）。"
+  },
+  "localSpecSearch": {
+    "collection": "core_3d",
+    "query": "Zunjie V800 Luxury MPV",
+    "index": {
+      "status": "rebuilt",
+      "reason": "missing",
+      "fingerprint": "06f0b2ece2935e441653f5c3533f91b3a4d6163f2aec4267559d7d8419bdd040"
+    },
+    "matches": []
+  }
+}
