@@ -70,9 +70,19 @@ export const BRAKE = {
   /** 再生制动：刹车滑条 b≤0.25 段纯电回收，线性至 -0.15g */
   regenSplitRatio: 0.25,
   regenMaxDecel: 0.15 * GRAVITY,
-  /** ABS 拟真：干地 μ0.95，机械制动减速度上限 μg = 9.31 m/s² */
-  absMu: 0.95,
-  absMaxDecel: 0.95 * GRAVITY,
+  /**
+   * ABS/抓地极限：μ1.10 与满踏板力 10.8 m/s² 语义对齐。
+   * 审查修复（P0-1 制动平衡反转）：原 μ0.95 低于满力对应 1.10g，
+   * 导致 b>0.862 后减速不再增长却持续升温——「踩得越狠反而越慢」。
+   * 现在钳制只代表真实抓地上限，深踩始终更快。
+   */
+  absMu: 1.1,
+  absMaxDecel: 1.1 * GRAVITY,
+  /** 深踩段回收退让起点：b 0.85→0.98 回收能力线性降至 75%（混动制动协调） */
+  regenFadeStart: 0.85,
+  regenFadeFloor: 0.75,
+  /** 热衰减：仅当机械制动需求 > 93% 抓地上限时才累积温度（不惩罚正确深踩） */
+  brakeHeatOnset: 0.93,
   /** 热衰减：连续全力刹车累积 brakeTemp，>1 时制动效率 ×0.85 */
   brakeTempThreshold: 1.0,
   brakeTempGain: 0.9,

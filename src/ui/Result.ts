@@ -195,14 +195,28 @@ export class Result {
       this.statsGrid.append(cell);
     }
 
-    // 本机最佳（仅成功计）
+    // 本机最佳（仅成功计）。localStorage 容错：Safari 无痕/禁用存储时静默降级不崩结算
+    const readBest = (): number => {
+      try {
+        return Number(window.localStorage.getItem(BEST_KEY) ?? 0);
+      } catch {
+        return 0;
+      }
+    };
+    const writeBest = (v: number): void => {
+      try {
+        window.localStorage.setItem(BEST_KEY, `${v}`);
+      } catch {
+        /* 存储不可用时忽略 */
+      }
+    };
     if (result.success) {
-      const prev = Number(localStorage.getItem(BEST_KEY) ?? 0);
-      if (result.score > prev) localStorage.setItem(BEST_KEY, `${result.score}`);
+      const prev = readBest();
+      if (result.score > prev) writeBest(result.score);
       const best = Math.max(prev, result.score);
       this.bestLabel.textContent = best > 0 ? `本机最佳 ${best} 分` : '';
     } else {
-      const best = Number(localStorage.getItem(BEST_KEY) ?? 0);
+      const best = readBest();
       this.bestLabel.textContent = best > 0 ? `本机最佳 ${best} 分` : '';
     }
 

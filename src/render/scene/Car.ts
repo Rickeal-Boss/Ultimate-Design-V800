@@ -104,7 +104,8 @@ export class Car {
   private headLevel = HEADLIGHT_ON;
   private snapT = 0;
   private barTime = Math.random() * 10;
-  private clock = new THREE.Clock();
+  /** 上一帧时刻（three r186 的 THREE.Clock 已废弃，改用 performance.now 差分） */
+  private lastFrameTime = performance.now();
   /** 轮标朝向计算复用向量（P4：避免每帧 4 次 Vector3 分配） */
   private tmpWorld = new THREE.Vector3();
 
@@ -391,7 +392,9 @@ export class Car {
 
   /** 悬浮轮标面向相机 + 全部 emissive 联动的逐帧推进 */
   update(camera: THREE.Camera): void {
-    const dt = Math.min(this.clock.getDelta(), 0.1);
+    const now = performance.now();
+    const dt = Math.min((now - this.lastFrameTime) / 1000, 0.1);
+    this.lastFrameTime = now;
 
     // 刹车灯：指数平滑 + brake_snap 闪红增益
     this.snapT = Math.max(0, this.snapT - dt * 2.6);

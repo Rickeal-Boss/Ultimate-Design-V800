@@ -74,11 +74,23 @@ export function motorForce(speed: number, throttle: number): number {
   return throttle * Math.min(FORCE_TORQUE_MAX, fPower);
 }
 
-/** 再生制动减速度 m/s²：b≤0.25 段纯电回收线性至 -0.15g，b>0.25 满回收混入机械制动 */
+/**
+ * 再生制动减速度 m/s²：b≤0.25 段纯电回收线性至 -0.15g，b>0.25 满回收混入机械制动。
+ * 深踩退让：b≥0.85 起回收能力线性降至 75%（混动制动协调逻辑——重刹段让机械踏板力主导，
+ * 保证「踩得越深越快」的单调性）。
+ */
 export function regenDecel(brake: number): number {
   if (brake <= 0) return 0;
   const ratio = Math.min(1, brake / BRAKE.regenSplitRatio);
-  return BRAKE.regenMaxDecel * ratio;
+  let fade = 1;
+  if (brake > BRAKE.regenFadeStart) {
+    const t = Math.min(
+      1,
+      (brake - BRAKE.regenFadeStart) / (0.98 - BRAKE.regenFadeStart)
+    );
+    fade = 1 - t * (1 - BRAKE.regenFadeFloor);
+  }
+  return BRAKE.regenMaxDecel * ratio * fade;
 }
 
 /** 单固定步长推进（dt = 1/120s）。返回本步是否越限速钳制。 */
@@ -95,10 +107,14 @@ export function stepVehicle(state: VehicleState, dt: number, input: VehicleInput
     state.mechDecelDemand = demand;
     // ABS 拟真：机械制动减速度 clamp 至 μg
     mechDecel = Math.min(demand, BRAKE.absMaxDecel);
-    // 热衰减：接近 ABS 上限的持续重刹累积温度
+    // 热衰减：仅在逼近抓地上限（>93% μg）时累积温度，不惩罚正常深踩
     const ratio = demand / BRAKE.absMaxDecel;
-    if (ratio > 0.8) {
-      state.brakeTemp = Math.min(1.5, state.brakeTemp + (ratio - 0.8) * BRAKE.brakeTempGain * dt);
+    if (ratio > BRAKE.brakeHeatOnset) {
+      state.brakeTemp = Math.min(
+        1.5,
+        state.brakeTemp +
+          (ratio - BRAKE.brakeHeatOnset) * BRAKE.brakeTempGain * dt
+      );
     } else if (ratio < 0.3) {
       state.brakeTemp = Math.max(0, state.brakeTemp - BRAKE.brakeTempCoolRate * dt);
     }

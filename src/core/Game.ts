@@ -51,6 +51,11 @@ export class Game {
   private readonly qualityGovernor: AdaptiveQuality;
 
   private time = 0;
+  /** 窗口事件句柄（dispose 时统一解绑，避免 HMR 泄漏） */
+  private readonly onResize = (): void => this.resize();
+  private readonly onOrientation = (): void => {
+    window.setTimeout(() => this.resize(), 250);
+  };
   private prevDistance = 0;
   private brakeFlash = 0;
   private pendingResult: { result: RunResult; delay: number } | null = null;
@@ -111,8 +116,8 @@ export class Game {
     });
     this.hud.cutInButton.addEventListener('click', () => this.engageBrake());
 
-    window.addEventListener('resize', () => this.resize());
-    window.addEventListener('orientationchange', () => window.setTimeout(() => this.resize(), 250));
+    window.addEventListener('resize', this.onResize);
+    window.addEventListener('orientationchange', this.onOrientation);
 
     this.loop = new Loop(
       {
@@ -418,6 +423,8 @@ export class Game {
   }
 
   dispose(): void {
+    window.removeEventListener('resize', this.onResize);
+    window.removeEventListener('orientationchange', this.onOrientation);
     this.loop.dispose();
     this.sfx.dispose();
     this.fx.dispose();

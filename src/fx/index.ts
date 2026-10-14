@@ -385,8 +385,9 @@ export class FxSystems {
   constructor(scene: THREE.Scene, tier: QualityTier) {
     if (tier === 'low') return; // low 档全部关闭
     const scale = tier === 'high' ? 1 : 0.5;
+    // 池容量按 200km/h 全力刹停标定：~171m / 0.8m 间隔 × 4 轮 ≈ 860 段，取 1200 留 1.4 倍余量
     this.smoke = new TireSmoke(Math.round(600 * scale));
-    this.skid = new SkidMarks(Math.round(512 * scale));
+    this.skid = new SkidMarks(Math.round(1200 * scale));
     this.sparks = new Sparks(Math.round(96 * scale));
     scene.add(this.smoke.object, this.skid.object, this.sparks.object);
   }
@@ -402,12 +403,15 @@ export class FxSystems {
       const [lx, lz] = WHEEL_LOCAL[w];
       this.tmp.set(lx, CONTACT_Y, lz).applyQuaternion(carRoot.quaternion).add(carRoot.position);
       if (this.skid && braking && brakeIntensity > 0.35 && speedMs > 2.5) {
-        // 每行驶 0.45m 铺一段痕
+        // 每行驶 0.8m 铺一段痕（单帧单轮最多 2 段，防掉帧瞬间冲掉池）
         this.skidTravel[w] += speedMs * dt;
-        if (this.skidTravel[w] >= 0.45) {
-          this.skidTravel[w] = 0;
+        let laid = 0;
+        while (this.skidTravel[w] >= 0.8 && laid < 2) {
+          this.skidTravel[w] -= 0.8;
+          laid++;
           this.skid.emit(this.tmp.x, this.tmp.z, headingY);
         }
+        if (laid > 0) this.skidTravel[w] = Math.min(this.skidTravel[w], 0.8);
       } else {
         this.skidTravel[w] = 0;
       }

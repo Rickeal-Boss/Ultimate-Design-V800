@@ -106,11 +106,12 @@ export function makePaintMaterial(color: number, lower = false): THREE.MeshPhysi
 
 /**
  * 玻璃材质按质量档分支：
- * - high/medium：MeshPhysicalMaterial transmission（真实折射，车内视角可看穿）
- * - low：transparent + opacity 降级（省一次透射 pass）
+ * - high：MeshPhysicalMaterial transmission（真实折射，车内视角可看穿）
+ * - medium/low：transparent + opacity 降级（省透射 pass；medium 承担移动端，
+ *   transmission 会使不透明场景整体重绘一遍、整帧 DC 近乎翻倍，故仅 high 保留）
  */
 export function makeGlassMaterial(tier: QualityTier = 'high'): THREE.MeshPhysicalMaterial {
-  if (tier === 'low') {
+  if (tier !== 'high') {
     return new THREE.MeshPhysicalMaterial({
       color: PALETTE.glass,
       ...MATERIAL.glassSimple,

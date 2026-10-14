@@ -55,6 +55,17 @@ export class Hud {
   private toastTimer = 0;
   private lastSpeedText = '';
   private lastTempText = '';
+  /** P4 性能：无门控的 textContent/style 写入会让浏览器做无效排版，
+   *  按「值未变则跳过」门控（静态相位/稳态时几乎零 DOM 写入） */
+  private textCache = new Map<HTMLElement, string>();
+  private lastForceHeight = '';
+
+  private setText(node: HTMLElement, text: string): void {
+    if (this.textCache.get(node) !== text) {
+      node.textContent = text;
+      this.textCache.set(node, text);
+    }
+  }
 
   constructor(callbacks: HudCallbacks = {}) {
     this.root = byId('hud');
@@ -132,14 +143,21 @@ export class Hud {
       this.speed.textContent = speedText;
       this.lastSpeedText = speedText;
     }
-    this.timer.textContent = `${data.brakeSeconds.toFixed(3)}s`;
-    this.distance.textContent = `${Math.max(0, Math.round(data.distanceToBarrier))}m`;
-    this.regen.textContent = `回收 ${Math.round(data.regenPowerKw)} kW`;
-    this.score.textContent =
-      data.braking && data.scorePreview > 0 ? `得分预览 ${data.scorePreview}` : '';
+    this.setText(this.timer, `${data.brakeSeconds.toFixed(3)}s`);
+    this.setText(this.distance, `${Math.max(0, Math.round(data.distanceToBarrier))}m`);
+    this.setText(this.regen, `回收 ${Math.round(data.regenPowerKw)} kW`);
+    this.setText(
+      this.score,
+      data.braking && data.scorePreview > 0 ? `得分预览 ${data.scorePreview}` : ''
+    );
     const ratio = Math.min(1, data.pedalForce / BRAKE.breakForceN);
-    this.forceFill.style.height = `calc(${ratio * 94}% - 2px)`;
-    this.forceValue.textContent = `${Math.round(data.pedalForce)} N`;
+    // 力条高度按 0.5% 步进量化（肉眼不可辨），进一步减少 style 写入
+    const height = `calc(${Math.round((ratio * 94) / 0.5) * 0.5}% - 2px)`;
+    if (height !== this.lastForceHeight) {
+      this.forceFill.style.height = height;
+      this.lastForceHeight = height;
+    }
+    this.setText(this.forceValue, `${Math.round(data.pedalForce)} N`);
     this.forceBox.classList.toggle('danger', ratio > 0.85);
     this.forceBox.classList.toggle('overheat', ratio > 0.7);
 
