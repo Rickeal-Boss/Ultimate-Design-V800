@@ -1,0 +1,21 @@
+{
+  "name": "brake-v800",
+  "private": true,
+  "version": "0.2.0",
+  "type": "module",
+  "description": "极限刹车挑战 · 尊界V800 —— Vite + TypeScript + three.js 程序化三维场景",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "cannon-es": "0.20.0",
+    "three": "0.186.1"
+  },
+  "devDependencies": {
+    "@types/three": "^0.186.0",
+    "typescript": "~5.9.2",
+    "vite": "^7.1.0"
+  }
+}
