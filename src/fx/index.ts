@@ -18,12 +18,19 @@ export interface FxModule {
   dispose(): void;
 }
 
-/** 轮位（车体局部坐标，与 Car.ts buildWheel 一致：±0.88 / 前 -1.55 后 1.88） */
+/**
+ * 轮位（root 系偏移，x/z 单位 m）。
+ * 与 createV800Model 的 wheel-fl/fr/rl/rr transform 对齐（x ±0.875 / z ±1.715，
+ * 来自 object-sculpt-spec.json 实测值）。旧值 ±0.88 / ∓1.55 ±1.88 是已删除的
+ * Car.ts buildWheel 口径，纵向偏差 16.5cm——旧 Car.ts 删除后此常量失去依据，特此更正。
+ * 注意 carRoot（root）自身 identity，body.rotation.y = π 只影响渲染朝向，
+ * fx 发射点直接加在 root.position 上，故此处写世界系偏移。
+ */
 const WHEEL_LOCAL: ReadonlyArray<readonly [number, number]> = [
-  [-0.88, -1.55],
-  [0.88, -1.55],
-  [-0.88, 1.88],
-  [0.88, 1.88]
+  [-0.875, -1.715],
+  [0.875, -1.715],
+  [-0.875, 1.715],
+  [0.875, 1.715]
 ];
 /** 轮胎接地高度（路面 y=0） */
 const CONTACT_Y = 0.02;

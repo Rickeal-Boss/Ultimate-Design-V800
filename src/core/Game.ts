@@ -355,7 +355,10 @@ export class Game {
     this.postfx.setFlash(this.brakeFlash);
 
     // ---- 音效（电机 / 风噪 / 胎啸 / 回收提示）----
-    this.sfx.updateEngine(this.sm.speedKmh, pedaling && !braking);
+    // 电子限速处动力主动退出（B-1）：电机音从「满载」降为滑行档，
+    // 与 G 表/俯仰归零保持一致，避免「钉速却全油门」的失真。
+    const atLimiter = vehicle.speed * MS_TO_KMH >= VEHICLE.maxSpeedKmh - 0.05;
+    this.sfx.updateEngine(this.sm.speedKmh, pedaling && !braking && !atLimiter);
     this.sfx.updateWind(vehicle.speed / (VEHICLE.maxSpeedKmh / MS_TO_KMH));
     this.sfx.updateSqueal(braking ? Math.min(1, this.sm.pedal.pedalForce / BRAKE.breakForceN) : 0, vehicle.speed);
     this.sfx.updateRegen(vehicle.regenPowerKw > 1);
@@ -428,6 +431,7 @@ export class Game {
     this.postfx.dispose();
     this.crashWorld.dispose();
     this.car.dispose();
+    this.result.destroy();
     this.renderer.dispose();
   }
 }

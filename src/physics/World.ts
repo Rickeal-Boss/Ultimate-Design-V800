@@ -5,8 +5,7 @@
  */
 import * as CANNON from 'cannon-es';
 import * as THREE from 'three';
-import { VEHICLE } from '../config/physics';
-import { TRACK } from '../config/physics';
+import { GRAVITY, TRACK, VEHICLE } from '../config/physics';
 
 export type CrashReason = 'barrier' | 'brake_snap';
 
@@ -67,7 +66,8 @@ export class World {
     this.active = true;
     this.time = 0;
 
-    const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -9.82, 0) });
+    // 审查修复（B-3）：重力引用统一常量（原硬编码 9.82 与 GRAVITY 9.81 不一致）
+    const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -GRAVITY, 0) });
     world.allowSleep = true;
     world.broadphase = new CANNON.SAPBroadphase(world);
     world.defaultContactMaterial.friction = 0.42;

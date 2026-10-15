@@ -548,6 +548,24 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
     wheelMat.needsUpdate = true;
   }
 
+  // ---- QA 钩子：#lightassert —— 灯光联动命中表 ----
+  // 审查建议（A-1）：灯组断链曾靠 if (mat) 静默吞掉，实机零报错但刹车灯不亮。
+  // URL hash 含 lightassert 时输出命中表，miss 即 console.error，断链从此可见。
+  if (typeof window !== 'undefined' && window.location.hash.includes('lightassert')) {
+    const rows = [
+      { 灯组: '刹车灯(尾灯/红带)', 期望: 'lamp-red', 命中: tailLamp?.id ?? '(无)' },
+      { 灯组: '头灯内芯', 期望: 'lamp-head', 命中: headLamp?.id ?? '(无)' },
+      { 灯组: 'MAEXTRO 字标', 期望: 'lamp-mark', 命中: markLamp?.id ?? '(无)' },
+      { 灯组: '星空顶', 期望: 'starlight', 命中: starMat ? 'starlight' : '(无)' },
+      { 灯组: '金色签名屏', 期望: 'lamp-gold', 命中: goldMat ? 'lamp-gold' : '(无)' },
+      { 灯组: '轮圈盘面', 期望: 'wheel-alloy', 命中: wheelMat ? 'wheel-alloy' : '(无)' }
+    ];
+    console.table(rows);
+    if (!tailLamp || !headLamp || !markLamp) {
+      console.error('[V800Adapter] #lightassert：灯组断链，见上表 (无) 行');
+    }
+  }
+
   const TAIL_BASE = 2.0;
   const HEAD_BASE = 2.5;
   let brakeLevel = TAIL_BASE;

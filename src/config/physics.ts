@@ -10,7 +10,7 @@
  * - Cd 0.32 为 MPV 假设值；滚阻 Crr 0.010 为常规铺装路经验值
  * - 制动力学参数（breakForceN/rampBase/rampGrowth/releaseRate/decelPerNewton）
  *   沿用原版逆向基准（reverse/reverse-game-logic.beautified.js 第 925-959 行 Pd 配置），
- *   语义不变：满踏板力 1612N → 机械减速度 10.8 m/s² ≈ 1.1g
+ *   语义不变：满踏板力 1612N → 机械减速度严格 = 抓地上限 1.1g（10.791 m/s²）
  */
 
 export const MS_TO_KMH = 3.6;
@@ -56,6 +56,9 @@ export const DRIVE = {
  * 断裂机制沿用原版：b≥0.98 过载爬升 (rampBase + 2×rampGrowth×holdTime)，
  * 达 breakForceN → brake_snap；松开时以 releaseRate 向目标值松弛。
  */
+/** ABS/抓地极限减速度 m/s²（μ1.10×g）——满踏板力语义上严格等于此值 */
+const ABS_MAX_DECEL = 1.1 * GRAVITY;
+
 export const BRAKE = {
   /** 达到此车速才允许切入刹车段（原版语义不变） */
   minSpeedKmh: 100,
@@ -63,8 +66,12 @@ export const BRAKE = {
   rampBase: 200,
   rampGrowth: 400,
   releaseRate: 900,
-  /** N → m/s² 换算：满力 1612N → 10.8 m/s² ≈ 1.1g（原版语义不变） */
-  decelPerNewton: 10.8 / 1612,
+  /**
+   * N → m/s² 换算：满踏板力 1612N 严格等于抓地上限 1.1g（10.791 m/s²）。
+   * 审查修复（B-4）：原写 10.8/1612 与 absMaxDecel 差 0.08%，满力会被 ABS
+   * 钳掉一丝；现与 absMaxDecel 同源（ABS_MAX_DECEL/1612），语义完全对齐。
+   */
+  decelPerNewton: ABS_MAX_DECEL / 1612,
   /** 判停速度 m/s */
   stopSpeed: 0.08,
   /** 再生制动：刹车滑条 b≤0.25 段纯电回收，线性至 -0.15g */
@@ -77,15 +84,19 @@ export const BRAKE = {
    * 现在钳制只代表真实抓地上限，深踩始终更快。
    */
   absMu: 1.1,
-  absMaxDecel: 1.1 * GRAVITY,
+  absMaxDecel: ABS_MAX_DECEL,
   /** 深踩段回收退让起点：b 0.85→0.98 回收能力线性降至 75%（混动制动协调） */
   regenFadeStart: 0.85,
   regenFadeFloor: 0.75,
-  /** 热衰减：仅当机械制动需求 > 93% 抓地上限时才累积温度（不惩罚正确深踩） */
-  brakeHeatOnset: 0.93,
-  /** 热衰减：连续全力刹车累积 brakeTemp，>1 时制动效率 ×0.85 */
+  /**
+   * 热衰减（审查修复 A-5/G-2，改为摩擦功物理）：
+   * 温度按 F_mech × v 的时间积分累积，与「是否超过抓地上限 93%」无关——
+   * 原 onset 门槛 + 0.063/s 速率上限使系统永不可触发（8s 满踩只攒 ~0.5）。
+   * 标定：一次 200→0 满刹摩擦功 ≈ 10.79×3300×143 ≈ 5.09 MJ → ΔT ≈ 0.60；
+   * 连续第二把满刹末累计 ≈1.2 → 触发 ×0.85 衰减（HUD 温度条同步变「制动衰减」）。
+   */
+  brakeTempGain: 0.6 / 5.09e6,
   brakeTempThreshold: 1.0,
-  brakeTempGain: 0.9,
   brakeTempEfficiency: 0.85,
   brakeTempCoolRate: 0.25
 } as const;

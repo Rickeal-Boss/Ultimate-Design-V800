@@ -140,6 +140,8 @@ export class Result {
   private chartCanvas: HTMLCanvasElement;
   private bestLabel: HTMLElement;
   private retryButton: HTMLButtonElement;
+  /** 窗口事件句柄（dispose 时统一解绑，避免 HMR 累积泄漏——审查 B-2） */
+  private readonly onResize = (): void => this.redraw();
 
   constructor(onRetry: () => void, onClick: () => void) {
     this.root = byId('result');
@@ -162,7 +164,12 @@ export class Result {
       onRetry();
     });
     this.root.addEventListener('pointerdown', (e) => e.stopPropagation());
-    window.addEventListener('resize', () => this.redraw());
+    window.addEventListener('resize', this.onResize);
+  }
+
+  /** 解绑窗口监听（Game.dispose 调用；HMR 时不累积泄漏） */
+  destroy(): void {
+    window.removeEventListener('resize', this.onResize);
   }
 
   show(result: RunResult): void {

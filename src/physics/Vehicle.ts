@@ -93,7 +93,11 @@ export function regenDecel(brake: number): number {
   return BRAKE.regenMaxDecel * ratio * fade;
 }
 
-/** 单固定步长推进（dt = 1/120s）。返回本步是否越限速钳制。 */
+/**
+ * 单固定步长推进（dt = 1/120s）。
+ * 电子限速在函数内消化：钳位生效时 state.accel 归零（真实车限速处动力主动退出），
+ * 避免「速度钉在 200 但 G 表/俯仰/电机音仍呈全力加速」的表现失真。
+ */
 export function stepVehicle(state: VehicleState, dt: number, input: VehicleInput): void {
   const speed = state.speed;
   let accel: number;
@@ -107,15 +111,16 @@ export function stepVehicle(state: VehicleState, dt: number, input: VehicleInput
     state.mechDecelDemand = demand;
     // ABS 拟真：机械制动减速度 clamp 至 μg
     mechDecel = Math.min(demand, BRAKE.absMaxDecel);
-    // 热衰减：仅在逼近抓地上限（>93% μg）时累积温度，不惩罚正常深踩
-    const ratio = demand / BRAKE.absMaxDecel;
-    if (ratio > BRAKE.brakeHeatOnset) {
+    // 热衰减：温度按摩擦功（F_mech × v）的时间积分累积——真实热衰减只认摩擦功，
+    // 与「是否逼近抓地上限」无关（一次 200→0 满刹就应明显升温）。
+    // 标定：brakeTempGain 使一次满刹（≈5.09 MJ）ΔT≈0.6，连续第二把触发 ×0.85。
+    // 松滑条/轻踩（mechDecel ≤ 0.5 m/s²）转为缓慢降温，温度不会无限累积。
+    if (mechDecel > 0.5) {
       state.brakeTemp = Math.min(
         1.5,
-        state.brakeTemp +
-          (ratio - BRAKE.brakeHeatOnset) * BRAKE.brakeTempGain * dt
+        state.brakeTemp + mechDecel * MASS * speed * dt * BRAKE.brakeTempGain
       );
-    } else if (ratio < 0.3) {
+    } else {
       state.brakeTemp = Math.max(0, state.brakeTemp - BRAKE.brakeTempCoolRate * dt);
     }
     state.overheat = state.brakeTemp > BRAKE.brakeTempThreshold;
@@ -130,7 +135,15 @@ export function stepVehicle(state: VehicleState, dt: number, input: VehicleInput
   }
 
   state.accel = accel;
-  state.speed = Math.max(0, Math.min(MAX_SPEED_MS, speed + accel * dt));
+  // 电子限速：被上限钳住的这一步加速度归零——真实限速是动力主动退出，
+  // 而非剩余驱动力被强行抹掉（后者会让 G 表/俯仰/电机音呈现「钉速却全油门」）。
+  const nextSpeed = speed + accel * dt;
+  if (nextSpeed >= MAX_SPEED_MS) {
+    state.speed = MAX_SPEED_MS;
+    state.accel = 0;
+  } else {
+    state.speed = Math.max(0, nextSpeed);
+  }
   state.distance += state.speed * dt;
   // 回收功率 kW = m × a_regen × v / 1000（仅刹车段显示）
   state.regenPowerKw =
