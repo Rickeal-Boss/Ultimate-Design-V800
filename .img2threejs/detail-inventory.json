@@ -1,6 +1,6 @@
 {
-  "sourceImage": "C:\\Users\\WB\\Desktop\\huawei-zunjie-v800-design-black-2x.jpg",
-  "zonesDir": "C:\\Users\\16896\\WorkBuddy\\2026-10-14-13-25-01\\brake-v800\\.img2threejs\\details",
+  "sourceImage": "<local-reference>/huawei-zunjie-v800-design-black-2x.jpg",
+  "zonesDir": "已移除:details",
   "detailInventory": {
     "scanMethod": "grid-3x3+cross-image",
     "targetMinDetails": 16,
@@ -22,7 +22,7 @@
           "type": "component.localFeatures",
           "ref": "headlamp-l"
         },
-        "evidenceRef": "C:\\Users\\16896\\WorkBuddy\\2026-10-14-13-25-01\\brake-v800\\.img2threejs\\details\\zone-r0c0.png",
+        "evidenceRef": "已移除:zone-r0c0.png",
         "confidence": 0.95
       },
       {
@@ -42,7 +42,7 @@
           "type": "component.localFeatures",
           "ref": "front-end"
         },
-        "evidenceRef": "C:\\Users\\16896\\WorkBuddy\\2026-10-14-13-25-01\\brake-v800\\.img2threejs\\details\\zone-r0c1.png",
+        "evidenceRef": "已移除:zone-r0c1.png",
         "confidence": 0.95
       },
       {
@@ -62,7 +62,7 @@
           "type": "component.localFeatures",
           "ref": "front-end"
         },
-        "evidenceRef": "C:\\Users\\16896\\WorkBuddy\\2026-10-14-13-25-01\\brake-v800\\.img2threejs\\details\\zone-r0c2.png",
+        "evidenceRef": "已移除:zone-r0c2.png",
         "confidence": 0.9
       },
       {
@@ -82,7 +82,7 @@
           "type": "component.localFeatures",
           "ref": "taillamp-l"
         },
-        "evidenceRef": "C:\\Users\\16896\\WorkBuddy\\2026-10-14-13-25-01\\brake-v800\\.img2threejs\\details\\zone-r1c0.png",
+        "evidenceRef": "已移除:zone-r1c0.png",
         "confidence": 0.95
       },
       {
@@ -102,7 +102,7 @@
           "type": "component.localFeatures",
           "ref": "handle-front-l"
         },
-        "evidenceRef": "C:\\Users\\16896\\WorkBuddy\\2026-10-14-13-25-01\\brake-v800\\.img2threejs\\details\\zone-r1c1.png",
+        "evidenceRef": "已移除:zone-r1c1.png",
         "confidence": 0.9
       },
       {
@@ -122,7 +122,7 @@
           "type": "component.localOverrides",
           "ref": "dpillar-silver"
         },
-        "evidenceRef": "C:\\Users\\16896\\WorkBuddy\\2026-10-14-13-25-01\\brake-v800\\.img2threejs\\details\\zone-r1c2.png",
+        "evidenceRef": "已移除:zone-r1c2.png",
         "confidence": 0.95
       },
       {
@@ -142,7 +142,7 @@
           "type": "component.localFeatures",
           "ref": "wheel-fl"
         },
-        "evidenceRef": "C:\\Users\\16896\\WorkBuddy\\2026-10-14-13-25-01\\brake-v800\\.img2threejs\\details\\zone-r2c0.png",
+        "evidenceRef": "已移除:zone-r2c0.png",
         "confidence": 0.95
       },
       {
@@ -162,7 +162,7 @@
           "type": "component.localFeatures",
           "ref": "chrome-belt-l"
         },
-        "evidenceRef": "C:\\Users\\16896\\WorkBuddy\\2026-10-14-13-25-01\\brake-v800\\.img2threejs\\details\\zone-r2c1.png",
+        "evidenceRef": "已移除:zone-r2c1.png",
         "confidence": 0.9
       },
       {
@@ -182,7 +182,7 @@
           "type": "component.localFeatures",
           "ref": "chrome-belt-l"
         },
-        "evidenceRef": "C:\\Users\\16896\\WorkBuddy\\2026-10-14-13-25-01\\brake-v800\\.img2threejs\\details\\zone-r2c2.png",
+        "evidenceRef": "已移除:zone-r2c2.png",
         "confidence": 0.75
       },
       {
@@ -202,7 +202,7 @@
           "type": "component.localFeatures",
           "ref": "chrome-belt-l"
         },
-        "evidenceRef": "C:\\Users\\16896\\WorkBuddy\\2026-10-14-13-25-01\\brake-v800\\.img2threejs\\details\\zone-r0c0.png",
+        "evidenceRef": "已移除:zone-r0c0.png",
         "confidence": 0.8
       },
       {
@@ -222,7 +222,7 @@
           "type": "component.localFeatures",
           "ref": "roof-rails"
         },
-        "evidenceRef": "C:\\Users\\16896\\WorkBuddy\\2026-10-14-13-25-01\\brake-v800\\.img2threejs\\details\\zone-r0c1.png",
+        "evidenceRef": "已移除:zone-r0c1.png",
         "confidence": 0.9
       },
       {
@@ -242,7 +242,7 @@
           "type": "component.localFeatures",
           "ref": "roof-rails"
         },
-        "evidenceRef": "C:\\Users\\16896\\WorkBuddy\\2026-10-14-13-25-01\\brake-v800\\.img2threejs\\details\\zone-r0c2.png",
+        "evidenceRef": "已移除:zone-r0c2.png",
         "confidence": 0.9
       },
       {
@@ -262,7 +262,7 @@
           "type": "component.localFeatures",
           "ref": "body-lower"
         },
-        "evidenceRef": "C:\\Users\\16896\\WorkBuddy\\2026-10-14-13-25-01\\brake-v800\\.img2threejs\\details\\zone-r1c0.png",
+        "evidenceRef": "已移除:zone-r1c0.png",
         "confidence": 0.85
       },
       {
@@ -282,7 +282,7 @@
           "type": "component.localFeatures",
           "ref": "tailgate"
         },
-        "evidenceRef": "C:\\Users\\16896\\WorkBuddy\\2026-10-14-13-25-01\\brake-v800\\.img2threejs\\details\\zone-r1c1.png",
+        "evidenceRef": "已移除:zone-r1c1.png",
         "confidence": 0.8
       },
       {

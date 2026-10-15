@@ -20,8 +20,13 @@ interface BarrierPair {
   body: CANNON.Body;
 }
 
-/** 台车碰撞盒半尺寸（约车长×车宽×车高的收缩盒） */
-const HALF_EXTENTS = new CANNON.Vec3(1.1, 0.92, 2.66);
+/**
+ * 台车碰撞盒半尺寸（x=半宽 / y=半高 / z=半长）。
+ * 与车模实测包围盒对齐：车宽 2.006 → 半宽 1.003，车高 1.85 → 半高 0.925，
+ * 车长 5.495 → 半长 2.748（z 保守取 2.66，保持撞障点回归数值不变）。
+ * 原半宽 1.1 比车宽半值 1.003 宽 9.7%，视觉上车体还没贴到路障就已判定碰撞。
+ */
+const HALF_EXTENTS = new CANNON.Vec3(1.01, 0.92, 2.66);
 const CAR_BODY_Y = 0.95;
 
 export class World {

@@ -6,6 +6,24 @@
   <meta name="theme-color" content="#120a0c" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='none' stroke='%23e0463c' stroke-width='4'/%3E%3C/svg%3E" />
   <title>极限刹车挑战 · 尊界V800</title>
+  <style>
+    /* 第三方许可署名（MIT / Apache-2.0 均要求保留版权与许可声明） */
+    #credits {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 5;
+      padding: 4px 10px 5px;
+      text-align: center;
+      font-size: 11px;
+      letter-spacing: 0.2px;
+      color: rgba(241, 220, 174, 0.5);
+      pointer-events: none;
+    }
+    #credits a { color: inherit; text-decoration: none; pointer-events: auto; }
+    #credits a:hover { color: var(--cream, #f1dcae); text-decoration: underline; }
+  </style>
   <script>
     // QA 钩子：URL hash 含 rafpump 时启用（仅无头/后台受控浏览器用，正常用户不受影响）。
     // 后台标签 Chromium 的 rAF 停转（见 docs/PERF.md §7），用 Worker 定时器泵替代 rAF 驱动循环，
@@ -30,6 +48,7 @@
   <div id="menu" class="hidden"></div>
   <div id="result" class="hidden"></div>
   <div id="loading"><div class="loading-text">尊界V800 · 场景构建中…</div></div>
+  <div id="credits">基于 <a href="https://threejs.org" target="_blank" rel="noreferrer">three.js</a>（MIT） · <a href="https://github.com/pmndrs/cannon-es" target="_blank" rel="noreferrer">cannon-es</a>（MIT） · <a href="https://www.typescriptlang.org" target="_blank" rel="noreferrer">TypeScript</a>（Apache-2.0）构建</div>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

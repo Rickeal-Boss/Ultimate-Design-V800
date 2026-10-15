@@ -81,7 +81,7 @@ export class Game {
     this.lighting = new Lighting(this.scene, quality, this.env.sunDirection);
     this.road = new Road(this.scene, this.renderer.capabilities.getMaxAnisotropy());
     new Terrain(this.scene);
-    this.car = createV800CarAdapter();
+    this.car = createV800CarAdapter(quality.tier);
     this.scene.add(this.car.root);
     this.fx = new FxSystems(this.scene, quality.tier);
 
@@ -311,7 +311,7 @@ export class Game {
     this.car.setBrakeHeat(nextHeat);
     this.car.setBrakeLights(braking && this.sm.pedal.pedalForce > 1 ? 8 : 1.6);
     this.car.setHeadlights(this.sm.phase !== 'menu');
-    this.car.update(this.rig.camera);
+    this.car.update(this.rig.camera, dt);
 
     // ---- 灯光 / 环境 / 路侧 ----
     const focus = this.sm.phase === 'crashed' ? this.crashWorld.focus : this.car.root.position;
@@ -427,6 +427,7 @@ export class Game {
     this.sliders.dispose();
     this.postfx.dispose();
     this.crashWorld.dispose();
+    this.car.dispose();
     this.renderer.dispose();
   }
 }

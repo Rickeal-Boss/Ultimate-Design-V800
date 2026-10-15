@@ -20,7 +20,17 @@ export interface QualitySettings {
   bloom: boolean;
   /** PMREM 环境贴图分辨率 */
   envMapSize: number;
+  /** 车模程序化贴图边长（px）：high 1024 / medium 512 / low 256 */
+  carTextureSize: number;
   isMobile: boolean;
+}
+
+/**
+ * 程序化贴图边长分档。26 材质 × 5 通道同步生成，1024² 实测 ~24s，256² 只要 ~1.7s，
+ * 因此低档必须显式降尺寸，否则中低端机首屏卡死。
+ */
+export function carTextureSizeFor(tier: QualityTier): number {
+  return TIERS[tier].carTextureSize;
 }
 
 const TIERS: Record<QualityTier, Omit<QualitySettings, 'tier' | 'isMobile'>> = {
@@ -32,7 +42,8 @@ const TIERS: Record<QualityTier, Omit<QualitySettings, 'tier' | 'isMobile'>> = {
     shadowOrtho: 28,
     msaaSamples: 4,
     bloom: true,
-    envMapSize: 900
+    envMapSize: 900,
+    carTextureSize: 1024
   },
   medium: {
     pixelRatio: Math.min(window.devicePixelRatio, 1.5),
@@ -42,7 +53,8 @@ const TIERS: Record<QualityTier, Omit<QualitySettings, 'tier' | 'isMobile'>> = {
     shadowOrtho: 28,
     msaaSamples: 2,
     bloom: true,
-    envMapSize: 512
+    envMapSize: 512,
+    carTextureSize: 512
   },
   low: {
     pixelRatio: 1,
@@ -52,7 +64,8 @@ const TIERS: Record<QualityTier, Omit<QualitySettings, 'tier' | 'isMobile'>> = {
     shadowOrtho: 28,
     msaaSamples: 0,
     bloom: false,
-    envMapSize: 256
+    envMapSize: 256,
+    carTextureSize: 256
   }
 };
 

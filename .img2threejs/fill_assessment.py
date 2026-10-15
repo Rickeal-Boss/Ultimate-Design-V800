@@ -2,7 +2,7 @@
 import json
 from pathlib import Path
 
-WRK = Path(r"C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\.img2threejs")
+WRK = Path(r"<workspace>/.img2threejs")
 
 # ---- 20 条身份细节（来自 8 张图观察；zone 坐标以 design-black 侧视图为基准）----
 DETAILS = [

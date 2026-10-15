@@ -10,7 +10,7 @@
       "scope": "setup",
       "status": "done",
       "evidence": [
-        "C:/Users/16896/WorkBuddy/2026-10-14-13-25-01/brake-v800/.img2threejs/image-analysis.md"
+        "<workspace>/.img2threejs/image-analysis.md"
       ],
       "reason": "",
       "command": "Read grimoire/intake/image_analysis.md and analyze {reference}"
@@ -20,7 +20,7 @@
       "scope": "setup",
       "status": "done",
       "evidence": [
-        "C:/Users/16896/WorkBuddy/2026-10-14-13-25-01/brake-v800/.img2threejs/assessment.json"
+        "<workspace>/.img2threejs/assessment.json"
       ],
       "reason": "",
       "command": "Read grimoire/intake/validation_rubric.md and record a pass, conditional, or reject verdict for {reference}"
@@ -30,7 +30,7 @@
       "scope": "setup",
       "status": "done",
       "evidence": [
-        "C:/Users/16896/WorkBuddy/2026-10-14-13-25-01/brake-v800/.img2threejs/assessment.json"
+        "<workspace>/.img2threejs/assessment.json"
       ],
       "reason": "",
       "command": "python3 forge/stage1_intake/check_reference_admission.py {reference} --out admission.json --probe-out probe.json"
@@ -40,7 +40,7 @@
       "scope": "setup",
       "status": "done",
       "evidence": [
-        "C:/Users/16896/WorkBuddy/2026-10-14-13-25-01/brake-v800/.img2threejs/assessment.json"
+        "<workspace>/.img2threejs/assessment.json"
       ],
       "reason": "",
       "command": "Run the local evidence search before authoring the assessment"
@@ -50,7 +50,7 @@
       "scope": "setup",
       "status": "done",
       "evidence": [
-        "C:/Users/16896/WorkBuddy/2026-10-14-13-25-01/brake-v800/.img2threejs/assessment.json"
+        "<workspace>/.img2threejs/assessment.json"
       ],
       "reason": "",
       "command": "python3 forge/stage2_spec/new_pre_spec_assessment.py \"<name>\" --image {reference} --domain generic --out assessment.json"
@@ -60,7 +60,7 @@
       "scope": "setup",
       "status": "done",
       "evidence": [
-        "C:/Users/16896/WorkBuddy/2026-10-14-13-25-01/brake-v800/.img2threejs/detail-inventory.json"
+        "<workspace>/.img2threejs/detail-inventory.json"
       ],
       "reason": "",
       "command": "python3 forge/stage1_intake/build_detail_inventory.py {reference} --mode grid-3x3 --out-dir detail-inventory --out di.json"
@@ -78,7 +78,7 @@
       "scope": "setup",
       "status": "done",
       "evidence": [
-        "C:/Users/16896/WorkBuddy/2026-10-14-13-25-01/brake-v800/.img2threejs/object-sculpt-spec.json"
+        "<workspace>/.img2threejs/object-sculpt-spec.json"
       ],
       "reason": "",
       "command": "python3 forge/stage2_spec/new_sculpt_spec.py \"<name>\" --image {reference} --assessment assessment.json --augmentation spec-augmentation.json --domain generic --out object-sculpt-spec.json"
@@ -88,7 +88,7 @@
       "scope": "setup",
       "status": "done",
       "evidence": [
-        "C:/Users/16896/WorkBuddy/2026-10-14-13-25-01/brake-v800/.img2threejs/material-evidence/crop-paint-gold.jpg"
+        "已移除:crop-paint-gold.jpg"
       ],
       "reason": "",
       "command": "python3 forge/stage1_intake/material_region_analysis.py --manifest material-regions.json --out-dir material-evidence --out material-analysis.json (single-crop route: analyze_texture.py + extract_pbr_evidence.py per verified crop; otherwise skip with a reason)"
@@ -98,7 +98,7 @@
       "scope": "setup",
       "status": "done",
       "evidence": [
-        "C:/Users/16896/WorkBuddy/2026-10-14-13-25-01/brake-v800/.img2threejs/object-sculpt-spec.json"
+        "<workspace>/.img2threejs/object-sculpt-spec.json"
       ],
       "reason": "",
       "command": "python3 forge/stage2_spec/apply_material_analysis.py {spec} material-analysis.json --in-place"
@@ -108,7 +108,7 @@
       "scope": "setup",
       "status": "done",
       "evidence": [
-        "C:/Users/16896/WorkBuddy/2026-10-14-13-25-01/brake-v800/.img2threejs/object-sculpt-spec.json"
+        "<workspace>/.img2threejs/object-sculpt-spec.json"
       ],
       "reason": "",
       "command": "python3 forge/stage2_spec/validate_sculpt_spec.py {spec} --strict-quality"
@@ -217,8 +217,8 @@
     "maxTotal": 6
   },
   "artifacts": {
-    "reference": "C:/Users/WB/Desktop/huawei-zunjie-v800-design-black-2x.jpg",
-    "spec": "C:\\Users\\16896\\WorkBuddy\\2026-10-14-13-25-01\\brake-v800\\.img2threejs\\object-sculpt-spec.json"
+    "reference": "<local-reference>/huawei-zunjie-v800-design-black-2x.jpg",
+    "spec": "<workspace>/.img2threejs/object-sculpt-spec.json"
   },
   "passHistory": [],
   "reviewCursor": 0,

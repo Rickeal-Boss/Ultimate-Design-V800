@@ -5,7 +5,7 @@
 import json
 from pathlib import Path
 
-WRK = Path(r"C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\.img2threejs")
+WRK = Path(r"<workspace>/.img2threejs")
 SP = WRK / "object-sculpt-spec.json"
 d = json.loads(SP.read_text(encoding="utf-8"))
 pa = json.loads((WRK / "assessment.json").read_text(encoding="utf-8"))["preSpecAssessment"]

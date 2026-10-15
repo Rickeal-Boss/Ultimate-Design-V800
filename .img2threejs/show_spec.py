@@ -1,7 +1,7 @@
 """查看 spec 顶层 schema。"""
 import json
 
-d = json.load(open(r"C:/Users/16896/WorkBuddy/2026-10-14-13-25-01/brake-v800/.img2threejs/object-sculpt-spec.json", encoding="utf-8"))
+d = json.load(open(r"<workspace>/.img2threejs/object-sculpt-spec.json", encoding="utf-8"))
 print("TOP KEYS:", list(d.keys()))
 for k, v in d.items():
     if isinstance(v, list):

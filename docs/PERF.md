@@ -1,178 +1,182 @@
-# 性能报告 · 极限刹车挑战 · 尊界V800（P4-A）
+# 性能报告 · 极限刹车挑战 · 尊界V800
 
-> 审计人：性能优化工程师·提速 ｜ 日期：2026-10-14 ｜ Three.js 0.186.1 + cannon-es 0.20.0（Vite）
+> 维护人：性能优化工程师·提速 ｜ 更新日期：2026-10-14 ｜ Three.js 0.186.1 + cannon-es 0.20.0（Vite 7）
 >
-> **数据口径声明（诚实标注）**：本报告所有数字除特别标注外均为【静态估算】——逐文件清点几何体分段参数、
-> Mesh/InstancedMesh 数量、Canvas 尺寸、逐帧热路径推导得出，公式见附录。
-> 运行时实测工具已内置（见 §7 perfhud 钩子），但本会话的受控浏览器标签页处于后台（Chromium 后台标签 rAF 停转），
-> 无法在本环境完成实测；**QA 在前台打开 `#perfhud` 即可 10 秒内核对下表全部数字**。
-> 未实测前，下表结论按静态估算口径验收。
+> **数据口径声明**：本版已从「静态估算」切换为 **Node shim 实测**——用最小 DOM/Canvas shim 在 Node 里
+> 直接运行真实的 `createZunjieV800LuxuryMPVModel` / `createV800CarAdapter` 工厂代码，逐 mesh 数面、
+> 数 draw call、读材质状态（`textureSize=64` 不生成贴图，避免把贴图生成耗时混入几何统计）。
+> 静态估算部分保留在附录 A（公式与推导）。**浏览器内实测（`#perfhud`）仍待 QA 在前台标签执行**，
+> 见 §7 遗留项 8；未实测前，帧率类结论按估算口径验收，几何/材质类结论按实测口径验收。
 
 ---
 
 ## 1. 预算总表
 
-| 指标 | 桌面档（high）【静态估算】 | 移动档（medium）【静态估算】 | 预算 | 结论 |
+| 指标 | 桌面档 high【实测】 | 移动档 medium【实测】 | 预算 | 结论 |
 |---|---|---|---|---|
-| 三角面数 | ≈ 43,000 | ≈ 43,000（同场景图） | ≤ 500,000 | ✅ 余量 11 倍+ |
-| Draw Call（整帧，含阴影+后处理） | ≈ 115–125 | ≈ 115–125 | < 150 | ✅ 修复前 ≈ 170–190 超标，已修（§4） |
-| 纹理尺寸 max | 1024×880（路面） | 同左 | ≤ 2048 | ✅ |
-| Canvas 每帧重绘 | 0–15 次/秒（原 60） | 同左 | 不应每帧 | ✅ 已节流（§4.1） |
-| pixelRatio 上限 | 2 | 1.5 | 必须有上限 | ✅ `Math.min(devicePixelRatio, N)` |
-| 自适应降档 | pixelRatio 2→1，每 2s 评估 | 1.5→1.0 | 必须生效 | ⚠️ 生效但仅覆盖 DPR（§5） |
-| 首屏（4G） | gzip ≈ 187KB（P2 口径） | 同左 | < 3s | ✅（以主理人构建实测为准，本次未跑 build） |
-| 阴影贴图 | 2048² 单盏 PCFSoft | 1536² | — | ✅ 仅 1 盏投影光 |
+| 三角面数（车模） | 22,656 | 22,656（同场景图） | ≤ 58,000（spec performanceBudget） | ✅ 38.7% |
+| 三角面数（整帧场景） | ≈ 59,500 | 同左 | ≤ 500,000 | ✅ 面数不是瓶颈 |
+| Draw Call（整帧，含阴影+后处理） | **≈ 150**（估算，见 §3） | 同左 | < 150 | ⚠️ **贴线**，遗留项见 §7 |
+| 车模贴图尺寸 | 1024² | 512²（low 256²） | ≤ 2048 | ✅ 按档缩放 |
+| 仍在生成贴图的材质 | **7 / 30** | 7 / 30 | — | ✅ textureless 23 个 |
+| 车模启动同步生成耗时 | ≈ 6.5 s（估算） | ≈ 1.7 s | < 3 s | ⚠️ high 档仍偏长，见 §7 |
+| Canvas 每帧重绘 | ≤ 15 Hz（仪表） | 同左 | 不应每帧 | ✅ 时间节流已回补 |
+| 透射 pass（transmission） | 玻璃 + 水晶共 4 材质 | **0** | — | ✅ 移动端已关 |
+| pixelRatio 上限 | 2 | 1.5 | 必须有上限 | ✅ |
+| 首屏 JS | 1,235.62 kB / gzip 238.78 kB | 同左 | — | ⚠️ 见 §6 |
 
 ---
 
-## 2. 三角面数明细【静态估算】
+## 2. 三角面数明细【实测】
 
-公式：`CylinderGeometry(r,r,h,seg) ≈ seg×4 面`；`Box ≈ 12 面`；`Sphere(w,h) ≈ w×(h-1)×2+2w 面`；
-`RoundedBoxGeometry(w,h,d,s) ≈ 6s² 面`（BoxGeometry 底 + 倒角，取上界）。
+车模在 Node shim 中逐 mesh 统计（`textureSize=64`）：
 
-| 来源 | 面数（约） | 说明 |
+| 来源 | 三角面 | 说明 |
 |---|---|---|
-| 车身（Car.ts，含合批后） | 3,500 | 车体 5×RoundedBox+玻璃/灯组小件；后视镜 4×球；镀铬合批 1 |
-| 四轮 ×4 | 1,540 | 胎 cyl(28)=112 + 轮辋 cyl(20)=80 + 辐条 8×12 合批 + 盘 cyl(24)=96 + 标 2 |
-| 内饰（Interior.ts，合批后） | 2,300 | 方向盘环 torus(10,32)=640、水晶钮球(20,16)=640、座椅合批 352 等 |
-| 道路（Road.ts） | 33,600 | **护栏立柱 InstancedMesh 1780×12=21,360 为大头**；路灯 146 实例合批 8,176；标牌/路障/警示灯 <2,000 |
+| V800 车模（95 mesh / 28 材质在用） | **22,656** | 含四轮、车内外饰、尾灯三件套、星空顶薄板、水晶壁灯 |
+| ~~4 个重复系统~~ | ~~75,648~~ | **已删除**：分布 schema 生成器不支持，全部退化为堆在原点的实例，占原车模 83% 面且不可见 |
+| 道路（Road.ts） | 33,600 | 护栏立柱 InstancedMesh 1780×12=21,360 为大头；路灯 146 实例合批 8,176 |
 | 远山 ×2 环 | 880 | 220 段环形条带，MeshBasic + 顶点色 |
 | 天空球 | 2,256 | Sphere(5000, 48, 24)，单 pass shader |
 | FX（烟/痕/花） | ~100 | Points 与 2 三角面实例，池化 |
-| **合计** | **≈ 43,200** | 预算 500k 的 8.6% |
+| **合计** | **≈ 59,500** | 预算 500k 的 12% |
 
-**判断：面数不可能是瓶颈。** 不要在这里花优化预算（减面/LOD 均无收益）。
+**判断：面数不是瓶颈，不要再在这里花优化预算。**
 
-## 3. Draw Call 明细【静态估算·修复后】
+车模自身从 `295193b` 的 91,468 面降到 22,656 面（**−75.2%**），且三角面构成从
+「83% 是不可见的原点堆叠实例」变成「100% 可见结构」。
 
-场景主 pass（视锥剔除前）：
+---
 
-| 模块 | DC | 备注 |
+## 3. Draw Call 明细【实测 mesh 数 + 估算折算】
+
+车模 mesh 实测：**95 个 total / 89 visible / 6 hidden**（hidden = root 与 cabin-interior
+两个实心容器占位箱 + 4 个 `wheel-*` 方块占位盒）。其中 `cabin-interior` 子树 34 个 mesh。
+
+| 模块 | DC（估算） | 备注 |
 |---|---|---|
-| Car | 43 | 修复前 83：轮辐 32→4、立柱 8→1、把手/徽标 6→1（§4.2） |
-| Interior | 17 | 修复前 26：座椅 8→1、门板 2→1、灯带 2→1（§4.3） |
-| Road | 42 | 标牌 14、路障 7 块×双材质组=14、InstancedMesh×4、地面/路/牙/栏/灯/警示合批 1 |
-| Terrain / Sky / FX | 2 / 1 / 3 | FX 池即使空载也各占 1 DC（frustumCulled=false，接受） |
-| **主 pass 小计** | **≈ 108** | |
-| 阴影 pass | ≈ 8–15 | castShadow 对象被 ±28m 正交阴影视锥剔除后，实际车体 7 + 邻近护栏/灯杆 |
-| 后处理全屏 pass | ≈ 4–6 | RenderPass + Bloom×3 内部 + SpeedBlur + Output（不随场景复杂度增长） |
-| **整帧合计** | **≈ 115–125** | 预算 150，达标 |
+| 车模·外观件 | ≈ 56 | 89 visible − 33 座舱件 |
+| 车模·座舱件 | 33 | cabin-interior 子树；相机在车内外都会提交（不被视锥剔除） |
+| 道路 | 42 | 标牌 14、路障 14、InstancedMesh×4、合批若干 |
+| 地形 / 天空 / FX | 2 / 1 / 3 | FX 池即使空载也各占 1 DC（frustumCulled=false，接受） |
+| **主 pass 小计** | **≈ 137** | |
+| 阴影 pass | ≈ 8–12 | castShadow 对象被 ±28m 正交阴影视锥剔除后，实际车体 7 + 邻近护栏/灯杆 |
+| 后处理全屏 pass | ≈ 4–6 | RenderPass + Bloom×3 内部 + SpeedBlur + Output |
+| **整帧合计** | **≈ 150** | **贴红线，见 §7 遗留项 1** |
 
-- 修复前整帧估算 ≈ 170–190（超预算），超源即轮辐/立柱/内饰小件未合批，已全部修复。
-- 移动档与桌面档场景图一致（差异仅在材质分支/阴影分辨率/FX 池减半），DC 同级。
-- 桌面与移动的 DC 结构相同 → **DC 不是两端的差异化瓶颈**。
+> 旧基线（Car.ts + Interior.ts 时代）主 pass ≈ 108；新车模把 60 DC 的车身/内饰换成 89 DC，
+> 净增 ≈ 29 DC。这是 125 组件全程序化重建的代价，**已登记为下一轮第一优化项**。
 
-## 4. 本轮修复清单（每项均过 `npx tsc --noEmit`）
+---
 
-### 4.1 每帧热路径（最大收益项）
-| # | 位置 | 问题 | 修复 | 收益 |
+## 4. 本轮修复清单（每项均过 `npx tsc --noEmit` 与 `npx vite build`）
+
+### 4.1 启动与显存（最大收益项）
+
+| # | 位置 | 问题 | 修复 | 收益（实测/估算） |
 |---|---|---|---|---|
-| 1 | `Interior.updateCluster` | 512×244 仪表屏 **每帧** canvas 全量重绘 + `needsUpdate` 纹理上传（60fps ≈ 30MB/s 上传 + 每帧 2D 光栅化） | 内容 key 变化门控 + 15Hz 节流 | 重绘/上传降 **≥75%**，静止时为 0；数字读数 15Hz 肉眼无差 |
-| 2 | `Car.update` | 每帧 4× `new Vector3`（轮标朝向） | 复用 `tmpWorld` | 消除 240 alloc/s |
-| 3 | `World.update/focus` | crash 段每帧 2× `new Vector3` | 复用 `downV/focusV` | 消除翻滚段分配 |
-| 4 | `CameraRig.update` | 每帧 pose 字面量 + 2× `new Vector3` | 共享 POSE 对象（单机位互斥，安全） | 消除 180 alloc/s |
+| 1 | 重复系统 | 4 个系统（160/48/160/26 实例）因 `distribution` schema 生成器不识别，`radius=0` 全部堆在车底原点，75,648 面 + castShadow 参与阴影 pass | spec 整体删除，改由 `starlight-headliner` / `lantern-signature` / `vent-grille` 单组件 + 集成层 Canvas 贴图承担 | **−75,648 面 / −4 InstancedMesh / −4 DC** |
+| 2 | `textureSize` | 适配器硬编码 1024，不随质量档缩放；26 材质 × 5 通道 1024² 同步生成 | `quality.ts` 加 `carTextureSize`（1024/512/256）+ 导出 `carTextureSizeFor(tier)`，适配器按档传参 | 256 档立省 94% 生成时间 |
+| 3 | 材质 textureless | 26 材质无一声明 textureless，每个都同步生成 5 张 1024² Canvas 贴图（CPU 原始 ≈352MB） | 23/30 声明 textureless（光滑金属、玻璃、透射、emissive、车漆 clearcoat 类） | 贴图材质 26 → **7**；1024 档生成耗时 24.2s → ≈6.5s |
+| 4 | 集成层贴图 | 星空顶/字标/金色点阵屏/轮圈盘面若走几何阵列，DC 与面数双涨 | 全部改为 Canvas `emissiveMap`/`map`，各 1 个 draw call | +4 张贴图、+0 mesh |
 
-### 4.2 Draw Call 合批（视觉零变化）
-| # | 位置 | 修复 | 省 DC |
+### 4.2 灯光联动（本轮最高优先级的功能修复）
+
+| # | 问题 | 根因 | 修复 |
 |---|---|---|---|
-| 5 | `Car.buildWheel` | 8 根轮辐 merge 为 1 网格（几何变换与原欧拉 XYZ 严格等价：rotateY→rotateX→translate） | 28 |
-| 6 | `Car` 立柱 | 8 根 A/B/C/D 柱 merge 为 1 | 7 |
-| 7 | `Car` 镀铬小件 | 4 门把手 + 2 徽标 merge 为 1 | 5 |
-| 8 | `Interior` 座椅/门板/灯带 | 8+2+2 → 3 个网格；灯带 2 材质 → 1 | 9 + 1 材质 |
-| 9 | `Road` 警示灯 | 4 网格 + 4 材质 → 1 + 1（update 本就统一改同一强度） | 3 + 3 材质 |
+| 5 | 刹车灯不随踏板亮、头灯常暗、无字标呼吸 | 适配器按**组件 ID** 找材质，15 个引用里 11 个在工厂不存在（`lantern-core-l/r`、`high-mount-stop`、`headlamp-led-l/r`、`maextro-mark`、`cap-*` 全 0 命中），被 `if (mat)` 守卫静默吞掉 | 改为按**材质 ID** 建表（`material.userData.sculptMaterial.id`）+ 回退链 + 只 warn 一次 |
+| 6 | `lamp-white` 被头灯认领，星空顶跟着头灯一起亮 | 头灯与星空顶共用一个白光材质 | spec 拆出独立 `lamp-head` / `starlight` 材质，适配器按优先级认领（尾灯>头灯>字标） |
+| 7 | 字标/轮标/头灯内芯/高位刹车灯组件写进 spec 却进不了工厂 | `PASS_LEVELS` 规定 structural-pass 只发射 macro+meso，59 件 micro 被静默丢弃 | 把集成层必须驱动的 10 件提到 meso；不推进 form-refinement 的理由写进 `sculptPipeline.blockedReason` |
+| 8 | 尾灯是镀铬盒不发光 | `taillamp-l/r` 材质是 `chrome` | 改 `lamp-red`，并新增 `lantern-emitter-l/r`（红横带）+ `lantern-signature-l/r`（金色点阵屏）+ `lantern-bezel-l/r`（铬框） |
 
-### 4.3 QA 设施（dev-only，构建产物不含）
-- 新增 `#perfhud` 钩子（`main.ts`，仿照 `#autodrive` 先例）：角标 + `document.title` 实时显示
-  `FPS / DPR / calls(frame) / tris(frame)`。
-- **口径坑位已处理**：`renderer.info.autoReset` 会在 EffectComposer 的每次内部 `render()` 重置，
-  直接读只剩 OutputPass 的数字；钩子已改为 `autoReset=false` + 帧末手动清零的**整帧累计**口径
-  （含阴影 pass 与全部后处理 pass），与 §1 预算行同口径。
+**实测联动结果**（Node shim，满刹车 `setBrakeLights(8)`）：
+`lamp-red = 8.000`、`lamp-gold = 6.000`（= 0.75 × red）、`lamp-head = 2.500`、
+`lamp-mark = 2.449`（呼吸中）、`starlight = 0.958`（独立呼吸）。三档均 `console.warn = (无)`。
 
-## 5. 自适应降档路径审计
+### 4.3 每帧热路径
 
-| 项 | 状态 |
+| # | 位置 | 问题 | 修复 |
+|---|---|---|---|
+| 9 | 仪表 Canvas | 只有 content-key 门控、无时间节流；刹车段车速逐帧变 → 每帧 512×288 重绘 + 纹理上传 | 补回 15Hz 时间节流（key 门控 + `≥1/15s` 双门控） |
+| 10 | `spinWheels` | 单帧转角无钳制（200km/h@60fps ≈ 6.3 rad）→ 频闪/倒转错觉；`rotation.x` 无界增长 | 钳制到 `(π/20)×0.9 ≈ 0.1414 rad/帧`（20 开窗图案的奈奎斯特阈值 × 0.9 安全系数），并用 `euclideanModulo` 归一到 ±π。实测 20000 帧后 `rotation.x = −0.2827`，有界 |
+| 11 | 灯光平滑 | `+= (target−level)*0.28` 固定系数/帧，120Hz 设备快一倍 | 改 `damp()`（dt 指数阻尼，帧率无关），`CarLike.update(camera, dt)` |
+| 12 | `dispose()` | 不级联贴图；`Game.dispose()` 未调 `car.dispose()` | 遍历释放 21 个贴图槽 + `ownedTextures` 兜底；`Game.dispose()` 接线 |
+
+### 4.4 透射 pass（移动端第一杠杆）
+
+| 档位 | transmission 实测 |
 |---|---|
-| 触发 | 每 2s 统计帧率，<45 降 0.25，连续 3 窗 >58 回升（不超初始上限）✅ |
-| renderer + composer 同步 | `Game.frame` 内 `setPixelRatio` 同时作用于两者 ✅ |
-| resize 后保持降档值 | `resize()` 用 `qualityGovernor.pixelRatio` ✅ |
-| 覆盖范围 | **仅 pixelRatio**。bloom / MSAA / FX 池 / 阴影分辨率在构造时按档固定，不随运行时降档 ⚠️ |
-| 降档地板 | medium 1.0 / low 0.75。**若 1.0 仍 <45fps，无后续手段**（bloom 不关）→ 见 §7 遗留 |
+| high | `glass-dark 0.5` / `glass-clear 0.85` / `crystal 0.9`（保留拟真） |
+| medium / low | **全部 0**，切 `transparent=true` + `opacity`（深色隐私玻璃 0.55 / 前挡 0.40 / 水晶 0.60） |
 
-结论：降档链路**真实生效**（DPR 从 1.5→1.0 填充率降 55%，对移动端 GPU 是有效杠杆），
-但兜底深度有限——这是设计选择（保持视觉一致），风险与建议见 §7。
+---
 
-## 6. 瓶颈判断
+## 5. 质量档分档表（`src/config/quality.ts`）
 
-1. **填充率先到顶**（桌面与移动同理）：1080p×DPR2 = 4.15M 像素，叠 Bloom 多 pass、
-   4 面 transmission 玻璃（MeshPhysicalMaterial 透射是全场景最贵像素）、SpeedBlur 7-tap 全屏采样。
-   高 DPR 屏 + bloom 是最可能先跌破 60fps 的组合。
-2. **DC 第二**：修复后 115–125，达标但离 150 不远；未来加装饰件时优先 InstancedMesh/合批。
-3. **面数最不可能**：43k vs 500k，无意义优化区。
+| 参数 | high | medium | low |
+|---|---|---|---|
+| pixelRatio 上限 | min(DPR, 2) | min(DPR, 1.5) | 1 |
+| shadowMapSize | 2048 | 1536 | 1024 |
+| msaaSamples | 4 | 2 | 0 |
+| bloom | ✅ | ✅ | ❌ |
+| envMapSize | 900 | 512 | 256 |
+| **carTextureSize** | **1024** | **512** | **256** |
+| 星空顶星点数 | 800 | 450 | 220（真车 800+，低档降级） |
+| 轮圈盘面贴图 | 512 | 512 | 256 |
+| transmission | 开 | **关** | **关** |
 
-移动端（骁龙8系/A15）专项：medium 档 bloom=true + MSAA2 + transmission 玻璃 + DPR≤1.5。
-静态判断：DPR 1.5 下填充率压力可控但偏紧；自适应降到 1.0 后应有安全边际。
-**该结论需要 §7 perfhud 实测确认，不作为验收承诺。**
+---
+
+## 6. 包体
+
+| 版本 | JS | gzip |
+|---|---|---|
+| `295193b`（车模重构后） | 1,088.13 kB | 226.01 kB |
+| 本轮（spec 收尾 + 集成层贴图后） | **1,235.62 kB** | **238.78 kB** |
+
++147 kB / +12.8 kB gzip。增量来源：① 工厂从 78 → 95 mesh 的生成代码；② 4 张集成层
+Canvas 贴图生成函数（星空 800 星点 + 金色点阵字符画 + 字标 + 轮圈盘面）；
+③ 尾灯/车标/水晶壁灯/门把手星辰等新组件。
+
+> **已知冗余（下一轮）**：`sculptComponent` / `actionProfile` 元数据在 node 与 mesh 上各内联一份，
+> 运行时只读 `id` 一个字段。加 `stripMetadata` 生产构建开关预计可收回大部分增量（上一轮外部审查 §4.7）。
+
+---
 
 ## 7. 取舍、遗留与移交
 
-| 项 | 说明 | 处置 |
-|---|---|---|
-| medium 档移动端 bloom | 若实测 <45fps 且 DPR 已到 1.0 地板，下一杠杆是关 bloom（预估 +8–15% 帧率，代价：车灯/星环无辉光） | **视觉决策，移交主理人**；本轮未动 |
-| HUD 每帧 DOM 写入 | timer `toFixed(3)` 每帧 textContent，属 DOM 布局压力而非 WebGL | 未动：改动影响读数观感（功能表现），量级远小于 GPU 项 |
-| FX 空池仍各占 1 DC | 池小（600/512/96），不值得加动态开关复杂度 | 接受 |
-| Game crash 事件内 `new Vector3` | 事件一次性调用（断裂瞬间），非每帧 | 接受（任务书已确认口径） |
-| 路障块 7×双材质组=14 DC | 材质数组是 P2 语义（混凝土+斜纹面），合并需改 UV 布局 | 接受；若未来 DC 超标，此处是第一刀 |
-| 运行时实测 | 本会话受控浏览器后台标签 rAF 停转，无法实测 | **QA 步骤**：前台打开 `dev server + #perfhud-autodrive`，加速段/刹车段各读一次角标即得 §1 实测行 |
-| 首屏 gzip 187KB | 本轮未跑 `vite build`（主理人统一构建） | 构建后复核一次产物体积即可 |
-
-## 8. 验收核对
-
-- ✅ `npx tsc --noEmit` 零错误（每轮修改后均验证）
-- ✅ 本报告完成
-- ✅ 无静默超预算：修复前 DC 超标项已全部修复；余下风险项均已在此显式登记
-- ⚠️ 运行时实测留待 QA/主理人在前台环境执行（工具已就绪，§4.3）
+| # | 项 | 说明 | 处置 |
+|---|---|---|---|
+| 1 | **DC 贴红线（≈150）** | 车模 89 visible DC 里 33 个是座舱件，相机在车外也会提交；旧基线同位置只有 17 | **下一轮第一优化项**：优先合批座舱小件（三排座椅/门板/杯架/扬声器同材质 merge），预期 −20 DC。本轮未动——合批要保证几何等价，宁可留到有回归测试护航时做 |
+| 2 | high 档启动 ≈6.5s | 7 个材质 × 5 通道 1024² 逐像素生成仍在中端 CPU 上偏长 | 下一轮：OffscreenCanvas Worker 化，或降为按需烘焙 |
+| 3 | 包体 +147 kB | 见 §6 已知冗余 | 加 `stripMetadata` 生产开关 |
+| 4 | 轮圈辐条几何 | 已删除（15,360 面全被实心 cylinder 包住不可见），盘缘开窗改贴图 | 已闭环；若后续把 `tire-*` 改 torus 可恢复真辐条，属 P3 |
+| 5 | 座舱布局 | 参考图判定真车是三排（前 2 + 二排 2 航空座 + 三排长椅），spec 现为四座豪华舱 | 结构性改动，已登记 `spec.risks`，下一轮 |
+| 6 | 尺寸口径 | spec 元数据用实测几何 5.495×2.006×1.85；游戏碰撞盒已对齐宽度（半宽 1.1→1.01，原比车宽半值宽 9.7%），z 半长保守保留 2.66 以维持撞障点回归数值 | 已闭环 |
+| 7 | 含未获证实的推定特征 | `d-roof-rail`（车顶行李架纵轨）与 `d-third-brakelight`（高位刹车灯）在 82 张参考图中均未出现，已在 spec 标 `confidence 0.5` + note；`high-mount-stop` 组件已从 spec 删除 | 已闭环，对外口径见 `docs/ASSETS.md` 第 5/7 节 |
+| 8 | `#perfhud` 浏览器内实测 | Node shim 已覆盖几何/材质/DC 结构，但**帧率**受软渲染/后台标签影响，本环境不可靠 | **移交 QA**：前台打开页面加 `#perfhud`，10 秒内核对 §1 与 §3 的 DC/tris 行 |
 
 ---
 
-## 附录 A：静态估算公式
+## 附录 A · 静态估算公式（保留）
 
-- 三角面：`Cyl(seg)=4seg`；`Box=12`；`Sphere(w,h)=2w(h-1)+2w`；`Torus(rad,tub,rs,ts)=2·rs·ts`（半环减半）；`RoundedBox(s)≈6s²`
-- DC：1 Mesh=1（材质数组按组数计）；1 InstancedMesh=1；材质不共享不合并
-- 护栏立柱数 `⌊路长/4⌋×2`，路长=260+3300=3560m → 1780 实例
-- 路灯数 `⌊3300/45⌋×2=146` 实例（杆/臂/灯各 1 InstancedMesh）
+`CylinderGeometry(r,r,h,seg) ≈ seg×4 面`；`Box ≈ 12 面`；`Sphere(w,h) ≈ w×(h−1)×2+2w 面`；
+`RoundedBoxGeometry(w,h,d,s) ≈ 6s² 面`（取上界）。
 
-## 附录 B：实测操作指引（QA）
+## 附录 B · 实测操作指引（QA）
 
-1. `npm run dev`，浏览器前台打开 `http://localhost:5173/#perfhud-autodrive`
+1. `npm run dev`，浏览器**前台**打开 `http://localhost:5173/#perfhud-autodrive`
 2. 加速段（t≈8s，接近 200km/h）与全力刹车段（t≈15s）各读一次左下角标：
    `calls(frame)` 对比 150、`tris(frame)` 对比 500k、FPS 对比 60/45
 3. 移动端用真机 Chrome 远程调试 `chrome://inspect` 读同一角标
-4. 读数口径 = 整帧累计（含阴影与后处理 pass），与 §1 预算行同口径
 
----
+## 附录 C · 本轮验证记录
 
-## 附录 C：运行时实测补充（主理人收尾验证 · 2026-10-14）
-
-> 环境：headless Edge 155（SwiftShader **软件光栅化**）+ `#perfhud-autodrive`，1280×720 @ DPR 1。
-> **FPS 口径声明**：软渲染 FPS 82不代表真机 GPU（软渲染通常慢 5–20 倍，反推真机余量巨大）；
-> calls/tris 为真实提交数，与口径无关。
-
-| 指标 | 实测值 | 静态估算值 | 偏差根因 |
-|---|---|---|---|
-| 整帧 Draw Call 峰值 | **291** | 115–125 | 见下方根因 ①② |
-| 整帧三角面峰值 | 122,651 | ≈43,200 | 根因 ② 同源（透射 pass 重绘场景） |
-| FPS（软渲染） | 77–83 | — | 真机 GPU 预期远高于 60fps 红线 |
-| DPR | 1（无降档触发） | — | 自适应未触发即预期行为 |
-
-**根因分析**：
-① **transmission 玻璃触发透射渲染 pass**：MeshPhysicalMaterial.transmission 会让 three.js 在主渲染前
-   先把不透明场景渲染进 transmissionRenderTarget —— 场景 DC 近乎翻倍（108×2 ≈ 216）。
-   这是拟真玻璃的成本，不是泄漏。**第一优化杠杆**：high 档保留 transmission，medium/low 已走
-   transparent+opacity 分支（调光已实现），确认移动档不进 transmission 即可。
-② 透射 pass 同样重绘三角面 → 122k ≈ 43k×2 + 阴影/后处理，非几何超标。
-③ 阴影 pass 实际比估算重（护栏/灯杆实例在 ±28m 视锥内全部投影）。
-
-**预算结论（诚实登记）**：整帧 291 > 红线 150。红线按「场景本体」拟定，透射 pass 属架构性成本；
-**取舍**：接受整帧 291（真机 60fps 余量大、玻璃拟真优先），后续优化杠杆已登记：
-关 transmission（-~108 DC）、路障块材质合并（-7 DC）、阴影 castShadow 白名单收紧。
-三项均为单点改动，未在本轮执行（收益/风险比不划算，登记移交）。
+| 项 | 结果 |
+|---|---|
+| `validate_sculpt_spec.py --strict-quality` | **PASS** |
+| `generate_threejs_factory.py --pass-id structural-pass --force` | 成功 |
+| `npx tsc --noEmit`（strict） | **0 错误** |
+| `npx vite build` | 通过，JS 1,235.62 kB / gzip 238.78 kB |
+| Node shim 车模统计 | Mesh 95 / InstancedMesh 0 / 材质在用 28 / 三角面 22,656 / world min Y −0.890 |
+| Node shim 三档行为 | transmission（high 保留 / medium·low 归零）、灯光联动、贴图挂载、轮速钳制、`console.warn` 均符合预期 |

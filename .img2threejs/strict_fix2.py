@@ -2,7 +2,7 @@
 import json
 from pathlib import Path
 
-WRK = Path(r"C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\.img2threejs")
+WRK = Path(r"<workspace>/.img2threejs")
 
 # ---------- fill_assessment.py: kind 映射 + ref 清洗 ----------
 fa = WRK / "fill_assessment.py"
