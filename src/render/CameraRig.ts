@@ -10,6 +10,7 @@
  * 切换通过指数阻尼做 0.4~0.6s 的位置/朝向插值，不瞬跳。
  */
 import * as THREE from 'three';
+import { clamp } from '../util/math';
 
 export type CameraMode = 'orbit' | 'chase' | 'hood' | 'cabin' | 'side' | 'crash';
 
@@ -107,6 +108,10 @@ const MODES: Record<CameraMode, (speed: number, portrait: boolean, time: number)
 };
 
 const IDENT = new THREE.Quaternion();
+const UP = new THREE.Vector3(0, 1, 0);
+/** 自由视角限位：偏航 ±225°（可绕到车后再多半圈）、俯仰 ±63°（防过顶翻转/钻地） */
+const YAW_LIMIT = Math.PI * 1.25;
+const PITCH_LIMIT = 1.1;
 
 export class CameraRig {
   camera: THREE.PerspectiveCamera;
@@ -119,6 +124,13 @@ export class CameraRig {
   private anchorReady = false;
   private tmpOffset = new THREE.Vector3();
   private tmpLook = new THREE.Vector3();
+  /** 自由视角：用户拖拽产生的偏航/俯仰偏移与缩放（双击或切机位复位） */
+  private userYaw = 0;
+  private userPitch = 0;
+  private userZoom = 1;
+  private dragging = false;
+  private tmpSph = new THREE.Spherical();
+  private tmpRight = new THREE.Vector3();
 
   constructor(aspect: number) {
     this.camera = new THREE.PerspectiveCamera(55, aspect, 0.1, 12000);
@@ -127,10 +139,39 @@ export class CameraRig {
 
   setMode(mode: CameraMode): void {
     this.mode = mode;
+    // 切机位（V 键 / HUD 按钮 / 结算自动机位）时自由视角归零
+    this.resetLook();
   }
 
   addShake(amount: number): void {
     this.shake = Math.max(this.shake, amount);
+  }
+
+  /** 拖拽增量：dx→偏航，dy→俯仰（外部机位为环绕惯例：上拖 = 相机升高俯视） */
+  addLook(dx: number, dy: number): void {
+    this.dragging = true;
+    this.userYaw = clamp(this.userYaw - dx * 0.005, -YAW_LIMIT, YAW_LIMIT);
+    this.userPitch = clamp(this.userPitch + dy * 0.004, -PITCH_LIMIT, PITCH_LIMIT);
+  }
+
+  endLook(): void {
+    this.dragging = false;
+  }
+
+  /** 滚轮 / 捏合缩放（仅外部机位生效） */
+  addZoom(deltaY: number): void {
+    this.userZoom = clamp(this.userZoom * (deltaY > 0 ? 1.1 : 0.9), 0.55, 2.2);
+  }
+
+  resetLook(): void {
+    this.userYaw = 0;
+    this.userPitch = 0;
+    this.userZoom = 1;
+    this.dragging = false;
+  }
+
+  get isDragging(): boolean {
+    return this.dragging;
   }
 
   update(dt: number, target: THREE.Vector3, speed: number, carQuat: THREE.Quaternion = IDENT): void {
@@ -144,6 +185,23 @@ export class CameraRig {
     const q = pose.local ? carQuat : IDENT;
     const off = this.tmpOffset.copy(pose.offset).applyQuaternion(q);
     const look = this.tmpLook.copy(pose.look).applyQuaternion(q);
+
+    // 自由视角覆盖层：第一人称（hood/cabin）偏转视线方向；外部机位绕锚点环绕 + 缩放。
+    // 叠加在既有阻尼机位系统之上，不改动任何原插值逻辑（每帧零分配）。
+    if (this.userYaw !== 0 || this.userPitch !== 0 || this.userZoom !== 1) {
+      if (this.mode === 'hood' || this.mode === 'cabin') {
+        if (this.userYaw !== 0) look.applyAxisAngle(UP, this.userYaw);
+        if (this.userPitch !== 0) {
+          const right = this.tmpRight.copy(look).cross(UP).normalize();
+          look.applyAxisAngle(right, -this.userPitch); // 上拖 = 抬视线
+        }
+      } else {
+        const sph = this.tmpSph.setFromVector3(off);
+        sph.theta += this.userYaw;
+        sph.phi = clamp(sph.phi + this.userPitch, 0.2, Math.PI - 0.2); // 防过顶/穿地
+        off.setFromSpherical(sph).multiplyScalar(this.userZoom);
+      }
+    }
 
     if (!this.anchorReady || this.mode === 'crash') {
       this.anchor.copy(target);

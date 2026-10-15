@@ -5,6 +5,7 @@
   --cream: #f1dcae;
   --orange: #ff6a3d;
   --red: #ff3b30;
+  --amber: #ffb020;
   --green: #5fe0a0;
   --blue: #30c8ff;
   --line: rgba(255, 255, 255, 0.08);
@@ -191,6 +192,42 @@ body {
 
 .force.overheat .force-value {
   color: var(--red);
+}
+
+/* 踏板断裂：踏板力条置灰（力恒为 0，但冗余在刹） */
+.force.snapped .force-track {
+  opacity: 0.35;
+  filter: grayscale(1);
+}
+
+.force.snapped .force-value {
+  color: var(--amber);
+}
+
+.redundancy-badge {
+  position: absolute;
+  left: 50%;
+  top: 27%;
+  transform: translateX(-50%);
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  letter-spacing: 1px;
+  color: #1a1206;
+  background: var(--amber);
+  box-shadow: 0 0 14px rgba(255, 176, 32, 0.45);
+  animation: redundancy-pulse 1.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes redundancy-pulse {
+  0%,
+  100% {
+    opacity: 0.75;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
 .countdown {
@@ -516,6 +553,11 @@ body {
 
 .result-title.fail {
   color: var(--red);
+}
+
+/* 踏板断裂 · 冗余刹停：判负但车辆获救，用琥珀色区别于彻底失败 */
+.result-title.warn {
+  color: var(--amber);
 }
 
 .result-sub {

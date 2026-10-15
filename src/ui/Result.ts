@@ -178,10 +178,11 @@ export class Result {
       this.title.textContent = '刹停成功';
       this.title.className = 'result-title ok';
       this.subtitle.textContent = '稳稳停住，尊界V800 毫发无损';
-    } else if (result.reason === 'brake_snap') {
-      this.title.textContent = '刹车踏板断裂';
-      this.title.className = 'result-title fail';
-      this.subtitle.textContent = `踏板力度达到 ${BRAKE.breakForceN} N，整车失控翻滚飞出`;
+    } else if (result.reason === 'brake_pedal_failed') {
+      // 决策①：冗余刹停 = 判负（制动系统已失效，「侥幸逃生」≠ 成功刹停）
+      this.title.textContent = '踏板断裂 · 冗余刹停';
+      this.title.className = 'result-title warn';
+      this.subtitle.textContent = `踏板在 ${BRAKE.breakForceN} N 处断裂，紧急制动安全冗余以 25% 力度把车拖停 —— 判负`;
     } else {
       this.title.textContent = '撞上路障';
       this.title.className = 'result-title fail';
@@ -193,8 +194,17 @@ export class Result {
       ['制动用时', hasRun ? `${result.stopSeconds.toFixed(3)} s` : '-'],
       ['制动距离', hasRun ? `${result.stopDistance.toFixed(1)} m` : '-'],
       ['峰值踏板力', hasRun ? `${Math.round(result.peakForce)} N` : '-'],
-      ['得分', `${result.score}`]
+      ['得分', result.degraded ? `${result.score}（判负）` : `${result.score}`]
     ];
+    if (result.degraded) {
+      stats.push(
+        ['断裂时刻', result.snapTime !== null ? `${result.snapTime.toFixed(2)} s` : '-'],
+        [
+          '冗余制动距离',
+          result.redundancyDistance !== null ? `${result.redundancyDistance.toFixed(1)} m` : '-'
+        ]
+      );
+    }
     this.statsGrid.innerHTML = '';
     for (const [label, value] of stats) {
       const cell = el('div', 'stat');
@@ -234,7 +244,7 @@ export class Result {
   private redraw(): void {
     if (!this.lastResult || this.root.classList.contains('hidden')) return;
     if (this.lastResult.samples.length < 2) return;
-    drawChart(this.chartCanvas, this.lastResult.samples, this.lastResult.reason === 'brake_snap');
+    drawChart(this.chartCanvas, this.lastResult.samples, this.lastResult.degraded);
   }
 
   hide(): void {

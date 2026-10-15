@@ -5,8 +5,10 @@
  * 车头朝向：游戏前进方向 -Z，新工厂车头 +Z → root 内置 rotY(PI) 中枢。
  */
 import * as THREE from 'three';
+import { GRAVITY } from '../config/physics';
 import { carTextureSizeFor, type QualityTier } from '../config/quality';
 import { damp, makeLcg } from '../util/math';
+import { mergeSafe } from '../util/geo';
 import {
   createZunjieV800LuxuryMPVModel,
   type ProceduralModelRuntime,
@@ -30,6 +32,10 @@ export interface CarLike {
   setBrakeHeat(t: number): void;
   updateCluster(speedKmh: number, forceN: number, g: number, gear: string): void;
   setSteer(angle: number): void;
+  /** 踏板断裂：刹车踏板绕顶端转轴翻脱并落进脚窝（纯运动学，不进 cannon） */
+  snapPedal(): void;
+  /** 复位踏板几何（重开一局） */
+  resetPedal(): void;
   update(camera: THREE.Camera, dt: number): void;
   dispose(): void;
 }
@@ -474,6 +480,48 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
   // 全被实心 cylinder 胎/圈包住 100% 不可见）。盘缘 20 开窗改由 wheel-alloy 的
   // Canvas 贴图（见 createWheelFaceTexture）承担，各 1 个 draw call。
 
+  // ---- 刹车踏板（集成层程序化组件，未走 spec 工厂）----
+  // 为什么不放进 spec：踏板是「断裂演出」的交互主体，需要运行时运动学脱落动画，
+  // 而工厂产物不可手改、本轮也不重跑生成器（回写 spec → validate → generate → tsc）。
+  // 已登记为集成层资产；下一轮若动 spec 再迁为 meso 组件（切记 level 必须 meso）。
+  // 几何合并为单个 mesh（踏板臂 + 踏板面 + 3 条防滑条）→ 整帧只 +1 draw call，
+  // 且仅在相机贴近（车内视角）时可见，车外视角零开销。
+  // 坐标口径同 spec：工厂车头 +Z、驾驶侧 +X（与 cabin 机位实测一致）。
+  const PEDAL_PIVOT = new THREE.Vector3(0.5, 0.62, 1.42);
+  /** 脚窝地板相对枢轴的高度（下坠终止面） */
+  const PEDAL_FALL_FLOOR = -0.3;
+  /** 断裂瞬间绕顶端转轴甩向驾驶者的角度 */
+  const PEDAL_FLING_RAD = (40 * Math.PI) / 180;
+  const pedalMat = new THREE.MeshPhysicalMaterial({
+    color: 0x16181c,
+    roughness: 0.78,
+    metalness: 0.12,
+    clearcoat: 0.2,
+    clearcoatRoughness: 0.6
+  });
+  const pedalGeo = mergeSafe([
+    // 踏板臂（自顶端枢轴向下 0.26）
+    new THREE.BoxGeometry(0.032, 0.26, 0.036).translate(0, -0.13, 0),
+    // 踏板面（略向驾驶者后倾）
+    new THREE.BoxGeometry(0.1, 0.13, 0.024).translate(0, -0.28, -0.055),
+    // 防滑条 ×3
+    new THREE.BoxGeometry(0.088, 0.008, 0.006).translate(0, -0.245, -0.112),
+    new THREE.BoxGeometry(0.088, 0.008, 0.006).translate(0, -0.28, -0.112),
+    new THREE.BoxGeometry(0.088, 0.008, 0.006).translate(0, -0.315, -0.112)
+  ]);
+  const pedal = new THREE.Mesh(pedalGeo, pedalMat);
+  pedal.name = 'brake-pedal';
+  pedal.position.copy(PEDAL_PIVOT);
+  pedal.castShadow = false;
+  pedal.visible = false;
+  body.add(pedal);
+  /** 脱落动画状态：pedalT < 0 表示未断裂 */
+  let pedalT = -1;
+  let pedalVelY = 0;
+  let pedalVelZ = 0;
+  let pedalBounce = 0;
+  let pedalRotX = 0;
+
   // ---- 灯光材质（按 ID 查表 + 回退链，缺失只 warn 一次）----
   const warnedLamps = new Set<string>();
   /**
@@ -651,6 +699,7 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
   };
 
   let tmpQuat = new THREE.Quaternion();
+  const tmpVec = new THREE.Vector3();
 
   const api: CarLike = {
     root,
@@ -687,6 +736,23 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
     setSteer(_angle: number): void {
       /* 直线赛道无转向输入 */
     },
+    snapPedal(): void {
+      if (pedalT >= 0) return; // 只触发一次
+      pedalT = 0;
+      pedalVelY = 0;
+      pedalVelZ = -0.4; // 向驾驶者方向（-Z = 车后）甩出
+      pedalBounce = 0;
+      pedalRotX = 0;
+    },
+    resetPedal(): void {
+      pedalT = -1;
+      pedalVelY = 0;
+      pedalVelZ = 0;
+      pedalBounce = 0;
+      pedalRotX = 0;
+      pedal.position.copy(PEDAL_PIVOT);
+      pedal.rotation.set(0, 0, 0);
+    },
     update(camera: THREE.Camera, dt: number): void {
       const now = performance.now() * 0.001;
       // 刹车灯平滑 + snap 闪红（damp：帧率无关）
@@ -713,6 +779,39 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
         camera.getWorldQuaternion(tmpQuat);
         for (const c of caps) c.quaternion.copy(tmpQuat);
       }
+
+      // ---- 踏板：脱落动画 + 可见性门控 ----
+      // 可见性按「相机到踏板的世界距离」判定：只有车内视角（≈1.1m）会进入，
+      // 车外各机位（hood ≈3.0 / side 4.6 / chase 8）全部剔除 → 车外零 draw call。
+      pedal.getWorldPosition(tmpVec);
+      const pedalVisible = tmpVec.distanceTo(camera.position) < 2.5;
+      if (pedal.visible !== pedalVisible) pedal.visible = pedalVisible;
+      if (pedalT >= 0) {
+        pedalT += dt;
+        if (pedalT < 0.12) {
+          // 0–0.12s：绕顶端枢轴向驾驶者甩转 40°
+          pedalRotX = (pedalT / 0.12) * PEDAL_FLING_RAD;
+        } else {
+          // 之后自由落体 + 向驾驶者方向的初速，落地两次弹跳（恢复系数 0.35/0.2）后躺平
+          pedalVelY -= GRAVITY * dt;
+          pedal.position.y += pedalVelY * dt;
+          pedal.position.z += pedalVelZ * dt;
+          const floor = PEDAL_PIVOT.y + PEDAL_FALL_FLOOR;
+          if (pedal.position.y <= floor) {
+            pedal.position.y = floor;
+            if (pedalBounce < 2 && Math.abs(pedalVelY) > 0.35) {
+              pedalVelY = -pedalVelY * (pedalBounce === 0 ? 0.35 : 0.2);
+              pedalVelZ *= 0.6;
+              pedalBounce++;
+            } else {
+              pedalVelY = 0;
+              pedalVelZ = 0;
+            }
+          }
+          pedalRotX = damp(pedalRotX, 1.45, 3, dt); // 渐稳至平躺
+        }
+        pedal.rotation.x = pedalRotX;
+      }
     },
     dispose(): void {
       model.traverse((o) => {
@@ -724,6 +823,8 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
           else disposeMaterial(mat);
         }
       });
+      pedalGeo.dispose();
+      pedalMat.dispose();
       gaugeTex.dispose();
       // 集成层贴图：已挂到材质上的会被 disposeMaterial 的 emissiveMap 槽释放，
       // 剩下的（材质缺失时的孤儿）在这里兜底，重复 dispose 无副作用

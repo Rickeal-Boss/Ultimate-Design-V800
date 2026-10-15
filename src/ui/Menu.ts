@@ -16,8 +16,9 @@ export class Menu {
       el('p', undefined, '① 倒计时后，向上拖动【油门滑条】（或按住 W/↑）全力加速'),
       el('p', undefined, '② 车速达到 100 km/h，【切入刹车】按钮亮起；达到限速会自动切入'),
       el('p', undefined, '③ 刹车段：向上拖动【刹车滑条】（或按住 S/↓/空格）施加踏板力'),
-      el('p', undefined, '④ 满程保持会过载爬升——踏板力达到 1612 N 将当场断裂翻滚'),
-      el('p', undefined, '⑤ 在路障（2600m）前刹停即成功，得分 = 初速² ÷ 用时')
+      el('p', undefined, '④ 满程保持会过载爬升——踏板力达到 1612 N 踏板断裂：制动失效，紧急制动安全冗余以 25% 力度接管（判负，但车会停住）'),
+      el('p', undefined, '⑤ 在路障（1300m）前刹停即成功，得分 = 初速² ÷ 用时；紧贴路障再切入会撞上去'),
+      el('p', undefined, '⑥ 拖动画面转视角 · 滚轮/捏合缩放 · 双击回正（V 键循环机位）')
     );
     const btnRow = el('div', 'btn-row');
     this.startButton = el('button', 'btn primary') as HTMLButtonElement;

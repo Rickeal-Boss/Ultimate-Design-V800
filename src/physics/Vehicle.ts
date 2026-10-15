@@ -3,7 +3,7 @@
  * dv/dt = (F_motor×throttle − F_drag − F_roll − F_brake − F_regen) / m
  * 电机模型：恒扭矩(T_max)→恒功率曲线，效率 0.92；电子限速 200km/h。
  */
-import { BRAKE, DRIVE, GRAVITY, MS_TO_KMH, VEHICLE } from '../config/physics';
+import { BRAKE, DRIVE, GRAVITY, MS_TO_KMH, REDUNDANCY, VEHICLE } from '../config/physics';
 
 export interface VehicleState {
   /** m/s */
@@ -25,12 +25,18 @@ export interface VehicleState {
 export interface VehicleInput {
   /** 油门 0~1（BRAKE 段锁定 0） */
   throttle: number;
-  /** 刹车滑条 0~1 */
+  /** 刹车滑条 0~1（踏板断裂后上层传 0：驾驶员踩空） */
   brake: number;
   /** 动力切断（切入刹车段后 true） */
   powerCut: boolean;
-  /** 踏板力 N（BrakeModel 输出） */
+  /** 踏板力 N（BrakeModel 输出；断裂后为 0） */
   pedalForce: number;
+  /**
+   * 踏板断裂后由安全冗余回路提供的减速度 m/s²（0 = 未启用）。
+   * 由上层用 redundancyDecel(pedalState) 计算后传入，保持 Vehicle 为纯函数
+   * （不依赖 BrakeModel，便于无头单测）。
+   */
+  redundancyDecel?: number;
 }
 
 export function createVehicleState(): VehicleState {
@@ -105,17 +111,26 @@ export function stepVehicle(state: VehicleState, dt: number, input: VehicleInput
   let mechDecel = 0;
 
   if (input.powerCut) {
-    // 刹车段：动力切断，再生 + 机械制动
-    regen = input.brake > 0 ? regenDecel(input.brake) : 0;
-    const demand = input.pedalForce * BRAKE.decelPerNewton;
+    // 刹车段：动力切断，再生 + 机械制动。
+    // 踏板断裂后由冗余回路提供全部制动力（regen 是否叠加由 REDUNDANCY.includeRegen 决定）。
+    const redundant = Math.max(0, input.redundancyDecel ?? 0);
+    regen = redundant > 0
+      ? (REDUNDANCY.includeRegen ? regenDecel(input.brake) : 0)
+      : input.brake > 0
+        ? regenDecel(input.brake)
+        : 0;
+    const demand = redundant > 0 ? redundant : input.pedalForce * BRAKE.decelPerNewton;
     state.mechDecelDemand = demand;
-    // ABS 拟真：机械制动减速度 clamp 至 μg
+    // ABS 拟真：机械制动减速度 clamp 至 μg（冗余 2.70 m/s² 远低于上限，不触发钳制）
     mechDecel = Math.min(demand, BRAKE.absMaxDecel);
     // 热衰减：温度按摩擦功（F_mech × v）的时间积分累积——真实热衰减只认摩擦功，
     // 与「是否逼近抓地上限」无关（一次 200→0 满刹就应明显升温）。
     // 标定：brakeTempGain 使一次满刹（≈5.09 MJ）ΔT≈0.6，连续第二把触发 ×0.85。
+    // 冗余回路为独立液压回路且力度仅 1/4，默认不计热（heatless），
+    // 避免「已被判负」的局再叠加一层热衰减惩罚。
     // 松滑条/轻踩（mechDecel ≤ 0.5 m/s²）转为缓慢降温，温度不会无限累积。
-    if (mechDecel > 0.5) {
+    const heating = mechDecel > 0.5 && !(redundant > 0 && REDUNDANCY.heatless);
+    if (heating) {
       state.brakeTemp = Math.min(
         1.5,
         state.brakeTemp + mechDecel * MASS * speed * dt * BRAKE.brakeTempGain

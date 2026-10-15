@@ -1,13 +1,14 @@
 /**
  * cannon-es 世界封装（仅碰撞/翻滚用——纵向动力学走 Vehicle 纯函数）。
- * 撞车/断裂翻滚：刚体台车 + 地面 + 两侧护栏 + 路障块（仅撞路障时激活）。
+ * 撞路障翻滚：刚体台车 + 地面 + 两侧护栏 + 路障块（撞路障时激活为动态刚体）。
  * P2 范围：不含车轮 detach 与碎片（P3 补充），翻滚动画本身为真物理。
+ *
+ * 玩法改版（决策①）：踏板断裂不再翻滚 —— 冗余制动接管至停车，翻滚只留给撞路障，
+ * 故 `brake_snap` 分支与其「凭空赋予侧向+翻转角速度」的能量来源问题一并删除。
  */
 import * as CANNON from 'cannon-es';
 import * as THREE from 'three';
 import { GRAVITY, TRACK, VEHICLE } from '../config/physics';
-
-export type CrashReason = 'barrier' | 'brake_snap';
 
 export interface CrashImpact {
   strength: number; // 0~1
@@ -52,16 +53,10 @@ export class World {
   /**
    * 开始一次翻滚模拟。
    * @param carRoot 车模根节点（其 position/quaternion 会被物理接管）
-   * @param reason 撞车原因（brake_snap 时给侧向+翻转角速度；barrier 时顶起前翻）
    * @param speedMs 撞击瞬间的车速 m/s
-   * @param barrierMeshes 路障块网格（撞路障时转为动态刚体）
+   * @param barrierMeshes 路障块网格（转为动态刚体）
    */
-  begin(
-    carRoot: THREE.Object3D,
-    reason: CrashReason,
-    speedMs: number,
-    barrierMeshes: THREE.Object3D[]
-  ): void {
+  begin(carRoot: THREE.Object3D, speedMs: number, barrierMeshes: THREE.Object3D[]): void {
     this.reset();
     this.active = true;
     this.time = 0;
@@ -104,23 +99,17 @@ export class World {
       carRoot.quaternion.z,
       carRoot.quaternion.w
     );
-    if (reason === 'brake_snap') {
-      const e = Math.min(1, speedMs / 50);
-      car.velocity.set(2.6 * e, 4.8 * e + 1.5, -speedMs * 0.9);
-      car.angularVelocity.set(-1.6 * e, 0.9 * e, 5.6 * e + 1.2);
-    } else {
-      car.velocity.set(0, 1.2, -speedMs);
-      car.angularVelocity.set(-0.6, 0.3, 1.6);
-      for (const mesh of barrierMeshes) {
-        this.barrierHome.set(mesh, { p: mesh.position.clone(), q: mesh.quaternion.clone() });
-        const block = new CANNON.Body({
-          mass: 650,
-          shape: new CANNON.Box(new CANNON.Vec3(0.95, 0.5, 0.35)),
-          position: new CANNON.Vec3(mesh.position.x, mesh.position.y, mesh.position.z)
-        });
-        world.addBody(block);
-        this.barriers.push({ mesh, body: block });
-      }
+    car.velocity.set(0, 1.2, -speedMs);
+    car.angularVelocity.set(-0.6, 0.3, 1.6);
+    for (const mesh of barrierMeshes) {
+      this.barrierHome.set(mesh, { p: mesh.position.clone(), q: mesh.quaternion.clone() });
+      const block = new CANNON.Body({
+        mass: 650,
+        shape: new CANNON.Box(new CANNON.Vec3(0.95, 0.5, 0.35)),
+        position: new CANNON.Vec3(mesh.position.x, mesh.position.y, mesh.position.z)
+      });
+      world.addBody(block);
+      this.barriers.push({ mesh, body: block });
     }
     car.addEventListener('collide', (event: { contact: CANNON.ContactEquation }) => {
       const impact = Math.abs(event.contact.getImpactVelocityAlongNormal());

@@ -1,15 +1,30 @@
 /**
  * 游戏会话状态机（原版 ng 类语义移植 + 新滑条交互）。
  * MENU → COUNTDOWN(3,2,1) → ACCEL（油门滑条）→ BRAKE（刹车滑条，油门锁定 0）
- * → STOPPED（成功）/ CRASHED（撞路障 / brake_snap 翻滚）→ Result
+ * → STOPPED（成功）/ CRASHED（撞路障）→ Result。
+ *
+ * 踏板断裂不再翻滚（玩法改版 决策①）：踏板脱开后由紧急制动安全冗余以满载 1/4 力度
+ * 接管至停车。冗余刹停仍是「失败」（制动系统已失效），但车辆获救 —— 结算档位
+ * `brake_pedal_failed`；翻滚演出只保留给撞路障。
  * 物理推进全部委托 physics/ 纯函数。
  */
 import { BRAKE, MS_TO_KMH, TRACK, VEHICLE, calcScore } from '../config/physics';
-import { createPedalState, forceSnap, resetPedal, stepPedal, PedalState } from '../physics/BrakeModel';
+import {
+  createPedalState,
+  redundancyDecel,
+  resetPedal,
+  stepPedal,
+  PedalState
+} from '../physics/BrakeModel';
 import { createVehicleState, stepVehicle, VehicleState } from '../physics/Vehicle';
 
 export type Phase = 'menu' | 'countdown' | 'accel' | 'brake' | 'stopped' | 'crashed';
-export type CrashReason = 'barrier' | 'brake_snap';
+/**
+ * 失败原因。
+ * - `barrier`：撞上路障（唯一会触发 cannon 翻滚演出的结局）
+ * - `brake_pedal_failed`：踏板断裂、冗余制动把车拖停（判负，但不翻滚）
+ */
+export type CrashReason = 'barrier' | 'brake_pedal_failed';
 
 export interface Sample {
   t: number;
@@ -21,6 +36,12 @@ export interface Sample {
 export interface RunResult {
   success: boolean;
   reason?: CrashReason;
+  /** 是否经历过踏板断裂（冗余制动完成刹停 / 断裂后撞障） */
+  degraded: boolean;
+  /** 踏板断裂时刻（刹车段计时 s），未断裂为 null */
+  snapTime: number | null;
+  /** 冗余制动推进的距离 m（断裂点 → 停车点），未断裂为 null */
+  redundancyDistance: number | null;
   v0Kmh: number;
   stopSeconds: number;
   stopDistance: number;
@@ -34,6 +55,8 @@ export type GameEvent =
   | { type: 'start' }
   | { type: 'brake_too_early' }
   | { type: 'brake_start'; v0Kmh: number }
+  /** 踏板断裂：不结算失败，由 Game 播放脱落演出并提示冗余接管 */
+  | { type: 'pedal_snap'; atSeconds: number; speedKmh: number }
   | { type: 'stopped'; result: RunResult }
   | { type: 'crash'; reason: CrashReason; result: RunResult };
 
@@ -58,6 +81,18 @@ export class StateMachine {
   brakeElapsed = 0;
   v0Kmh = 0;
   peakForce = 0;
+  /** 踏板断裂点里程 m（冗余制动距离 = 当前里程 − 此值） */
+  private snapDistance = 0;
+  /** 冗余制动是否已接管（HUD 徽标 / 刹车灯 / 仪表用） */
+  get redundancyActive(): boolean {
+    return this.pedal.snapped;
+  }
+  /** 最近一次结算结果（结算面板之外的诊断 / 自动化测试入口） */
+  lastResult: RunResult | null = null;
+  /** 冗余制动已推进距离 m */
+  get redundancyDistance(): number {
+    return this.pedal.snapped ? Math.max(0, this.vehicle.distance - this.snapDistance) : 0;
+  }
   private countdown = 0;
   private lastCountdownTick = 0;
   private brakeStartDistance = 0;
@@ -98,8 +133,10 @@ export class StateMachine {
     this.brakeElapsed = 0;
     this.v0Kmh = 0;
     this.peakForce = 0;
+    this.snapDistance = 0;
     this.samples = [];
     this.sampleTimer = 0;
+    this.lastResult = null;
     this.countdown = COUNTDOWN_SECONDS;
     this.lastCountdownTick = 4;
     this.phase = 'countdown';
@@ -169,30 +206,44 @@ export class StateMachine {
   }
 
   private stepBraking(dt: number, input: SessionInput, events: GameEvent[]): void {
-    const snapped = stepPedal(this.pedal, dt, Math.max(0, Math.min(1, input.brake)));
+    // 踏板断裂后驾驶员踩空：刹车输入失效，制动力全部来自冗余回路
+    const driverBrake = this.pedal.snapped ? 0 : Math.max(0, Math.min(1, input.brake));
+    const justSnapped = stepPedal(this.pedal, dt, driverBrake, this.brakeElapsed);
     stepVehicle(this.vehicle, dt, {
       throttle: 0, // 刹车段油门锁定 0
-      brake: input.brake,
+      brake: driverBrake,
       powerCut: true,
-      pedalForce: this.pedal.pedalForce
+      pedalForce: this.pedal.pedalForce,
+      redundancyDecel: redundancyDecel(this.pedal)
     });
     this.brakeElapsed += dt;
-    this.peakForce = Math.max(this.peakForce, this.pedal.pedalForce);
+    // 峰值力在断裂瞬间达到 breakForceN（此后踏板力归零，故断裂后须显式取满值）
+    this.peakForce = Math.max(
+      this.peakForce,
+      this.pedal.snapped ? BRAKE.breakForceN : this.pedal.pedalForce
+    );
+    if (justSnapped) {
+      this.snapDistance = this.vehicle.distance;
+      this.peakForce = BRAKE.breakForceN;
+      events.push({
+        type: 'pedal_snap',
+        atSeconds: this.brakeElapsed,
+        speedKmh: this.speedKmh
+      });
+    }
     this.sampleTimer += dt;
     if (this.sampleTimer >= SAMPLE_INTERVAL) {
       this.sampleTimer -= SAMPLE_INTERVAL;
       this.recordSample();
     }
-    if (snapped) {
-      forceSnap(this.pedal);
-      this.peakForce = BRAKE.breakForceN;
-      this.crash('brake_snap', events);
-      return;
-    }
+    // 断裂不再直接失败：车辆继续行驶、由冗余制动接管，直至停下或撞路障
     if (!this.checkBarrier(events) && this.vehicle.speed <= BRAKE.stopSpeed) {
       this.vehicle.speed = 0;
       this.phase = 'stopped';
-      events.push({ type: 'stopped', result: this.result(true) });
+      events.push({
+        type: 'stopped',
+        result: this.result(!this.pedal.snapped, this.pedal.snapped ? 'brake_pedal_failed' : undefined)
+      });
     }
   }
 
@@ -220,16 +271,23 @@ export class StateMachine {
     if (this.v0Kmh > 0) this.recordSample();
     const stopSeconds = Math.round(this.brakeElapsed * 1000) / 1000;
     const v0Kmh = Math.round(this.v0Kmh * 10) / 10;
-    return {
+    const degraded = this.pedal.snapped;
+    this.lastResult = {
       success,
       reason,
+      degraded,
+      snapTime: this.pedal.snapTime,
+      redundancyDistance: degraded ? this.redundancyDistance : null,
       v0Kmh,
       stopSeconds,
       stopDistance: Math.max(0, this.vehicle.distance - this.brakeStartDistance),
       peakForce: this.peakForce,
+      // 冗余刹停计 0 分（决策①：制动系统已失效，不算成功刹停；本机最佳不被污染）。
+      // 惩罚不靠新系数：刹停时间被拉长 3 倍以上，公式本身已足够体现。
       score: success ? calcScore(v0Kmh, stopSeconds) : 0,
       samples: this.samples.slice()
     };
+    return this.lastResult;
   }
 }
 

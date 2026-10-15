@@ -19,6 +19,8 @@ export interface HudInput {
   canBrake: boolean;
   braking: boolean;
   atLimiter: boolean;
+  /** 踏板断裂后冗余制动已接管（踏板力条置灰 + 「踏板脱开」文案） */
+  redundancy: boolean;
 }
 
 export interface HudCallbacks {
@@ -51,6 +53,7 @@ export class Hud {
   private tempBox: HTMLElement;
   private countdown: HTMLElement;
   private toast: HTMLElement;
+  private redundancyBadge: HTMLElement;
   private viewButtons = new Map<CameraMode, HTMLButtonElement>();
   private toastTimer = 0;
   private lastSpeedText = '';
@@ -123,7 +126,25 @@ export class Hud {
     this.cutInButton.textContent = '切入刹车';
     this.cutInButton.disabled = true;
 
-    this.root.append(left, mid, viewGroup, forceWrap, this.countdown, this.toast, this.cutInButton);
+    // 安全冗余徽标（踏板断裂后常驻，脉动提示「在刹，但不是你踩的」）
+    this.redundancyBadge = el('div', 'redundancy-badge hidden', '安全冗余 25%');
+
+    this.root.append(
+      left,
+      mid,
+      viewGroup,
+      forceWrap,
+      this.countdown,
+      this.toast,
+      this.redundancyBadge,
+      this.cutInButton
+    );
+  }
+
+  /** 踏板断裂 → 冗余制动接管：徽标常驻、踏板力条置灰显示「踏板脱开」 */
+  setRedundancyActive(active: boolean): void {
+    setVisible(this.redundancyBadge, active);
+    this.forceBox.classList.toggle('snapped', active);
   }
 
   setVisible(visible: boolean): void {
@@ -157,9 +178,14 @@ export class Hud {
       this.forceFill.style.height = height;
       this.lastForceHeight = height;
     }
-    this.setText(this.forceValue, `${Math.round(data.pedalForce)} N`);
-    this.forceBox.classList.toggle('danger', ratio > 0.85);
-    this.forceBox.classList.toggle('overheat', ratio > 0.7);
+    // 断裂后踏板力恒为 0，直接显示「0 N」会让玩家误以为没在刹车 → 改文案并置灰
+    if (data.redundancy) {
+      this.setText(this.forceValue, '踏板脱开');
+    } else {
+      this.setText(this.forceValue, `${Math.round(data.pedalForce)} N`);
+    }
+    this.forceBox.classList.toggle('danger', !data.redundancy && ratio > 0.85);
+    this.forceBox.classList.toggle('overheat', !data.redundancy && ratio > 0.7);
 
     // 制动温度条
     const tempRatio = Math.min(1, data.brakeTemp / 1.5);

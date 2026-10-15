@@ -4,7 +4,7 @@
  */
 import * as THREE from 'three';
 import { Sfx, vibrate } from '../audio/Sfx';
-import { BRAKE, CRASH, MS_TO_KMH, VEHICLE } from '../config/physics';
+import { BRAKE, CRASH, MS_TO_KMH, REDUNDANCY, VEHICLE } from '../config/physics';
 import { AdaptiveQuality, type QualitySettings } from '../config/quality';
 import { World } from '../physics/World';
 import { FxSystems } from '../fx';
@@ -28,6 +28,12 @@ import type { GameEvent, RunResult } from './StateMachine';
 import { StateMachine } from './StateMachine';
 
 const PHYSICS_HZ = 120;
+/**
+ * 冗余制动期间的刹车灯亮度。
+ * 断裂后 pedalForce 归零，若沿用 `pedalForce > 1 ? 8 : 1.6` 会让灯掉回怠速 ——
+ * 车明明在减速却灭灯。取 4.5（介于怠速 1.6 与全力 8 之间）：在刹，但不是你踩的。
+ */
+const REDUNDANT_BRAKE_LIGHT = 4.5;
 
 export class Game {
   private readonly scene = new THREE.Scene();
@@ -65,8 +71,15 @@ export class Game {
   /** 结算段自动机位计时（side 2s → orbit；crash 段 crash 2s → side 2s → orbit） */
   private settleTimer = 0;
   private lastImpactStrength = 0;
-  /** 自动测试钩子：URL hash 含 autodrive 时，油门全开→限速自动切入→满刹车（QA 用） */
+  /** 自动测试钩子：URL hash 含 autodrive 时，油门全开→限速自动切入→b=0.9 刹车（QA 用） */
   private readonly autoDrive = window.location.hash.includes('autodrive');
+  /** 断裂路径钩子：autodrive + snapdrive 时刹车滑条拉满（1.0），用于冗余制动回归 */
+  private readonly snapDrive = window.location.hash.includes('snapdrive');
+  /** 断裂后车内视角停留计时（看踏板脱落），≤0 时交还常规机位 */
+  private snapCamTimer = 0;
+  private snapCamReturn: CameraMode | null = null;
+  /** 自由视角输入解绑器（与 Sliders 同模式：一次性 AbortController） */
+  private lookAbort: AbortController | null = null;
 
   constructor(
     container: HTMLElement,
@@ -115,6 +128,7 @@ export class Game {
 
     window.addEventListener('resize', this.onResize);
     window.addEventListener('orientationchange', this.onOrientation);
+    this.wireFreeLook();
 
     this.loop = new Loop(
       {
@@ -147,6 +161,10 @@ export class Game {
     this.sliders.reset();
     this.sliders.showCutIn();
     this.crashWorld.reset();
+    this.hud.setRedundancyActive(false);
+    this.snapCamTimer = 0;
+    this.snapCamReturn = null;
+    this.car.resetPedal();
     this.sm.start();
     this.rig.setMode('chase');
     this.cycleIndex = 0;
@@ -171,6 +189,60 @@ export class Game {
   private engageBrake(): void {
     this.sfx.unlock();
     this.forceBrakeTick = true;
+  }
+
+  /**
+   * 自由视角输入（决策③）：画布上拖拽 = 环绕/转头，滚轮 = 缩放，双击 = 回正。
+   * 滑条与视角按钮是独立 DOM 且已各自 setPointerCapture，事件不会冒泡到此处，
+   * 因此直接挂在 renderer.domElement 上零冲突；全部经一个 AbortController 解绑。
+   */
+  private wireFreeLook(): void {
+    const canvas = this.renderer.domElement;
+    const ac = new AbortController();
+    this.lookAbort = ac;
+    const opts = { signal: ac.signal } as const;
+    let pointerId = -1;
+    let lastX = 0;
+    let lastY = 0;
+
+    canvas.addEventListener(
+      'pointerdown',
+      (e) => {
+        if (pointerId !== -1) return;
+        pointerId = e.pointerId;
+        lastX = e.clientX;
+        lastY = e.clientY;
+        canvas.setPointerCapture(e.pointerId);
+      },
+      opts
+    );
+    canvas.addEventListener(
+      'pointermove',
+      (e) => {
+        if (e.pointerId !== pointerId) return;
+        this.rig.addLook(e.clientX - lastX, e.clientY - lastY);
+        lastX = e.clientX;
+        lastY = e.clientY;
+      },
+      opts
+    );
+    const release = (e: PointerEvent): void => {
+      if (e.pointerId !== pointerId) return;
+      pointerId = -1;
+      this.rig.endLook();
+    };
+    canvas.addEventListener('pointerup', release, opts);
+    canvas.addEventListener('pointercancel', release, opts);
+    canvas.addEventListener('dblclick', () => this.rig.resetLook(), opts);
+    canvas.addEventListener(
+      'wheel',
+      (e) => {
+        e.preventDefault();
+        this.rig.addZoom(e.deltaY);
+      },
+      { signal: ac.signal, passive: false }
+    );
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault(), opts);
   }
 
   /** V 键：ACCEL/BRAKE 段循环 chase→hood→cabin→side */
@@ -198,7 +270,8 @@ export class Game {
     if (this.sm.phase === 'accel' && this.sm.atLimiter) this.forceBrakeTick = true;
     const phase = this.sm.phase;
     const autoThrottle = this.autoDrive && phase === 'accel' ? 1 : 0;
-    const autoBrake = this.autoDrive && phase === 'brake' ? 0.9 : 0; // 0.9：低于断裂阈值，验证成功刹停路径；改 1 可验证断裂路径
+    // 0.9：低于断裂阈值，验证成功刹停路径；#snapdrive 时拉满 1.0 验证断裂→冗余路径
+    const autoBrake = this.autoDrive && phase === 'brake' ? (this.snapDrive ? 1 : 0.9) : 0;
     const events = this.sm.step(step, {
       throttle: Math.max(autoThrottle, this.sliders.throttle),
       brake: Math.max(autoBrake, this.sliders.brake),
@@ -237,38 +310,59 @@ export class Game {
         vibrate(20);
         this.hud.showToast(`动力切断 · 初速度 ${event.v0Kmh.toFixed(1)} km/h`);
         break;
-      case 'stopped':
+      case 'pedal_snap':
+        // 断裂不再翻滚：踏板脱开 + 冗余回路接管，车辆继续行驶至停稳（判负）
+        this.sfx.snap();
+        this.car.flashBrakeSnap();
+        this.car.snapPedal();
+        this.brakeFlash = 0.85;
+        this.rig.addShake(0.5);
+        vibrate([90, 40, 200]);
+        this.hud.setRedundancyActive(true);
+        this.hud.showToast(
+          `刹车踏板断裂！紧急制动安全冗余介入（${Math.round(REDUNDANCY.forceRatio * 100)}% 力度）`,
+          true,
+          2400
+        );
+        // 车内视角停留看踏板脱落，之后交还常规机位（玩家仍可自由拖拽环视）
+        this.snapCamReturn = this.rig.mode === 'cabin' ? null : this.rig.mode;
+        this.rig.setMode('cabin');
+        this.hud.setActiveView('cabin');
+        this.snapCamTimer = REDUNDANCY.cabinHoldSeconds;
+        break;
+      case 'stopped': {
         // 结算段：电影侧机位 2s → orbit（frame 内按 settleTimer 推进）
+        const degraded = event.result.degraded;
         this.settleTimer = 0;
         this.rig.setMode('side');
         this.hud.setActiveView('side');
-        this.sfx.success();
-        vibrate([30, 50, 30]);
-        this.hud.showToast('完美刹停！', false, 1600);
+        this.hud.setRedundancyActive(false);
+        if (degraded) {
+          this.sfx.warn();
+          this.hud.showToast('冗余制动拖停 · 制动系统已失效（判负）', true, 2200);
+        } else {
+          this.sfx.success();
+          vibrate([30, 50, 30]);
+          this.hud.showToast('完美刹停！', false, 1600);
+        }
         this.pendingResult = { result: event.result, delay: 1.8 };
         break;
+      }
       case 'crash': {
+        // 翻滚演出只留给撞路障（断裂已改为冗余接管，不再有凭空的翻滚能量来源）
         const speedMs = this.sm.vehicle.speed;
         this.rig.setMode('crash');
         this.hud.setActiveView('crash');
         this.settleTimer = 0;
+        this.hud.setRedundancyActive(false);
         this.car.body.rotation.set(0, 0, 0);
-        this.crashWorld.begin(this.car.root, event.reason, speedMs, this.road.barrierBlocks);
+        this.crashWorld.begin(this.car.root, speedMs, this.road.barrierBlocks);
         this.crashElapsed = 0;
-        if (event.reason === 'brake_snap') {
-          this.sfx.snap();
-          this.car.flashBrakeSnap();
-          this.fx.burstSparks(this.car.root.localToWorld(new THREE.Vector3(0, 0.55, -2.2)));
-          this.brakeFlash = 0.85;
-          this.rig.addShake(0.6);
-          this.hud.showToast('刹车踏板断裂！', true, 2200);
-        } else {
-          this.sfx.impact(1);
-          this.fx.burstSparks(this.car.root.localToWorld(new THREE.Vector3(0, 0.6, -2.7)));
-          this.brakeFlash = 0.5;
-          this.rig.addShake(0.8);
-          this.hud.showToast('撞上路障！', true, 2200);
-        }
+        this.sfx.impact(1);
+        this.fx.burstSparks(this.car.root.localToWorld(new THREE.Vector3(0, 0.6, -2.7)));
+        this.brakeFlash = 0.5;
+        this.rig.addShake(0.8);
+        this.hud.showToast('撞上路障！', true, 2200);
         vibrate([90, 40, 200]);
         this.pendingResult = { result: event.result, delay: CRASH.resultDelaySeconds };
         break;
@@ -309,7 +403,15 @@ export class Game {
       1
     );
     this.car.setBrakeHeat(nextHeat);
-    this.car.setBrakeLights(braking && this.sm.pedal.pedalForce > 1 ? 8 : 1.6);
+    // 断裂后踏板力归零，但车仍在减速：冗余期间刹车灯保持中亮（不是你踩的，但在刹）
+    const redundant = this.sm.redundancyActive;
+    this.car.setBrakeLights(
+      braking && redundant
+        ? REDUNDANT_BRAKE_LIGHT
+        : braking && this.sm.pedal.pedalForce > 1
+          ? 8
+          : 1.6
+    );
     this.car.setHeadlights(this.sm.phase !== 'menu');
     this.car.update(this.rig.camera, dt);
 
@@ -326,6 +428,16 @@ export class Game {
       Math.abs(vehicle.accel) / 9.81,
       braking ? 'B' : 'D'
     );
+
+    // ---- 断裂特写：车内视角停留 cabinHoldSeconds 后交还原机位 ----
+    if (this.snapCamTimer > 0 && this.sm.phase === 'brake') {
+      this.snapCamTimer -= dt;
+      if (this.snapCamTimer <= 0 && this.rig.mode === 'cabin' && this.snapCamReturn) {
+        this.rig.setMode(this.snapCamReturn);
+        this.hud.setActiveView(this.snapCamReturn);
+        this.snapCamReturn = null;
+      }
+    }
 
     // ---- 结算段自动机位：crash 2s → side 2s → orbit；stopped: side 2s → orbit ----
     if (this.sm.phase === 'stopped' || this.sm.phase === 'crashed') {
@@ -355,18 +467,30 @@ export class Game {
     this.postfx.setFlash(this.brakeFlash);
 
     // ---- 音效（电机 / 风噪 / 胎啸 / 回收提示）----
+    // 冗余制动段胎啸按固定 1/4 力度给（比静默滑行更有「电子泵介入」的听感）
     // 电子限速处动力主动退出（B-1）：电机音从「满载」降为滑行档，
     // 与 G 表/俯仰归零保持一致，避免「钉速却全油门」的失真。
     const atLimiter = vehicle.speed * MS_TO_KMH >= VEHICLE.maxSpeedKmh - 0.05;
     this.sfx.updateEngine(this.sm.speedKmh, pedaling && !braking && !atLimiter);
     this.sfx.updateWind(vehicle.speed / (VEHICLE.maxSpeedKmh / MS_TO_KMH));
-    this.sfx.updateSqueal(braking ? Math.min(1, this.sm.pedal.pedalForce / BRAKE.breakForceN) : 0, vehicle.speed);
+    this.sfx.updateSqueal(
+      braking
+        ? redundant
+          ? REDUNDANCY.forceRatio
+          : Math.min(1, this.sm.pedal.pedalForce / BRAKE.breakForceN)
+        : 0,
+      vehicle.speed
+    );
     this.sfx.updateRegen(vehicle.regenPowerKw > 1);
 
     // ---- 特效（轮胎烟 / 刹车痕 / 火花；low 档内部自动关闭）----
     this.fx.update(dt, {
       carRoot: this.car.root,
-      brakeIntensity: braking ? Math.min(1, this.sm.pedal.pedalForce / BRAKE.breakForceN) : 0,
+      brakeIntensity: braking
+        ? redundant
+          ? REDUNDANCY.forceRatio
+          : Math.min(1, this.sm.pedal.pedalForce / BRAKE.breakForceN)
+        : 0,
       speedMs: vehicle.speed,
       braking
     });
@@ -394,7 +518,8 @@ export class Game {
       scorePreview: this.sm.scorePreview,
       canBrake: this.sm.canBrake,
       braking,
-      atLimiter: this.sm.atLimiter
+      atLimiter: this.sm.atLimiter,
+      redundancy: redundant
     });
     this.sliders.setCutInEnabled(this.sm.canBrake || braking, this.sm.canBrake && !braking);
     this.sliders.render(dt);
@@ -424,6 +549,8 @@ export class Game {
   dispose(): void {
     window.removeEventListener('resize', this.onResize);
     window.removeEventListener('orientationchange', this.onOrientation);
+    this.lookAbort?.abort();
+    this.lookAbort = null;
     this.loop.dispose();
     this.sfx.dispose();
     this.fx.dispose();
