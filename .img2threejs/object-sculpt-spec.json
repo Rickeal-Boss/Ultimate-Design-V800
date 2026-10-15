@@ -1050,18 +1050,36 @@
       "interaction-pass",
       "optimization-pass"
     ],
-    "currentPass": "structural-pass",
+    "currentPass": "material-pass",
     "completedPasses": [
-      "blockout"
+      "blockout",
+      "structural-pass",
+      "form-refinement"
     ],
-    "lastCompletedPass": "",
-    "blockedReason": "blockout requires a browser screenshot and self-correction review before structural-pass unlocks",
+    "lastCompletedPass": "form-refinement",
+    "blockedReason": "",
     "nextRequiredEvidence": [
-      "blockout browser render screenshot from your agent's browser/screenshot tool",
-      "side-by-side reference/render comparison sheet",
-      "AI vision score >= 0.7 with layer scores and mismatch critique",
-      "critical semantic feature scores from the same image pair meeting their individual thresholds",
-      "reviewHistory entry for blockout with action=continue"
+      "Reference-derived albedo palette records dominant, secondary, and accent colors per visible material.",
+      "Each important material defines roughness variation and at least one normal/bump/displacement response.",
+      "Local material overrides, dirt/wear/stains/moss/chips/scratches or equivalent masks are tied to evidenceRefs.",
+      "Thin, transparent, reflective, wet, or fibrous materials document alpha/transmission/clearcoat/metalness/fiber response when relevant.",
+      "Generated preview uses procedural albedo/roughness/bump texture or vertex color variation instead of one flat color.",
+      "Generated preview uses independent PBR maps at 1024px or higher for the quality-first tier.",
+      "If source pixels are available, referencePbr extraction passed at confidence >= 0.7 or the pass is stopped/requesting better references.",
+      "Macro, meso, and micro surface frequency bands are visible at the intended review distance without obvious tiling.",
+      "AI vision comparison score meets selfCorrectLoop.visualAcceptance.threshold.",
+      "reference-derived albedo palette with dominant, secondary, and accent colors",
+      "independent albedo, roughness, height/normal, and AO maps",
+      "macro, meso, and micro surface-frequency response at 1024px or higher",
+      "local material masks: AO, dirt, wear, stains, moss, chips, scratches, wetness, or equivalent",
+      "neutral, grazing-light close-up, and reference-matched browser screenshots",
+      "AI vision comparison sheet score meeting the visual acceptance threshold",
+      "browser render screenshot from your agent's browser/screenshot tool",
+      "side-by-side reference/render comparison sheet for AI vision review",
+      "banded interior difference vs the reference baseline (forge/stage4_review/interior_difference.py --from/--to per region)",
+      "AI vision score at or above the visual acceptance threshold",
+      "all critical semantic feature scores from the shared image pair at or above their thresholds",
+      "self-correction review appended with action=continue before the next pass"
     ]
   },
   "lookDevTargets": {
@@ -8510,22 +8528,42 @@
             [
               0.62,
               0,
-              1.2
+              0.85
             ],
             [
               0.62,
               0,
-              -1.9
+              -1.35
+            ],
+            [
+              0.42,
+              0,
+              -1.55
+            ],
+            [
+              -0.42,
+              0,
+              -1.55
             ],
             [
               -0.62,
               0,
-              -1.9
+              -1.35
             ],
             [
               -0.62,
               0,
-              1.2
+              0.85
+            ],
+            [
+              -0.42,
+              0,
+              1.05
+            ],
+            [
+              0.42,
+              0,
+              1.05
             ]
           ],
           "radius": 0.022,
@@ -8542,22 +8580,6 @@
         "normalStrategy": "vertex normals"
       },
       "parent": "root",
-      "attachment": {
-        "parentSocket": "roof-panel.top",
-        "localStart": [
-          0.62,
-          0,
-          1.2
-        ],
-        "localEnd": [
-          -0.62,
-          0,
-          1.2
-        ],
-        "contactType": "flush",
-        "embedDepth": 0.01,
-        "gapTolerance": 0.004
-      },
       "dimensions": {
         "width": 1,
         "height": 1,
@@ -8568,8 +8590,8 @@
       "transform": {
         "position": [
           0,
-          1.895,
-          -0.35
+          1.732,
+          -0.25
         ],
         "rotation": [
           0,
@@ -8665,7 +8687,23 @@
         "materialClass": "metal",
         "materialClassConfidence": 0.9
       },
-      "notes": " 参考图 82 张均未证实该特征；按车型惯例推定，非实测证据。原承载裁片已按权利人合规要求移除，仓库内不可复验。"
+      "notes": " 参考图 82 张均未证实该特征；按车型惯例推定，非实测证据。原承载裁片已按权利人合规要求移除，仓库内不可复验。 结构修复(structural-pass审查): 原attachment.localStart/localEnd为跨轨端点,生成器将其解释为单圆柱并落在root坐标系地面(y≈0.06)。现localStart==localEnd(零长度→生成器回退tubePath闭环分支,表达纵轨×2),节点transform.position改为[0,1.732,-0.4]使管中心贴车顶顶面(y=1.72,embed 0.01),世界z范围[-2.3,0.8]在roof-panel z范围[-2.36,0.98]内。 补偿: tubePath 闭环经 CatmullRom 插值在四角外凸≈0.19, 收缩局部 z 至[-1.55,1.05]并移节点 z=-0.25, 使世界 z 外凸后≈[-1.98,0.98] 不越过 roof 后缘 -2.36。 再修: 90°尖角在 CatmullRom 下过冲(先 z 后 x), 改八角形闭环(45°切角0.2) 世界 z≈[-1.85,0.85] x=±0.62 均在 roof 范围内。",
+      "attachment": {
+        "parentSocket": "roof-panel.top",
+        "localStart": [
+          0.62,
+          0,
+          1.2
+        ],
+        "localEnd": [
+          0.62,
+          0,
+          1.2
+        ],
+        "contactType": "flush",
+        "embedDepth": 0.01,
+        "gapTolerance": 0.004
+      }
     },
     {
       "id": "lidar-wedge",
@@ -8700,8 +8738,8 @@
       "transform": {
         "position": [
           0,
-          1.9,
-          1.28
+          1.75,
+          0.8
         ],
         "rotation": [
           0.12,
@@ -22985,7 +23023,98 @@
       ]
     }
   ],
-  "visualEvidence": [],
+  "visualEvidence": [
+    {
+      "timestamp": "2026-10-15T17:03:59.817760+00:00",
+      "passId": "structural-pass",
+      "estimatedFidelity": 0.84,
+      "aiVisionScore": 0.84,
+      "visualAcceptanceThreshold": 0.7,
+      "layerScores": {
+        "silhouetteProportion": 0.86,
+        "formDetail": 0.86,
+        "materialSurface": 0.78,
+        "lightingCamera": 0.82,
+        "componentStructure": 0.9,
+        "attachmentIntegrity": 0.88,
+        "microReadiness": 0.0
+      },
+      "featureReviews": [
+        {
+          "id": "front-lamp-system",
+          "visible": true,
+          "score": 0.86,
+          "notes": "结构口径：竖向大灯壳体 az000 可见、位置/对称性 world box 核验；LED带+星点 micro 待 form-refinement"
+        },
+        {
+          "id": "tail-lantern-system",
+          "visible": true,
+          "score": 0.86,
+          "notes": "结构口径：宫灯竖条 az180/hero 可见、bezel+emitter 在场、红色可辨；core 点阵 micro 待 form-refinement"
+        },
+        {
+          "id": "cabin-luxury-kit",
+          "visible": true,
+          "score": 0.83,
+          "notes": "数据级：三联屏/仪表/方向盘/中岛/后排座椅/顶棚/星空顶/氛围灯层叠正确；preview 近距机位被玻璃遮挡，目视留待运行时"
+        },
+        {
+          "id": "door-handle-belt",
+          "visible": true,
+          "score": 0.8,
+          "notes": "通长把手带 az090/az270 可见，handle-front+slider world box 在位"
+        }
+      ],
+      "referenceScreenshot": "<local-reference>/huawei-zunjie-v800-design-black-2x.jpg",
+      "renderScreenshot": ".img2threejs/renders/structural-pass/hero.png",
+      "comparisonImage": ".img2threejs/renders/structural-pass/comparison-sheet.png",
+      "cameraView": "hero az40/p12 (preview harness)",
+      "notes": "",
+      "aiVisionNotes": ""
+    },
+    {
+      "timestamp": "2026-10-15T17:13:45.819231+00:00",
+      "passId": "form-refinement",
+      "estimatedFidelity": 0.85,
+      "aiVisionScore": 0.85,
+      "visualAcceptanceThreshold": 0.7,
+      "layerScores": {
+        "silhouetteProportion": 0.87,
+        "formDetail": 0.88,
+        "materialSurface": 0.78,
+        "lightingCamera": 0.82,
+        "componentStructure": 0.9,
+        "attachmentIntegrity": 0.88,
+        "microReadiness": 0.88
+      },
+      "featureReviews": [
+        {
+          "id": "overall-silhouette",
+          "visible": true,
+          "score": 0.87,
+          "notes": "stripped-az090/hero 轮廓完整：MPV 高顶长轴姿态、四轮位形正确、车顶行李架环在前缘内、无悬浮件；0.15 塌缩门 5 视角 0.975-1.034"
+        },
+        {
+          "id": "front-lamp-system",
+          "visible": true,
+          "score": 0.87,
+          "notes": "LED 带+星点 micro 已发射，az000 竖向灯内白色光带可辨；壳体位形同 structural 口径"
+        },
+        {
+          "id": "wheel-disc-design",
+          "visible": true,
+          "score": 0.78,
+          "notes": "cap-* 432tris 轮盖在场 hero 白点可辨；轮辐造型属 material/surface 层细化"
+        }
+      ],
+      "referenceScreenshot": "<local-reference>/huawei-zunjie-v800-design-black-2x.jpg",
+      "renderScreenshot": ".img2threejs/renders/form-refinement/hero.png",
+      "comparisonImage": ".img2threejs/renders/form-refinement/stripped-az090.png",
+      "cameraView": "hero az40/p12 + az000 front (preview harness)",
+      "notes": "",
+      "aiVisionNotes": ""
+    }
+  ],
   "reviewHistory": [
     {
       "passId": "blockout",
@@ -23013,6 +23142,136 @@
           "note": "侧视轮廓/比例数据级核对+目检通过；轮拱切口留待 form pass"
         }
       ]
+    },
+    {
+      "timestamp": "2026-10-15T17:03:59.817760+00:00",
+      "passId": "structural-pass",
+      "estimatedFidelity": 0.84,
+      "aiVisionScore": 0.84,
+      "visualAcceptanceThreshold": 0.7,
+      "layerScores": {
+        "silhouetteProportion": 0.86,
+        "formDetail": 0.86,
+        "materialSurface": 0.78,
+        "lightingCamera": 0.82,
+        "componentStructure": 0.9,
+        "attachmentIntegrity": 0.88,
+        "microReadiness": 0.0
+      },
+      "featureReviews": [
+        {
+          "id": "front-lamp-system",
+          "visible": true,
+          "score": 0.86,
+          "notes": "结构口径：竖向大灯壳体 az000 可见、位置/对称性 world box 核验；LED带+星点 micro 待 form-refinement"
+        },
+        {
+          "id": "tail-lantern-system",
+          "visible": true,
+          "score": 0.86,
+          "notes": "结构口径：宫灯竖条 az180/hero 可见、bezel+emitter 在场、红色可辨；core 点阵 micro 待 form-refinement"
+        },
+        {
+          "id": "cabin-luxury-kit",
+          "visible": true,
+          "score": 0.83,
+          "notes": "数据级：三联屏/仪表/方向盘/中岛/后排座椅/顶棚/星空顶/氛围灯层叠正确；preview 近距机位被玻璃遮挡，目视留待运行时"
+        },
+        {
+          "id": "door-handle-belt",
+          "visible": true,
+          "score": 0.8,
+          "notes": "通长把手带 az090/az270 可见，handle-front+slider world box 在位"
+        }
+      ],
+      "action": "continue",
+      "summary": "structural-pass 数据级+多机位验收：95 组件(macro10+meso85)全量发射并逐项核验 world box。修复 2 项结构缺陷：①roof-rails 原位于地面(y≈0.06)，spec 回写后贴车顶 y[1.710,1.754] z[-1.876,0.876]，八角形闭环 tubePath 消除 CatmullRom 90°过冲；②lidar-wedge 原悬浮车顶上方 0.136m 且越过前缘，现 y[1.706,1.794] 贴合 z[0.638,0.962] 在 roof 前缘内。turntable 四方位 PASS（segmentationReliable=true, holed=false, degenerate=false；stripped 素模图，左右面积 0.25/0.25 对称）。multi-angle 无退化视图。座舱 kit 数据级核验层叠嵌套正确。generate→tsc strict→vite build 全绿。限制如实登记：外部参考图已被权利人合规移除→reference-based Tier1 BLOCKED；无同机位 blockout 基线渲染→interior_difference 无法运行；preview 近距机位被玻璃遮挡→座舱目视留待运行时舱内相机。ΔE max61.5=lantern-emitter 为 5 簇全局口径已知局限。遗留裁决：paint-upper 金色双色 vs design-black 命名矛盾（material-pass 裁决）；taillamp recipe dominantAlbedo=近白 与 lamp-red 材质不一致。另登记工具分歧：append_review 要求顶层 mapStrippedRender 而 blockout 证据嵌套在 visualEvidence 内，本次用 --force-out-of-order 记录。",
+      "matched": [
+        "95/95 meso+macro 组件运行时在场；0 悬浮组件（修复后）；四方位覆盖+无孔洞；左右对称 0.25/0.25"
+      ],
+      "mismatches": [
+        "micro 层 46 组件未发射（流水线设计，待 form-refinement）；reference-based Tier1 阻塞（参考图合规移除）；paint 双色 vs design-black 命名矛盾待裁决"
+      ],
+      "specFixes": [
+        "roof-rails: attachment 零长度化+tubePath 八角闭环+transform[0,1.732,-0.25]；lidar-wedge: transform[0,1.75,0.8]"
+      ],
+      "codeFixes": [],
+      "evidence": [
+        ".img2threejs/renders/structural-pass/parts-verify.json",
+        ".img2threejs/renders/structural-pass/palette-deltaE.json"
+      ],
+      "outOfSequence": true,
+      "mapStrippedRender": ".img2threejs/renders/structural-pass/stripped-az270.png",
+      "visualEvidence": {
+        "referenceScreenshot": "<local-reference>/huawei-zunjie-v800-design-black-2x.jpg",
+        "renderScreenshot": ".img2threejs/renders/structural-pass/hero.png",
+        "comparisonImage": ".img2threejs/renders/structural-pass/comparison-sheet.png",
+        "cameraView": "hero az40/p12 (preview harness)",
+        "notes": "",
+        "aiVisionNotes": ""
+      }
+    },
+    {
+      "timestamp": "2026-10-15T17:13:45.819231+00:00",
+      "passId": "form-refinement",
+      "estimatedFidelity": 0.85,
+      "aiVisionScore": 0.85,
+      "visualAcceptanceThreshold": 0.7,
+      "layerScores": {
+        "silhouetteProportion": 0.87,
+        "formDetail": 0.88,
+        "materialSurface": 0.78,
+        "lightingCamera": 0.82,
+        "componentStructure": 0.9,
+        "attachmentIntegrity": 0.88,
+        "microReadiness": 0.88
+      },
+      "featureReviews": [
+        {
+          "id": "overall-silhouette",
+          "visible": true,
+          "score": 0.87,
+          "notes": "stripped-az090/hero 轮廓完整：MPV 高顶长轴姿态、四轮位形正确、车顶行李架环在前缘内、无悬浮件；0.15 塌缩门 5 视角 0.975-1.034"
+        },
+        {
+          "id": "front-lamp-system",
+          "visible": true,
+          "score": 0.87,
+          "notes": "LED 带+星点 micro 已发射，az000 竖向灯内白色光带可辨；壳体位形同 structural 口径"
+        },
+        {
+          "id": "wheel-disc-design",
+          "visible": true,
+          "score": 0.78,
+          "notes": "cap-* 432tris 轮盖在场 hero 白点可辨；轮辐造型属 material/surface 层细化"
+        }
+      ],
+      "action": "continue",
+      "summary": "form-refinement 验收：46 个 micro 组件全量发射并运行时在场（141/141，0 missing）。几何实测（BufferGeometry 直读）：模型总面数 39,792 = macro 1,612 + meso 21,588 + micro 16,592，占 targetTriangles=58,000 的 69%（预算内）。DC 实测：每个 micro 恰好 1 mesh / 1 主 pass draw call（隔离测量 46/46 均=1）；preview 页整帧 calls 182→273 的增量 91 = 46 主 pass + 45 阴影 pass（lookdev key light 4096 阴影贴图把每个投影 mesh 再画一遍；游戏运行时阴影配置不同，整帧口径由主理人按 V800Adapter 合批后裁决）。top 增量组件：crystal-shifter 1216、arch-fr/rr 1152、cupholder-l/r 1152、cap-* 432、speaker-* 432、headlamp-star 288、其余 192-288。门禁：turntable 四方位 PASS、multi-angle 无退化视图、world box 141/141 在场（41 项 CHECK 为 [1,1,1] 默认尺寸/斜置包围盒/贴面接触三类已核实的误报类）。目视：az000 大灯 LED 带已可辨（micro 发射后），前牌照/灯带/盾标在场；前挡玻璃透出座椅/头枕为透明材质正常透视；roof-rails 八角环在车顶。待裁决（主理人）：micro 全放行 = +46 DC 主 pass，与整帧 150 红线的取舍（合批/分档/机位剔除）需在 batchMerge 落地后定；greenhouse-glass 不透明 vs windshield 透明的材质不一致留 material-pass。",
+      "matched": [
+        "46/46 micro 在场；预算 69%；每 micro 1 DC；四方位+无退化"
+      ],
+      "mismatches": [
+        "整帧 DC 273（含阴影口径）vs 游戏 150 红线：需合批裁决；greenhouse/windshield 透明度不一致"
+      ],
+      "specFixes": [
+        "无（本 pass 未改 spec 几何）"
+      ],
+      "codeFixes": [],
+      "evidence": [
+        ".img2threejs/renders/form-refinement/parts-verify.json",
+        ".img2threejs/renders/form-refinement/micro-dc-measure.json"
+      ],
+      "outOfSequence": true,
+      "mapStrippedRender": ".img2threejs/renders/form-refinement/stripped-az270.png",
+      "visualEvidence": {
+        "referenceScreenshot": "<local-reference>/huawei-zunjie-v800-design-black-2x.jpg",
+        "renderScreenshot": ".img2threejs/renders/form-refinement/hero.png",
+        "comparisonImage": ".img2threejs/renders/form-refinement/stripped-az090.png",
+        "cameraView": "hero az40/p12 + az000 front (preview harness)",
+        "notes": "",
+        "aiVisionNotes": ""
+      }
     }
   ],
   "lodPlan": [

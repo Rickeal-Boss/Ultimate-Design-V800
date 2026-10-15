@@ -4,3 +4,9 @@ dist/
 .DS_Store
 Thumbs.db
 npm-debug.log*
+
+# 临时构建与浏览器 profile（Edge CDP 产物，体积大且不可复现）
+.img2threejs/tmpbuild/
+*.binarypb
+*.db-journal
+*.db-wal

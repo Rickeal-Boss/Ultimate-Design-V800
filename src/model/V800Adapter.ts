@@ -9,6 +9,7 @@ import { GRAVITY } from '../config/physics';
 import { carTextureSizeFor, type QualityTier } from '../config/quality';
 import { damp, makeLcg } from '../util/math';
 import { mergeSafe } from '../util/geo';
+import { batchMergeStatic, UV_CONTENT_MATERIAL_IDS } from './batchMerge';
 import {
   createZunjieV800LuxuryMPVModel,
   type ProceduralModelRuntime,
@@ -412,11 +413,18 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
   root.add(body);
 
   // ---- 节点索引（按组件 ID）----
-  const byId = new Map<string, THREE.Object3D>();
-  model.traverse((o) => {
-    const cid = (o.userData.sculptComponent?.id ?? o.userData.component?.id) as string | undefined;
-    if (cid && !byId.has(cid)) byId.set(cid, o);
-  });
+  // 同一 ID 可能在 pivot 节点和它的 mesh 上各挂一份；traverse 先序，先命中的是外层 pivot，
+  // 运行时要驱动的正是 pivot，这个顺序恰好是我们想要的。
+  const indexComponents = (scope: THREE.Object3D): Map<string, THREE.Object3D> => {
+    const map = new Map<string, THREE.Object3D>();
+    scope.traverse((o) => {
+      const cid = (o.userData.sculptComponent?.id ?? o.userData.component?.id) as string | undefined;
+      if (cid && !map.has(cid)) map.set(cid, o);
+    });
+    return map;
+  };
+  // let 而不是 const：合批之后要重建一次（见下方 §静态合批）
+  let byId = indexComponents(model);
 
   // ---- 材质索引（按材质 ID：userData.sculptMaterial.id）----
   const matById = new Map<string, THREE.MeshPhysicalMaterial>();
@@ -700,6 +708,54 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
 
   let tmpQuat = new THREE.Quaternion();
   const tmpVec = new THREE.Vector3();
+  /** billboard 折算用：cap 父节点的世界朝向 */
+  const tmpParentQuat = new THREE.Quaternion();
+
+  // ---------------------------------------------------------------------------
+  // 静态合批：静止的同材质小件压成单 draw call（DC 是本项目唯一贴红线的指标）
+  //
+  // 位置选在这里是有意的：上面已经把全部运行时引用取好了 ——
+  // wheels[].spin（每帧 rotation.x）、caps（每帧 quaternion）、gaugeMesh（适配器持有引用）、
+  // pedal（每帧 position/rotation/visible）、matById（按材质 ID 驱动灯光）。
+  // 合批器拿这些对象当保护清单，它们整棵子树都不参与合并。
+  //
+  // 合并范围只有 model 子树：pedal 挂在 body 上，天然不在其中，免受影响。
+  // 合并后 leaf mesh 会被摘掉，byId 里若有条目指向它们就变成「挂着但不再渲染」的死引用，
+  // 因此紧接着按合并后的树重建索引，保证后续按 ID 取到的一定还是活对象。
+  // 灯光链路按 matById 的材质对象驱动，材质实例不因合批改变，这条链路不受影响（已实测）。
+  // UV_CONTENT_MATERIAL_IDS：这是一份**防御性契约**，不是修复合批缺陷 ——
+  // 合批本身不破坏 UV（实测 17,882 个顶点 UV 误差 = 0），但这些材质承载的是"画面内容"
+  // （UI 画布 / 星空图案 / 灯箱点阵），集成层会在运行时换贴图（仪表 gaugeTex、星空顶 emissiveMap）；
+  // 一旦将来 spec 把它们拆成多实例或逐件换图，合批会让"换一张图"连带影响同组其他 mesh。
+  // 当前每组只有 1 个成员（crystal 有 2 个，但已被「透明 + counter-rotate」拦下），排除代价 0 DC。
+  // ---------------------------------------------------------------------------
+  const batchStats = batchMergeStatic(model, {
+    excludeObjects: [...wheels.map((w) => w.spin), ...caps, ...(gaugeMesh ? [gaugeMesh] : []), pedal],
+    excludeMaterialIds: UV_CONTENT_MATERIAL_IDS
+  });
+  if (batchStats.problems.length > 0) {
+    console.error('[V800Adapter] 静态合批自校验失败：', batchStats.problems);
+  }
+  byId = indexComponents(model);
+  if (typeof window !== 'undefined' && window.location.hash.includes('batchmerge')) {
+    console.table(
+      batchStats.groups
+        .slice()
+        .sort((a, b) => b.meshesIn - a.meshesIn)
+        .map((g) => ({
+          材质: g.materialId,
+          '合并前 mesh': g.meshesIn,
+          '合并后 mesh': g.meshesOut,
+          减少: g.meshesIn - g.meshesOut,
+          合并件三角面: g.triangles
+        }))
+    );
+    console.info(
+      `[V800Adapter] #batchmerge：mesh ${batchStats.meshesBefore} → ${batchStats.meshesAfter}，` +
+        `可见 ${batchStats.drawCallsBefore} → ${batchStats.drawCallsAfter}，` +
+        `Draw Call −${batchStats.drawCallReduction}`
+    );
+  }
 
   const api: CarLike = {
     root,
@@ -774,10 +830,21 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
         starMat.emissiveIntensity =
           STARLIGHT_BASE_INTENSITY * (1 + STARLIGHT_BREATH_AMPLITUDE * Math.sin(phase));
       }
-      // 悬浮轮标朝向相机
+      // ---- 悬浮轮标朝向相机（billboard）----
+      // 坑（已修）：这里曾经直接把相机的**世界**四元数赋给 cap 的**局部** quaternion。
+      // cap 在 model 子树下，而 body 带 rotation.y = π（工厂车头 +Z → 游戏 -Z），
+      // 于是 cap 的世界朝向 = 父链旋转 × 相机朝向，实际差 180° —— 字标是背对相机的。
+      // 正确做法是先把目标世界朝向折算到父节点局部空间：local = parentWorldQ⁻¹ × cameraWorldQ。
       if (camera) {
         camera.getWorldQuaternion(tmpQuat);
-        for (const c of caps) c.quaternion.copy(tmpQuat);
+        for (const c of caps) {
+          if (c.parent) {
+            c.parent.getWorldQuaternion(tmpParentQuat);
+            c.quaternion.copy(tmpParentQuat).invert().multiply(tmpQuat);
+          } else {
+            c.quaternion.copy(tmpQuat); // 无父节点时局部即世界
+          }
+        }
       }
 
       // ---- 踏板：脱落动画 + 可见性门控 ----

@@ -1,0 +1,385 @@
+{
+ "callsAll": 275,
+ "trisAll": 76620,
+ "callsNoMicro": 184,
+ "trisNoMicro": 44652,
+ "dcDelta": 91,
+ "triDelta": 31968,
+ "per": [
+  {
+   "id": "hood-blister",
+   "calls": 1,
+   "tris": 192
+  },
+  {
+   "id": "bpillar-l",
+   "calls": 1,
+   "tris": 192
+  },
+  {
+   "id": "cpillar-l",
+   "calls": 1,
+   "tris": 192
+  },
+  {
+   "id": "bpillar-r",
+   "calls": 1,
+   "tris": 192
+  },
+  {
+   "id": "cpillar-r",
+   "calls": 1,
+   "tris": 192
+  },
+  {
+   "id": "shield-logo",
+   "calls": 1,
+   "tris": 192
+  },
+  {
+   "id": "headlamp-star-l",
+   "calls": 1,
+   "tris": 288
+  },
+  {
+   "id": "headlamp-star-r",
+   "calls": 1,
+   "tris": 288
+  },
+  {
+   "id": "bumper-light-strip",
+   "calls": 1,
+   "tris": 192
+  },
+  {
+   "id": "bumper-chrome-lip",
+   "calls": 1,
+   "tris": 192
+  },
+  {
+   "id": "front-plate",
+   "calls": 1,
+   "tris": 288
+  },
+  {
+   "id": "lantern-core-l",
+   "calls": 1,
+   "tris": 288
+  },
+  {
+   "id": "lantern-core-r",
+   "calls": 1,
+   "tris": 288
+  },
+  {
+   "id": "fender-badge-l",
+   "calls": 1,
+   "tris": 192
+  },
+  {
+   "id": "mirror-cap-l",
+   "calls": 1,
+   "tris": 192
+  },
+  {
+   "id": "fender-badge-r",
+   "calls": 1,
+   "tris": 192
+  },
+  {
+   "id": "mirror-cap-r",
+   "calls": 1,
+   "tris": 192
+  },
+  {
+   "id": "fuel-door",
+   "calls": 1,
+   "tris": 192
+  },
+  {
+   "id": "arch-fr",
+   "calls": 1,
+   "tris": 1152
+  },
+  {
+   "id": "arch-rr",
+   "calls": 1,
+   "tris": 1152
+  },
+  {
+   "id": "cap-fl",
+   "calls": 1,
+   "tris": 432
+  },
+  {
+   "id": "cap-fr",
+   "calls": 1,
+   "tris": 432
+  },
+  {
+   "id": "cap-rl",
+   "calls": 1,
+   "tris": 432
+  },
+  {
+   "id": "cap-rr",
+   "calls": 1,
+   "tris": 432
+  },
+  {
+   "id": "dash-chrome-strip",
+   "calls": 1,
+   "tris": 192
+  },
+  {
+   "id": "tweeter-l",
+   "calls": 1,
+   "tris": 224
+  },
+  {
+   "id": "tweeter-r",
+   "calls": 1,
+   "tris": 224
+  },
+  {
+   "id": "steering-hub",
+   "calls": 1,
+   "tris": 432
+  },
+  {
+   "id": "crystal-shifter",
+   "calls": 1,
+   "tris": 1216
+  },
+  {
+   "id": "charge-pad",
+   "calls": 1,
+   "tris": 288
+  },
+  {
+   "id": "cupholder-l",
+   "calls": 1,
+   "tris": 1152
+  },
+  {
+   "id": "cupholder-r",
+   "calls": 1,
+   "tris": 1152
+  },
+  {
+   "id": "rear-control-screen",
+   "calls": 1,
+   "tris": 288
+  },
+  {
+   "id": "seat-driver-headrest",
+   "calls": 1,
+   "tris": 192
+  },
+  {
+   "id": "seat-passenger-headrest",
+   "calls": 1,
+   "tris": 192
+  },
+  {
+   "id": "seat-rear-l-headrest",
+   "calls": 1,
+   "tris": 192
+  },
+  {
+   "id": "seat-rear-l-legrest",
+   "calls": 1,
+   "tris": 192
+  },
+  {
+   "id": "seat-rear-l-armrest",
+   "calls": 1,
+   "tris": 192
+  },
+  {
+   "id": "seat-rear-r-headrest",
+   "calls": 1,
+   "tris": 192
+  },
+  {
+   "id": "seat-rear-r-legrest",
+   "calls": 1,
+   "tris": 192
+  },
+  {
+   "id": "seat-rear-r-armrest",
+   "calls": 1,
+   "tris": 192
+  },
+  {
+   "id": "overhead-console",
+   "calls": 1,
+   "tris": 192
+  },
+  {
+   "id": "speaker-fl",
+   "calls": 1,
+   "tris": 432
+  },
+  {
+   "id": "speaker-fr",
+   "calls": 1,
+   "tris": 432
+  },
+  {
+   "id": "speaker-rl",
+   "calls": 1,
+   "tris": 432
+  },
+  {
+   "id": "speaker-rr",
+   "calls": 1,
+   "tris": 432
+  }
+ ],
+ "perMeshTris": {
+  "root": 192,
+  "body-lower": 56,
+  "hood-panel": 192,
+  "hood-blister": 192,
+  "greenhouse-glass": 20,
+  "roof-panel": 32,
+  "windshield": 192,
+  "dpillar-l": 192,
+  "bpillar-l": 192,
+  "cpillar-l": 192,
+  "dpillar-r": 192,
+  "bpillar-r": 192,
+  "cpillar-r": 192,
+  "front-end": 192,
+  "chrome-brow": 192,
+  "maextro-mark": 288,
+  "shield-logo": 192,
+  "headlamp-l": 32,
+  "headlamp-led-l": 192,
+  "headlamp-star-l": 288,
+  "headlamp-r": 32,
+  "headlamp-led-r": 192,
+  "headlamp-star-r": 288,
+  "bumper-lower": 192,
+  "bumper-light-strip": 192,
+  "bumper-chrome-lip": 192,
+  "front-plate": 288,
+  "emblem-shield": 20,
+  "tailgate": 192,
+  "taillamp-l": 32,
+  "lantern-core-l": 288,
+  "lantern-bezel-l": 192,
+  "lantern-emitter-l": 192,
+  "lantern-signature-l": 192,
+  "taillamp-r": 32,
+  "lantern-core-r": 288,
+  "lantern-bezel-r": 192,
+  "lantern-emitter-r": 192,
+  "lantern-signature-r": 192,
+  "tail-window-trim": 192,
+  "chrome-belt-l": 192,
+  "window-belt-l": 192,
+  "handle-front-l": 192,
+  "handle-slider-l": 192,
+  "fender-badge-l": 192,
+  "rocker-l": 192,
+  "mirror-l": 192,
+  "mirror-cap-l": 192,
+  "chrome-belt-r": 192,
+  "window-belt-r": 192,
+  "handle-front-r": 192,
+  "handle-slider-r": 192,
+  "fender-badge-r": 192,
+  "rocker-r": 192,
+  "mirror-r": 192,
+  "mirror-cap-r": 192,
+  "fuel-door": 192,
+  "arch-fr": 1152,
+  "arch-rr": 1152,
+  "roof-rails": 768,
+  "lidar-wedge": 192,
+  "wheel-fl": 192,
+  "tire-fl": 432,
+  "rim-fl": 432,
+  "cap-fl": 432,
+  "wheel-fr": 192,
+  "tire-fr": 432,
+  "rim-fr": 432,
+  "cap-fr": 432,
+  "wheel-rl": 192,
+  "tire-rl": 432,
+  "rim-rl": 432,
+  "cap-rl": 432,
+  "wheel-rr": 192,
+  "tire-rr": 432,
+  "rim-rr": 432,
+  "cap-rr": 432,
+  "cabin-interior": 192,
+  "cabin-floor": 192,
+  "dash-upper": 192,
+  "dash-lower": 192,
+  "dash-chrome-strip": 192,
+  "tri-screen": 288,
+  "gauge-screen": 288,
+  "vents-strip": 192,
+  "tweeter-l": 224,
+  "tweeter-r": 224,
+  "steering": 1152,
+  "steering-hub": 432,
+  "tunnel-front": 192,
+  "crystal-shifter": 1216,
+  "charge-pad": 288,
+  "cupholder-l": 1152,
+  "cupholder-r": 1152,
+  "tunnel-rear": 192,
+  "rear-control-screen": 288,
+  "seat-driver": 192,
+  "seat-driver-back": 192,
+  "seat-driver-headrest": 192,
+  "seat-passenger": 192,
+  "seat-passenger-back": 192,
+  "seat-passenger-headrest": 192,
+  "seat-rear-l": 192,
+  "seat-rear-l-back": 192,
+  "seat-rear-l-headrest": 192,
+  "seat-rear-l-legrest": 192,
+  "seat-rear-l-armrest": 192,
+  "seat-rear-r": 192,
+  "seat-rear-r-back": 192,
+  "seat-rear-r-headrest": 192,
+  "seat-rear-r-legrest": 192,
+  "seat-rear-r-armrest": 192,
+  "headliner-front": 192,
+  "headliner-rear": 192,
+  "overhead-console": 192,
+  "ambient-strip-l": 384,
+  "ambient-strip-r": 384,
+  "door-panel-fl": 192,
+  "speaker-fl": 432,
+  "door-panel-fr": 192,
+  "speaker-fr": 432,
+  "door-panel-rl": 192,
+  "speaker-rl": 432,
+  "door-panel-rr": 192,
+  "speaker-rr": 432,
+  "curtain-l": 288,
+  "curtain-r": 288,
+  "starlight-headliner": 192,
+  "vent-grille": 192,
+  "crystal-sconce-l": 432,
+  "crystal-sconce-band-l": 432,
+  "crystal-sconce-r": 432,
+  "crystal-sconce-band-r": 432,
+  "wheel-cap-fl": 432,
+  "wheel-cap-fr": 432,
+  "wheel-cap-rl": 432,
+  "wheel-cap-rr": 432,
+  "handle-star-fl": 192,
+  "handle-star-fr": 192,
+  "handle-star-rl": 192,
+  "handle-star-rr": 192
+ },
+ "meshCount": 141,
+ "microCount": 46
+}

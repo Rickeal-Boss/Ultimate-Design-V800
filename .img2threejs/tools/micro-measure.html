@@ -1,0 +1,89 @@
+<!doctype html>
+<html><head><meta charset="UTF-8"><title>micro DC 测量</title></head>
+<body>
+<script type="module">
+import * as THREE from 'three';
+import {
+  createZunjieV800LuxuryMPVModel,
+  createZunjieV800LuxuryMPVLookDevLights,
+  createZunjieV800LuxuryMPVEnvironment,
+  frameZunjieV800LuxuryMPVCamera,
+  configureZunjieV800LuxuryMPVRenderer,
+} from '/src/model/createV800Model';
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setSize(1280, 760);
+renderer.setPixelRatio(1);
+configureZunjieV800LuxuryMPVRenderer(renderer);
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x241a1e);
+scene.environment = createZunjieV800LuxuryMPVEnvironment(renderer);
+const camera = new THREE.PerspectiveCamera(30, 1280 / 760, 0.05, 60);
+scene.add(createZunjieV800LuxuryMPVLookDevLights());
+const model = createZunjieV800LuxuryMPVModel({ textureSize: 1024 });
+scene.add(model);
+const CONTAINER = new Set(['root', 'cabin-interior']);
+model.traverse((o) => {
+  if ((o).isMesh) {
+    const cid = o.userData.sculptComponent?.id;
+    if (cid && CONTAINER.has(cid)) o.visible = false;
+  }
+});
+model.updateMatrixWorld(true);
+const box = new THREE.Box3().setFromObject(model);
+const center = box.getCenter(new THREE.Vector3());
+const ground = new THREE.Mesh(
+  new THREE.CircleGeometry(9, 48),
+  new THREE.MeshStandardMaterial({ color: 0x2c2226, roughness: 0.95 })
+);
+ground.rotation.x = -Math.PI / 2;
+ground.position.y = center.y - box.getSize(new THREE.Vector3()).y / 2 + 0.001;
+scene.add(ground);
+const az = (40 * Math.PI) / 180, pitch = (12 * Math.PI) / 180, dist = 8.4;
+camera.position.set(dist * Math.cos(pitch) * Math.sin(az), center.y + dist * Math.sin(pitch), dist * Math.cos(pitch) * Math.cos(az));
+camera.lookAt(0, center.y, 0);
+renderer.render(scene, camera);
+
+const allMeshes = [];
+model.traverse((o) => { if (o.isMesh) allMeshes.push(o); });
+const microMeshes = allMeshes.filter((m) => m.userData.sculptComponent?.level === 'micro');
+
+window.__measure = () => {
+  renderer.render(scene, camera);
+  const callsAll = renderer.info.render.calls;
+  const trisAll = renderer.info.render.triangles;
+  microMeshes.forEach((m) => (m.visible = false));
+  renderer.render(scene, camera);
+  const callsNoMicro = renderer.info.render.calls;
+  const trisNoMicro = renderer.info.render.triangles;
+  microMeshes.forEach((m) => (m.visible = true));
+  // 逐组件隔离测量
+  const per = [];
+  const other = allMeshes.filter((m) => !microMeshes.includes(m));
+  for (const m of microMeshes) {
+    allMeshes.forEach((x) => (x.visible = false));
+    ground.visible = false;
+    m.visible = true;
+    renderer.render(scene, camera);
+    per.push({
+      id: m.userData.sculptComponent?.id,
+      calls: renderer.info.render.calls,
+      tris: renderer.info.render.triangles,
+    });
+  }
+  allMeshes.forEach((x) => (x.visible = true));
+  ground.visible = true;
+  // 每 mesh 三角形数（从几何体直读）
+  const perMeshTris = {};
+  for (const m of allMeshes) {
+    const g = m.geometry;
+    const t = g.index ? g.index.count / 3 : (g.attributes.position?.count || 0) / 3;
+    const id = m.userData.sculptComponent?.id;
+    perMeshTris[id] = (perMeshTris[id] || 0) + Math.round(t);
+  }
+  return { callsAll, trisAll, callsNoMicro, trisNoMicro, dcDelta: callsAll - callsNoMicro, triDelta: trisAll - trisNoMicro, per, perMeshTris, meshCount: allMeshes.length, microCount: microMeshes.length };
+};
+window.__ready = true;
+</script>
+</body></html>

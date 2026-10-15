@@ -1,0 +1,94 @@
+{
+ "az270": {
+  "checked": 95,
+  "maxDeltaE": 61.5,
+  "worst": [
+   [
+    "lantern-emitter-l",
+    61.5
+   ],
+   [
+    "lantern-emitter-r",
+    61.5
+   ],
+   [
+    "ambient-strip-l",
+    44.89
+   ],
+   [
+    "ambient-strip-r",
+    44.89
+   ],
+   [
+    "maextro-mark",
+    42.55
+   ],
+   [
+    "headlamp-led-l",
+    42.55
+   ],
+   [
+    "headlamp-led-r",
+    42.55
+   ],
+   [
+    "handle-star-fl",
+    40.76
+   ],
+   [
+    "handle-star-fr",
+    40.76
+   ],
+   [
+    "handle-star-rl",
+    40.76
+   ]
+  ]
+ },
+ "az090": {
+  "checked": 95,
+  "maxDeltaE": 60.64,
+  "worst": [
+   [
+    "lantern-emitter-l",
+    60.64
+   ],
+   [
+    "lantern-emitter-r",
+    60.64
+   ],
+   [
+    "ambient-strip-l",
+    43.32
+   ],
+   [
+    "ambient-strip-r",
+    43.32
+   ],
+   [
+    "maextro-mark",
+    37.02
+   ],
+   [
+    "headlamp-led-l",
+    37.02
+   ],
+   [
+    "headlamp-led-r",
+    37.02
+   ],
+   [
+    "cabin-interior",
+    36.69
+   ],
+   [
+    "seat-driver",
+    36.69
+   ],
+   [
+    "seat-driver-back",
+    36.69
+   ]
+  ]
+ }
+}

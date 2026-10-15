@@ -1,0 +1,44 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>
+body{margin:0;background:#141014;color:#ddd;font:12px/1.4 monospace}
+h1{font-size:15px;margin:8px 12px;color:#e8c88a}
+h2{font-size:13px;margin:10px 12px 4px;color:#c9a86b}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:0 12px}
+.cell{background:#000;position:relative}
+.cell img{width:100%;display:block}
+.cell span{position:absolute;left:4px;top:4px;background:#000a;padding:1px 5px;font-size:11px;color:#9fd49f}
+table{border-collapse:collapse;margin:4px 12px 12px;font-size:11px}
+td,th{border:1px solid #444;padding:2px 8px;text-align:left}
+th{color:#e8c88a}
+.ok{color:#7fdc7f}.bad{color:#ff8f8f}.warn{color:#ffd479}
+</style></head><body>
+<h1>V800 structural-pass 多机位审查表（外部营销参考图已被权利人合规移除 → 无法并排对照；本表为程序化重建多机位自查表）</h1>
+<h2>A. 外观多机位（含材质）</h2>
+<div class="grid">
+<div class="cell"><img src="hero.png"><span>hero az40 p12</span></div>
+<div class="cell"><img src="az090.png"><span>az90 侧</span></div>
+<div class="cell"><img src="az000.png"><span>az0 前</span></div>
+<div class="cell"><img src="az180.png"><span>az180 后</span></div>
+<div class="cell"><img src="az270.png"><span>az270 侧</span></div>
+<div class="cell"><img src="top.png"><span>top p42</span></div>
+</div>
+<h2>B. 素模（无贴图，结构验证）</h2>
+<div class="grid">
+<div class="cell"><img src="stripped-hero.png"><span>stripped hero</span></div>
+<div class="cell"><img src="stripped-az090.png"><span>stripped az90</span></div>
+<div class="cell"><img src="stripped-top.png"><span>stripped top</span></div>
+</div>
+<h2>C. 数据核验（world box / 门禁）</h2>
+<table>
+<tr><th>项</th><th>结果</th></tr>
+<tr><td>运行时组件数</td><td class="ok">95 = macro10 + meso85（structural-pass 范围全量；micro 46 按流水线设计待 form-refinement）</td></tr>
+<tr><td>renderer.info</td><td>tris=44556, calls=182（preview 页；预算 targetTriangles=58000 → 77%，maxDrawCalls=42 为游戏整帧口径、preview 页含 lookdev 灯光/地面不可直接对比）</td></tr>
+<tr><td>turntable 四方位（0/90/180/270）</td><td class="ok">PASS：covered=true, segmentationReliable=true, holed=false, degenerate=false（stripped 素模图；--allow-holes 未触发）</td></tr>
+<tr><td>multi-angle 退化视图</td><td class="ok">无 degenerate（5 视角面积比 0.975~1.031）</td></tr>
+<tr><td>调色板 ΔE（spec-recipe vs 渲染主色簇）</td><td class="warn">max 61.5 = lantern-emitter（自发光件在 5 簇全局口径下天然偏高，脚本自述口径限制）；车漆/镀铬主色簇匹配</td></tr>
+<tr><td>roof-rails 修复</td><td class="ok">原位于地面 y[-0.06,0.06] → 现贴车顶 y[1.710,1.754]，z[-1.876,0.876] 在 roof 范围内，八角形闭环消除 CatmullRom 过冲</td></tr>
+<tr><td>lidar-wedge 修复</td><td class="ok">原悬浮车顶上方 0.136m 且越过前缘 → 现 y[1.706,1.794] 贴合车顶，z[0.638,0.962] 在 roof 前缘 0.98 内</td></tr>
+<tr><td>reference-based Tier1</td><td class="bad">BLOCKED：外部参考图已被权利人合规移除（仓库内不可复验），silhouetteIoU/aspect/scale 基准缺失</td></tr>
+<tr><td>interior_difference</td><td class="warn">无法运行：无同机位 blockout 基线渲染留存（blockout 证据为游戏运行时截图，机位/光照不同，像素带状对比无意义）</td></tr>
+</table>
+</body></html>

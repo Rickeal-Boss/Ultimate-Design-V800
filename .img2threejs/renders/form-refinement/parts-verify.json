@@ -1,0 +1,3196 @@
+{
+ "summary": {
+  "total": 141,
+  "ok": 100,
+  "check": 41,
+  "missing": 0,
+  "runtimePartCount": 141,
+  "specComponentCount": 141
+ },
+ "rows": [
+  {
+   "id": "root",
+   "level": "macro",
+   "parent": null,
+   "status": "OK",
+   "size": [
+    2.006,
+    1.78,
+    5.44
+   ],
+   "worldMin": [
+    -1.003,
+    -0.89,
+    -2.72
+   ],
+   "declared": [
+    2.006,
+    1.85,
+    5.44
+   ],
+   "notes": []
+  },
+  {
+   "id": "body-lower",
+   "level": "macro",
+   "parent": "root",
+   "status": "CHECK",
+   "size": [
+    2.006,
+    0.89,
+    5.495
+   ],
+   "worldMin": [
+    -1.003,
+    0.2,
+    -2.83
+   ],
+   "declared": [
+    1,
+    1,
+    1
+   ],
+   "notes": [
+    "shrink: exp=[1, 1, 1] got=[2.006, 0.89, 5.495]"
+   ]
+  },
+  {
+   "id": "hood-panel",
+   "level": "meso",
+   "parent": "root",
+   "status": "OK",
+   "size": [
+    1.3,
+    0.1,
+    1.3
+   ],
+   "worldMin": [
+    -0.65,
+    1.005,
+    1.27
+   ],
+   "declared": [
+    1.3,
+    0.035,
+    1.3
+   ],
+   "notes": []
+  },
+  {
+   "id": "hood-blister",
+   "level": "micro",
+   "parent": "hood-panel",
+   "status": "OK",
+   "size": [
+    0.62,
+    0.047,
+    0.341
+   ],
+   "worldMin": [
+    -0.31,
+    1.097,
+    1.332
+   ],
+   "declared": [
+    0.62,
+    0.03,
+    0.34
+   ],
+   "notes": []
+  },
+  {
+   "id": "greenhouse-glass",
+   "level": "macro",
+   "parent": "root",
+   "status": "CHECK",
+   "size": [
+    1.83,
+    0.545,
+    3.44
+   ],
+   "worldMin": [
+    -0.915,
+    1.1,
+    -2.42
+   ],
+   "declared": [
+    1,
+    1,
+    1
+   ],
+   "notes": [
+    "shrink: exp=[1, 1, 1] got=[1.83, 0.545, 3.44]"
+   ]
+  },
+  {
+   "id": "roof-panel",
+   "level": "meso",
+   "parent": "root",
+   "status": "CHECK",
+   "size": [
+    1.6,
+    0.22,
+    3.34
+   ],
+   "worldMin": [
+    -0.8,
+    1.5,
+    -2.36
+   ],
+   "declared": [
+    1,
+    1,
+    1
+   ],
+   "notes": [
+    "shrink: exp=[1, 1, 1] got=[1.6, 0.22, 3.34]"
+   ]
+  },
+  {
+   "id": "windshield",
+   "level": "meso",
+   "parent": "root",
+   "status": "CHECK",
+   "size": [
+    1.5,
+    0.552,
+    0.93
+   ],
+   "worldMin": [
+    -0.75,
+    1.069,
+    0.135
+   ],
+   "declared": [
+    1.5,
+    0.025,
+    1.06
+   ],
+   "notes": [
+    "shrink: exp=[1.5, 0.025, 1.06] got=[1.5, 0.552, 0.93]"
+   ]
+  },
+  {
+   "id": "dpillar-l",
+   "level": "meso",
+   "parent": "root",
+   "status": "OK",
+   "size": [
+    0.266,
+    0.58,
+    0.34
+   ],
+   "worldMin": [
+    0.767,
+    1.09,
+    -2.45
+   ],
+   "declared": [
+    0.2,
+    0.56,
+    0.34
+   ],
+   "notes": []
+  },
+  {
+   "id": "bpillar-l",
+   "level": "micro",
+   "parent": "root",
+   "status": "OK",
+   "size": [
+    0.035,
+    0.56,
+    0.05
+   ],
+   "worldMin": [
+    0.887,
+    1.02,
+    0.395
+   ],
+   "declared": [
+    0.035,
+    0.56,
+    0.05
+   ],
+   "notes": []
+  },
+  {
+   "id": "cpillar-l",
+   "level": "micro",
+   "parent": "root",
+   "status": "OK",
+   "size": [
+    0.035,
+    0.56,
+    0.05
+   ],
+   "worldMin": [
+    0.887,
+    1.02,
+    -1.345
+   ],
+   "declared": [
+    0.035,
+    0.56,
+    0.05
+   ],
+   "notes": []
+  },
+  {
+   "id": "dpillar-r",
+   "level": "meso",
+   "parent": "root",
+   "status": "OK",
+   "size": [
+    0.266,
+    0.58,
+    0.34
+   ],
+   "worldMin": [
+    -1.033,
+    1.09,
+    -2.45
+   ],
+   "declared": [
+    0.2,
+    0.56,
+    0.34
+   ],
+   "notes": []
+  },
+  {
+   "id": "bpillar-r",
+   "level": "micro",
+   "parent": "root",
+   "status": "OK",
+   "size": [
+    0.035,
+    0.56,
+    0.05
+   ],
+   "worldMin": [
+    -0.923,
+    1.02,
+    0.395
+   ],
+   "declared": [
+    0.035,
+    0.56,
+    0.05
+   ],
+   "notes": []
+  },
+  {
+   "id": "cpillar-r",
+   "level": "micro",
+   "parent": "root",
+   "status": "OK",
+   "size": [
+    0.035,
+    0.56,
+    0.05
+   ],
+   "worldMin": [
+    -0.923,
+    1.02,
+    -1.345
+   ],
+   "declared": [
+    0.035,
+    0.56,
+    0.05
+   ],
+   "notes": []
+  },
+  {
+   "id": "front-end",
+   "level": "macro",
+   "parent": "root",
+   "status": "OK",
+   "size": [
+    1.86,
+    1.05,
+    0.08
+   ],
+   "worldMin": [
+    -0.93,
+    0.375,
+    2.58
+   ],
+   "declared": [
+    1.86,
+    1.05,
+    0.08
+   ],
+   "notes": []
+  },
+  {
+   "id": "chrome-brow",
+   "level": "meso",
+   "parent": "front-end",
+   "status": "OK",
+   "size": [
+    1.84,
+    0.09,
+    0.06
+   ],
+   "worldMin": [
+    -0.92,
+    1.255,
+    2.56
+   ],
+   "declared": [
+    1.84,
+    0.09,
+    0.06
+   ],
+   "notes": []
+  },
+  {
+   "id": "maextro-mark",
+   "level": "meso",
+   "parent": "front-end",
+   "status": "OK",
+   "size": [
+    0.8,
+    0.06,
+    0
+   ],
+   "worldMin": [
+    -0.4,
+    1.27,
+    2.668
+   ],
+   "declared": [
+    0.8,
+    0.06,
+    0.005
+   ],
+   "notes": []
+  },
+  {
+   "id": "shield-logo",
+   "level": "micro",
+   "parent": "front-end",
+   "status": "OK",
+   "size": [
+    0.05,
+    0.17,
+    0.02
+   ],
+   "worldMin": [
+    -0.025,
+    0.835,
+    2.66
+   ],
+   "declared": [
+    0.05,
+    0.17,
+    0.02
+   ],
+   "notes": []
+  },
+  {
+   "id": "headlamp-l",
+   "level": "meso",
+   "parent": "front-end",
+   "status": "CHECK",
+   "size": [
+    0.2,
+    0.635,
+    0.07
+   ],
+   "worldMin": [
+    0.7,
+    0.635,
+    2.65
+   ],
+   "declared": [
+    1,
+    1,
+    1
+   ],
+   "notes": [
+    "shrink: exp=[1, 1, 1] got=[0.2, 0.635, 0.07]"
+   ]
+  },
+  {
+   "id": "headlamp-led-l",
+   "level": "meso",
+   "parent": "headlamp-l",
+   "status": "OK",
+   "size": [
+    0.022,
+    0.4,
+    0.02
+   ],
+   "worldMin": [
+    0.834,
+    0.76,
+    2.705
+   ],
+   "declared": [
+    0.022,
+    0.4,
+    0.02
+   ],
+   "notes": []
+  },
+  {
+   "id": "headlamp-star-l",
+   "level": "micro",
+   "parent": "headlamp-l",
+   "status": "OK",
+   "size": [
+    0.13,
+    0.52,
+    0
+   ],
+   "worldMin": [
+    0.715,
+    0.7,
+    2.721
+   ],
+   "declared": [
+    0.13,
+    0.52,
+    0.004
+   ],
+   "notes": []
+  },
+  {
+   "id": "headlamp-r",
+   "level": "meso",
+   "parent": "front-end",
+   "status": "CHECK",
+   "size": [
+    0.2,
+    0.635,
+    0.07
+   ],
+   "worldMin": [
+    -0.9,
+    0.635,
+    2.65
+   ],
+   "declared": [
+    1,
+    1,
+    1
+   ],
+   "notes": [
+    "shrink: exp=[1, 1, 1] got=[0.2, 0.635, 0.07]"
+   ]
+  },
+  {
+   "id": "headlamp-led-r",
+   "level": "meso",
+   "parent": "headlamp-r",
+   "status": "OK",
+   "size": [
+    0.022,
+    0.4,
+    0.02
+   ],
+   "worldMin": [
+    -0.856,
+    0.76,
+    2.705
+   ],
+   "declared": [
+    0.022,
+    0.4,
+    0.02
+   ],
+   "notes": []
+  },
+  {
+   "id": "headlamp-star-r",
+   "level": "micro",
+   "parent": "headlamp-r",
+   "status": "OK",
+   "size": [
+    0.13,
+    0.52,
+    0
+   ],
+   "worldMin": [
+    -0.845,
+    0.7,
+    2.721
+   ],
+   "declared": [
+    0.13,
+    0.52,
+    0.004
+   ],
+   "notes": []
+  },
+  {
+   "id": "bumper-lower",
+   "level": "meso",
+   "parent": "front-end",
+   "status": "OK",
+   "size": [
+    1.92,
+    0.32,
+    0.1
+   ],
+   "worldMin": [
+    -0.96,
+    0.3,
+    2.575
+   ],
+   "declared": [
+    1.92,
+    0.32,
+    0.1
+   ],
+   "notes": []
+  },
+  {
+   "id": "bumper-light-strip",
+   "level": "micro",
+   "parent": "bumper-lower",
+   "status": "OK",
+   "size": [
+    1.45,
+    0.018,
+    0.015
+   ],
+   "worldMin": [
+    -0.725,
+    0.551,
+    2.673
+   ],
+   "declared": [
+    1.45,
+    0.018,
+    0.015
+   ],
+   "notes": []
+  },
+  {
+   "id": "bumper-chrome-lip",
+   "level": "micro",
+   "parent": "bumper-lower",
+   "status": "OK",
+   "size": [
+    1.86,
+    0.04,
+    0.05
+   ],
+   "worldMin": [
+    -0.93,
+    0.32,
+    2.65
+   ],
+   "declared": [
+    1.86,
+    0.04,
+    0.05
+   ],
+   "notes": []
+  },
+  {
+   "id": "front-plate",
+   "level": "micro",
+   "parent": "front-end",
+   "status": "OK",
+   "size": [
+    0.42,
+    0.11,
+    0
+   ],
+   "worldMin": [
+    -0.63,
+    0.745,
+    2.68
+   ],
+   "declared": [
+    0.42,
+    0.11,
+    0.004
+   ],
+   "notes": []
+  },
+  {
+   "id": "tailgate",
+   "level": "macro",
+   "parent": "root",
+   "status": "OK",
+   "size": [
+    1.86,
+    1.05,
+    0.07
+   ],
+   "worldMin": [
+    -0.93,
+    0.495,
+    -2.835
+   ],
+   "declared": [
+    1.86,
+    1.05,
+    0.07
+   ],
+   "notes": []
+  },
+  {
+   "id": "taillamp-l",
+   "level": "meso",
+   "parent": "tailgate",
+   "status": "CHECK",
+   "size": [
+    0.18,
+    0.69,
+    0.06
+   ],
+   "worldMin": [
+    0.75,
+    0.545,
+    -2.86
+   ],
+   "declared": [
+    1,
+    1,
+    1
+   ],
+   "notes": [
+    "shrink: exp=[1, 1, 1] got=[0.18, 0.69, 0.06]"
+   ]
+  },
+  {
+   "id": "lantern-core-l",
+   "level": "micro",
+   "parent": "taillamp-l",
+   "status": "OK",
+   "size": [
+    0.135,
+    0.6,
+    0
+   ],
+   "worldMin": [
+    0.772,
+    0.6,
+    -2.862
+   ],
+   "declared": [
+    0.135,
+    0.6,
+    0.004
+   ],
+   "notes": []
+  },
+  {
+   "id": "taillamp-r",
+   "level": "meso",
+   "parent": "tailgate",
+   "status": "CHECK",
+   "size": [
+    0.18,
+    0.69,
+    0.06
+   ],
+   "worldMin": [
+    -0.93,
+    0.545,
+    -2.86
+   ],
+   "declared": [
+    1,
+    1,
+    1
+   ],
+   "notes": [
+    "shrink: exp=[1, 1, 1] got=[0.18, 0.69, 0.06]"
+   ]
+  },
+  {
+   "id": "lantern-core-r",
+   "level": "micro",
+   "parent": "taillamp-r",
+   "status": "OK",
+   "size": [
+    0.135,
+    0.6,
+    0
+   ],
+   "worldMin": [
+    -0.908,
+    0.6,
+    -2.862
+   ],
+   "declared": [
+    0.135,
+    0.6,
+    0.004
+   ],
+   "notes": []
+  },
+  {
+   "id": "tail-window-trim",
+   "level": "meso",
+   "parent": "tailgate",
+   "status": "OK",
+   "size": [
+    1.3,
+    0.1,
+    0.05
+   ],
+   "worldMin": [
+    -0.65,
+    1.41,
+    -2.81
+   ],
+   "declared": [
+    1.3,
+    0.1,
+    0.05
+   ],
+   "notes": []
+  },
+  {
+   "id": "chrome-belt-l",
+   "level": "meso",
+   "parent": "root",
+   "status": "OK",
+   "size": [
+    0.02,
+    0.03,
+    4.6
+   ],
+   "worldMin": [
+    0.996,
+    0.99,
+    -2.45
+   ],
+   "declared": [
+    0.02,
+    0.03,
+    4.6
+   ],
+   "notes": []
+  },
+  {
+   "id": "window-belt-l",
+   "level": "meso",
+   "parent": "root",
+   "status": "OK",
+   "size": [
+    0.015,
+    0.02,
+    3.3
+   ],
+   "worldMin": [
+    0.911,
+    1.095,
+    -2.2
+   ],
+   "declared": [
+    0.015,
+    0.02,
+    3.3
+   ],
+   "notes": []
+  },
+  {
+   "id": "handle-front-l",
+   "level": "meso",
+   "parent": "root",
+   "status": "OK",
+   "size": [
+    0.035,
+    0.04,
+    0.62
+   ],
+   "worldMin": [
+    0.994,
+    0.95,
+    0.87
+   ],
+   "declared": [
+    0.035,
+    0.04,
+    0.62
+   ],
+   "notes": []
+  },
+  {
+   "id": "handle-slider-l",
+   "level": "meso",
+   "parent": "root",
+   "status": "OK",
+   "size": [
+    0.035,
+    0.04,
+    0.62
+   ],
+   "worldMin": [
+    0.994,
+    0.95,
+    -0.59
+   ],
+   "declared": [
+    0.035,
+    0.04,
+    0.62
+   ],
+   "notes": []
+  },
+  {
+   "id": "fender-badge-l",
+   "level": "micro",
+   "parent": "root",
+   "status": "OK",
+   "size": [
+    0.012,
+    0.045,
+    0.05
+   ],
+   "worldMin": [
+    1.002,
+    0.937,
+    1.595
+   ],
+   "declared": [
+    0.012,
+    0.045,
+    0.05
+   ],
+   "notes": []
+  },
+  {
+   "id": "rocker-l",
+   "level": "meso",
+   "parent": "root",
+   "status": "OK",
+   "size": [
+    0.05,
+    0.12,
+    3.4
+   ],
+   "worldMin": [
+    0.963,
+    0.22,
+    -1.85
+   ],
+   "declared": [
+    0.05,
+    0.12,
+    3.4
+   ],
+   "notes": []
+  },
+  {
+   "id": "mirror-l",
+   "level": "meso",
+   "parent": "root",
+   "status": "OK",
+   "size": [
+    0.22,
+    0.13,
+    0.11
+   ],
+   "worldMin": [
+    0.99,
+    1.105,
+    0.965
+   ],
+   "declared": [
+    0.22,
+    0.13,
+    0.11
+   ],
+   "notes": []
+  },
+  {
+   "id": "mirror-cap-l",
+   "level": "micro",
+   "parent": "mirror-l",
+   "status": "OK",
+   "size": [
+    0.225,
+    0.05,
+    0.115
+   ],
+   "worldMin": [
+    0.988,
+    1.19,
+    0.962
+   ],
+   "declared": [
+    0.225,
+    0.05,
+    0.115
+   ],
+   "notes": []
+  },
+  {
+   "id": "chrome-belt-r",
+   "level": "meso",
+   "parent": "root",
+   "status": "OK",
+   "size": [
+    0.02,
+    0.03,
+    4.6
+   ],
+   "worldMin": [
+    -1.016,
+    0.99,
+    -2.45
+   ],
+   "declared": [
+    0.02,
+    0.03,
+    4.6
+   ],
+   "notes": []
+  },
+  {
+   "id": "window-belt-r",
+   "level": "meso",
+   "parent": "root",
+   "status": "OK",
+   "size": [
+    0.015,
+    0.02,
+    3.3
+   ],
+   "worldMin": [
+    -0.925,
+    1.095,
+    -2.2
+   ],
+   "declared": [
+    0.015,
+    0.02,
+    3.3
+   ],
+   "notes": []
+  },
+  {
+   "id": "handle-front-r",
+   "level": "meso",
+   "parent": "root",
+   "status": "OK",
+   "size": [
+    0.035,
+    0.04,
+    0.62
+   ],
+   "worldMin": [
+    -1.03,
+    0.95,
+    0.87
+   ],
+   "declared": [
+    0.035,
+    0.04,
+    0.62
+   ],
+   "notes": []
+  },
+  {
+   "id": "handle-slider-r",
+   "level": "meso",
+   "parent": "root",
+   "status": "OK",
+   "size": [
+    0.035,
+    0.04,
+    0.62
+   ],
+   "worldMin": [
+    -1.03,
+    0.95,
+    -0.59
+   ],
+   "declared": [
+    0.035,
+    0.04,
+    0.62
+   ],
+   "notes": []
+  },
+  {
+   "id": "fender-badge-r",
+   "level": "micro",
+   "parent": "root",
+   "status": "OK",
+   "size": [
+    0.012,
+    0.045,
+    0.05
+   ],
+   "worldMin": [
+    -1.014,
+    0.937,
+    1.595
+   ],
+   "declared": [
+    0.012,
+    0.045,
+    0.05
+   ],
+   "notes": []
+  },
+  {
+   "id": "rocker-r",
+   "level": "meso",
+   "parent": "root",
+   "status": "OK",
+   "size": [
+    0.05,
+    0.12,
+    3.4
+   ],
+   "worldMin": [
+    -1.013,
+    0.22,
+    -1.85
+   ],
+   "declared": [
+    0.05,
+    0.12,
+    3.4
+   ],
+   "notes": []
+  },
+  {
+   "id": "mirror-r",
+   "level": "meso",
+   "parent": "root",
+   "status": "OK",
+   "size": [
+    0.22,
+    0.13,
+    0.11
+   ],
+   "worldMin": [
+    -1.21,
+    1.105,
+    0.965
+   ],
+   "declared": [
+    0.22,
+    0.13,
+    0.11
+   ],
+   "notes": []
+  },
+  {
+   "id": "mirror-cap-r",
+   "level": "micro",
+   "parent": "mirror-r",
+   "status": "OK",
+   "size": [
+    0.225,
+    0.05,
+    0.115
+   ],
+   "worldMin": [
+    -1.212,
+    1.19,
+    0.962
+   ],
+   "declared": [
+    0.225,
+    0.05,
+    0.115
+   ],
+   "notes": []
+  },
+  {
+   "id": "fuel-door",
+   "level": "micro",
+   "parent": "root",
+   "status": "OK",
+   "size": [
+    0.012,
+    0.16,
+    0.09
+   ],
+   "worldMin": [
+    1,
+    0.9,
+    -1.345
+   ],
+   "declared": [
+    0.012,
+    0.16,
+    0.09
+   ],
+   "notes": []
+  },
+  {
+   "id": "arch-fr",
+   "level": "micro",
+   "parent": "root",
+   "status": "CHECK",
+   "size": [
+    0.003,
+    0.992,
+    0.992
+   ],
+   "worldMin": [
+    -0.001,
+    -0.096,
+    1.219
+   ],
+   "declared": [
+    1.04,
+    1.04,
+    0.05
+   ],
+   "notes": [
+    "shrink: exp=[1.04, 1.04, 0.05] got=[0.003, 0.992, 0.992]"
+   ]
+  },
+  {
+   "id": "arch-rr",
+   "level": "micro",
+   "parent": "root",
+   "status": "CHECK",
+   "size": [
+    0.003,
+    0.992,
+    0.992
+   ],
+   "worldMin": [
+    -0.001,
+    -0.096,
+    -2.211
+   ],
+   "declared": [
+    1.04,
+    1.04,
+    0.05
+   ],
+   "notes": [
+    "shrink: exp=[1.04, 1.04, 0.05] got=[0.003, 0.992, 0.992]"
+   ]
+  },
+  {
+   "id": "roof-rails",
+   "level": "meso",
+   "parent": "root",
+   "status": "CHECK",
+   "size": [
+    1.489,
+    0.044,
+    2.752
+   ],
+   "worldMin": [
+    -0.745,
+    1.71,
+    -1.876
+   ],
+   "declared": [
+    1,
+    1,
+    1
+   ],
+   "notes": [
+    "shrink: exp=[1, 1, 1] got=[1.489, 0.044, 2.752]"
+   ]
+  },
+  {
+   "id": "lidar-wedge",
+   "level": "meso",
+   "parent": "root",
+   "status": "OK",
+   "size": [
+    0.17,
+    0.088,
+    0.324
+   ],
+   "worldMin": [
+    -0.085,
+    1.706,
+    0.638
+   ],
+   "declared": [
+    0.17,
+    0.05,
+    0.32
+   ],
+   "notes": []
+  },
+  {
+   "id": "wheel-fl",
+   "level": "macro",
+   "parent": "root",
+   "status": "OK",
+   "size": [
+    0.255,
+    0.764,
+    0.764
+   ],
+   "worldMin": [
+    0.748,
+    0,
+    1.333
+   ],
+   "declared": [
+    0.255,
+    0.764,
+    0.764
+   ],
+   "notes": []
+  },
+  {
+   "id": "tire-fl",
+   "level": "meso",
+   "parent": "wheel-fl",
+   "status": "CHECK",
+   "size": [
+    0.255,
+    0.764,
+    0.764
+   ],
+   "worldMin": [
+    0.747,
+    0,
+    1.333
+   ],
+   "declared": [
+    0.764,
+    0.255,
+    0.764
+   ],
+   "notes": [
+    "shrink: exp=[0.764, 0.255, 0.764] got=[0.255, 0.764, 0.764]"
+   ]
+  },
+  {
+   "id": "rim-fl",
+   "level": "meso",
+   "parent": "wheel-fl",
+   "status": "CHECK",
+   "size": [
+    0.235,
+    0.6,
+    0.6
+   ],
+   "worldMin": [
+    0.757,
+    0.082,
+    1.427
+   ],
+   "declared": [
+    0.6,
+    0.235,
+    0.6
+   ],
+   "notes": [
+    "shrink: exp=[0.6, 0.235, 0.6] got=[0.235, 0.6, 0.6]"
+   ]
+  },
+  {
+   "id": "cap-fl",
+   "level": "micro",
+   "parent": "wheel-fl",
+   "status": "CHECK",
+   "size": [
+    0.02,
+    0.11,
+    0.11
+   ],
+   "worldMin": [
+    0.865,
+    0.327,
+    1.785
+   ],
+   "declared": [
+    0.11,
+    0.02,
+    0.11
+   ],
+   "notes": [
+    "shrink: exp=[0.11, 0.02, 0.11] got=[0.02, 0.11, 0.11]"
+   ]
+  },
+  {
+   "id": "wheel-fr",
+   "level": "macro",
+   "parent": "root",
+   "status": "OK",
+   "size": [
+    0.255,
+    0.764,
+    0.764
+   ],
+   "worldMin": [
+    -1.002,
+    0,
+    1.333
+   ],
+   "declared": [
+    0.255,
+    0.764,
+    0.764
+   ],
+   "notes": []
+  },
+  {
+   "id": "tire-fr",
+   "level": "meso",
+   "parent": "wheel-fr",
+   "status": "CHECK",
+   "size": [
+    0.255,
+    0.764,
+    0.764
+   ],
+   "worldMin": [
+    -1.003,
+    0,
+    1.333
+   ],
+   "declared": [
+    0.764,
+    0.255,
+    0.764
+   ],
+   "notes": [
+    "shrink: exp=[0.764, 0.255, 0.764] got=[0.255, 0.764, 0.764]"
+   ]
+  },
+  {
+   "id": "rim-fr",
+   "level": "meso",
+   "parent": "wheel-fr",
+   "status": "CHECK",
+   "size": [
+    0.235,
+    0.6,
+    0.6
+   ],
+   "worldMin": [
+    -0.993,
+    0.082,
+    1.427
+   ],
+   "declared": [
+    0.6,
+    0.235,
+    0.6
+   ],
+   "notes": [
+    "shrink: exp=[0.6, 0.235, 0.6] got=[0.235, 0.6, 0.6]"
+   ]
+  },
+  {
+   "id": "cap-fr",
+   "level": "micro",
+   "parent": "wheel-fr",
+   "status": "CHECK",
+   "size": [
+    0.02,
+    0.11,
+    0.11
+   ],
+   "worldMin": [
+    -0.885,
+    0.327,
+    1.785
+   ],
+   "declared": [
+    0.11,
+    0.02,
+    0.11
+   ],
+   "notes": [
+    "shrink: exp=[0.11, 0.02, 0.11] got=[0.02, 0.11, 0.11]"
+   ]
+  },
+  {
+   "id": "wheel-rl",
+   "level": "macro",
+   "parent": "root",
+   "status": "OK",
+   "size": [
+    0.255,
+    0.764,
+    0.764
+   ],
+   "worldMin": [
+    0.748,
+    0,
+    -2.097
+   ],
+   "declared": [
+    0.255,
+    0.764,
+    0.764
+   ],
+   "notes": []
+  },
+  {
+   "id": "tire-rl",
+   "level": "meso",
+   "parent": "wheel-rl",
+   "status": "CHECK",
+   "size": [
+    0.255,
+    0.764,
+    0.764
+   ],
+   "worldMin": [
+    0.747,
+    0,
+    -2.097
+   ],
+   "declared": [
+    0.764,
+    0.255,
+    0.764
+   ],
+   "notes": [
+    "shrink: exp=[0.764, 0.255, 0.764] got=[0.255, 0.764, 0.764]"
+   ]
+  },
+  {
+   "id": "rim-rl",
+   "level": "meso",
+   "parent": "wheel-rl",
+   "status": "CHECK",
+   "size": [
+    0.235,
+    0.6,
+    0.6
+   ],
+   "worldMin": [
+    0.757,
+    0.082,
+    -2.003
+   ],
+   "declared": [
+    0.6,
+    0.235,
+    0.6
+   ],
+   "notes": [
+    "shrink: exp=[0.6, 0.235, 0.6] got=[0.235, 0.6, 0.6]"
+   ]
+  },
+  {
+   "id": "cap-rl",
+   "level": "micro",
+   "parent": "wheel-rl",
+   "status": "CHECK",
+   "size": [
+    0.02,
+    0.11,
+    0.11
+   ],
+   "worldMin": [
+    0.865,
+    0.327,
+    -1.645
+   ],
+   "declared": [
+    0.11,
+    0.02,
+    0.11
+   ],
+   "notes": [
+    "shrink: exp=[0.11, 0.02, 0.11] got=[0.02, 0.11, 0.11]"
+   ]
+  },
+  {
+   "id": "wheel-rr",
+   "level": "macro",
+   "parent": "root",
+   "status": "OK",
+   "size": [
+    0.255,
+    0.764,
+    0.764
+   ],
+   "worldMin": [
+    -1.002,
+    0,
+    -2.097
+   ],
+   "declared": [
+    0.255,
+    0.764,
+    0.764
+   ],
+   "notes": []
+  },
+  {
+   "id": "tire-rr",
+   "level": "meso",
+   "parent": "wheel-rr",
+   "status": "CHECK",
+   "size": [
+    0.255,
+    0.764,
+    0.764
+   ],
+   "worldMin": [
+    -1.003,
+    0,
+    -2.097
+   ],
+   "declared": [
+    0.764,
+    0.255,
+    0.764
+   ],
+   "notes": [
+    "shrink: exp=[0.764, 0.255, 0.764] got=[0.255, 0.764, 0.764]"
+   ]
+  },
+  {
+   "id": "rim-rr",
+   "level": "meso",
+   "parent": "wheel-rr",
+   "status": "CHECK",
+   "size": [
+    0.235,
+    0.6,
+    0.6
+   ],
+   "worldMin": [
+    -0.993,
+    0.082,
+    -2.003
+   ],
+   "declared": [
+    0.6,
+    0.235,
+    0.6
+   ],
+   "notes": [
+    "shrink: exp=[0.6, 0.235, 0.6] got=[0.235, 0.6, 0.6]"
+   ]
+  },
+  {
+   "id": "cap-rr",
+   "level": "micro",
+   "parent": "wheel-rr",
+   "status": "CHECK",
+   "size": [
+    0.02,
+    0.11,
+    0.11
+   ],
+   "worldMin": [
+    -0.885,
+    0.327,
+    -1.645
+   ],
+   "declared": [
+    0.11,
+    0.02,
+    0.11
+   ],
+   "notes": [
+    "shrink: exp=[0.11, 0.02, 0.11] got=[0.02, 0.11, 0.11]"
+   ]
+  },
+  {
+   "id": "cabin-interior",
+   "level": "macro",
+   "parent": "root",
+   "status": "OK",
+   "size": [
+    1.72,
+    1.5,
+    4.2
+   ],
+   "worldMin": [
+    -0.86,
+    -0.75,
+    -2.1
+   ],
+   "declared": [
+    1.72,
+    1.5,
+    4.2
+   ],
+   "notes": []
+  },
+  {
+   "id": "cabin-floor",
+   "level": "meso",
+   "parent": "cabin-interior",
+   "status": "OK",
+   "size": [
+    1.66,
+    0.035,
+    3.6
+   ],
+   "worldMin": [
+    -0.83,
+    0.282,
+    -2.25
+   ],
+   "declared": [
+    1.66,
+    0.035,
+    3.6
+   ],
+   "notes": []
+  },
+  {
+   "id": "dash-upper",
+   "level": "meso",
+   "parent": "cabin-interior",
+   "status": "OK",
+   "size": [
+    1.78,
+    0.197,
+    0.469
+   ],
+   "worldMin": [
+    -0.89,
+    0.901,
+    1.065
+   ],
+   "declared": [
+    1.78,
+    0.17,
+    0.46
+   ],
+   "notes": []
+  },
+  {
+   "id": "dash-lower",
+   "level": "meso",
+   "parent": "cabin-interior",
+   "status": "OK",
+   "size": [
+    1.78,
+    0.26,
+    0.3
+   ],
+   "worldMin": [
+    -0.89,
+    0.67,
+    1.25
+   ],
+   "declared": [
+    1.78,
+    0.26,
+    0.3
+   ],
+   "notes": []
+  },
+  {
+   "id": "dash-chrome-strip",
+   "level": "micro",
+   "parent": "cabin-interior",
+   "status": "OK",
+   "size": [
+    1.8,
+    0.014,
+    0.016
+   ],
+   "worldMin": [
+    -0.9,
+    0.898,
+    1.107
+   ],
+   "declared": [
+    1.8,
+    0.014,
+    0.016
+   ],
+   "notes": []
+  },
+  {
+   "id": "tri-screen",
+   "level": "meso",
+   "parent": "cabin-interior",
+   "status": "OK",
+   "size": [
+    1.46,
+    0.313,
+    0.031
+   ],
+   "worldMin": [
+    -0.73,
+    0.963,
+    1.124
+   ],
+   "declared": [
+    1.46,
+    0.315,
+    0.006
+   ],
+   "notes": []
+  },
+  {
+   "id": "gauge-screen",
+   "level": "meso",
+   "parent": "cabin-interior",
+   "status": "OK",
+   "size": [
+    0.38,
+    0.198,
+    0.028
+   ],
+   "worldMin": [
+    0.53,
+    1.041,
+    1.046
+   ],
+   "declared": [
+    0.38,
+    0.2,
+    0.005
+   ],
+   "notes": []
+  },
+  {
+   "id": "vents-strip",
+   "level": "meso",
+   "parent": "cabin-interior",
+   "status": "OK",
+   "size": [
+    1.62,
+    0.05,
+    0.035
+   ],
+   "worldMin": [
+    -0.81,
+    0.835,
+    1.112
+   ],
+   "declared": [
+    1.62,
+    0.05,
+    0.035
+   ],
+   "notes": []
+  },
+  {
+   "id": "tweeter-l",
+   "level": "micro",
+   "parent": "cabin-interior",
+   "status": "OK",
+   "size": [
+    0.045,
+    0.12,
+    0.12
+   ],
+   "worldMin": [
+    0.815,
+    -0.06,
+    -0.06
+   ],
+   "declared": [
+    0.05,
+    0.045,
+    0.05
+   ],
+   "notes": []
+  },
+  {
+   "id": "tweeter-r",
+   "level": "micro",
+   "parent": "cabin-interior",
+   "status": "OK",
+   "size": [
+    0.045,
+    0.12,
+    0.12
+   ],
+   "worldMin": [
+    -0.905,
+    -0.06,
+    -0.06
+   ],
+   "declared": [
+    0.05,
+    0.045,
+    0.05
+   ],
+   "notes": []
+  },
+  {
+   "id": "steering",
+   "level": "meso",
+   "parent": "cabin-interior",
+   "status": "CHECK",
+   "size": [
+    0.392,
+    0.164,
+    0.36
+   ],
+   "worldMin": [
+    0.344,
+    0.878,
+    0.78
+   ],
+   "declared": [
+    0.4,
+    0.4,
+    0.05
+   ],
+   "notes": [
+    "shrink: exp=[0.4, 0.4, 0.05] got=[0.392, 0.164, 0.36]"
+   ]
+  },
+  {
+   "id": "steering-hub",
+   "level": "micro",
+   "parent": "steering",
+   "status": "CHECK",
+   "size": [
+    0.15,
+    0.151,
+    0.093
+   ],
+   "worldMin": [
+    0.465,
+    0.884,
+    0.913
+   ],
+   "declared": [
+    0.15,
+    0.035,
+    0.15
+   ],
+   "notes": [
+    "shrink: exp=[0.15, 0.035, 0.15] got=[0.15, 0.151, 0.093]"
+   ]
+  },
+  {
+   "id": "tunnel-front",
+   "level": "meso",
+   "parent": "cabin-interior",
+   "status": "OK",
+   "size": [
+    0.42,
+    0.34,
+    0.8
+   ],
+   "worldMin": [
+    -0.21,
+    0.45,
+    0.62
+   ],
+   "declared": [
+    0.42,
+    0.34,
+    0.8
+   ],
+   "notes": []
+  },
+  {
+   "id": "crystal-shifter",
+   "level": "micro",
+   "parent": "cabin-interior",
+   "status": "OK",
+   "size": [
+    0.085,
+    0.085,
+    0.085
+   ],
+   "worldMin": [
+    -0.043,
+    0.802,
+    1.077
+   ],
+   "declared": [
+    0.085,
+    0.085,
+    0.085
+   ],
+   "notes": []
+  },
+  {
+   "id": "charge-pad",
+   "level": "micro",
+   "parent": "cabin-interior",
+   "status": "CHECK",
+   "size": [
+    0.17,
+    0.004,
+    0.001
+   ],
+   "worldMin": [
+    -0.085,
+    0.793,
+    0.86
+   ],
+   "declared": [
+    0.17,
+    0.004,
+    0.24
+   ],
+   "notes": [
+    "shrink: exp=[0.17, 0.004, 0.24] got=[0.17, 0.004, 0.001]"
+   ]
+  },
+  {
+   "id": "cupholder-l",
+   "level": "micro",
+   "parent": "cabin-interior",
+   "status": "CHECK",
+   "size": [
+    0.099,
+    0.002,
+    0.099
+   ],
+   "worldMin": [
+    0.066,
+    0.799,
+    0.75
+   ],
+   "declared": [
+    0.1,
+    0.1,
+    0.02
+   ],
+   "notes": [
+    "shrink: exp=[0.1, 0.1, 0.02] got=[0.099, 0.002, 0.099]"
+   ]
+  },
+  {
+   "id": "cupholder-r",
+   "level": "micro",
+   "parent": "cabin-interior",
+   "status": "CHECK",
+   "size": [
+    0.099,
+    0.002,
+    0.099
+   ],
+   "worldMin": [
+    -0.164,
+    0.799,
+    0.75
+   ],
+   "declared": [
+    0.1,
+    0.1,
+    0.02
+   ],
+   "notes": [
+    "shrink: exp=[0.1, 0.1, 0.02] got=[0.099, 0.002, 0.099]"
+   ]
+  },
+  {
+   "id": "tunnel-rear",
+   "level": "meso",
+   "parent": "cabin-interior",
+   "status": "OK",
+   "size": [
+    0.44,
+    0.36,
+    1.3
+   ],
+   "worldMin": [
+    -0.22,
+    0.44,
+    -1.2
+   ],
+   "declared": [
+    0.44,
+    0.36,
+    1.3
+   ],
+   "notes": []
+  },
+  {
+   "id": "rear-control-screen",
+   "level": "micro",
+   "parent": "cabin-interior",
+   "status": "OK",
+   "size": [
+    0.24,
+    0.141,
+    0.051
+   ],
+   "worldMin": [
+    -0.12,
+    0.76,
+    -0.976
+   ],
+   "declared": [
+    0.24,
+    0.15,
+    0.005
+   ],
+   "notes": []
+  },
+  {
+   "id": "seat-driver",
+   "level": "meso",
+   "parent": "cabin-interior",
+   "status": "OK",
+   "size": [
+    0.52,
+    0.14,
+    0.5
+   ],
+   "worldMin": [
+    0.26,
+    0.55,
+    0.67
+   ],
+   "declared": [
+    0.52,
+    0.14,
+    0.5
+   ],
+   "notes": []
+  },
+  {
+   "id": "seat-driver-back",
+   "level": "meso",
+   "parent": "seat-driver",
+   "status": "OK",
+   "size": [
+    0.5,
+    0.671,
+    0.205
+   ],
+   "worldMin": [
+    0.27,
+    0.645,
+    1.037
+   ],
+   "declared": [
+    0.5,
+    0.66,
+    0.14
+   ],
+   "notes": []
+  },
+  {
+   "id": "seat-driver-headrest",
+   "level": "micro",
+   "parent": "seat-driver",
+   "status": "OK",
+   "size": [
+    0.26,
+    0.15,
+    0.1
+   ],
+   "worldMin": [
+    0.39,
+    1.285,
+    1.13
+   ],
+   "declared": [
+    0.26,
+    0.15,
+    0.1
+   ],
+   "notes": []
+  },
+  {
+   "id": "seat-passenger",
+   "level": "meso",
+   "parent": "cabin-interior",
+   "status": "OK",
+   "size": [
+    0.52,
+    0.14,
+    0.5
+   ],
+   "worldMin": [
+    -0.78,
+    0.55,
+    0.67
+   ],
+   "declared": [
+    0.52,
+    0.14,
+    0.5
+   ],
+   "notes": []
+  },
+  {
+   "id": "seat-passenger-back",
+   "level": "meso",
+   "parent": "seat-passenger",
+   "status": "OK",
+   "size": [
+    0.5,
+    0.671,
+    0.205
+   ],
+   "worldMin": [
+    -0.77,
+    0.645,
+    1.037
+   ],
+   "declared": [
+    0.5,
+    0.66,
+    0.14
+   ],
+   "notes": []
+  },
+  {
+   "id": "seat-passenger-headrest",
+   "level": "micro",
+   "parent": "seat-passenger",
+   "status": "OK",
+   "size": [
+    0.26,
+    0.15,
+    0.1
+   ],
+   "worldMin": [
+    -0.65,
+    1.285,
+    1.13
+   ],
+   "declared": [
+    0.26,
+    0.15,
+    0.1
+   ],
+   "notes": []
+  },
+  {
+   "id": "seat-rear-l",
+   "level": "meso",
+   "parent": "cabin-interior",
+   "status": "OK",
+   "size": [
+    0.56,
+    0.14,
+    0.52
+   ],
+   "worldMin": [
+    0.22,
+    0.55,
+    -1.56
+   ],
+   "declared": [
+    0.56,
+    0.14,
+    0.52
+   ],
+   "notes": []
+  },
+  {
+   "id": "seat-rear-l-back",
+   "level": "meso",
+   "parent": "seat-rear-l",
+   "status": "OK",
+   "size": [
+    0.54,
+    0.671,
+    0.205
+   ],
+   "worldMin": [
+    0.23,
+    0.645,
+    -1.163
+   ],
+   "declared": [
+    0.54,
+    0.66,
+    0.14
+   ],
+   "notes": []
+  },
+  {
+   "id": "seat-rear-l-headrest",
+   "level": "micro",
+   "parent": "seat-rear-l",
+   "status": "OK",
+   "size": [
+    0.26,
+    0.15,
+    0.1
+   ],
+   "worldMin": [
+    0.37,
+    1.285,
+    -1.05
+   ],
+   "declared": [
+    0.26,
+    0.15,
+    0.1
+   ],
+   "notes": []
+  },
+  {
+   "id": "seat-rear-l-legrest",
+   "level": "micro",
+   "parent": "seat-rear-l",
+   "status": "OK",
+   "size": [
+    0.34,
+    0.126,
+    0.386
+   ],
+   "worldMin": [
+    0.33,
+    1.117,
+    -1.013
+   ],
+   "declared": [
+    0.34,
+    0.07,
+    0.38
+   ],
+   "notes": []
+  },
+  {
+   "id": "seat-rear-l-armrest",
+   "level": "micro",
+   "parent": "seat-rear-l",
+   "status": "OK",
+   "size": [
+    0.6,
+    0.1,
+    0.34
+   ],
+   "worldMin": [
+    0.2,
+    0.85,
+    -1.42
+   ],
+   "declared": [
+    0.6,
+    0.1,
+    0.34
+   ],
+   "notes": []
+  },
+  {
+   "id": "seat-rear-r",
+   "level": "meso",
+   "parent": "cabin-interior",
+   "status": "OK",
+   "size": [
+    0.56,
+    0.14,
+    0.52
+   ],
+   "worldMin": [
+    -0.78,
+    0.55,
+    -1.56
+   ],
+   "declared": [
+    0.56,
+    0.14,
+    0.52
+   ],
+   "notes": []
+  },
+  {
+   "id": "seat-rear-r-back",
+   "level": "meso",
+   "parent": "seat-rear-r",
+   "status": "OK",
+   "size": [
+    0.54,
+    0.671,
+    0.205
+   ],
+   "worldMin": [
+    -0.77,
+    0.645,
+    -1.163
+   ],
+   "declared": [
+    0.54,
+    0.66,
+    0.14
+   ],
+   "notes": []
+  },
+  {
+   "id": "seat-rear-r-headrest",
+   "level": "micro",
+   "parent": "seat-rear-r",
+   "status": "OK",
+   "size": [
+    0.26,
+    0.15,
+    0.1
+   ],
+   "worldMin": [
+    -0.63,
+    1.285,
+    -1.05
+   ],
+   "declared": [
+    0.26,
+    0.15,
+    0.1
+   ],
+   "notes": []
+  },
+  {
+   "id": "seat-rear-r-legrest",
+   "level": "micro",
+   "parent": "seat-rear-r",
+   "status": "OK",
+   "size": [
+    0.34,
+    0.126,
+    0.386
+   ],
+   "worldMin": [
+    -0.67,
+    1.117,
+    -1.013
+   ],
+   "declared": [
+    0.34,
+    0.07,
+    0.38
+   ],
+   "notes": []
+  },
+  {
+   "id": "seat-rear-r-armrest",
+   "level": "micro",
+   "parent": "seat-rear-r",
+   "status": "OK",
+   "size": [
+    0.6,
+    0.1,
+    0.34
+   ],
+   "worldMin": [
+    -0.8,
+    0.85,
+    -1.42
+   ],
+   "declared": [
+    0.6,
+    0.1,
+    0.34
+   ],
+   "notes": []
+  },
+  {
+   "id": "headliner-front",
+   "level": "meso",
+   "parent": "cabin-interior",
+   "status": "OK",
+   "size": [
+    1.52,
+    0.02,
+    1.45
+   ],
+   "worldMin": [
+    -0.76,
+    1.69,
+    -0.275
+   ],
+   "declared": [
+    1.52,
+    0.02,
+    1.45
+   ],
+   "notes": []
+  },
+  {
+   "id": "headliner-rear",
+   "level": "meso",
+   "parent": "cabin-interior",
+   "status": "OK",
+   "size": [
+    1.52,
+    0.02,
+    1.55
+   ],
+   "worldMin": [
+    -0.76,
+    1.665,
+    -2.125
+   ],
+   "declared": [
+    1.52,
+    0.02,
+    1.55
+   ],
+   "notes": []
+  },
+  {
+   "id": "overhead-console",
+   "level": "micro",
+   "parent": "cabin-interior",
+   "status": "OK",
+   "size": [
+    1.1,
+    0.045,
+    0.28
+   ],
+   "worldMin": [
+    -0.55,
+    1.697,
+    -0.69
+   ],
+   "declared": [
+    1.1,
+    0.045,
+    0.28
+   ],
+   "notes": []
+  },
+  {
+   "id": "ambient-strip-l",
+   "level": "meso",
+   "parent": "cabin-interior",
+   "status": "CHECK",
+   "size": [
+    0.074,
+    0.044,
+    3.601
+   ],
+   "worldMin": [
+    -0.802,
+    1.633,
+    -2.251
+   ],
+   "declared": [
+    1,
+    1,
+    1
+   ],
+   "notes": [
+    "shrink: exp=[1, 1, 1] got=[0.074, 0.044, 3.601]"
+   ]
+  },
+  {
+   "id": "ambient-strip-r",
+   "level": "meso",
+   "parent": "cabin-interior",
+   "status": "CHECK",
+   "size": [
+    0.074,
+    0.044,
+    3.601
+   ],
+   "worldMin": [
+    0.728,
+    1.633,
+    -2.251
+   ],
+   "declared": [
+    1,
+    1,
+    1
+   ],
+   "notes": [
+    "shrink: exp=[1, 1, 1] got=[0.074, 0.044, 3.601]"
+   ]
+  },
+  {
+   "id": "door-panel-fl",
+   "level": "meso",
+   "parent": "cabin-interior",
+   "status": "OK",
+   "size": [
+    0.07,
+    0.62,
+    1.15
+   ],
+   "worldMin": [
+    0.905,
+    0.55,
+    0.275
+   ],
+   "declared": [
+    0.07,
+    0.62,
+    1.15
+   ],
+   "notes": []
+  },
+  {
+   "id": "speaker-fl",
+   "level": "micro",
+   "parent": "door-panel-fl",
+   "status": "CHECK",
+   "size": [
+    0.015,
+    0.075,
+    0.075
+   ],
+   "worldMin": [
+    0.89,
+    0.702,
+    0.712
+   ],
+   "declared": [
+    0.075,
+    0.015,
+    0.075
+   ],
+   "notes": [
+    "shrink: exp=[0.075, 0.015, 0.075] got=[0.015, 0.075, 0.075]"
+   ]
+  },
+  {
+   "id": "door-panel-fr",
+   "level": "meso",
+   "parent": "cabin-interior",
+   "status": "OK",
+   "size": [
+    0.07,
+    0.62,
+    1.15
+   ],
+   "worldMin": [
+    -0.975,
+    0.55,
+    0.275
+   ],
+   "declared": [
+    0.07,
+    0.62,
+    1.15
+   ],
+   "notes": []
+  },
+  {
+   "id": "speaker-fr",
+   "level": "micro",
+   "parent": "door-panel-fr",
+   "status": "CHECK",
+   "size": [
+    0.015,
+    0.075,
+    0.075
+   ],
+   "worldMin": [
+    -0.905,
+    0.702,
+    0.712
+   ],
+   "declared": [
+    0.075,
+    0.015,
+    0.075
+   ],
+   "notes": [
+    "shrink: exp=[0.075, 0.015, 0.075] got=[0.015, 0.075, 0.075]"
+   ]
+  },
+  {
+   "id": "door-panel-rl",
+   "level": "meso",
+   "parent": "cabin-interior",
+   "status": "OK",
+   "size": [
+    0.07,
+    0.62,
+    1.15
+   ],
+   "worldMin": [
+    0.905,
+    0.55,
+    -1.525
+   ],
+   "declared": [
+    0.07,
+    0.62,
+    1.15
+   ],
+   "notes": []
+  },
+  {
+   "id": "speaker-rl",
+   "level": "micro",
+   "parent": "door-panel-rl",
+   "status": "CHECK",
+   "size": [
+    0.015,
+    0.075,
+    0.075
+   ],
+   "worldMin": [
+    0.89,
+    0.702,
+    -1.088
+   ],
+   "declared": [
+    0.075,
+    0.015,
+    0.075
+   ],
+   "notes": [
+    "shrink: exp=[0.075, 0.015, 0.075] got=[0.015, 0.075, 0.075]"
+   ]
+  },
+  {
+   "id": "door-panel-rr",
+   "level": "meso",
+   "parent": "cabin-interior",
+   "status": "OK",
+   "size": [
+    0.07,
+    0.62,
+    1.15
+   ],
+   "worldMin": [
+    -0.975,
+    0.55,
+    -1.525
+   ],
+   "declared": [
+    0.07,
+    0.62,
+    1.15
+   ],
+   "notes": []
+  },
+  {
+   "id": "speaker-rr",
+   "level": "micro",
+   "parent": "door-panel-rr",
+   "status": "CHECK",
+   "size": [
+    0.015,
+    0.075,
+    0.075
+   ],
+   "worldMin": [
+    -0.905,
+    0.702,
+    -1.088
+   ],
+   "declared": [
+    0.075,
+    0.015,
+    0.075
+   ],
+   "notes": [
+    "shrink: exp=[0.075, 0.015, 0.075] got=[0.015, 0.075, 0.075]"
+   ]
+  },
+  {
+   "id": "curtain-l",
+   "level": "meso",
+   "parent": "cabin-interior",
+   "status": "CHECK",
+   "size": [
+    0.02,
+    0.52,
+    0
+   ],
+   "worldMin": [
+    0.87,
+    1.06,
+    -1.55
+   ],
+   "declared": [
+    0.02,
+    0.52,
+    0.85
+   ],
+   "notes": [
+    "shrink: exp=[0.02, 0.52, 0.85] got=[0.02, 0.52, 0]"
+   ]
+  },
+  {
+   "id": "curtain-r",
+   "level": "meso",
+   "parent": "cabin-interior",
+   "status": "CHECK",
+   "size": [
+    0.02,
+    0.52,
+    0
+   ],
+   "worldMin": [
+    -0.89,
+    1.06,
+    -1.55
+   ],
+   "declared": [
+    0.02,
+    0.52,
+    0.85
+   ],
+   "notes": [
+    "shrink: exp=[0.02, 0.52, 0.85] got=[0.02, 0.52, 0]"
+   ]
+  },
+  {
+   "id": "starlight-headliner",
+   "level": "meso",
+   "parent": "cabin-interior",
+   "status": "OK",
+   "size": [
+    1.36,
+    0.006,
+    1.33
+   ],
+   "worldMin": [
+    -0.68,
+    1.683,
+    -0.28
+   ],
+   "declared": [
+    1.36,
+    0.006,
+    1.33
+   ],
+   "notes": []
+  },
+  {
+   "id": "vent-grille",
+   "level": "meso",
+   "parent": "cabin-interior",
+   "status": "OK",
+   "size": [
+    1.6,
+    0.042,
+    0.006
+   ],
+   "worldMin": [
+    -0.8,
+    0.839,
+    1.106
+   ],
+   "declared": [
+    1.6,
+    0.042,
+    0.006
+   ],
+   "notes": []
+  },
+  {
+   "id": "wheel-cap-fl",
+   "level": "meso",
+   "parent": "root",
+   "status": "CHECK",
+   "size": [
+    0.012,
+    0.14,
+    0.14
+   ],
+   "worldMin": [
+    1.006,
+    0.312,
+    1.645
+   ],
+   "declared": [
+    0.14,
+    0.012,
+    0.14
+   ],
+   "notes": [
+    "shrink: exp=[0.14, 0.012, 0.14] got=[0.012, 0.14, 0.14]"
+   ]
+  },
+  {
+   "id": "wheel-cap-fr",
+   "level": "meso",
+   "parent": "root",
+   "status": "CHECK",
+   "size": [
+    0.012,
+    0.14,
+    0.14
+   ],
+   "worldMin": [
+    -1.018,
+    0.312,
+    1.645
+   ],
+   "declared": [
+    0.14,
+    0.012,
+    0.14
+   ],
+   "notes": [
+    "shrink: exp=[0.14, 0.012, 0.14] got=[0.012, 0.14, 0.14]"
+   ]
+  },
+  {
+   "id": "wheel-cap-rl",
+   "level": "meso",
+   "parent": "root",
+   "status": "CHECK",
+   "size": [
+    0.012,
+    0.14,
+    0.14
+   ],
+   "worldMin": [
+    1.006,
+    0.312,
+    -1.785
+   ],
+   "declared": [
+    0.14,
+    0.012,
+    0.14
+   ],
+   "notes": [
+    "shrink: exp=[0.14, 0.012, 0.14] got=[0.012, 0.14, 0.14]"
+   ]
+  },
+  {
+   "id": "wheel-cap-rr",
+   "level": "meso",
+   "parent": "root",
+   "status": "CHECK",
+   "size": [
+    0.012,
+    0.14,
+    0.14
+   ],
+   "worldMin": [
+    -1.018,
+    0.312,
+    -1.785
+   ],
+   "declared": [
+    0.14,
+    0.012,
+    0.14
+   ],
+   "notes": [
+    "shrink: exp=[0.14, 0.012, 0.14] got=[0.012, 0.14, 0.14]"
+   ]
+  },
+  {
+   "id": "lantern-bezel-l",
+   "level": "meso",
+   "parent": "taillamp-l",
+   "status": "OK",
+   "size": [
+    0.2,
+    0.72,
+    0.008
+   ],
+   "worldMin": [
+    0.74,
+    0.54,
+    -2.868
+   ],
+   "declared": [
+    0.2,
+    0.72,
+    0.008
+   ],
+   "notes": []
+  },
+  {
+   "id": "lantern-emitter-l",
+   "level": "meso",
+   "parent": "taillamp-l",
+   "status": "OK",
+   "size": [
+    0.16,
+    0.64,
+    0.006
+   ],
+   "worldMin": [
+    0.76,
+    0.58,
+    -2.875
+   ],
+   "declared": [
+    0.16,
+    0.64,
+    0.006
+   ],
+   "notes": []
+  },
+  {
+   "id": "lantern-signature-l",
+   "level": "meso",
+   "parent": "taillamp-l",
+   "status": "OK",
+   "size": [
+    0.1,
+    0.3,
+    0.004
+   ],
+   "worldMin": [
+    0.79,
+    0.75,
+    -2.882
+   ],
+   "declared": [
+    0.1,
+    0.3,
+    0.004
+   ],
+   "notes": []
+  },
+  {
+   "id": "lantern-bezel-r",
+   "level": "meso",
+   "parent": "taillamp-r",
+   "status": "OK",
+   "size": [
+    0.2,
+    0.72,
+    0.008
+   ],
+   "worldMin": [
+    -0.94,
+    0.54,
+    -2.868
+   ],
+   "declared": [
+    0.2,
+    0.72,
+    0.008
+   ],
+   "notes": []
+  },
+  {
+   "id": "lantern-emitter-r",
+   "level": "meso",
+   "parent": "taillamp-r",
+   "status": "OK",
+   "size": [
+    0.16,
+    0.64,
+    0.006
+   ],
+   "worldMin": [
+    -0.92,
+    0.58,
+    -2.875
+   ],
+   "declared": [
+    0.16,
+    0.64,
+    0.006
+   ],
+   "notes": []
+  },
+  {
+   "id": "lantern-signature-r",
+   "level": "meso",
+   "parent": "taillamp-r",
+   "status": "OK",
+   "size": [
+    0.1,
+    0.3,
+    0.004
+   ],
+   "worldMin": [
+    -0.89,
+    0.75,
+    -2.882
+   ],
+   "declared": [
+    0.1,
+    0.3,
+    0.004
+   ],
+   "notes": []
+  },
+  {
+   "id": "emblem-shield",
+   "level": "meso",
+   "parent": "front-end",
+   "status": "CHECK",
+   "size": [
+    1.1,
+    0.24,
+    0.01
+   ],
+   "worldMin": [
+    -0.55,
+    1.18,
+    2.656
+   ],
+   "declared": [
+    1,
+    1,
+    1
+   ],
+   "notes": [
+    "shrink: exp=[1, 1, 1] got=[1.1, 0.24, 0.01]"
+   ]
+  },
+  {
+   "id": "crystal-sconce-l",
+   "level": "meso",
+   "parent": "cabin-interior",
+   "status": "OK",
+   "size": [
+    0.05,
+    0.34,
+    0.05
+   ],
+   "worldMin": [
+    0.845,
+    1.11,
+    0.395
+   ],
+   "declared": [
+    0.05,
+    0.34,
+    0.05
+   ],
+   "notes": []
+  },
+  {
+   "id": "crystal-sconce-band-l",
+   "level": "meso",
+   "parent": "cabin-interior",
+   "status": "OK",
+   "size": [
+    0.062,
+    0.035,
+    0.062
+   ],
+   "worldMin": [
+    0.839,
+    1.262,
+    0.389
+   ],
+   "declared": [
+    0.062,
+    0.035,
+    0.062
+   ],
+   "notes": []
+  },
+  {
+   "id": "crystal-sconce-r",
+   "level": "meso",
+   "parent": "cabin-interior",
+   "status": "OK",
+   "size": [
+    0.05,
+    0.34,
+    0.05
+   ],
+   "worldMin": [
+    -0.895,
+    1.11,
+    0.395
+   ],
+   "declared": [
+    0.05,
+    0.34,
+    0.05
+   ],
+   "notes": []
+  },
+  {
+   "id": "crystal-sconce-band-r",
+   "level": "meso",
+   "parent": "cabin-interior",
+   "status": "OK",
+   "size": [
+    0.062,
+    0.035,
+    0.062
+   ],
+   "worldMin": [
+    -0.901,
+    1.262,
+    0.389
+   ],
+   "declared": [
+    0.062,
+    0.035,
+    0.062
+   ],
+   "notes": []
+  },
+  {
+   "id": "handle-star-fl",
+   "level": "meso",
+   "parent": "root",
+   "status": "OK",
+   "size": [
+    0.006,
+    0.03,
+    0.56
+   ],
+   "worldMin": [
+    1.029,
+    0.955,
+    0.9
+   ],
+   "declared": [
+    0.006,
+    0.03,
+    0.56
+   ],
+   "notes": []
+  },
+  {
+   "id": "handle-star-fr",
+   "level": "meso",
+   "parent": "root",
+   "status": "OK",
+   "size": [
+    0.006,
+    0.03,
+    0.56
+   ],
+   "worldMin": [
+    -1.035,
+    0.955,
+    0.9
+   ],
+   "declared": [
+    0.006,
+    0.03,
+    0.56
+   ],
+   "notes": []
+  },
+  {
+   "id": "handle-star-rl",
+   "level": "meso",
+   "parent": "root",
+   "status": "OK",
+   "size": [
+    0.006,
+    0.03,
+    0.56
+   ],
+   "worldMin": [
+    1.029,
+    0.955,
+    -0.56
+   ],
+   "declared": [
+    0.006,
+    0.03,
+    0.56
+   ],
+   "notes": []
+  },
+  {
+   "id": "handle-star-rr",
+   "level": "meso",
+   "parent": "root",
+   "status": "OK",
+   "size": [
+    0.006,
+    0.03,
+    0.56
+   ],
+   "worldMin": [
+    -1.035,
+    0.955,
+    -0.56
+   ],
+   "declared": [
+    0.006,
+    0.03,
+    0.56
+   ],
+   "notes": []
+  }
+ ]
+}
