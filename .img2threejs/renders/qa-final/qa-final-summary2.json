@@ -1,0 +1,338 @@
+{
+  "captureTime": "2026-10-16T10:47:25.642Z",
+  "P1_uvassert": {
+    "tables": [
+      [
+        {
+          "材质": "leather-warm",
+          "检查三角面": 6240,
+          "越界串味": 0,
+          "分区0三角面": 4272,
+          "分区1三角面": 1968,
+          "样例": "—"
+        },
+        {
+          "材质": "housing-dark",
+          "检查三角面": 536,
+          "越界串味": 0,
+          "分区0三角面": 384,
+          "分区1三角面": 152,
+          "样例": "—"
+        },
+        {
+          "材质": "lamp-white",
+          "检查三角面": 576,
+          "越界串味": 0,
+          "分区0三角面": 192,
+          "分区1三角面": 384,
+          "样例": "—"
+        },
+        {
+          "材质": "lamp-gold",
+          "检查三角面": 2560,
+          "越界串味": 0,
+          "分区0三角面": 384,
+          "分区1三角面": 2176,
+          "样例": "—"
+        }
+      ]
+    ],
+    "logs": [
+      "warn: THREE.WARNING: Multiple instances of Three.js being imported.",
+      "info: [V800Adapter] #uvassert：全部三角形 UV 落在合法分区内，无串味"
+    ]
+  },
+  "P1_shots": [
+    "H3-quilt-rear-seatbacks.png",
+    "H3-quilt-rear-wide.png",
+    "H3-wood-tunnel-top.png",
+    "H3-crystal-shifter.png",
+    "H3-lampgold-speaker-rl.png",
+    "H3-lampgold-speaker-fl.png",
+    "H3-lampgold-tweeter-l.png",
+    "H3-tri-screen.png",
+    "H3-starlight-up.png",
+    "H3-cabin-front.png",
+    "H3-cabin-third.png",
+    "H3-wheel-rim-fl-face.png",
+    "H3-taillamp-close.png",
+    "H3-greenhouse-inside-left.png",
+    "H3-greenhouse-inside-front.png"
+  ],
+  "P2_batchmerge": {
+    "tables": [
+      [
+        {
+          "灯组": "刹车灯(尾灯/红带)",
+          "期望": "lamp-red",
+          "命中": "lamp-red"
+        },
+        {
+          "灯组": "头灯内芯",
+          "期望": "lamp-head",
+          "命中": "lamp-head"
+        },
+        {
+          "灯组": "MAEXTRO 字标",
+          "期望": "lamp-mark",
+          "命中": "lamp-mark"
+        },
+        {
+          "灯组": "星空顶",
+          "期望": "starlight",
+          "命中": "starlight"
+        },
+        {
+          "灯组": "金色签名屏",
+          "期望": "lamp-gold",
+          "命中": "lamp-gold"
+        },
+        {
+          "灯组": "轮圈盘面",
+          "期望": "wheel-alloy",
+          "命中": "wheel-alloy"
+        },
+        {
+          "灯组": "尾灯 3+3 灯带贴图",
+          "期望": "housing-dark",
+          "命中": "housing-dark"
+        },
+        {
+          "灯组": "星尘颗粒",
+          "期望": "lamp-star",
+          "命中": "lamp-star"
+        },
+        {
+          "灯组": "头灯 LED 点阵",
+          "期望": "lamp-head",
+          "命中": "lamp-head"
+        },
+        {
+          "灯组": "车名牌镀铬字",
+          "期望": "plate",
+          "命中": "plate"
+        },
+        {
+          "灯组": "盾徽面板分区贴图",
+          "期望": "lamp-white",
+          "命中": "lamp-white"
+        },
+        {
+          "灯组": "皮革图集(素面+菱格)",
+          "期望": "leather-warm",
+          "命中": "leather-warm"
+        },
+        {
+          "灯组": "深棕皮革粒面",
+          "期望": "leather-dark",
+          "命中": "leather-dark"
+        },
+        {
+          "灯组": "米白皮革粒面",
+          "期望": "leather-ivory",
+          "命中": "leather-ivory"
+        },
+        {
+          "灯组": "开放木纹",
+          "期望": "wood",
+          "命中": "wood"
+        },
+        {
+          "灯组": "顶棚麂皮",
+          "期望": "headliner-suede",
+          "命中": "headliner-suede"
+        },
+        {
+          "灯组": "窗帘织纹",
+          "期望": "curtain",
+          "命中": "curtain"
+        },
+        {
+          "灯组": "地毯短绒",
+          "期望": "carpet",
+          "命中": "carpet"
+        },
+        {
+          "灯组": "greenhouse 玻璃透射",
+          "期望": "glass-dark",
+          "命中": "trans=0.82"
+        }
+      ],
+      [
+        {
+          "材质": "chrome",
+          "合并前 mesh": 23,
+          "合并后 mesh": 1,
+          "减少": 22,
+          "合并件三角面": 6072
+        },
+        {
+          "材质": "leather-warm",
+          "合并前 mesh": 23,
+          "合并后 mesh": 1,
+          "减少": 22,
+          "合并件三角面": 6048
+        },
+        {
+          "材质": "matte-black",
+          "合并前 mesh": 14,
+          "合并后 mesh": 1,
+          "减少": 13,
+          "合并件三角面": 4800
+        },
+        {
+          "材质": "lamp-red",
+          "合并前 mesh": 8,
+          "合并后 mesh": 1,
+          "减少": 7,
+          "合并件三角面": 1536
+        },
+        {
+          "材质": "lamp-gold",
+          "合并前 mesh": 8,
+          "合并后 mesh": 1,
+          "减少": 7,
+          "合并件三角面": 2560
+        },
+        {
+          "材质": "dpillar-silver",
+          "合并前 mesh": 6,
+          "合并后 mesh": 1,
+          "减少": 5,
+          "合并件三角面": 1728
+        },
+        {
+          "材质": "housing-dark",
+          "合并前 mesh": 6,
+          "合并后 mesh": 1,
+          "减少": 5,
+          "合并件三角面": 536
+        },
+        {
+          "材质": "lamp-star",
+          "合并前 mesh": 6,
+          "合并后 mesh": 1,
+          "减少": 5,
+          "合并件三角面": 1344
+        },
+        {
+          "材质": "paint-lower",
+          "合并前 mesh": 5,
+          "合并后 mesh": 1,
+          "减少": 4,
+          "合并件三角面": 968
+        },
+        {
+          "材质": "paint-upper",
+          "合并前 mesh": 4,
+          "合并后 mesh": 1,
+          "减少": 3,
+          "合并件三角面": 472
+        },
+        {
+          "材质": "bronze-dark",
+          "合并前 mesh": 4,
+          "合并后 mesh": 1,
+          "减少": 3,
+          "合并件三角面": 424
+        },
+        {
+          "材质": "lamp-white",
+          "合并前 mesh": 3,
+          "合并后 mesh": 1,
+          "减少": 2,
+          "合并件三角面": 576
+        },
+        {
+          "材质": "leather-ivory",
+          "合并前 mesh": 3,
+          "合并后 mesh": 1,
+          "减少": 2,
+          "合并件三角面": 576
+        },
+        {
+          "材质": "lamp-head",
+          "合并前 mesh": 2,
+          "合并后 mesh": 1,
+          "减少": 1,
+          "合并件三角面": 384
+        },
+        {
+          "材质": "carpet",
+          "合并前 mesh": 2,
+          "合并后 mesh": 1,
+          "减少": 1,
+          "合并件三角面": 384
+        },
+        {
+          "材质": "wood",
+          "合并前 mesh": 2,
+          "合并后 mesh": 1,
+          "减少": 1,
+          "合并件三角面": 384
+        },
+        {
+          "材质": "lamp-amber",
+          "合并前 mesh": 2,
+          "合并后 mesh": 1,
+          "减少": 1,
+          "合并件三角面": 768
+        },
+        {
+          "材质": "curtain",
+          "合并前 mesh": 2,
+          "合并后 mesh": 1,
+          "减少": 1,
+          "合并件三角面": 576
+        }
+      ]
+    ],
+    "logs": [
+      "info: [V800Adapter] #batchmerge：mesh 170 → 65，可见 164 → 59，Draw Call −105"
+    ]
+  },
+  "P3_hookRecapture": {
+    "front": "C3-cabin-front.png",
+    "rear": "C3-cabin-rear.png",
+    "third": "C3-cabin-third.png"
+  },
+  "errors": {
+    "P1": []
+  },
+  "P1_info": {
+    "headSign": 1,
+    "frontSeatC": [
+      0,
+      0.998,
+      0.948
+    ],
+    "rimBox": [
+      0.74,
+      0.082,
+      1.427,
+      1.01,
+      0.682,
+      2.027
+    ],
+    "taillampBox": [
+      -0.93,
+      0.64,
+      -2.876,
+      0.93,
+      1.16,
+      -2.835
+    ],
+    "greenhouseBox": [
+      -0.915,
+      1.101,
+      -2.409,
+      0.915,
+      1.645,
+      0.979
+    ],
+    "dressedFrame": {
+      "tris": 62632,
+      "calls": 45
+    }
+  }
+}

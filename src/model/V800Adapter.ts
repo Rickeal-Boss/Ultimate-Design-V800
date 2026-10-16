@@ -259,22 +259,45 @@ const GOLD_MATRIX_PATTERN: readonly string[] = [
   '................',
 ];
 
-function createGoldMatrixTexture(): THREE.CanvasTexture {
-  const cols = 16;
-  const rows = GOLD_MATRIX_PATTERN.length; // 24
-  const cell = 24;
+/**
+ * 尾灯中部签名屏 + 音响格栅 分区图集（512×512）。
+ *
+ * P1-1 修复：lamp-gold 是共享材质 —— 金色签名屏（lantern-signature-l/r）与
+ * 4 扬声器 + 2 高音罩共用一份 emissiveMap，此前音响格栅显示金色点阵（串味）。
+ * 解法沿用 EX-07/EX-28 图集先例：
+ *   左区 = 点阵屏图案区（供签名屏重映射落点）；
+ *   右区 = 素面拉丝金暗场（供 6 个音频组件重映射落点，近黑基底 × 材质金色 albedo
+ *          = 只留极弱暖光晕，点阵彻底消失）。
+ * 图案区按 cell=20 绘制 16×24 = 320×480，纵横比 2:3 与签名屏 0.09×0.135m 完全一致
+ * （原 384×576 同为 2:3），图案布局/配色逐格不变 —— 尾灯金屏观感零变化。
+ * 音频组件 UV 由 remapUV 在 batchMergeStatic 之前烘进源几何。
+ */
+/** 签名屏点阵在图集内的 UV 分区（cell=20 图案画在画布 x[8,328] y[16,496]） */
+const GOLD_PATTERN_REGION = Object.freeze([8 / 512, 328 / 512, 16 / 512, 496 / 512]);
+/** 音响格栅素面拉丝金 UV 分区（画布 x[348,502] y[10,502]） */
+const GOLD_BRUSHED_REGION = Object.freeze([348 / 512, 502 / 512, 10 / 512, 502 / 512]);
+
+function createGoldAtlasTexture(): THREE.CanvasTexture {
+  const S = 512;
   const canvas = document.createElement('canvas');
-  canvas.width = cols * cell; // 384
-  canvas.height = rows * cell; // 576
+  canvas.width = S;
+  canvas.height = S;
   const ctx = canvas.getContext('2d')!;
+  // 全幅黑底：黑 = 零发光，任何未覆盖区域都不会漏光
   ctx.fillStyle = '#080604';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const cols = 16;
+  const rows = GOLD_MATRIX_PATTERN.length; // 24
+  const cell = 20;
+  const ox = 8;
+  const oy = 16;
   // 未点亮的点也画一颗极暗的，保留点阵面板质感
   ctx.fillStyle = 'rgba(201, 168, 107, 0.07)';
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       ctx.beginPath();
-      ctx.arc((c + 0.5) * cell, (r + 0.5) * cell, cell * 0.09, 0, Math.PI * 2);
+      ctx.arc(ox + (c + 0.5) * cell, oy + (r + 0.5) * cell, cell * 0.09, 0, Math.PI * 2);
       ctx.fill();
     }
   }
@@ -283,8 +306,8 @@ function createGoldMatrixTexture(): THREE.CanvasTexture {
     const line = GOLD_MATRIX_PATTERN[r];
     for (let c = 0; c < cols && c < line.length; c++) {
       if (line[c] !== '#') continue;
-      const cx = (c + 0.5) * cell;
-      const cy = (r + 0.5) * cell;
+      const cx = ox + (c + 0.5) * cell;
+      const cy = oy + (r + 0.5) * cell;
       const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, cell * 0.42);
       grad.addColorStop(0, 'rgba(255, 236, 196, 0.98)');
       grad.addColorStop(0.45, 'rgba(201, 168, 107, 0.9)');
@@ -295,6 +318,37 @@ function createGoldMatrixTexture(): THREE.CanvasTexture {
       ctx.fill();
     }
   }
+
+  // ---- 右区：素面拉丝金暗场（音频组件落点）----
+  // 近黑暖底 + 细横向拉丝：emissive 上只留极弱织理（×1.8 强度后≈0.02 亮度，不点阵），
+  // 金属观感由材质自身的 #C2A263 albedo + metalness 1.0 + envMap 承担。
+  const bx0 = GOLD_BRUSHED_REGION[0] * S;
+  const bx1 = GOLD_BRUSHED_REGION[1] * S;
+  const by0 = (1 - GOLD_BRUSHED_REGION[3]) * S;
+  const by1 = (1 - GOLD_BRUSHED_REGION[2]) * S;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(bx0, by0, bx1 - bx0, by1 - by0);
+  ctx.clip();
+  const bgrad = ctx.createLinearGradient(bx0, 0, bx1, 0);
+  bgrad.addColorStop(0, 'rgb(22, 17, 10)');
+  bgrad.addColorStop(0.5, 'rgb(34, 26, 15)');
+  bgrad.addColorStop(1, 'rgb(22, 17, 10)');
+  ctx.fillStyle = bgrad;
+  ctx.fillRect(bx0, by0, bx1 - bx0, by1 - by0);
+  // 拉丝：细横线（沿 U 向），亮度微抖，确定性 LCG
+  const rnd = makeLcg(0x9d15b3);
+  for (let y = by0; y <= by1; y += 2) {
+    const a = 0.04 + rnd() * 0.07;
+    ctx.strokeStyle = `rgba(201, 168, 107, ${a.toFixed(3)})`;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(bx0, y + (rnd() - 0.5) * 0.8);
+    ctx.lineTo(bx1, y + (rnd() - 0.5) * 0.8);
+    ctx.stroke();
+  }
+  ctx.restore();
+
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.needsUpdate = true;
@@ -548,6 +602,238 @@ function createHandleStarTexture(): THREE.CanvasTexture {
   return tex;
 }
 
+// ---------------------------------------------------------------------------
+// P1 内饰程序化织物贴图（皮革 ×3 / 木纹 / 麂皮 / 窗帘 / 地毯）。
+// 七个材质在 spec 声明 textureless（normal/bump 全 null）—— 这里是唯一支撑，
+// 不画就是光滑塑料回归。全部 Canvas 程序化绘制（合规铁律：零照片像素），
+// 高度场 → 颜色/法线同源派生，周期噪声保证 tileable。
+// ---------------------------------------------------------------------------
+
+/** 整数哈希 → [0,1)，确定性（同一 seed 逐次加载一致） */
+function hash2i(ix: number, iy: number, seed: number): number {
+  let h = (Math.imul(ix, 374761393) + Math.imul(iy, 668265263) + Math.imul(seed, 2246822519)) >>> 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177) >>> 0;
+  h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
+
+const smoothT = (t: number): number => t * t * (3 - 2 * t);
+
+/**
+ * 周期 value noise：x/y 以「格」为单位，格数 = period（整数 ⇒ 贴图 tileable）。
+ * x, y 应在 [0, period) 内取值（由调用方乘频率保证）。
+ */
+function pnoise(x: number, y: number, period: number, seed: number): number {
+  const x0 = Math.floor(x);
+  const y0 = Math.floor(y);
+  const fx = smoothT(x - x0);
+  const fy = smoothT(y - y0);
+  const wrap = (n: number): number => ((n % period) + period) % period;
+  const ix0 = wrap(x0);
+  const ix1 = wrap(x0 + 1);
+  const iy0 = wrap(y0);
+  const iy1 = wrap(y0 + 1);
+  const a = hash2i(ix0, iy0, seed);
+  const b = hash2i(ix1, iy0, seed);
+  const c = hash2i(ix0, iy1, seed);
+  const d = hash2i(ix1, iy1, seed);
+  return a + (b - a) * fx + (c - a) * fy + (a - b - c + d) * fx * fy;
+}
+
+const clamp01 = (t: number): number => Math.max(0, Math.min(1, t));
+
+interface SurfaceMapSet {
+  map: THREE.CanvasTexture;
+  normalMap: THREE.CanvasTexture;
+}
+
+/**
+ * 通用程序化表面贴图生成器：sample(u, v) 返回 [h, r, g, b]
+ * （h ∈ 0..1 高度场供法线派生；rgb 为 0..255 颜色通道）。
+ * 法线由高度场 wrap 边缘的有限差分求出 —— 与颜色同源，凹凸必然对位。
+ * map = SRGBColorSpace（颜色内容）；normalMap = NoColorSpace（数据贴图，绝不设 sRGB）。
+ */
+function createProceduralSurface(
+  size: number,
+  normalStrength: number,
+  sample: (u: number, v: number) => [number, number, number, number]
+): SurfaceMapSet {
+  const colorCanvas = document.createElement('canvas');
+  colorCanvas.width = size;
+  colorCanvas.height = size;
+  const colorCtx = colorCanvas.getContext('2d')!;
+  const colorImage = colorCtx.createImageData(size, size);
+  const normalCanvas = document.createElement('canvas');
+  normalCanvas.width = size;
+  normalCanvas.height = size;
+  const normalCtx = normalCanvas.getContext('2d')!;
+  const normalImage = normalCtx.createImageData(size, size);
+  const height = new Float32Array(size * size);
+
+  for (let y = 0; y < size; y++) {
+    const v = y / size;
+    for (let x = 0; x < size; x++) {
+      const u = x / size;
+      const [h, r, g, b] = sample(u, v);
+      height[y * size + x] = h;
+      const off = (y * size + x) * 4;
+      colorImage.data[off] = r;
+      colorImage.data[off + 1] = g;
+      colorImage.data[off + 2] = b;
+      colorImage.data[off + 3] = 255;
+    }
+  }
+
+  // wrap 有限差分 → 法线（[-1,1] 映射到 [0,255]）
+  const s = normalStrength * size;
+  for (let y = 0; y < size; y++) {
+    const yUp = (y - 1 + size) % size;
+    const yDn = (y + 1) % size;
+    for (let x = 0; x < size; x++) {
+      const xL = (x - 1 + size) % size;
+      const xR = (x + 1) % size;
+      const dx = (height[y * size + xR] - height[y * size + xL]) * s;
+      const dy = (height[yDn * size + x] - height[yUp * size + x]) * s;
+      const invLen = 1 / Math.sqrt(dx * dx + dy * dy + 1);
+      const off = (y * size + x) * 4;
+      normalImage.data[off] = Math.round((-dx * invLen * 0.5 + 0.5) * 255);
+      normalImage.data[off + 1] = Math.round((-dy * invLen * 0.5 + 0.5) * 255);
+      normalImage.data[off + 2] = Math.round((invLen * 0.5 + 0.5) * 255);
+      normalImage.data[off + 3] = 255;
+    }
+  }
+  colorCtx.putImageData(colorImage, 0, 0);
+  normalCtx.putImageData(normalImage, 0, 0);
+
+  const map = new THREE.CanvasTexture(colorCanvas);
+  map.colorSpace = THREE.SRGBColorSpace;
+  map.wrapS = THREE.RepeatWrapping;
+  map.wrapT = THREE.RepeatWrapping;
+  map.anisotropy = 4;
+  map.needsUpdate = true;
+  const normalMap = new THREE.CanvasTexture(normalCanvas);
+  normalMap.colorSpace = THREE.NoColorSpace; // 数据贴图：绝不 sRGB
+  normalMap.wrapS = THREE.RepeatWrapping;
+  normalMap.wrapT = THREE.RepeatWrapping;
+  normalMap.needsUpdate = true;
+  return { map, normalMap };
+}
+
+/** 皮革粒面采样：三层周期噪声（大粒 + 细粒 + 脊状褶皱），颜色 = 基色 × 高度明暗 */
+function leatherSampler(baseHex: [number, number, number], seed: number) {
+  const [br, bg, bb] = baseHex;
+  return (u: number, v: number): [number, number, number, number] => {
+    const n1 = pnoise(u * 10, v * 10, 10, seed);
+    const n2 = pnoise(u * 28, v * 28, 28, seed + 1);
+    const ridge = 1 - Math.abs(2 * pnoise(u * 40, v * 40, 40, seed + 2) - 1);
+    const h = clamp01(0.42 * n1 + 0.33 * n2 + 0.25 * ridge);
+    const shade = 0.8 + 0.4 * h;
+    const warm = 0.97 + 0.06 * n2;
+    return [h, br * shade, bg * shade * warm, bb * shade];
+  };
+}
+
+/**
+ * 皮革图集（正方形 size，左半素面 / 右半菱形缝格）—— leather-warm 专用。
+ * 共享材质图集 + UV 重映射是硬约束（MEMORY）：素面给全车通用件，
+ * 菱格区给 seat-rear-*（座面/靠背/头枕，I5/I6 钻石菱格参考）。
+ * 底半幅复制素面（防意外采样露出花屏，多余 25% 显存换零风险）。
+ * 菱格：45° 旋转方格阵，缝线凹槽 + 珠状缝点 + 格心微鼓（高度场直接体现，
+ * 法线由同一场派生，缝线立体感免费获得）。
+ */
+function createLeatherAtlasTexture(
+  size: number,
+  seed: number,
+  baseHex: [number, number, number],
+  quiltCell: number
+): SurfaceMapSet {
+  const half = size / 2;
+  const plain = leatherSampler(baseHex, seed);
+  const [br, bg, bb] = baseHex;
+  const stitchPitch = quiltCell / 4; // 缝珠间距
+  const sample = (u: number, v: number): [number, number, number, number] => {
+    const x = u * size;
+    const y = v * size;
+    if (x >= half && y < half) {
+      // ---- 右上：菱形缝格区 ----
+      const qx = x - half;
+      // 45° 菱格：两条正交线族 (x+y) 与 (x−y)，周期 = quiltCell
+      const d1 = ((qx + y) % quiltCell + quiltCell) % quiltCell;
+      const d2 = ((qx - y) % quiltCell + quiltCell) % quiltCell;
+      const w = quiltCell * 0.055; // 缝线半宽
+      const dist = Math.min(Math.min(d1, quiltCell - d1), Math.min(d2, quiltCell - d2));
+      const [h0, r0, g0, b0] = plain(u, v);
+      if (dist < w) {
+        // 缝线凹槽：压暗 + 周期缝珠提亮
+        const beadPhase = ((qx + y) % stitchPitch) / stitchPitch;
+        const bead = dist < w * 0.5 && beadPhase < 0.22 ? 1 : 0;
+        const shade = bead ? 1.35 : 0.55;
+        const h = bead ? 0.95 : 0.12;
+        return [h, Math.min(255, br * shade), Math.min(255, bg * shade), Math.min(255, bb * shade)];
+      }
+      // 格心微鼓：距缝线越远越高
+      const puff = clamp01(dist / (quiltCell * 0.5));
+      const h = clamp01(h0 * 0.55 + 0.45 * puff);
+      const shade = 0.86 + 0.3 * h;
+      return [h, r0 * shade, g0 * shade, b0 * shade];
+    }
+    return plain(u, v);
+  };
+  return createProceduralSurface(size, 0.55, sample);
+}
+
+/** 开放木纹（沿 U 拉伸）：u 向低频 / v 向高频，脊状深条纹 + 细纤维 */
+function woodSampler(baseHex: [number, number, number], seed: number) {
+  const [br, bg, bb] = baseHex;
+  return (u: number, v: number): [number, number, number, number] => {
+    // 沿 U 拉伸：u 方向频率 3，v 方向频率 34（约 11:1 拉伸比）
+    const streak = pnoise(u * 3, v * 34, 3 * 34, seed);
+    const ring = 1 - Math.abs(2 * pnoise(u * 2, v * 12, 2 * 12, seed + 1) - 1);
+    const fiber = pnoise(u * 6, v * 90, 6 * 90, seed + 2);
+    const h = clamp01(0.4 * streak + 0.4 * ring * ring + 0.2 * fiber);
+    // 深色开放纹：ring 峰值处压暗
+    const dark = 1 - 0.38 * ring * ring;
+    const shade = (0.78 + 0.44 * h) * dark;
+    return [h, br * shade, bg * shade, bb * shade];
+  };
+}
+
+/** 麂皮微颗粒：极细密噪声、极低起伏 */
+function suedeSampler(baseHex: [number, number, number], seed: number) {
+  const [br, bg, bb] = baseHex;
+  return (u: number, v: number): [number, number, number, number] => {
+    const fine = pnoise(u * 96, v * 96, 96, seed);
+    const mid = pnoise(u * 18, v * 18, 18, seed + 1);
+    const h = clamp01(0.7 * fine + 0.3 * mid);
+    const shade = 0.92 + 0.16 * h;
+    return [h, br * shade, bg * shade, bb * shade];
+  };
+}
+
+/** 竖向织纹（窗帘）：u 向密条纹 + v 向缓慢波动 + 细纤维 */
+function curtainSampler(baseHex: [number, number, number], seed: number) {
+  const [br, bg, bb] = baseHex;
+  return (u: number, v: number): [number, number, number, number] => {
+    const warp = 0.5 + 0.5 * Math.sin(2 * Math.PI * u * 28 + 1.4 * pnoise(u * 4, v * 3, 4 * 3, seed));
+    const weft = pnoise(u * 64, v * 5, 64 * 5, seed + 1);
+    const h = clamp01(0.6 * warp + 0.4 * weft);
+    const shade = 0.86 + 0.26 * h;
+    return [h, br * shade, bg * shade, bb * shade];
+  };
+}
+
+/** 短绒地毯：高频斑驳 + 中频簇团 */
+function carpetSampler(baseHex: [number, number, number], seed: number) {
+  const [br, bg, bb] = baseHex;
+  return (u: number, v: number): [number, number, number, number] => {
+    const speck = hash2i(Math.floor(u * 128) % 128, Math.floor(v * 128) % 128, seed);
+    const clump = pnoise(u * 22, v * 22, 22, seed + 1);
+    const h = clamp01(0.45 * speck + 0.55 * clump);
+    const shade = 0.72 + 0.56 * h;
+    return [h, br * shade, bg * shade, bb * shade];
+  };
+}
+
 /**
  * EX-26 车名牌「尊界 V800」镀铬立体字（1024×272，字标类允许 1024²）。
  * 参考图为镀铬立体字而非黑底印字：黑底保留（plate 组件身份），字面用
@@ -704,6 +990,207 @@ function createHeadlampLedTexture(): THREE.CanvasTexture {
   return tex;
 }
 
+/**
+ * 屏幕家族 UI 图集（1024×512）。screen-ui 是共享材质（三联屏 + 后排控制屏 +
+ * 2 块零重力座椅扶手屏，IN-21/43），四块屏各自要不同的 UI 画面 ——
+ * 沿用图集 + UV 重映射先例：左上横条 = 三联屏（1.46×0.315m，纵横比 4.6，
+ * 分仪表/中控/副驾三段 HarmonyOS 风卡片）；左下 = 后排控制屏（0.24×0.15）；
+ * 中下小卡 = 扶手屏（0.07×0.05）。其余近黑，任何未重映射的采样都不露 UI。
+ * 深底浅字（H1-H5 参考：仪表+副驾娱乐+中控，深色底 + 浅灰字 + 绿色点缀）。
+ */
+const TRI_SCREEN_UI_REGION = Object.freeze([4 / 1024, 1020 / 1024, 1 - 227 / 512, 1 - 4 / 512]);
+const REAR_CTRL_UI_REGION = Object.freeze([4 / 1024, 316 / 1024, 1 - 508 / 512, 1 - 300 / 512]);
+const SEAT_CTRL_UI_REGION = Object.freeze([332 / 1024, 470 / 1024, 1 - 482 / 512, 1 - 380 / 512]);
+
+function createScreenUIAtlasTexture(): THREE.CanvasTexture {
+  const W = 1024;
+  const H = 512;
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d')!;
+  // 全幅深底：未覆盖区域 = 熄屏
+  ctx.fillStyle = '#0a0c10';
+  ctx.fillRect(0, 0, W, H);
+  const roundRect = (x: number, y: number, w: number, h: number, r: number): void => {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  };
+  const panel = (x: number, y: number, w: number, h: number): void => {
+    roundRect(x, y, w, h, 8);
+    ctx.fillStyle = '#10141b';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(159, 182, 200, 0.28)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  };
+  const label = (text: string, x: number, y: number, size: number, color: string, align: CanvasTextAlign = 'left'): void => {
+    ctx.fillStyle = color;
+    ctx.textAlign = align;
+    ctx.textBaseline = 'middle';
+    ctx.font = `${size}px "Segoe UI", "Microsoft YaHei", sans-serif`;
+    ctx.fillText(text, x, y);
+  };
+
+  // ---- 左上：三联屏（y 4..227）----
+  panel(4, 4, 1016, 223);
+  // 分段隔断
+  ctx.strokeStyle = 'rgba(159, 182, 200, 0.18)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(342, 14); ctx.lineTo(342, 217);
+  ctx.moveTo(682, 14); ctx.lineTo(682, 217);
+  ctx.stroke();
+  // ① 仪表段（驾驶位）
+  label('88', 60, 108, 92, '#e8f2ec');
+  label('km/h', 60, 176, 22, '#6e8494');
+  label('P', 300, 60, 44, '#9fb6c8', 'right');
+  // 电量/踏板力条
+  ctx.fillStyle = '#16241d';
+  roundRect(56, 196, 220, 12, 6); ctx.fill();
+  ctx.fillStyle = '#7fd8a8';
+  roundRect(56, 196, 150, 12, 6); ctx.fill();
+  label('READY', 180, 26, 18, '#7fd8a8', 'center');
+  // ② 中控段（时钟 + 卡片）
+  label('10:36', 512, 62, 56, '#eef3f8', 'center');
+  label('10月16日 周五', 512, 104, 20, '#6e8494', 'center');
+  panel(376, 128, 272, 76);
+  label('♪ 湖畔晨曲 — 车载歌单', 512, 152, 22, '#c8d4de', 'center');
+  label('导航 · 前往公司 24 分钟', 512, 186, 18, '#7fa8c8', 'center');
+  // ③ 副驾段（娱乐）
+  panel(716, 28, 268, 120);
+  label('多媒体', 850, 78, 26, '#c8d4de', 'center');
+  label('视频卡片', 850, 112, 18, '#6e8494', 'center');
+  panel(716, 160, 128, 52);
+  label('23°C 晴', 780, 186, 20, '#c8d4de', 'center');
+  panel(856, 160, 128, 52);
+  label('空气净化中', 920, 186, 17, '#7fd8a8', 'center');
+
+  // ---- 左下：后排控制屏（0.24×0.15 → 312×208 @ y300..508）----
+  panel(4, 300, 312, 208);
+  label('后排控制', 160, 330, 24, '#c8d4de', 'center');
+  for (const [i, t] of [['24°C', '温度'], ['座椅', '加热'], ['遮阳', '窗帘'], ['氛围', '灯效']].entries()) {
+    const bx = 28 + (i % 2) * 140;
+    const by = 356 + Math.floor(i / 2) * 68;
+    panel(bx, by, 120, 56);
+    label(t[0], bx + 60, by + 24, 20, '#e8eef4', 'center');
+    label(t[1], bx + 60, by + 44, 13, '#6e8494', 'center');
+  }
+
+  // ---- 中下小卡：零重力座椅扶手屏（0.07×0.05 → 138×102 @ x332..470 y380..482）----
+  panel(332, 380, 138, 102);
+  for (const [i, t] of [['座椅', '按摩'], ['腰托', '通风']].entries()) {
+    const by = 392 + i * 42;
+    label(t[0], 402, by, 15, '#d8e2ea', 'center');
+    label(t[1], 402, by + 18, 11, '#5f7080', 'center');
+  }
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/**
+ * lamp-gold 反照率图集（512×512，与 createGoldAtlasTexture 同布局）。
+ * N3 修复：此前素面金观感呈「奶油色 blob」—— albedo #C2A263（亮金）× metalness 1
+ * × roughness 0.28 + 环境反射 = 亮奶油色。目标是「深色拉丝金属格栅」：
+ *   左区（签名屏底）：近黑暖底 —— EX-29 金色点阵在深色屏体上更符合实拍；
+ *   右区（音频格栅）：深青铜底 + 横向拉丝明暗 —— 拉丝金属观感由 map 承担，
+ *   金属反射强度由 roughness 上调收敛（0.28 → 0.45）。
+ * UV 分区沿用既有 remapUV 落点（签名屏 → 左区 / 6 音频件 → 右区），零额外映射。
+ */
+function createGoldAlbedoAtlasTexture(): THREE.CanvasTexture {
+  const S = 512;
+  const canvas = document.createElement('canvas');
+  canvas.width = S;
+  canvas.height = S;
+  const ctx = canvas.getContext('2d')!;
+  // 全幅深青铜暗底
+  ctx.fillStyle = '#181309';
+  ctx.fillRect(0, 0, S, S);
+  // 左区：签名屏底 —— 近黑暖灰
+  ctx.fillStyle = 'rgb(12, 10, 7)';
+  ctx.fillRect(0, 0, S / 2, S);
+  // 右区：音频格栅 —— 深青铜 + 横向拉丝（沿 U 明暗抖动，确定性 LCG）
+  const bx0 = GOLD_BRUSHED_REGION[0] * S;
+  const bx1 = GOLD_BRUSHED_REGION[1] * S;
+  const by0 = (1 - GOLD_BRUSHED_REGION[3]) * S;
+  const by1 = (1 - GOLD_BRUSHED_REGION[2]) * S;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(bx0, by0, bx1 - bx0, by1 - by0);
+  ctx.clip();
+  const base = ctx.createLinearGradient(bx0, 0, bx1, 0);
+  base.addColorStop(0, 'rgb(38, 30, 18)');
+  base.addColorStop(0.5, 'rgb(52, 41, 25)');
+  base.addColorStop(1, 'rgb(38, 30, 18)');
+  ctx.fillStyle = base;
+  ctx.fillRect(bx0, by0, bx1 - bx0, by1 - by0);
+  const rnd = makeLcg(0x71c3a5);
+  for (let y = by0; y <= by1; y += 1) {
+    const a = 0.05 + rnd() * 0.12;
+    const light = rnd() > 0.5;
+    ctx.strokeStyle = light
+      ? `rgba(122, 98, 58, ${a.toFixed(3)})`
+      : `rgba(16, 12, 7, ${a.toFixed(3)})`;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(bx0, y + (rnd() - 0.5) * 0.6);
+    ctx.lineTo(bx1, y + (rnd() - 0.5) * 0.6);
+    ctx.stroke();
+  }
+  ctx.restore();
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/**
+ * 菱格专用平铺贴图（整幅菱形缝格，无图集分区）。
+ * N2 终解：菱格件若沿用共享图集，三平面/盒投影的连续 UV 必然越出分区、
+ * mod 折回又会在三角形插值时穿过图集间缝 —— 唯一两全解是给菱格件一张
+ * 「整幅都是图案」的可平铺贴图：细胞周期 = size/16（整数）→ RepeatWrapping
+ * 无缝环绕，UV 可沿世界坐标无限延展。配合逐三角形三平面投影（见适配器），
+ * 任意朝向的面都得到 6cm 等密度菱格。材质用 leather-warm 的克隆（ID 不变，
+ * 合批按实例分组 → 菱格件独立成组，+1 draw call）。
+ */
+function createQuiltTileTexture(size: number, seed: number, baseHex: [number, number, number]): SurfaceMapSet {
+  const cells = 16; // 每贴图边 16 个细胞（周期整数 → 无缝）
+  const [br, bg, bb] = baseHex;
+  const plain = leatherSampler(baseHex, seed);
+  const stitchPitch = 0.25; // 缝珠间距（细胞单位的 1/4，同图集版）
+  const sample = (u: number, v: number): [number, number, number, number] => {
+    const cx = u * cells;
+    const cy = v * cells;
+    // 45° 菱格：两条正交线族（细胞单位）
+    const d1 = ((cx + cy) % 1 + 1) % 1;
+    const d2 = ((cx - cy) % 1 + 1) % 1;
+    const w = 0.055; // 缝线半宽（细胞单位，同图集版 0.055×cell）
+    const dist = Math.min(Math.min(d1, 1 - d1), Math.min(d2, 1 - d2));
+    const [h0, r0, g0, b0] = plain(u, v);
+    if (dist < w) {
+      const beadPhase = (((cx + cy) % stitchPitch) + stitchPitch) % stitchPitch / stitchPitch;
+      const bead = dist < w * 0.5 && beadPhase < 0.22 ? 1 : 0;
+      const shade = bead ? 1.35 : 0.55;
+      const h = bead ? 0.95 : 0.12;
+      return [h, Math.min(255, br * shade), Math.min(255, bg * shade), Math.min(255, bb * shade)];
+    }
+    const puff = clamp01(dist / 0.5);
+    const h = clamp01(h0 * 0.55 + 0.45 * puff);
+    const shade = 0.86 + 0.3 * h;
+    return [h, r0 * shade, g0 * shade, b0 * shade];
+  };
+  return createProceduralSurface(size, 0.55, sample);
+}
+
 export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
   const model = createZunjieV800LuxuryMPVModel({ textureSize: carTextureSizeFor(tier) });
   const runtime = model.userData.runtime as ProceduralModelRuntime | undefined;
@@ -742,6 +1229,21 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
     }
   });
 
+  // ---- P1-5 greenhouse 玻璃一致性（适配层覆盖；spec 数值不动，决策回写 spec 留给主理人）----
+  // 根因：glass-dark spec 自带 transmission 0.5，但色调 #101418 近黑 —— 透射光被乘成
+  // ≈6% 亮度，视觉读作不透明黑板，与 glass-clear 的透明观感不一致。
+  // 统一为「深色隐私玻璃但可透视」：high 档提高透射 + 提亮色调；
+  // medium/low 由下方既有归零回退接手（opacity 0.55 近似），门控行为与 glass-clear 一致。
+  // 透射 pass 本就因 glass-clear/crystal 存在，此处零新增 pass、零 DC 增量。
+  const greenhouseMat = matById.get('glass-dark') ?? null;
+  if (greenhouseMat) {
+    greenhouseMat.transmission = 0.82;
+    greenhouseMat.color.set(0x2e3640);
+    greenhouseMat.thickness = 0.02;
+    greenhouseMat.transparent = true;
+    greenhouseMat.needsUpdate = true;
+  }
+
   // ---- 非 high 档：transmission 降级为普通半透明（构造期一次，避免每帧透射 pass）----
   if (tier !== 'high') {
     for (const [id, mat] of matById) {
@@ -760,6 +1262,9 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
     const comp = o.userData.sculptComponent as { id?: string; primitive?: string } | undefined;
     const cid = (comp?.id ?? o.userData.component?.id) as string | undefined;
     if (cid === 'root' || cid === 'cabin-interior') {
+      // N1：tri-screen / gauge-screen / rear-control-screen 以 cabin-interior 为父 ——
+      // 直接隐藏会把三块屏整棵藏掉（屏 UI 永远不渲染）。先把屏移出占位盒
+      // （attach 保持世界变换），再隐藏占位盒本体。
       m.visible = false;
       return;
     }
@@ -778,6 +1283,27 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
       m.castShadow = false;
     }
   });
+
+  // ---- N1：屏幕家族脱离隐藏的 cabin-interior 占位盒 ----
+  // spec 里 tri-screen / gauge-screen / rear-control-screen 的 parent 是 cabin-interior
+  // （占位实心盒，上方已 visible=false）—— 子树随父隐藏，三块屏从未渲染过。
+  // attach() 到 model 根并保持世界变换；扶手屏挂在 seat-rear-* 下不受影响。
+  // ⚠️ attach 依赖 matrixWorld：全新场景图尚未计算过，必须先刷新一次，
+  // 否则 attach 用恒等矩阵反解局部变换 → 屏幕飞位。
+  root.updateMatrixWorld(true);
+  for (const id of ['tri-screen', 'gauge-screen', 'rear-control-screen']) {
+    const node = byId.get(id);
+    if (node && node.parent && node.parent !== model) {
+      model.attach(node);
+    }
+  }
+  // 屏面朝向修正：工厂 plane-card 的 UI 面朝 +z（风挡方向），背对驾驶者 ——
+  // FrontSide 材质下驾驶者视角整体背面剔除（屏「消失」），车外透过风挡才见灰板
+  // （QA 终验 H4-tri-screen 灰白素板的真因）。绕局部 Y 旋转 π 让 UI 面向乘员。
+  for (const id of ['tri-screen', 'gauge-screen']) {
+    const node = byId.get(id);
+    if (node) node.rotateY(Math.PI);
+  }
 
   // ---- 车轮（pivot 在轮心，绕 X 滚动）----
   const wheels: WheelPivot[] = [];
@@ -878,10 +1404,18 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
     starMat.needsUpdate = true;
   }
   if (goldMat) {
-    const tex = createGoldMatrixTexture();
+    const tex = createGoldAtlasTexture();
     ownedTextures.push(tex);
     goldMat.emissiveMap = tex;
     goldMat.emissive.set(0xffffff);
+    // N3 素面金观感：亮金 albedo × metalness 1 × roughness 0.28 = 奶油色 blob。
+    // 深色拉丝 albedo 图集承担「深色拉丝金属」底色，roughness 收敛镜面反射；
+    // 签名屏（左区近黑底）上的金色点阵对比度同步提升（EX-29）。
+    const albedo = createGoldAlbedoAtlasTexture();
+    ownedTextures.push(albedo);
+    goldMat.map = albedo;
+    goldMat.color.set(0xffffff); // 底色交给 map（同 plate 先例：避免 albedo 相乘压色）
+    goldMat.roughness = 0.45;
     goldMat.needsUpdate = true;
   }
   // 字标贴图只在真正命中 lamp-mark 时挂，避免污染回退到的 lamp-white（星空顶也在用它）
@@ -933,6 +1467,52 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
     }
     uv.needsUpdate = true;
   };
+  /**
+   * 归一化重映射：先测 mesh 自身 UV 包围盒，再线性压进目标区。
+   * extrude / curve-sweep 基元的 UV 是坐标值（实测 leather-warm 合批后
+   * u∈[-0.33,1.0]），不是 0..1 —— 直接用 remapUV 会错位，必须走这里。
+   * box/cylinder 等 0..1 基元经此函数与 remapUV 结果一致（bbox 即全幅）。
+   */
+  const remapUVToRegion = (
+    mesh: THREE.Mesh,
+    u0: number,
+    u1: number,
+    v0: number,
+    v1: number
+  ): void => {
+    const uv = mesh.geometry.getAttribute('uv');
+    if (!uv || uv.count === 0) return;
+    let uMin = Infinity;
+    let uMax = -Infinity;
+    let vMin = Infinity;
+    let vMax = -Infinity;
+    for (let i = 0; i < uv.count; i++) {
+      const u = uv.getX(i);
+      const v = uv.getY(i);
+      if (u < uMin) uMin = u;
+      if (u > uMax) uMax = u;
+      if (v < vMin) vMin = v;
+      if (v > vMax) vMax = v;
+    }
+    const du = uMax - uMin;
+    const dv = vMax - vMin;
+    if (du < 1e-6 || dv < 1e-6) {
+      // 退化 UV（共线/共点）：落到分区中心，避免除零后 NaN
+      const uc = (u0 + u1) / 2;
+      const vc = (v0 + v1) / 2;
+      for (let i = 0; i < uv.count; i++) uv.setXY(i, uc, vc);
+      uv.needsUpdate = true;
+      return;
+    }
+    for (let i = 0; i < uv.count; i++) {
+      uv.setXY(
+        i,
+        u0 + ((uv.getX(i) - uMin) / du) * (u1 - u0),
+        v0 + ((uv.getY(i) - vMin) / dv) * (v1 - v0)
+      );
+    }
+    uv.needsUpdate = true;
+  };
 
   // EX-28 尾灯 3+3 横带：12 条几何灯带撤除后，图案落在暗场内衬（lantern-emitter，
   // housing-dark）上 —— 红光核心在最深层只露红晕环，见 createTailBandAtlasTexture 注释。
@@ -950,9 +1530,12 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
       const fieldMesh = meshOf(fieldId);
       if (fieldMesh) remapUV(fieldMesh, 0.004, 0.496, 0.004, 0.996);
     }
+    // 壳体是 extrude 基元（UV 为坐标值非 0..1）—— 必须走归一化重映射。
+    // #uvassert 实测：旧写法线性 remapUV 有 104/536 三角形越出合法分区
+    // （落在 u 0.496..0.55 黑缝与 v<0.3 区域，存在串进红带区的风险）。
     for (const shellId of ['taillamp-l', 'taillamp-r', 'headlamp-l', 'headlamp-r']) {
       const shellMesh = meshOf(shellId);
-      if (shellMesh) remapUV(shellMesh, 0.55, 0.95, 0.3, 0.7);
+      if (shellMesh) remapUVToRegion(shellMesh, 0.55, 0.95, 0.3, 0.7);
     }
   }
   // EX-22/EX-08 星尘颗粒：门把手发光条 + 大灯星点卡共用 lamp-star
@@ -997,6 +1580,304 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
       if (barMesh) remapUV(barMesh, 0.55, 0.95, 0.3, 0.7);
     }
   }
+  // P1-1 lamp-gold 图集 UV 分区：签名屏 → 点阵图案区；4 扬声器 + 2 高音罩 →
+  // 素面拉丝金区（点阵串味修复）。线性 remapUV 对 box/cylinder/capsule（UV 恒 0..1）
+  // 与归一化重映射等价；UV 改动必须在 batchMergeStatic 之前烘进源几何。
+  if (goldMat) {
+    for (const id of ['lantern-signature-l', 'lantern-signature-r']) {
+      const mesh = meshOf(id);
+      if (mesh) remapUV(mesh, GOLD_PATTERN_REGION[0], GOLD_PATTERN_REGION[1], GOLD_PATTERN_REGION[2], GOLD_PATTERN_REGION[3]);
+    }
+    for (const id of ['speaker-fl', 'speaker-fr', 'speaker-rl', 'speaker-rr', 'tweeter-l', 'tweeter-r']) {
+      const mesh = meshOf(id);
+      if (mesh) remapUV(mesh, GOLD_BRUSHED_REGION[0], GOLD_BRUSHED_REGION[1], GOLD_BRUSHED_REGION[2], GOLD_BRUSHED_REGION[3]);
+    }
+  }
+
+  // N1 屏幕家族 UI：screen-ui 是共享材质（三联屏 + 后排控制屏 + 2 扶手屏，IN-21/43），
+  // spec 声明 textureless（画面由集成层 Canvas 提供）—— 此前从未挂图，四块屏全是
+  // 均匀发光素板。图集 + UV 分区：三联屏 → 顶部横条（4.6:1），后排控制屏 → 左下，
+  // 扶手屏 → 中下小卡。四块屏不在合批范围（UV_CONTENT_MATERIAL_IDS），逐件重映射安全。
+  const screenMat = matById.get('screen-ui') ?? null;
+  if (screenMat && !screenMat.emissiveMap) {
+    const tex = createScreenUIAtlasTexture();
+    ownedTextures.push(tex);
+    screenMat.emissiveMap = tex;
+    screenMat.map = tex; // 屏体自发光为主，map 同源避免关闭 bloom 后纯黑
+    screenMat.emissive.set(0xffffff);
+    screenMat.color.set(0xffffff);
+    screenMat.emissiveIntensity = 1.25;
+    screenMat.needsUpdate = true;
+    // plane-card 基元 UV 恒 0..1 → 线性 remapUV 足够
+    const triScreen = meshOf('tri-screen');
+    if (triScreen) remapUV(triScreen, TRI_SCREEN_UI_REGION[0], TRI_SCREEN_UI_REGION[1], TRI_SCREEN_UI_REGION[2], TRI_SCREEN_UI_REGION[3]);
+    const rearCtrl = meshOf('rear-control-screen');
+    if (rearCtrl) remapUV(rearCtrl, REAR_CTRL_UI_REGION[0], REAR_CTRL_UI_REGION[1], REAR_CTRL_UI_REGION[2], REAR_CTRL_UI_REGION[3]);
+    for (const id of ['seat-rear-l-screen', 'seat-rear-r-screen']) {
+      const mesh = meshOf(id);
+      if (!mesh) continue;
+      // 扶手屏 rotation.x = −1.75（上仰朝车尾）→ 图集方向旋转 180°（u/v 反向映射）
+      remapUV(mesh, SEAT_CTRL_UI_REGION[1], SEAT_CTRL_UI_REGION[0], SEAT_CTRL_UI_REGION[3], SEAT_CTRL_UI_REGION[2]);
+    }
+  }
+
+  // ---- P1 内饰织物贴图：皮革 ×3 / 木纹 / 麂皮 / 窗帘 / 地毯 ----
+  // 七个材质 spec 声明 textureless（normal/bump 全 null），这里的 Canvas 程序化
+  // 贴图是唯一支撑。可平铺纹理全车通用 → 合批照合不误；唯一需要分区的是
+  // leather-warm（菱格只给后排座椅）→ 图集 + UV 归一化重映射。
+  // 挂 map 后 color 放白（同 plate 先例：底色由贴图承担，避免 albedo 相乘压暗）。
+  const fabricSize = tier === 'low' ? 256 : 512;
+  const atlasSize = tier === 'high' ? 1024 : 512; // 贴图 ≤1024 硬约束
+  const applySurface = (
+    mat: THREE.MeshPhysicalMaterial,
+    set: SurfaceMapSet,
+    normalScale: number
+  ): void => {
+    ownedTextures.push(set.map, set.normalMap);
+    mat.map = set.map;
+    mat.normalMap = set.normalMap;
+    mat.normalScale.setScalar(normalScale);
+    mat.color.set(0xffffff);
+    mat.needsUpdate = true;
+  };
+  const leatherDarkMat = matById.get('leather-dark') ?? null;
+  if (leatherDarkMat && !leatherDarkMat.map) {
+    applySurface(
+      leatherDarkMat,
+      createProceduralSurface(fabricSize, 0.6, leatherSampler([74, 52, 42], 11)),
+      0.7
+    );
+  }
+  const leatherIvoryMat = matById.get('leather-ivory') ?? null;
+  if (leatherIvoryMat && !leatherIvoryMat.map) {
+    applySurface(
+      leatherIvoryMat,
+      createProceduralSurface(fabricSize, 0.55, leatherSampler([232, 224, 208], 23)),
+      0.65
+    );
+  }
+  /**
+   * N2 菱格 UV 重建（盒投影）：curve-sweep 基元的参数 UV 相对世界局部各向异性
+   * 实测高达 25–220×（#uvassert 密度判据），线性归一化重映射修不了局部畸变 ——
+   * 直接按模型空间坐标重建 UV：取包围盒最小的轴为投影法向，其余两轴作 u/v，
+   * 细胞数按世界尺寸 ÷ 目棱格边长取整 → 细胞在世界空间近似正方形、纹素密度均匀。
+   * 子区原点 (u0,v0)、每细胞 UV 跨度 cellUV（= 图集菱格周期），子区必须在
+   * 菱格分区内（u0 + nx·cellUV ≤ 0.992）。
+   */
+  const QUILT_CELL_WORLD = 0.06; // I5/I6 钻石菱格参考边长 ≈6cm
+  /**
+   * N2 菱格 UV 重建（逐三角形三平面投影 + 世界锚定连续 UV）：
+   * 单平面盒投影对「接近投影方向的面」（头枕顶面、座面沿 Mes）必然压扁 —— 实测
+   * 16 个 6.5–11cm² 三角形各向异性 4.5–18x。改为逐三角形按面法线主轴选投影平面
+   * （伪三平面），UV = 世界坐标 ÷ 细胞边长 ÷ 贴图细胞数 —— 连续无 mod，环绕交给
+   * RepeatWrapping（平铺贴图整幅菱格、细胞周期整数 → 无缝）。折痕两侧 UV 跳变
+   * 落在几何折角上（真实软包在此有滚边），不产生可见拉伸。
+   * 索引几何先 toNonIndexed（逐三角形独立 UV 需要独立顶点）。
+   */
+  const remapUVQuiltTriplanar = (mesh: THREE.Mesh): void => {
+    let geo = mesh.geometry;
+    if (geo.index) {
+      const old = geo;
+      geo = geo.toNonIndexed();
+      mesh.geometry = geo;
+      old.dispose();
+    }
+    const pos = geo.getAttribute('position');
+    const uv = geo.getAttribute('uv');
+    if (!pos || !uv || pos.count === 0) return;
+    model.updateMatrixWorld(true);
+    const modelToLocal = new THREE.Matrix4().copy(model.matrixWorld).invert().multiply(mesh.matrixWorld);
+    const count = pos.count;
+    const pts = new Float32Array(count * 3);
+    const tv = new THREE.Vector3();
+    for (let i = 0; i < count; i++) {
+      tv.fromBufferAttribute(pos, i).applyMatrix4(modelToLocal);
+      pts[i * 3] = tv.x;
+      pts[i * 3 + 1] = tv.y;
+      pts[i * 3 + 2] = tv.z;
+    }
+    // 贴图每边 16 细胞（createQuiltTileTexture）→ UV 每细胞 1/16，周期 1.0
+    const uvPerCell = 1 / 16;
+    for (let t = 0; t < count; t += 3) {
+      // 面法线（模型空间）
+      const ax = pts[(t + 1) * 3] - pts[t * 3];
+      const ay = pts[(t + 1) * 3 + 1] - pts[t * 3 + 1];
+      const az = pts[(t + 1) * 3 + 2] - pts[t * 3 + 2];
+      const bx = pts[(t + 2) * 3] - pts[t * 3];
+      const by = pts[(t + 2) * 3 + 1] - pts[t * 3 + 1];
+      const bz = pts[(t + 2) * 3 + 2] - pts[t * 3 + 2];
+      const nx = ay * bz - az * by;
+      const ny = az * bx - ax * bz;
+      const nz = ax * by - ay * bx;
+      const abs = [Math.abs(nx), Math.abs(ny), Math.abs(nz)];
+      const a = abs[0] >= abs[1] && abs[0] >= abs[2] ? 0 : abs[1] >= abs[2] ? 1 : 2;
+      const a1 = (a + 1) % 3;
+      const a2 = (a + 2) % 3;
+      for (let k = 0; k < 3; k++) {
+        const i = t + k;
+        const u = (pts[i * 3 + a1] / QUILT_CELL_WORLD) * uvPerCell;
+        const v = (pts[i * 3 + a2] / QUILT_CELL_WORLD) * uvPerCell;
+        uv.setXY(i, u, v);
+      }
+    }
+    uv.needsUpdate = true;
+  };
+  /**
+   * N2 扩展：素面区盒投影（统一纹素密度，大面可环绕）。
+   * 素面粒面无细胞结构，关键是「两个主方向密度一致」+「不越入菱格区」：
+   *   - 短轴 → u：压进素面分区 [0.008, 0.492]（u<0.5 的整列都是素面 paint 区）；
+   *   - 长轴 → v：按同一密度自由延展，RepeatWrapping 环绕 —— 粒面噪声以 1.0 UV
+   *     为周期（pnoise period 10/28/40），环绕采样无缝；且 u 恒 <0.5，无论 v 环绕到
+   *     哪里都落在素面 paint 区（u≥0.5 且 v≥0.5 才是菱格区），零串味风险。
+   * 密度下限取 minDensity（≈ 全车素面中位 0.47 m/UV），大件超出分区容量时才放大。
+   */
+  const PLAIN_MIN_DENSITY = 0.47; // m per UV 单位（对照 #uvassert 密度中位表）
+  const remapUVPlainBoxProject = (mesh: THREE.Mesh, u0: number, v0: number, span: number): void => {
+    remapUVBoxProject(mesh, u0, v0, (size, axes) => {
+      // axes[0] = 最大轴，axes[1] = 次轴。u 取次轴（短），v 取最大轴（长，可环绕）
+      const short = size[axes[1]];
+      const long = size[axes[0]];
+      const density = Math.max(short / span, PLAIN_MIN_DENSITY);
+      return [short / density, long / density];
+    }, true);
+  };
+  function remapUVBoxProject(
+    mesh: THREE.Mesh,
+    u0: number,
+    v0: number,
+    spansOf: (size: number[], axes: number[]) => [number, number],
+    swapAxes = false
+  ): void {
+    const geo = mesh.geometry;
+    const pos = geo.getAttribute('position');
+    const uv = geo.getAttribute('uv');
+    if (!pos || !uv || pos.count === 0) return;
+    model.updateMatrixWorld(true);
+    const modelToLocal = new THREE.Matrix4().copy(model.matrixWorld).invert().multiply(mesh.matrixWorld);
+    const count = pos.count;
+    const pts = new Float32Array(count * 3);
+    const tv = new THREE.Vector3();
+    const mn = [Infinity, Infinity, Infinity];
+    const mx = [-Infinity, -Infinity, -Infinity];
+    for (let i = 0; i < count; i++) {
+      tv.fromBufferAttribute(pos, i).applyMatrix4(modelToLocal);
+      for (let a = 0; a < 3; a++) {
+        const val = a === 0 ? tv.x : a === 1 ? tv.y : tv.z;
+        pts[i * 3 + a] = val;
+        if (val < mn[a]) mn[a] = val;
+        if (val > mx[a]) mx[a] = val;
+      }
+    }
+    const size = [mx[0] - mn[0], mx[1] - mn[1], mx[2] - mn[2]];
+    const axes = [0, 1, 2].sort((a, b) => size[b] - size[a]); // 大→小
+    const uAxis = swapAxes ? axes[1] : axes[0]; // 素面：u 取短轴（压进分区），v 取长轴（环绕）
+    const vAxis = swapAxes ? axes[0] : axes[1];
+    const w = size[uAxis];
+    const h = size[vAxis];
+    if (w < 1e-6 || h < 1e-6) return;
+    const [uSpan, vSpan] = spansOf(size, axes);
+    for (let i = 0; i < count; i++) {
+      const pu = (pts[i * 3 + uAxis] - mn[uAxis]) / w;
+      const pv = (pts[i * 3 + vAxis] - mn[vAxis]) / h;
+      uv.setXY(i, u0 + pu * uSpan, v0 + pv * vSpan);
+    }
+    uv.needsUpdate = true;
+  }
+  const leatherWarmMat = matById.get('leather-warm') ?? null;
+  if (leatherWarmMat && !leatherWarmMat.map) {
+    // 共享图集：素面粒面承载门板/前排/三排等通用件（左上素面区）
+    const warm = createLeatherAtlasTexture(atlasSize, 0x51c9d4, [192, 138, 94], atlasSize / 32);
+    applySurface(leatherWarmMat, warm, 0.7);
+    // N2：菱格件改用专用平铺贴图 + 材质克隆（ID 不变）——
+    // 共享图集的分区约束与「任意朝向面都要 6cm 等密度菱格」不可兼得（三平面
+    // 投影的连续 UV 必然越出分区）；整幅可平铺的菱格贴图让 UV 沿世界坐标无限
+    // 延展、RepeatWrapping 无缝环绕。克隆材质令合批把菱格件独立成组：+1 draw call。
+    const quiltMat = leatherWarmMat.clone();
+    const quiltSet = createQuiltTileTexture(atlasSize / 2, 0x51c9d5, [192, 138, 94]);
+    ownedTextures.push(quiltSet.map, quiltSet.normalMap);
+    quiltMat.map = quiltSet.map;
+    quiltMat.normalMap = quiltSet.normalMap;
+    quiltMat.userData.quiltTiled = true; // #uvassert 跳过分区判据（整幅菱格，无串味概念）
+    quiltMat.needsUpdate = true;
+    // 菱格区：后排座椅座面/靠背/头枕可见面 —— 逐三角形三平面投影
+    for (const id of [
+      'seat-rear-l',
+      'seat-rear-l-back',
+      'seat-rear-l-headrest',
+      'seat-rear-r',
+      'seat-rear-r-back',
+      'seat-rear-r-headrest'
+    ]) {
+      const mesh = meshOf(id);
+      if (mesh) {
+        mesh.material = quiltMat;
+        remapUVQuiltTriplanar(mesh);
+      }
+    }
+    // 素面区（左上）：其余全部 leather-warm 用户（门板/前排/扶手/腿托），
+    // 不重映射会采到整幅图集把菱格串到门板上。cabin-interior 是隐藏占位盒，
+    // 一并重映射让 #uvassert 全绿（且将来若取消隐藏也不会露出菱格）。
+    // 三排大件（1.34m 长凳）改走素面盒投影：归一化重映射下其 curve-sweep UV
+    // 的局部各向异性把粒面拉成波浪乱纹（复拍机位正对它），统一密度后消除。
+    const half = 0.5;
+    const inset = 0.008;
+    for (const id of ['seat-third-row', 'seat-third-row-back', 'seat-third-row-headrest']) {
+      const mesh = meshOf(id);
+      if (mesh) remapUVPlainBoxProject(mesh, inset, half + inset, half - inset * 2);
+    }
+    for (const id of [
+      'cabin-interior',
+      'seat-driver',
+      'seat-driver-back',
+      'seat-driver-headrest',
+      'seat-passenger',
+      'seat-passenger-back',
+      'seat-passenger-headrest',
+      'door-panel-fl',
+      'door-panel-fr',
+      'door-panel-rl',
+      'door-panel-rr',
+      'seat-rear-l-armrest',
+      'seat-rear-l-legrest',
+      'seat-rear-r-armrest',
+      'seat-rear-r-legrest'
+    ]) {
+      const mesh = meshOf(id);
+      if (mesh) remapUVToRegion(mesh, inset, half - inset, half + inset, 1 - inset);
+    }
+  }
+  const woodMatTrim = matById.get('wood') ?? null;
+  if (woodMatTrim && !woodMatTrim.map) {
+    applySurface(
+      woodMatTrim,
+      createProceduralSurface(fabricSize, 0.45, woodSampler([107, 52, 24], 37)),
+      0.45
+    );
+  }
+  const suedeMat = matById.get('headliner-suede') ?? null;
+  if (suedeMat && !suedeMat.map) {
+    applySurface(
+      suedeMat,
+      createProceduralSurface(fabricSize, 0.35, suedeSampler([58, 42, 32], 41)),
+      0.3
+    );
+  }
+  const curtainMat = matById.get('curtain') ?? null;
+  if (curtainMat && !curtainMat.map) {
+    applySurface(
+      curtainMat,
+      createProceduralSurface(fabricSize, 0.5, curtainSampler([216, 207, 192], 53)),
+      0.6
+    );
+  }
+  const carpetMat = matById.get('carpet') ?? null;
+  if (carpetMat && !carpetMat.map) {
+    applySurface(
+      carpetMat,
+      createProceduralSurface(fabricSize, 0.5, carpetSampler([138, 90, 48], 61)),
+      0.8
+    );
+  }
 
   // ---- QA 钩子：#lightassert —— 灯光联动命中表 ----
   // 审查建议（A-1）：灯组断链曾靠 if (mat) 静默吞掉，实机零报错但刹车灯不亮。
@@ -1013,7 +1894,16 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
       { 灯组: '星尘颗粒', 期望: 'lamp-star', 命中: starDustMat ? 'lamp-star' : '(无)' },
       { 灯组: '头灯 LED 点阵', 期望: 'lamp-head', 命中: ledMat ? 'lamp-head' : '(无)' },
       { 灯组: '车名牌镀铬字', 期望: 'plate', 命中: plateMat ? 'plate' : '(无)' },
-      { 灯组: '盾徽面板分区贴图', 期望: 'lamp-white', 命中: whiteMat ? 'lamp-white' : '(无)' }
+      { 灯组: '盾徽面板分区贴图', 期望: 'lamp-white', 命中: whiteMat ? 'lamp-white' : '(无)' },
+      { 灯组: '皮革图集(素面+菱格)', 期望: 'leather-warm', 命中: leatherWarmMat ? 'leather-warm' : '(无)' },
+      { 灯组: '屏幕家族UI(三联/后排/扶手)', 期望: 'screen-ui', 命中: matById.has('screen-ui') ? 'screen-ui' : '(无)' },
+      { 灯组: '深棕皮革粒面', 期望: 'leather-dark', 命中: leatherDarkMat ? 'leather-dark' : '(无)' },
+      { 灯组: '米白皮革粒面', 期望: 'leather-ivory', 命中: leatherIvoryMat ? 'leather-ivory' : '(无)' },
+      { 灯组: '开放木纹', 期望: 'wood', 命中: woodMatTrim ? 'wood' : '(无)' },
+      { 灯组: '顶棚麂皮', 期望: 'headliner-suede', 命中: suedeMat ? 'headliner-suede' : '(无)' },
+      { 灯组: '窗帘织纹', 期望: 'curtain', 命中: curtainMat ? 'curtain' : '(无)' },
+      { 灯组: '地毯短绒', 期望: 'carpet', 命中: carpetMat ? 'carpet' : '(无)' },
+      { 灯组: 'greenhouse 玻璃透射', 期望: 'glass-dark', 命中: greenhouseMat ? `trans=${greenhouseMat.transmission.toFixed(2)}` : '(无)' }
     ];
     console.table(rows);
     if (!tailLamp || !headLamp || !markLamp) {
@@ -1054,11 +1944,19 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
   const gctx = gaugeCanvas.getContext('2d')!;
   const gaugeTex = new THREE.CanvasTexture(gaugeCanvas);
   gaugeTex.colorSpace = THREE.SRGBColorSpace;
-  const gaugeNode = byId.get('gauge-screen');
-  const gaugeMesh =
-    gaugeNode && (gaugeNode as THREE.Mesh).isMesh
-      ? (gaugeNode as THREE.Mesh)
-      : (runtime?.meshes?.['gauge-screen'] as THREE.Mesh | undefined);
+  // gauge-ui 材质在工厂里可能挂在与 byId 首个命中不同的 mesh 实例上 ——
+  // 沿组件节点向下找第一个真正的 mesh（与 meshOf 同口径），确保画布贴到渲染件上
+  let gaugeMesh: THREE.Mesh | null = null;
+  {
+    const gaugeNode = byId.get('gauge-screen');
+    if (gaugeNode) {
+      if ((gaugeNode as THREE.Mesh).isMesh) gaugeMesh = gaugeNode as THREE.Mesh;
+      else gaugeNode.traverse((o) => {
+        if (!gaugeMesh && (o as THREE.Mesh).isMesh) gaugeMesh = o as THREE.Mesh;
+      });
+    }
+    if (!gaugeMesh) gaugeMesh = (runtime?.meshes?.['gauge-screen'] as THREE.Mesh | undefined) ?? null;
+  }
   if (gaugeMesh && gaugeMesh.material) {
     const mat = gaugeMesh.material as THREE.MeshStandardMaterial;
     mat.map = gaugeTex;
@@ -1114,6 +2012,7 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
     gctx.fillText('READY', w / 2, 240);
     gaugeTex.needsUpdate = true;
   };
+  drawGauge(0, 0, 0, 'P'); // 初帧即出 UI（QA 机位 / 待机态不走 updateCluster 也能看到仪表画面）
 
   let tmpQuat = new THREE.Quaternion();
   const tmpVec = new THREE.Vector3();
@@ -1164,6 +2063,315 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
         `可见 ${batchStats.drawCallsBefore} → ${batchStats.drawCallsAfter}，` +
         `Draw Call −${batchStats.drawCallReduction}`
     );
+  }
+
+  // ---- QA 钩子：#uvassert —— 图集串味验证（三角形-矩形相交法）----
+  // MEMORY 铁律的机器化：凡共享材质图集 + UV 重映射，必须验证每个三角形的
+  // UV 包围盒完整落在其合法分区内（容差 0.0015），越界即串味。合批实测不破坏
+  // UV（逐点比对误差 0），所以在合批后的几何上检验等价于源几何检验。
+  if (typeof window !== 'undefined' && window.location.hash.includes('uvassert')) {
+    // 素面 v 环绕语义材质：判据按 paint 布局（左半幅恒素面）而非单一矩形
+    const WRAP_PLAIN_MATS = new Set<string>(['leather-warm']);
+    const UV_ATLAS_REGIONS: Record<string, Array<[number, number, number, number]>> = {
+      // lamp-gold：点阵图案区 + 素面拉丝金区（P1-1）
+      'lamp-gold': [
+        [GOLD_PATTERN_REGION[0], GOLD_PATTERN_REGION[1], GOLD_PATTERN_REGION[2], GOLD_PATTERN_REGION[3]],
+        [GOLD_BRUSHED_REGION[0], GOLD_BRUSHED_REGION[1], GOLD_BRUSHED_REGION[2], GOLD_BRUSHED_REGION[3]]
+      ],
+      // leather-warm：素面粒面区（左上）+ 菱形缝格区（右上）（P1-2）；
+      // R2/R3 = 素面环绕扩展区（下半幅两象限：素面长轴 v 经 RepeatWrapping 环绕时
+      // 采样落点，粒面噪声 1.0 UV 周期故内容与 R0 连续；u<0.5 或 v<0.5 恒为素面 paint 区）
+      'leather-warm': [
+        [0.008, 0.492, 0.508, 0.992],
+        [0.508, 0.992, 0.508, 0.992],
+        [0.008, 0.492, 0.0, 0.492],
+        [0.508, 0.992, 0.0, 0.492]
+      ],
+      // housing-dark：3+3 红带区 + 纯黑壳体区（EX-28）
+      'housing-dark': [
+        [0.004, 0.496, 0.004, 0.996],
+        [0.55, 0.95, 0.3, 0.7]
+      ],
+      // lamp-white：盾徽面板区 + 纯白灯带区（EX-07）
+      'lamp-white': [
+        [0.004, 0.496, 0.004, 0.996],
+        [0.55, 0.95, 0.3, 0.7]
+      ],
+      // screen-ui：三联屏横条 + 后排控制屏 + 扶手屏（N1）
+      'screen-ui': [
+        [TRI_SCREEN_UI_REGION[0], TRI_SCREEN_UI_REGION[1], TRI_SCREEN_UI_REGION[2], TRI_SCREEN_UI_REGION[3]],
+        [REAR_CTRL_UI_REGION[0], REAR_CTRL_UI_REGION[1], REAR_CTRL_UI_REGION[2], REAR_CTRL_UI_REGION[3]],
+        [SEAT_CTRL_UI_REGION[0], SEAT_CTRL_UI_REGION[1], SEAT_CTRL_UI_REGION[2], SEAT_CTRL_UI_REGION[3]]
+      ]
+    };
+    const EPS = 0.0015;
+    const perMat = new Map<string, { tris: number; bad: number; perRegion: number[]; samples: string[] }>();
+    model.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      const mat = Array.isArray(m.material) ? m.material[0] : m.material;
+      const mid = (mat as THREE.MeshPhysicalMaterial | undefined)?.userData?.sculptMaterial?.id as
+        | string
+        | undefined;
+      const regions = mid ? UV_ATLAS_REGIONS[mid] : undefined;
+      if (!regions) return;
+      const uv = m.geometry.getAttribute('uv');
+      const index = m.geometry.getIndex();
+      const pos = m.geometry.getAttribute('position');
+      // mergeSafe 合并产物是 non-indexed（toNonIndexed）—— 无 index 时按 position 数
+      if (!uv || !pos) return;
+      const triCount = index ? index.count / 3 : pos.count / 3;
+      let rec = perMat.get(mid!);
+      if (!rec) {
+        rec = { tris: 0, bad: 0, perRegion: regions.map(() => 0), samples: [] };
+        perMat.set(mid!, rec);
+      }
+      const vertexOf = (t: number, k: number): number => (index ? index.getX(t * 3 + k) : t * 3 + k);
+      for (let t = 0; t < triCount; t++) {
+        let uMin = Infinity;
+        let uMax = -Infinity;
+        const vArr = [0, 0, 0];
+        let vMin = Infinity;
+        let vMax = -Infinity;
+        for (let k = 0; k < 3; k++) {
+          const i = vertexOf(t, k);
+          const u = uv.getX(i);
+          const v = uv.getY(i);
+          vArr[k] = v;
+          if (u < uMin) uMin = u;
+          if (u > uMax) uMax = u;
+          if (v < vMin) vMin = v;
+          if (v > vMax) vMax = v;
+        }
+        rec!.tris++;
+        let regionHit = -1;
+        // 菱格平铺材质（quiltTiled）：整幅皆图案、无分区概念 → 直接合法
+        if ((mat as THREE.MeshPhysicalMaterial | undefined)?.userData?.quiltTiled === true) {
+          regionHit = 0;
+        }
+        // 判据分两族：
+        //  一般材质（bbox 严判）：三角形 UV bbox 完整落入某分区；
+        //  leather-warm（环绕语义）：素面长轴 v 经 RepeatWrapping 环绕，其采样足迹
+        //  是「左半幅任意 v」∪「右下象限 v<0.5」的并集，单个矩形无法表达 ——
+        //  改按 paint 布局判：u 全程 <0.5 → 左半幅恒素面（合法）；u 触及右半幅 →
+        //  逐顶点 mod-v 必须落在菱格区（≥0.508）或右下素面区（≤0.492）。
+        else if (WRAP_PLAIN_MATS.has(mid!)) {
+          if (uMax <= 0.492 + EPS) {
+            regionHit = 0; // 左半幅：素面 paint 区，v 任意（环绕）
+          } else if (uMin >= 0.5 - EPS) {
+            let quilt = true;
+            let lowerPlain = true;
+            for (let k2 = 0; k2 < 3; k2++) {
+              const mv = vArr[k2] - Math.floor(vArr[k2]);
+              if (mv < 0.508 - EPS || mv > 0.992 + EPS) quilt = false;
+              if (mv > 0.492 + EPS) lowerPlain = false;
+            }
+            regionHit = quilt ? 1 : lowerPlain ? 3 : -1;
+          }
+        } else {
+          for (let ri = 0; ri < regions.length; ri++) {
+            const [u0, u1, v0, v1] = regions[ri];
+            if (uMin >= u0 - EPS && uMax <= u1 + EPS && vMin >= v0 - EPS && vMax <= v1 + EPS) {
+              regionHit = ri;
+              break;
+            }
+          }
+        }
+        if (regionHit >= 0) rec!.perRegion[regionHit]++;
+        else {
+          rec!.bad++;
+          if (rec!.samples.length < 3) {
+            rec!.samples.push(
+              `${(m.userData.component as { id?: string } | undefined)?.id ?? m.name}#${t}[${uMin.toFixed(3)},${vMin.toFixed(3)}..${uMax.toFixed(3)},${vMax.toFixed(3)}]`
+            );
+          }
+        }
+      }
+    });
+    const rows = [...perMat.entries()].map(([id, r]) => ({
+      材质: id,
+      检查三角面: r.tris,
+      越界串味: r.bad,
+      '分区0三角面': r.perRegion[0],
+      '分区1三角面': r.perRegion[1],
+      样例: r.bad > 0 ? r.samples.join(' | ') : '—'
+    }));
+    console.table(rows);
+    const totalBad = rows.reduce((s, r) => s + r['越界串味'], 0);
+    if (totalBad > 0) console.error(`[V800Adapter] #uvassert：${totalBad} 个三角形 UV 越出图集分区（串味）`);
+    else console.info('[V800Adapter] #uvassert：全部三角形 UV 落在合法分区内，无串味');
+
+    // ---- N2 扩展判据：纹素密度 / 各向异性拉伸 ----
+    // 分区归属判据只验证「采样落在合法分区内」，验证不了拉伸：QA 终验实测
+    // curve-sweep 基元的参数 UV 局部各向异性达 25–220×（菱格被拉成水平乱纹）。
+    // 判据：逐三角形比较「UV 边长 ↔ 世界边长」两个主方向的密度比（各向异性），
+    // 世界面积 > 1cm² 且各向异性 > 4× 记超阈；同时输出密度中位数（mm/px）供目测复核。
+    // 合并几何已是 model-local（scale=1）；未合并件经 modelToLocal 折算后同口径。
+    const modelInv = new THREE.Matrix4().copy(model.matrixWorld).invert();
+    const m2m = new THREE.Matrix4();
+    const pA = new THREE.Vector3();
+    const pB = new THREE.Vector3();
+    const pC = new THREE.Vector3();
+    const ANISO_LIMIT = 4;
+    const AREA_MIN = 1e-5; // m²，排除接缝退化三角形
+    interface DensityStat {
+      n: number;
+      dens: number[];
+      aniso: number[];
+      over: number;
+      over8: number;
+      worst: number;
+      worstAt: string;
+    }
+    const densStats = new Map<string, DensityStat>();
+    const statOf = (key: string): DensityStat => {
+      let s = densStats.get(key);
+      if (!s) {
+        s = { n: 0, dens: [], aniso: [], over: 0, over8: 0, worst: 0, worstAt: '' };
+        densStats.set(key, s);
+      }
+      return s;
+    };
+    model.updateMatrixWorld(true);
+    model.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      const mat = Array.isArray(m.material) ? m.material[0] : m.material;
+      const matRec = mat as THREE.MeshPhysicalMaterial | undefined;
+      const mid = matRec?.userData?.sculptMaterial?.id as string | undefined;
+      if (!mid) return;
+      if (!matRec?.map && !matRec?.emissiveMap) return;
+      const geo = m.geometry;
+      const pos = geo.getAttribute('position');
+      const uvA = geo.getAttribute('uv');
+      if (!pos || !uvA || pos.count < 3) return;
+      m2m.copy(modelInv).multiply(m.matrixWorld);
+      const index = geo.getIndex();
+      const triCount = index ? index.count / 3 : pos.count / 3;
+      const vid = (t: number, k: number): number => (index ? index.getX(t * 3 + k) : t * 3 + k);
+      const regions = UV_ATLAS_REGIONS[mid];
+      for (let t = 0; t < triCount; t++) {
+        pA.fromBufferAttribute(pos, vid(t, 0)).applyMatrix4(m2m);
+        pB.fromBufferAttribute(pos, vid(t, 1)).applyMatrix4(m2m);
+        pC.fromBufferAttribute(pos, vid(t, 2)).applyMatrix4(m2m);
+        const wArea = ((pB.x - pA.x) * (pC.y - pA.y) - (pC.x - pA.x) * (pB.y - pA.y)) * 0.5;
+        if (Math.abs(wArea) < AREA_MIN) continue;
+        // 分区归属（与上方串味判据同口径；无分区材质按 'tile' 记）
+        const us = [uvA.getX(vid(t, 0)), uvA.getX(vid(t, 1)), uvA.getX(vid(t, 2))];
+        const vs = [uvA.getY(vid(t, 0)), uvA.getY(vid(t, 1)), uvA.getY(vid(t, 2))];
+        let regionKey = 'tile';
+        if (regions) {
+          const uMin = Math.min(...us);
+          const uMax = Math.max(...us);
+          let ri = -1;
+          let forceTile = false;
+          if ((mat as THREE.MeshPhysicalMaterial | undefined)?.userData?.quiltTiled === true) {
+            regionKey = 'tile'; // 菱格平铺材质：无分区，按 tile 统计密度/各向异性
+            forceTile = true; // R1（P5 复核）：不参与分区归属，但必须进下方密度判据，否则整组被 ri<0 continue 跳过成空集结论
+          } else if (WRAP_PLAIN_MATS.has(mid!)) {
+            if (uMax <= 0.492 + EPS) {
+              ri = uMin >= 0.008 - EPS ? 0 : -1; // 左半幅素面（v 环绕）
+            } else if (uMin >= 0.5 - EPS) {
+              let quilt = true;
+              let lowerPlain = true;
+              for (let k2 = 0; k2 < 3; k2++) {
+                const mv = vs[k2] - Math.floor(vs[k2]);
+                if (mv < 0.508 - EPS || mv > 0.992 + EPS) quilt = false;
+                if (mv > 0.492 + EPS) lowerPlain = false;
+              }
+              ri = quilt ? 1 : lowerPlain ? 3 : -1;
+            }
+          } else {
+            const vMin = Math.min(...vs);
+            const vMax = Math.max(...vs);
+            for (let k = 0; k < regions.length && ri < 0; k++) {
+              const [u0, u1, v0, v1] = regions[k];
+              if (uMin >= u0 - EPS && uMax <= u1 + EPS && vMin >= v0 - EPS && vMax <= v1 + EPS) {
+                ri = k;
+              }
+            }
+          }
+          if (ri < 0 && !forceTile) continue; // 越界件已由串味判据上报，此处不重复计；forceTile（菱格平铺）照常进密度判据
+          if (ri >= 0) regionKey = `R${ri}`;
+        }
+        const uvArea = Math.abs(
+          (us[1] - us[0]) * (vs[2] - vs[0]) - (us[2] - us[0]) * (vs[1] - vs[0])
+        ) / 2;
+        if (uvArea < 1e-12) continue;
+        const edges: Array<[THREE.Vector3, THREE.Vector3, number, number, number, number]> = [
+          [pA, pB, us[0], vs[0], us[1], vs[1]],
+          [pB, pC, us[1], vs[1], us[2], vs[2]],
+          [pC, pA, us[2], vs[2], us[0], vs[0]]
+        ];
+        // 折边剔除：盒投影下跨越折痕的薄壁三角形有一条「世界长度可观、UV 长度≈0」
+        // 的边（厚度方向被投影吃掉）—— 其纹理横向被压扁属计划内行为（相当于真实
+        // 软包的包边），不参与密度/各向异性统计，单独计数供审查。
+        let isFold = false;
+        for (const [P, Q, su, sv, tu, tvv] of edges) {
+          const ul = Math.hypot(tu - su, tvv - sv);
+          if (ul < 1e-4 && P.distanceTo(Q) > 0.005) { isFold = true; break; }
+        }
+        if (isFold) {
+          statOf(`${mid}/foldWalls`).n++;
+          continue;
+        }
+        let dMax = 0;
+        let dMin = Infinity;
+        for (const [P, Q, su, sv, tu, tvv] of edges) {
+          const ul = Math.hypot(tu - su, tvv - sv);
+          if (ul < 1e-12) continue;
+          const d = P.distanceTo(Q) / ul;
+          if (d > dMax) dMax = d;
+          if (d < dMin) dMin = d;
+        }
+        if (!isFinite(dMin) || dMin <= 0) continue;
+        const aniso = dMax / dMin;
+        const key = `${mid}/${regionKey}`;
+        const st = statOf(key);
+        st.n++;
+        st.dens.push(Math.sqrt(Math.abs(wArea) / uvArea)); // m per UV 单位
+        st.aniso.push(aniso);
+        if (aniso > 8) st.over8++;
+        if (aniso > ANISO_LIMIT) {
+          st.over++;
+          if (aniso > st.worst) {
+            st.worst = aniso;
+            st.worstAt = `${(m.userData.component as { id?: string } | undefined)?.id ?? m.name}#${t}@(${pA.x.toFixed(2)},${pA.y.toFixed(2)},${pA.z.toFixed(2)})`;
+          }
+        }
+      }
+    });
+    const ATLAS_PX = 1024; // 图集像素跨度（每 UV 单元的 px 数；密度仅供目测复核的参考口径）
+    const densRows = [...densStats.entries()].map(([key, s]) => {
+      const sorted = s.dens.slice().sort((a, b) => a - b);
+      const med = sorted.length ? sorted[Math.floor(sorted.length / 2)] : 0;
+      const aSorted = s.aniso.slice().sort((a, b) => a - b);
+      const aMed = aSorted.length ? aSorted[Math.floor(aSorted.length / 2)] : 0;
+      return {
+        '材质/分区': key,
+        三角形: s.n,
+        '密度中位(mm/px)': +((med / ATLAS_PX) * 1000).toFixed(2),
+        '各向异性中位': +aMed.toFixed(2),
+        超阈: s.over,
+        超阈8x: s.over8,
+        最差: s.worst > 0 ? `${s.worst.toFixed(1)}x ${s.worstAt}` : '—'
+      };
+    });
+    console.table(densRows);
+    // ERROR 门只看「图案内容」分区（菱格 / 红带 / 点阵 / 盾徽 / 屏幕 UI）——
+    // 方向性纹理（木纹/窗帘/拉丝）与匀色区（灯带白场）的设计各向异性不算缺陷，
+    // 全量数据在上表供人工复核（QA 密度判据的可见化）。
+    const PATTERN_REGION_KEYS = /^(leather-warm\/R1|housing-dark\/R0|lamp-gold\/R0|lamp-white\/R0|screen-ui\/R\d)$/;
+    const totalOver = densRows
+      .filter((r) => PATTERN_REGION_KEYS.test(r['材质/分区']))
+      .reduce((s2, r) => s2 + r['超阈8x'], 0);
+    if (totalOver > 0) {
+      console.error(
+        `[V800Adapter] #uvassert 密度判据：图案分区 ${totalOver} 个三角形各向异性拉伸 > 8x（世界面积 > ${AREA_MIN * 1e4}cm²），见上表`
+      );
+    } else {
+      console.info(`[V800Adapter] #uvassert 密度判据：图案分区无 > 8x 的各向异性拉伸（世界面积 > ${AREA_MIN * 1e4}cm² 口径）`);
+    }
   }
 
   const api: CarLike = {

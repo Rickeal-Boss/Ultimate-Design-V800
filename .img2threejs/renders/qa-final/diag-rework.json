@@ -1,0 +1,1612 @@
+{
+ "taillamp": [
+  {
+   "name": "batch/lamp-red",
+   "from": [
+    "lantern-core-l",
+    "taillamp-bar-top-l",
+    "taillamp-bar-bottom-l",
+    "lantern-core-r",
+    "taillamp-bar-top-r",
+    "taillamp-bar-bottom-r",
+    "rear-reflector-l",
+    "rear-reflector-r"
+   ],
+   "mat": {
+    "id": "lamp-red",
+    "emissive": "#e03040",
+    "emissiveIntensity": 2,
+    "color": "#b51f2c",
+    "roughness": 0.25,
+    "metalness": 0,
+    "hasMap": false,
+    "hasEmissiveMap": false,
+    "hasNormalMap": false,
+    "mapColors": null,
+    "emColors": null,
+    "transparent": false,
+    "opacity": 1,
+    "transmission": 0,
+    "depthWrite": true,
+    "side": 0
+   },
+   "center": [
+    0,
+    0.697,
+    2.678
+   ],
+   "size": [
+    1.828,
+    0.844,
+    0.396
+   ],
+   "uv": [
+    0,
+    1,
+    0,
+    1,
+    4608
+   ],
+   "renderOrder": 0
+  }
+ ],
+ "leather": [
+  {
+   "compId": "cabin-interior",
+   "meshName": "四座豪华舱",
+   "batchFrom": 1,
+   "mergedSize": [
+    1.72,
+    1.5,
+    4.2
+   ],
+   "uv": [
+    0.008,
+    0.492,
+    0.508,
+    0.992,
+    150
+   ]
+  },
+  {
+   "compId": "seat-driver",
+   "meshName": "batch/leather-warm",
+   "batchFrom": 23,
+   "mergedSize": [
+    1.95,
+    0.895,
+    3.746
+   ],
+   "uv": [
+    0.008,
+    0.992,
+    0.508,
+    0.992,
+    18144
+   ]
+  },
+  {
+   "compId": "seat-driver-back",
+   "meshName": "batch/leather-warm",
+   "batchFrom": 23,
+   "mergedSize": [
+    1.95,
+    0.895,
+    3.746
+   ],
+   "uv": [
+    0.008,
+    0.992,
+    0.508,
+    0.992,
+    18144
+   ]
+  },
+  {
+   "compId": "seat-driver-headrest",
+   "meshName": "batch/leather-warm",
+   "batchFrom": 23,
+   "mergedSize": [
+    1.95,
+    0.895,
+    3.746
+   ],
+   "uv": [
+    0.008,
+    0.992,
+    0.508,
+    0.992,
+    18144
+   ]
+  },
+  {
+   "compId": "seat-passenger",
+   "meshName": "batch/leather-warm",
+   "batchFrom": 23,
+   "mergedSize": [
+    1.95,
+    0.895,
+    3.746
+   ],
+   "uv": [
+    0.008,
+    0.992,
+    0.508,
+    0.992,
+    18144
+   ]
+  },
+  {
+   "compId": "seat-passenger-back",
+   "meshName": "batch/leather-warm",
+   "batchFrom": 23,
+   "mergedSize": [
+    1.95,
+    0.895,
+    3.746
+   ],
+   "uv": [
+    0.008,
+    0.992,
+    0.508,
+    0.992,
+    18144
+   ]
+  },
+  {
+   "compId": "seat-passenger-headrest",
+   "meshName": "batch/leather-warm",
+   "batchFrom": 23,
+   "mergedSize": [
+    1.95,
+    0.895,
+    3.746
+   ],
+   "uv": [
+    0.008,
+    0.992,
+    0.508,
+    0.992,
+    18144
+   ]
+  },
+  {
+   "compId": "seat-rear-l",
+   "meshName": "batch/leather-warm",
+   "batchFrom": 23,
+   "mergedSize": [
+    1.95,
+    0.895,
+    3.746
+   ],
+   "uv": [
+    0.008,
+    0.992,
+    0.508,
+    0.992,
+    18144
+   ]
+  },
+  {
+   "compId": "seat-rear-l-back",
+   "meshName": "batch/leather-warm",
+   "batchFrom": 23,
+   "mergedSize": [
+    1.95,
+    0.895,
+    3.746
+   ],
+   "uv": [
+    0.008,
+    0.992,
+    0.508,
+    0.992,
+    18144
+   ]
+  },
+  {
+   "compId": "seat-rear-l-headrest",
+   "meshName": "batch/leather-warm",
+   "batchFrom": 23,
+   "mergedSize": [
+    1.95,
+    0.895,
+    3.746
+   ],
+   "uv": [
+    0.008,
+    0.992,
+    0.508,
+    0.992,
+    18144
+   ]
+  },
+  {
+   "compId": "seat-rear-l-legrest",
+   "meshName": "batch/leather-warm",
+   "batchFrom": 23,
+   "mergedSize": [
+    1.95,
+    0.895,
+    3.746
+   ],
+   "uv": [
+    0.008,
+    0.992,
+    0.508,
+    0.992,
+    18144
+   ]
+  },
+  {
+   "compId": "seat-rear-l-armrest",
+   "meshName": "batch/leather-warm",
+   "batchFrom": 23,
+   "mergedSize": [
+    1.95,
+    0.895,
+    3.746
+   ],
+   "uv": [
+    0.008,
+    0.992,
+    0.508,
+    0.992,
+    18144
+   ]
+  },
+  {
+   "compId": "seat-rear-r",
+   "meshName": "batch/leather-warm",
+   "batchFrom": 23,
+   "mergedSize": [
+    1.95,
+    0.895,
+    3.746
+   ],
+   "uv": [
+    0.008,
+    0.992,
+    0.508,
+    0.992,
+    18144
+   ]
+  },
+  {
+   "compId": "seat-rear-r-back",
+   "meshName": "batch/leather-warm",
+   "batchFrom": 23,
+   "mergedSize": [
+    1.95,
+    0.895,
+    3.746
+   ],
+   "uv": [
+    0.008,
+    0.992,
+    0.508,
+    0.992,
+    18144
+   ]
+  },
+  {
+   "compId": "seat-rear-r-headrest",
+   "meshName": "batch/leather-warm",
+   "batchFrom": 23,
+   "mergedSize": [
+    1.95,
+    0.895,
+    3.746
+   ],
+   "uv": [
+    0.008,
+    0.992,
+    0.508,
+    0.992,
+    18144
+   ]
+  },
+  {
+   "compId": "seat-rear-r-legrest",
+   "meshName": "batch/leather-warm",
+   "batchFrom": 23,
+   "mergedSize": [
+    1.95,
+    0.895,
+    3.746
+   ],
+   "uv": [
+    0.008,
+    0.992,
+    0.508,
+    0.992,
+    18144
+   ]
+  },
+  {
+   "compId": "seat-rear-r-armrest",
+   "meshName": "batch/leather-warm",
+   "batchFrom": 23,
+   "mergedSize": [
+    1.95,
+    0.895,
+    3.746
+   ],
+   "uv": [
+    0.008,
+    0.992,
+    0.508,
+    0.992,
+    18144
+   ]
+  },
+  {
+   "compId": "door-panel-fl",
+   "meshName": "batch/leather-warm",
+   "batchFrom": 23,
+   "mergedSize": [
+    1.95,
+    0.895,
+    3.746
+   ],
+   "uv": [
+    0.008,
+    0.992,
+    0.508,
+    0.992,
+    18144
+   ]
+  },
+  {
+   "compId": "door-panel-fr",
+   "meshName": "batch/leather-warm",
+   "batchFrom": 23,
+   "mergedSize": [
+    1.95,
+    0.895,
+    3.746
+   ],
+   "uv": [
+    0.008,
+    0.992,
+    0.508,
+    0.992,
+    18144
+   ]
+  },
+  {
+   "compId": "door-panel-rl",
+   "meshName": "batch/leather-warm",
+   "batchFrom": 23,
+   "mergedSize": [
+    1.95,
+    0.895,
+    3.746
+   ],
+   "uv": [
+    0.008,
+    0.992,
+    0.508,
+    0.992,
+    18144
+   ]
+  },
+  {
+   "compId": "door-panel-rr",
+   "meshName": "batch/leather-warm",
+   "batchFrom": 23,
+   "mergedSize": [
+    1.95,
+    0.895,
+    3.746
+   ],
+   "uv": [
+    0.008,
+    0.992,
+    0.508,
+    0.992,
+    18144
+   ]
+  },
+  {
+   "compId": "seat-third-row",
+   "meshName": "batch/leather-warm",
+   "batchFrom": 23,
+   "mergedSize": [
+    1.95,
+    0.895,
+    3.746
+   ],
+   "uv": [
+    0.008,
+    0.992,
+    0.508,
+    0.992,
+    18144
+   ]
+  },
+  {
+   "compId": "seat-third-row-back",
+   "meshName": "batch/leather-warm",
+   "batchFrom": 23,
+   "mergedSize": [
+    1.95,
+    0.895,
+    3.746
+   ],
+   "uv": [
+    0.008,
+    0.992,
+    0.508,
+    0.992,
+    18144
+   ]
+  },
+  {
+   "compId": "seat-third-row-headrest",
+   "meshName": "batch/leather-warm",
+   "batchFrom": 23,
+   "mergedSize": [
+    1.95,
+    0.895,
+    3.746
+   ],
+   "uv": [
+    0.008,
+    0.992,
+    0.508,
+    0.992,
+    18144
+   ]
+  }
+ ],
+ "screens": [
+  {
+   "compId": "tri-screen",
+   "localSize": [
+    1.46,
+    0.313,
+    0.031
+   ]
+  },
+  {
+   "compId": "gauge-screen",
+   "localSize": [
+    0.38,
+    0.198,
+    0.028
+   ]
+  },
+  {
+   "compId": "rear-control-screen",
+   "localSize": [
+    0.24,
+    0.141,
+    0.051
+   ]
+  },
+  {
+   "compId": "seat-rear-l-screen",
+   "localSize": [
+    0.07,
+    0.009,
+    0.049
+   ]
+  },
+  {
+   "compId": "seat-rear-r-screen",
+   "localSize": [
+    0.07,
+    0.009,
+    0.049
+   ]
+  },
+  {
+   "meshName": "贯穿三联屏",
+   "from": [
+    "tri-screen"
+   ],
+   "mat": {
+    "id": "screen-ui",
+    "emissive": "#9fb6c8",
+    "emissiveIntensity": 1.4,
+    "color": "#0a0c10",
+    "roughness": 0.12,
+    "metalness": 0,
+    "hasMap": false,
+    "hasEmissiveMap": false,
+    "hasNormalMap": false,
+    "mapColors": null,
+    "emColors": null,
+    "transparent": false,
+    "opacity": 1,
+    "transmission": 0,
+    "depthWrite": true,
+    "side": 0
+   },
+   "uv": [
+    0,
+    1,
+    0,
+    1,
+    169
+   ]
+  },
+  {
+   "meshName": "悬浮仪表屏",
+   "from": [
+    "gauge-screen"
+   ],
+   "mat": {
+    "id": "gauge-ui",
+    "emissive": "#7fd8a8",
+    "emissiveIntensity": 1.6,
+    "color": "#060a08",
+    "roughness": 0.12,
+    "metalness": 0,
+    "hasMap": false,
+    "hasEmissiveMap": false,
+    "hasNormalMap": false,
+    "mapColors": null,
+    "emColors": null,
+    "transparent": false,
+    "opacity": 1,
+    "transmission": 0,
+    "depthWrite": true,
+    "side": 0
+   },
+   "uv": [
+    0,
+    1,
+    0,
+    1,
+    169
+   ]
+  },
+  {
+   "meshName": "后排控制屏",
+   "from": [
+    "rear-control-screen"
+   ],
+   "mat": {
+    "id": "screen-ui",
+    "emissive": "#9fb6c8",
+    "emissiveIntensity": 1.4,
+    "color": "#0a0c10",
+    "roughness": 0.12,
+    "metalness": 0,
+    "hasMap": false,
+    "hasEmissiveMap": false,
+    "hasNormalMap": false,
+    "mapColors": null,
+    "emColors": null,
+    "transparent": false,
+    "opacity": 1,
+    "transmission": 0,
+    "depthWrite": true,
+    "side": 0
+   },
+   "uv": [
+    0,
+    1,
+    0,
+    1,
+    169
+   ]
+  },
+  {
+   "meshName": "零重力座椅扶手控制屏（l）",
+   "from": [
+    "seat-rear-l-screen"
+   ],
+   "mat": {
+    "id": "screen-ui",
+    "emissive": "#9fb6c8",
+    "emissiveIntensity": 1.4,
+    "color": "#0a0c10",
+    "roughness": 0.12,
+    "metalness": 0,
+    "hasMap": false,
+    "hasEmissiveMap": false,
+    "hasNormalMap": false,
+    "mapColors": null,
+    "emColors": null,
+    "transparent": false,
+    "opacity": 1,
+    "transmission": 0,
+    "depthWrite": true,
+    "side": 0
+   },
+   "uv": [
+    0,
+    1,
+    0,
+    1,
+    169
+   ]
+  },
+  {
+   "meshName": "零重力座椅扶手控制屏（r）",
+   "from": [
+    "seat-rear-r-screen"
+   ],
+   "mat": {
+    "id": "screen-ui",
+    "emissive": "#9fb6c8",
+    "emissiveIntensity": 1.4,
+    "color": "#0a0c10",
+    "roughness": 0.12,
+    "metalness": 0,
+    "hasMap": false,
+    "hasEmissiveMap": false,
+    "hasNormalMap": false,
+    "mapColors": null,
+    "emColors": null,
+    "transparent": false,
+    "opacity": 1,
+    "transmission": 0,
+    "depthWrite": true,
+    "side": 0
+   },
+   "uv": [
+    0,
+    1,
+    0,
+    1,
+    169
+   ]
+  }
+ ],
+ "gold": [
+  {
+   "meshName": "batch/lamp-gold",
+   "from": [
+    "lantern-signature-l",
+    "lantern-signature-r",
+    "tweeter-l",
+    "tweeter-r",
+    "speaker-fl",
+    "speaker-fr",
+    "speaker-rl",
+    "speaker-rr"
+   ],
+   "mat": {
+    "id": "lamp-gold",
+    "emissive": "#ffffff",
+    "emissiveIntensity": 1.8,
+    "color": "#c2a263",
+    "roughness": 0.28,
+    "metalness": 1,
+    "hasMap": false,
+    "hasEmissiveMap": true,
+    "hasNormalMap": false,
+    "mapColors": null,
+    "emColors": "srgb",
+    "transparent": false,
+    "opacity": 1,
+    "transmission": 0,
+    "depthWrite": true,
+    "side": 0
+   },
+   "uv": [
+    0.0156,
+    0.9805,
+    0.0195,
+    0.9805,
+    7680
+   ]
+  }
+ ],
+ "tailHide": {
+  "all": 0,
+  "core": 1,
+  "emitter": 1,
+  "signature": 1,
+  "bars": 1,
+  "bezel": 1,
+  "shell": 1
+ },
+ "compBox": {
+  "root": [
+   2.006,
+   1.78,
+   5.44
+  ],
+  "body-lower": [
+   2.006,
+   0.89,
+   5.479
+  ],
+  "hood-panel": [
+   1.3,
+   0.1,
+   1.3
+  ],
+  "hood-blister": [
+   0.62,
+   0.047,
+   0.341
+  ],
+  "greenhouse-glass": [
+   1.83,
+   0.544,
+   3.388
+  ],
+  "roof-panel": [
+   1.6,
+   0.233,
+   3.36
+  ],
+  "windshield": [
+   1.5,
+   0.552,
+   0.93
+  ],
+  "dpillar-l": [
+   0.266,
+   0.58,
+   0.34
+  ],
+  "bpillar-l": [
+   0.035,
+   0.56,
+   0.05
+  ],
+  "cpillar-l": [
+   0.035,
+   0.56,
+   0.05
+  ],
+  "dpillar-r": [
+   0.266,
+   0.58,
+   0.34
+  ],
+  "bpillar-r": [
+   0.035,
+   0.56,
+   0.05
+  ],
+  "cpillar-r": [
+   0.035,
+   0.56,
+   0.05
+  ],
+  "front-end": [
+   1.86,
+   1.05,
+   0.08
+  ],
+  "chrome-brow": [
+   1.84,
+   0.09,
+   0.06
+  ],
+  "maextro-mark": [
+   0.8,
+   0.06,
+   0
+  ],
+  "shield-logo": [
+   0.09,
+   0.24,
+   0.012
+  ],
+  "headlamp-l": [
+   0.2,
+   0.635,
+   0.07
+  ],
+  "headlamp-led-l": [
+   0.022,
+   0.4,
+   0.02
+  ],
+  "headlamp-star-l": [
+   0.13,
+   0.52,
+   0
+  ],
+  "headlamp-r": [
+   0.2,
+   0.635,
+   0.07
+  ],
+  "headlamp-led-r": [
+   0.022,
+   0.4,
+   0.02
+  ],
+  "headlamp-star-r": [
+   0.13,
+   0.52,
+   0
+  ],
+  "bumper-lower": [
+   1.92,
+   0.32,
+   0.1
+  ],
+  "bumper-light-strip": [
+   1.45,
+   0.018,
+   0.015
+  ],
+  "bumper-chrome-lip": [
+   1.86,
+   0.04,
+   0.05
+  ],
+  "front-plate": [
+   0.42,
+   0.11,
+   0
+  ],
+  "emblem-shield": [
+   1.1,
+   0.24,
+   0.01
+  ],
+  "front-light-bar": [
+   1.8,
+   0.014,
+   0.02
+  ],
+  "shield-emblem-panel": [
+   0.06,
+   0.17,
+   0.004
+  ],
+  "tailgate": [
+   1.86,
+   1.05,
+   0.07
+  ],
+  "taillamp-l": [
+   0.18,
+   0.52,
+   0.03
+  ],
+  "lantern-core-l": [
+   0.148,
+   0.438,
+   0.002
+  ],
+  "lantern-bezel-l": [
+   0.17,
+   0.5,
+   0.006
+  ],
+  "lantern-emitter-l": [
+   0.135,
+   0.425,
+   0.002
+  ],
+  "lantern-signature-l": [
+   0.09,
+   0.135,
+   0.002
+  ],
+  "taillamp-bar-top-l": [
+   0.12,
+   0.03,
+   0.003
+  ],
+  "taillamp-bar-bottom-l": [
+   0.12,
+   0.03,
+   0.003
+  ],
+  "taillamp-r": [
+   0.18,
+   0.52,
+   0.03
+  ],
+  "lantern-core-r": [
+   0.148,
+   0.438,
+   0.002
+  ],
+  "lantern-bezel-r": [
+   0.17,
+   0.5,
+   0.006
+  ],
+  "lantern-emitter-r": [
+   0.135,
+   0.425,
+   0.002
+  ],
+  "lantern-signature-r": [
+   0.09,
+   0.135,
+   0.002
+  ],
+  "taillamp-bar-top-r": [
+   0.12,
+   0.03,
+   0.003
+  ],
+  "taillamp-bar-bottom-r": [
+   0.12,
+   0.03,
+   0.003
+  ],
+  "tail-window-trim": [
+   1.3,
+   0.1,
+   0.05
+  ],
+  "chrome-belt-l": [
+   0.02,
+   0.03,
+   4.6
+  ],
+  "window-belt-l": [
+   0.015,
+   0.02,
+   3.3
+  ],
+  "handle-front-l": [
+   0.035,
+   0.04,
+   0.62
+  ],
+  "handle-slider-l": [
+   0.035,
+   0.04,
+   0.62
+  ],
+  "fender-badge-l": [
+   0.012,
+   0.045,
+   0.05
+  ],
+  "rocker-l": [
+   0.05,
+   0.12,
+   3.4
+  ],
+  "mirror-l": [
+   0.22,
+   0.13,
+   0.11
+  ],
+  "mirror-cap-l": [
+   0.225,
+   0.05,
+   0.115
+  ],
+  "chrome-belt-r": [
+   0.02,
+   0.03,
+   4.6
+  ],
+  "window-belt-r": [
+   0.015,
+   0.02,
+   3.3
+  ],
+  "handle-front-r": [
+   0.035,
+   0.04,
+   0.62
+  ],
+  "handle-slider-r": [
+   0.035,
+   0.04,
+   0.62
+  ],
+  "fender-badge-r": [
+   0.012,
+   0.045,
+   0.05
+  ],
+  "rocker-r": [
+   0.05,
+   0.12,
+   3.4
+  ],
+  "mirror-r": [
+   0.22,
+   0.13,
+   0.11
+  ],
+  "mirror-cap-r": [
+   0.225,
+   0.05,
+   0.115
+  ],
+  "fuel-door": [
+   0.012,
+   0.16,
+   0.09
+  ],
+  "arch-fr": [
+   0.003,
+   0.992,
+   0.992
+  ],
+  "arch-rr": [
+   0.003,
+   0.992,
+   0.992
+  ],
+  "roof-rails": [
+   1.489,
+   0.044,
+   2.752
+  ],
+  "lidar-wedge": [
+   0.17,
+   0.088,
+   0.324
+  ],
+  "wheel-fl": [
+   0.255,
+   0.764,
+   0.764
+  ],
+  "tire-fl": [
+   0.255,
+   0.764,
+   0.764
+  ],
+  "rim-fl": [
+   0.27,
+   0.6,
+   0.6
+  ],
+  "cap-fl": [
+   0.02,
+   0.11,
+   0.11
+  ],
+  "wheel-fr": [
+   0.255,
+   0.764,
+   0.764
+  ],
+  "tire-fr": [
+   0.255,
+   0.764,
+   0.764
+  ],
+  "rim-fr": [
+   0.27,
+   0.6,
+   0.6
+  ],
+  "cap-fr": [
+   0.02,
+   0.11,
+   0.11
+  ],
+  "wheel-rl": [
+   0.255,
+   0.764,
+   0.764
+  ],
+  "tire-rl": [
+   0.255,
+   0.764,
+   0.764
+  ],
+  "rim-rl": [
+   0.27,
+   0.6,
+   0.6
+  ],
+  "cap-rl": [
+   0.02,
+   0.11,
+   0.11
+  ],
+  "wheel-rr": [
+   0.255,
+   0.764,
+   0.764
+  ],
+  "tire-rr": [
+   0.255,
+   0.764,
+   0.764
+  ],
+  "rim-rr": [
+   0.27,
+   0.6,
+   0.6
+  ],
+  "cap-rr": [
+   0.02,
+   0.11,
+   0.11
+  ],
+  "cabin-interior": [
+   1.72,
+   1.5,
+   4.2
+  ],
+  "cabin-floor": [
+   1.66,
+   0.035,
+   3.6
+  ],
+  "dash-upper": [
+   1.78,
+   0.197,
+   0.469
+  ],
+  "dash-lower": [
+   1.78,
+   0.26,
+   0.3
+  ],
+  "dash-chrome-strip": [
+   1.8,
+   0.014,
+   0.016
+  ],
+  "tri-screen": [
+   1.46,
+   0.313,
+   0.031
+  ],
+  "gauge-screen": [
+   0.38,
+   0.198,
+   0.028
+  ],
+  "vents-strip": [
+   1.62,
+   0.05,
+   0.035
+  ],
+  "tweeter-l": [
+   0.045,
+   0.12,
+   0.12
+  ],
+  "tweeter-r": [
+   0.045,
+   0.12,
+   0.12
+  ],
+  "steering": [
+   0.392,
+   0.164,
+   0.36
+  ],
+  "steering-hub": [
+   0.15,
+   0.151,
+   0.093
+  ],
+  "tunnel-front": [
+   0.42,
+   0.34,
+   0.8
+  ],
+  "crystal-shifter": [
+   0.085,
+   0.085,
+   0.085
+  ],
+  "charge-pad": [
+   0.16,
+   0,
+   0.22
+  ],
+  "cupholder-l": [
+   0.099,
+   0.002,
+   0.099
+  ],
+  "cupholder-r": [
+   0.099,
+   0.002,
+   0.099
+  ],
+  "tunnel-rear": [
+   0.44,
+   0.36,
+   1.3
+  ],
+  "rear-control-screen": [
+   0.24,
+   0.141,
+   0.051
+  ],
+  "seat-driver": [
+   0.52,
+   0.145,
+   0.508
+  ],
+  "seat-driver-back": [
+   0.5,
+   0.675,
+   0.186
+  ],
+  "seat-driver-headrest": [
+   0.26,
+   0.15,
+   0.1
+  ],
+  "seat-passenger": [
+   0.52,
+   0.145,
+   0.508
+  ],
+  "seat-passenger-back": [
+   0.5,
+   0.675,
+   0.186
+  ],
+  "seat-passenger-headrest": [
+   0.26,
+   0.15,
+   0.1
+  ],
+  "seat-rear-l": [
+   0.56,
+   0.145,
+   0.527
+  ],
+  "seat-rear-l-back": [
+   0.54,
+   0.675,
+   0.186
+  ],
+  "seat-rear-l-headrest": [
+   0.26,
+   0.15,
+   0.1
+  ],
+  "seat-rear-l-legrest": [
+   0.34,
+   0.126,
+   0.386
+  ],
+  "seat-rear-l-armrest": [
+   0.6,
+   0.1,
+   0.34
+  ],
+  "seat-rear-l-screen": [
+   0.07,
+   0.009,
+   0.049
+  ],
+  "seat-rear-l-plate": [
+   0.05,
+   0.022,
+   0.003
+  ],
+  "seat-rear-r": [
+   0.56,
+   0.145,
+   0.527
+  ],
+  "seat-rear-r-back": [
+   0.54,
+   0.675,
+   0.186
+  ],
+  "seat-rear-r-headrest": [
+   0.26,
+   0.15,
+   0.1
+  ],
+  "seat-rear-r-legrest": [
+   0.34,
+   0.126,
+   0.386
+  ],
+  "seat-rear-r-armrest": [
+   0.6,
+   0.1,
+   0.34
+  ],
+  "seat-rear-r-screen": [
+   0.07,
+   0.009,
+   0.049
+  ],
+  "seat-rear-r-plate": [
+   0.05,
+   0.022,
+   0.003
+  ],
+  "headliner-front": [
+   1.52,
+   0.02,
+   1.45
+  ],
+  "headliner-rear": [
+   1.52,
+   0.02,
+   1.55
+  ],
+  "overhead-console": [
+   1.1,
+   0.045,
+   0.28
+  ],
+  "ambient-strip-l": [
+   0.074,
+   0.044,
+   3.601
+  ],
+  "ambient-strip-r": [
+   0.074,
+   0.044,
+   3.601
+  ],
+  "door-panel-fl": [
+   0.07,
+   0.62,
+   1.15
+  ],
+  "speaker-fl": [
+   0.015,
+   0.075,
+   0.075
+  ],
+  "door-panel-fl-crystal": [
+   0.03,
+   0.13,
+   0.03
+  ],
+  "door-panel-fr": [
+   0.07,
+   0.62,
+   1.15
+  ],
+  "speaker-fr": [
+   0.015,
+   0.075,
+   0.075
+  ],
+  "door-panel-fr-crystal": [
+   0.03,
+   0.13,
+   0.03
+  ],
+  "door-panel-rl": [
+   0.07,
+   0.62,
+   1.15
+  ],
+  "speaker-rl": [
+   0.015,
+   0.075,
+   0.075
+  ],
+  "door-panel-rl-crystal": [
+   0.03,
+   0.13,
+   0.03
+  ],
+  "door-panel-rr": [
+   0.07,
+   0.62,
+   1.15
+  ],
+  "speaker-rr": [
+   0.015,
+   0.075,
+   0.075
+  ],
+  "door-panel-rr-crystal": [
+   0.03,
+   0.13,
+   0.03
+  ],
+  "curtain-l": [
+   0.02,
+   0.52,
+   0
+  ],
+  "curtain-r": [
+   0.02,
+   0.52,
+   0
+  ],
+  "starlight-headliner": [
+   1.36,
+   0.006,
+   1.33
+  ],
+  "vent-grille": [
+   1.6,
+   0.042,
+   0.006
+  ],
+  "crystal-sconce-l": [
+   0.05,
+   0.34,
+   0.05
+  ],
+  "crystal-sconce-band-l": [
+   0.062,
+   0.035,
+   0.062
+  ],
+  "crystal-sconce-r": [
+   0.05,
+   0.34,
+   0.05
+  ],
+  "crystal-sconce-band-r": [
+   0.062,
+   0.035,
+   0.062
+  ],
+  "console-island-charge-tray": [
+   0.38,
+   0.008,
+   0.26
+  ],
+  "charge-pad-r": [
+   0.16,
+   0,
+   0.22
+  ],
+  "console-island-knob-base": [
+   0.095,
+   0.035,
+   0.095
+  ],
+  "console-island-knob-ring": [
+   0.104,
+   0.011,
+   0.104
+  ],
+  "seat-third-row": [
+   1.34,
+   0.12,
+   0.5
+  ],
+  "seat-third-row-back": [
+   1.34,
+   0.532,
+   0.196
+  ],
+  "seat-third-row-headrest": [
+   1,
+   0.163,
+   0.121
+  ],
+  "trunk-floor": [
+   1.55,
+   0.03,
+   0.55
+  ],
+  "trunk-sill": [
+   1.42,
+   0.05,
+   0.06
+  ],
+  "wheel-cap-fl": [
+   0.012,
+   0.14,
+   0.14
+  ],
+  "wheel-cap-fr": [
+   0.012,
+   0.14,
+   0.14
+  ],
+  "wheel-cap-rl": [
+   0.012,
+   0.14,
+   0.14
+  ],
+  "wheel-cap-rr": [
+   0.012,
+   0.14,
+   0.14
+  ],
+  "handle-star-fl": [
+   0.006,
+   0.03,
+   0.56
+  ],
+  "handle-star-fr": [
+   0.006,
+   0.03,
+   0.56
+  ],
+  "handle-star-rl": [
+   0.006,
+   0.03,
+   0.56
+  ],
+  "handle-star-rr": [
+   0.006,
+   0.03,
+   0.56
+  ],
+  "roof-spoiler": [
+   1.4,
+   0.041,
+   0.162
+  ],
+  "rear-reflector-l": [
+   0.34,
+   0.05,
+   0.02
+  ],
+  "rear-reflector-r": [
+   0.34,
+   0.05,
+   0.02
+  ],
+  "tail-chrome-strip": [
+   1.5,
+   0.035,
+   0.02
+  ],
+  "mirror-arm-l": [
+   0.05,
+   0.05,
+   0.08
+  ],
+  "mirror-arm-r": [
+   0.05,
+   0.05,
+   0.08
+  ]
+ },
+ "leatherDensity": [
+  {
+   "mesh": "四座豪华舱",
+   "plain": {
+    "n": 192,
+    "densMed": 5.1859,
+    "anisoMed": 2.4419,
+    "anisoMax": 2.8
+   },
+   "quilt": {
+    "n": 0,
+    "densMed": null,
+    "anisoMed": null,
+    "anisoMax": null,
+    "samples": []
+   }
+  },
+  {
+   "mesh": "batch/leather-warm",
+   "plain": {
+    "n": 4080,
+    "densMed": 0.9332,
+    "anisoMed": 2.68,
+    "anisoMax": 219.8
+   },
+   "quilt": {
+    "n": 1968,
+    "densMed": 2.1154,
+    "anisoMed": 2.3399,
+    "anisoMax": 219.8,
+    "samples": [
+     {
+      "c": [
+       0.75,
+       0.64,
+       -1.09
+      ],
+      "an": 24.9
+     },
+     {
+      "c": [
+       0.25,
+       0.66,
+       -0.99
+      ],
+      "an": 24.9
+     }
+    ]
+   }
+  }
+ ]
+}

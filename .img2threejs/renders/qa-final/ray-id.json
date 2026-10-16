@@ -1,0 +1,1664 @@
+{
+ "out": [
+  {
+   "label": "qa3-quilt-back-close(c.z-0.6)",
+   "eyeF": [
+    0.27,
+    1,
+    -1.7
+   ],
+   "lookF": [
+    0.27,
+    0.85,
+    -1.1
+   ],
+   "hits": [
+    {
+     "dist": 0.558,
+     "ids": [
+      "seat-driver",
+      "seat-driver-back",
+      "seat-driver-headrest",
+      "seat-passenger",
+      "seat-passenger-back",
+      "seat-passenger-headrest",
+      "seat-rear-l",
+      "seat-rear-l-back"
+     ],
+     "mat": "leather-warm",
+     "point": [
+      -0.27,
+      1,
+      1.14
+     ]
+    },
+    {
+     "dist": 2.77,
+     "ids": [
+      "dash-upper"
+     ],
+     "mat": "leather-dark",
+     "point": [
+      -0.27,
+      1,
+      -1.07
+     ]
+    },
+    {
+     "dist": 4.28,
+     "ids": [
+      "hood-panel",
+      "hood-blister",
+      "front-end",
+      "tailgate"
+     ],
+     "mat": "paint-upper",
+     "point": [
+      -0.27,
+      1,
+      -2.58
+     ]
+    }
+   ]
+  },
+  {
+   "label": "qa3-quilt-back-cabin(c.z+0.6)",
+   "eyeF": [
+    0.27,
+    0.95,
+    -0.5
+   ],
+   "lookF": [
+    0.27,
+    0.8,
+    -1.1
+   ],
+   "hits": [
+    {
+     "dist": 1.573,
+     "ids": [
+      "dash-upper"
+     ],
+     "mat": "leather-dark",
+     "point": [
+      -0.27,
+      0.95,
+      -1.07
+     ]
+    },
+    {
+     "dist": 3.08,
+     "ids": [
+      "hood-panel",
+      "hood-blister",
+      "front-end",
+      "tailgate"
+     ],
+     "mat": "paint-upper",
+     "point": [
+      -0.27,
+      0.95,
+      -2.58
+     ]
+    }
+   ]
+  },
+  {
+   "label": "cabin-view-of-backrest-front",
+   "eyeF": [
+    0,
+    1.05,
+    0.3
+   ],
+   "lookF": [
+    0,
+    0.9,
+    -1.1
+   ],
+   "hits": [
+    {
+     "dist": 0.767,
+     "ids": [
+      "dash-upper"
+     ],
+     "mat": "leather-dark",
+     "point": [
+      0,
+      1.05,
+      -1.07
+     ]
+    },
+    {
+     "dist": 1.37,
+     "ids": [
+      "hood-panel",
+      "hood-blister",
+      "front-end",
+      "tailgate"
+     ],
+     "mat": "paint-upper",
+     "point": [
+      0,
+      1.05,
+      -1.67
+     ]
+    },
+    {
+     "dist": 2.28,
+     "ids": [
+      "hood-panel",
+      "hood-blister",
+      "front-end",
+      "tailgate"
+     ],
+     "mat": "paint-upper",
+     "point": [
+      0,
+      1.05,
+      -2.58
+     ]
+    }
+   ]
+  },
+  {
+   "label": "thirdrow-view-of-backrest-rear",
+   "eyeF": [
+    0,
+    1,
+    -2
+   ],
+   "lookF": [
+    0,
+    0.9,
+    -1.1
+   ],
+   "hits": [
+    {
+     "dist": 3.07,
+     "ids": [
+      "dash-upper"
+     ],
+     "mat": "leather-dark",
+     "point": [
+      0,
+      1,
+      -1.07
+     ]
+    },
+    {
+     "dist": 4.58,
+     "ids": [
+      "hood-panel",
+      "hood-blister",
+      "front-end",
+      "tailgate"
+     ],
+     "mat": "paint-upper",
+     "point": [
+      0,
+      1,
+      -2.58
+     ]
+    },
+    {
+     "dist": 4.67,
+     "ids": [
+      "shield-logo",
+      "emblem-shield",
+      "seat-rear-l-plate",
+      "seat-rear-r-plate"
+     ],
+     "mat": "bronze-dark",
+     "point": [
+      0,
+      1,
+      -2.67
+     ]
+    }
+   ]
+  },
+  {
+   "label": "rA-ndc-grid",
+   "grid": [
+    {
+     "nx": -0.5,
+     "ny": 0.2,
+     "d": 0.57,
+     "ids": [
+      "seat-driver",
+      "seat-driver-back",
+      "seat-driver-headrest",
+      "seat-passenger"
+     ],
+     "mat": "leather-warm",
+     "uv": [
+      0.71,
+      0.603
+     ],
+     "faceIdx": 2404,
+     "p": [
+      -0.41,
+      1.03,
+      1.14
+     ]
+    },
+    {
+     "nx": -0.5,
+     "ny": 0,
+     "d": 0.58,
+     "ids": [
+      "seat-driver",
+      "seat-driver-back",
+      "seat-driver-headrest",
+      "seat-passenger"
+     ],
+     "mat": "leather-warm",
+     "uv": [
+      0.692,
+      0.604
+     ],
+     "faceIdx": 2401,
+     "p": [
+      -0.41,
+      1,
+      1.14
+     ]
+    },
+    {
+     "nx": -0.5,
+     "ny": -0.2,
+     "d": 0.58,
+     "ids": [
+      "seat-driver",
+      "seat-driver-back",
+      "seat-driver-headrest",
+      "seat-passenger"
+     ],
+     "mat": "leather-warm",
+     "uv": [
+      0.675,
+      0.604
+     ],
+     "faceIdx": 2399,
+     "p": [
+      -0.41,
+      0.97,
+      1.14
+     ]
+    },
+    {
+     "nx": -0.5,
+     "ny": -0.4,
+     "d": 0.43,
+     "ids": [
+      "seat-driver",
+      "seat-driver-back",
+      "seat-driver-headrest",
+      "seat-passenger"
+     ],
+     "mat": "leather-warm",
+     "uv": [
+      0.149,
+      0.809
+     ],
+     "faceIdx": 3218,
+     "p": [
+      -0.38,
+      0.95,
+      1.29
+     ]
+    },
+    {
+     "nx": -0.35,
+     "ny": 0.2,
+     "d": 0.57,
+     "ids": [
+      "seat-driver",
+      "seat-driver-back",
+      "seat-driver-headrest",
+      "seat-passenger"
+     ],
+     "mat": "leather-warm",
+     "uv": [
+      0.71,
+      0.581
+     ],
+     "faceIdx": 2404,
+     "p": [
+      -0.37,
+      1.03,
+      1.14
+     ]
+    },
+    {
+     "nx": -0.35,
+     "ny": 0,
+     "d": 0.57,
+     "ids": [
+      "seat-driver",
+      "seat-driver-back",
+      "seat-driver-headrest",
+      "seat-passenger"
+     ],
+     "mat": "leather-warm",
+     "uv": [
+      0.692,
+      0.581
+     ],
+     "faceIdx": 2401,
+     "p": [
+      -0.37,
+      1,
+      1.14
+     ]
+    },
+    {
+     "nx": -0.35,
+     "ny": -0.2,
+     "d": 0.57,
+     "ids": [
+      "seat-driver",
+      "seat-driver-back",
+      "seat-driver-headrest",
+      "seat-passenger"
+     ],
+     "mat": "leather-warm",
+     "uv": [
+      0.675,
+      0.582
+     ],
+     "faceIdx": 2399,
+     "p": [
+      -0.37,
+      0.97,
+      1.14
+     ]
+    },
+    {
+     "nx": -0.35,
+     "ny": -0.4,
+     "d": 0.42,
+     "ids": [
+      "seat-driver",
+      "seat-driver-back",
+      "seat-driver-headrest",
+      "seat-passenger"
+     ],
+     "mat": "leather-warm",
+     "uv": [
+      0.124,
+      0.809
+     ],
+     "faceIdx": 3217,
+     "p": [
+      -0.34,
+      0.95,
+      1.29
+     ]
+    },
+    {
+     "nx": -0.2,
+     "ny": 0.2,
+     "d": 0.56,
+     "ids": [
+      "seat-driver",
+      "seat-driver-back",
+      "seat-driver-headrest",
+      "seat-passenger"
+     ],
+     "mat": "leather-warm",
+     "uv": [
+      0.71,
+      0.559
+     ],
+     "faceIdx": 2405,
+     "p": [
+      -0.33,
+      1.03,
+      1.14
+     ]
+    },
+    {
+     "nx": -0.2,
+     "ny": 0,
+     "d": 0.56,
+     "ids": [
+      "seat-driver",
+      "seat-driver-back",
+      "seat-driver-headrest",
+      "seat-passenger"
+     ],
+     "mat": "leather-warm",
+     "uv": [
+      0.692,
+      0.559
+     ],
+     "faceIdx": 2401,
+     "p": [
+      -0.33,
+      1,
+      1.14
+     ]
+    },
+    {
+     "nx": -0.2,
+     "ny": -0.2,
+     "d": 0.57,
+     "ids": [
+      "seat-driver",
+      "seat-driver-back",
+      "seat-driver-headrest",
+      "seat-passenger"
+     ],
+     "mat": "leather-warm",
+     "uv": [
+      0.675,
+      0.559
+     ],
+     "faceIdx": 2399,
+     "p": [
+      -0.33,
+      0.97,
+      1.14
+     ]
+    },
+    {
+     "nx": -0.2,
+     "ny": -0.4,
+     "d": 0.41,
+     "ids": [
+      "seat-driver",
+      "seat-driver-back",
+      "seat-driver-headrest",
+      "seat-passenger"
+     ],
+     "mat": "leather-warm",
+     "uv": [
+      0.098,
+      0.809
+     ],
+     "faceIdx": 3217,
+     "p": [
+      -0.31,
+      0.95,
+      1.29
+     ]
+    },
+    {
+     "nx": 0,
+     "ny": 0.2,
+     "d": 0.56,
+     "ids": [
+      "seat-driver",
+      "seat-driver-back",
+      "seat-driver-headrest",
+      "seat-passenger"
+     ],
+     "mat": "leather-warm",
+     "uv": [
+      0.71,
+      0.529
+     ],
+     "faceIdx": 2405,
+     "p": [
+      -0.27,
+      1.03,
+      1.14
+     ]
+    },
+    {
+     "nx": 0,
+     "ny": 0,
+     "d": 0.56,
+     "ids": [
+      "seat-driver",
+      "seat-driver-back",
+      "seat-driver-headrest",
+      "seat-passenger"
+     ],
+     "mat": "leather-warm",
+     "uv": [
+      0.692,
+      0.529
+     ],
+     "faceIdx": 2401,
+     "p": [
+      -0.27,
+      1,
+      1.14
+     ]
+    },
+    {
+     "nx": 0,
+     "ny": -0.2,
+     "d": 0.56,
+     "ids": [
+      "seat-driver",
+      "seat-driver-back",
+      "seat-driver-headrest",
+      "seat-passenger"
+     ],
+     "mat": "leather-warm",
+     "uv": [
+      0.675,
+      0.529
+     ],
+     "faceIdx": 2399,
+     "p": [
+      -0.27,
+      0.97,
+      1.14
+     ]
+    },
+    {
+     "nx": 0,
+     "ny": -0.4,
+     "d": 0.41,
+     "ids": [
+      "seat-driver",
+      "seat-driver-back",
+      "seat-driver-headrest",
+      "seat-passenger"
+     ],
+     "mat": "leather-warm",
+     "uv": [
+      0.064,
+      0.809
+     ],
+     "faceIdx": 3216,
+     "p": [
+      -0.27,
+      0.95,
+      1.29
+     ]
+    },
+    {
+     "nx": 0.2,
+     "ny": 0.2,
+     "d": 1.82,
+     "ids": [
+      "greenhouse-glass"
+     ],
+     "mat": "glass-dark",
+     "uv": [
+      0.108,
+      0.169
+     ],
+     "faceIdx": 55,
+     "p": [
+      -0.08,
+      1.11,
+      -0.11
+     ]
+    },
+    {
+     "nx": 0.2,
+     "ny": 0,
+     "d": 2.78,
+     "ids": [
+      "dash-upper"
+     ],
+     "mat": "leather-dark",
+     "uv": [
+      0.509,
+      0.581
+     ],
+     "faceIdx": 172,
+     "p": [
+      0.02,
+      1,
+      -1.07
+     ]
+    },
+    {
+     "nx": 0.2,
+     "ny": -0.2,
+     "d": 1.81,
+     "ids": [
+      "root"
+     ],
+     "mat": "paint-upper",
+     "uv": [
+      0.542,
+      0.482
+     ],
+     "faceIdx": 84,
+     "p": [
+      -0.08,
+      0.89,
+      -0.1
+     ]
+    },
+    {
+     "nx": 0.2,
+     "ny": -0.4,
+     "d": 0.41,
+     "ids": [
+      "seat-driver",
+      "seat-driver-back",
+      "seat-driver-headrest",
+      "seat-passenger"
+     ],
+     "mat": "leather-warm",
+     "uv": [
+      0.031,
+      0.809
+     ],
+     "faceIdx": 3216,
+     "p": [
+      -0.23,
+      0.95,
+      1.29
+     ]
+    },
+    {
+     "nx": 0.35,
+     "ny": 0.2,
+     "d": 1.84,
+     "ids": [
+      "greenhouse-glass"
+     ],
+     "mat": "glass-dark",
+     "uv": [
+      0.108,
+      0.029
+     ],
+     "faceIdx": 55,
+     "p": [
+      0.06,
+      1.11,
+      -0.11
+     ]
+    },
+    {
+     "nx": 0.35,
+     "ny": 0,
+     "d": 2.81,
+     "ids": [
+      "dash-upper"
+     ],
+     "mat": "leather-dark",
+     "uv": [
+      0.629,
+      0.581
+     ],
+     "faceIdx": 173,
+     "p": [
+      0.23,
+      1,
+      -1.07
+     ]
+    },
+    {
+     "nx": 0.35,
+     "ny": -0.2,
+     "d": 1.83,
+     "ids": [
+      "root"
+     ],
+     "mat": "paint-upper",
+     "uv": [
+      0.473,
+      0.482
+     ],
+     "faceIdx": 82,
+     "p": [
+      0.05,
+      0.89,
+      -0.1
+     ]
+    },
+    {
+     "nx": 0.35,
+     "ny": -0.4,
+     "d": 0.92,
+     "ids": [
+      "root"
+     ],
+     "mat": "paint-upper",
+     "uv": [
+      0.554,
+      0.647
+     ],
+     "faceIdx": 76,
+     "p": [
+      -0.11,
+      0.89,
+      0.8
+     ]
+    },
+    {
+     "nx": 0.5,
+     "ny": 0.2,
+     "d": 1.87,
+     "ids": [
+      "greenhouse-glass"
+     ],
+     "mat": "glass-dark",
+     "uv": [
+      0.108,
+      -0.111
+     ],
+     "faceIdx": 55,
+     "p": [
+      0.2,
+      1.11,
+      -0.11
+     ]
+    },
+    {
+     "nx": 0.5,
+     "ny": 0,
+     "d": 2.85,
+     "ids": [
+      "seat-driver",
+      "seat-driver-back",
+      "seat-driver-headrest",
+      "seat-passenger"
+     ],
+     "mat": "leather-warm",
+     "uv": [
+      0.308,
+      0.992
+     ],
+     "faceIdx": 1417,
+     "p": [
+      0.44,
+      1,
+      -1.06
+     ]
+    },
+    {
+     "nx": 0.5,
+     "ny": -0.2,
+     "d": 1.86,
+     "ids": [
+      "root"
+     ],
+     "mat": "paint-upper",
+     "uv": [
+      0.404,
+      0.482
+     ],
+     "faceIdx": 82,
+     "p": [
+      0.19,
+      0.89,
+      -0.1
+     ]
+    },
+    {
+     "nx": 0.5,
+     "ny": -0.4,
+     "d": 0.94,
+     "ids": [
+      "root"
+     ],
+     "mat": "paint-upper",
+     "uv": [
+      0.519,
+      0.647
+     ],
+     "faceIdx": 76,
+     "p": [
+      -0.04,
+      0.89,
+      0.8
+     ]
+    }
+   ]
+  }
+ ],
+ "compPos": {
+  "root": [
+   0,
+   0,
+   0
+  ],
+  "body-lower": [
+   0,
+   0.65,
+   -0.08
+  ],
+  "hood-panel": [
+   0,
+   1.05,
+   1.92
+  ],
+  "hood-blister": [
+   0,
+   1.12,
+   1.5
+  ],
+  "greenhouse-glass": [
+   0,
+   1.37,
+   -0.72
+  ],
+  "roof-panel": [
+   0,
+   1.62,
+   -0.7
+  ],
+  "windshield": [
+   0,
+   1.34,
+   0.6
+  ],
+  "dpillar-l": [
+   0.9,
+   1.38,
+   -2.28
+  ],
+  "bpillar-l": [
+   0.91,
+   1.3,
+   0.42
+  ],
+  "cpillar-l": [
+   0.91,
+   1.3,
+   -1.32
+  ],
+  "dpillar-r": [
+   -0.9,
+   1.38,
+   -2.28
+  ],
+  "bpillar-r": [
+   -0.91,
+   1.3,
+   0.42
+  ],
+  "cpillar-r": [
+   -0.91,
+   1.3,
+   -1.32
+  ],
+  "front-end": [
+   0,
+   0.9,
+   2.62
+  ],
+  "chrome-brow": [
+   0,
+   1.3,
+   2.59
+  ],
+  "maextro-mark": [
+   0,
+   1.3,
+   2.67
+  ],
+  "shield-logo": [
+   0,
+   0.92,
+   2.68
+  ],
+  "headlamp-l": [
+   0.8,
+   0.95,
+   2.69
+  ],
+  "headlamp-led-l": [
+   0.85,
+   0.96,
+   2.71
+  ],
+  "headlamp-star-l": [
+   0.78,
+   0.96,
+   2.72
+  ],
+  "headlamp-r": [
+   -0.8,
+   0.95,
+   2.69
+  ],
+  "headlamp-led-r": [
+   -0.85,
+   0.96,
+   2.71
+  ],
+  "headlamp-star-r": [
+   -0.78,
+   0.96,
+   2.72
+  ],
+  "bumper-lower": [
+   0,
+   0.46,
+   2.63
+  ],
+  "bumper-light-strip": [
+   0,
+   0.56,
+   2.68
+  ],
+  "bumper-chrome-lip": [
+   0,
+   0.34,
+   2.67
+  ],
+  "front-plate": [
+   -0.42,
+   0.8,
+   2.67
+  ],
+  "emblem-shield": [
+   0,
+   1.3,
+   2.62
+  ],
+  "front-light-bar": [
+   0,
+   1.34,
+   2.66
+  ],
+  "shield-emblem-panel": [
+   0,
+   0.92,
+   2.69
+  ],
+  "tailgate": [
+   0,
+   1.02,
+   -2.8
+  ],
+  "taillamp-l": [
+   0.84,
+   0.9,
+   -2.85
+  ],
+  "lantern-core-l": [
+   0.84,
+   0.9,
+   -2.87
+  ],
+  "lantern-bezel-l": [
+   0.84,
+   0.9,
+   -2.87
+  ],
+  "lantern-emitter-l": [
+   0.84,
+   0.9,
+   -2.87
+  ],
+  "lantern-signature-l": [
+   0.84,
+   0.9,
+   -2.87
+  ],
+  "taillamp-bar-top-l": [
+   0.84,
+   1.08,
+   -2.87
+  ],
+  "taillamp-bar-bottom-l": [
+   0.84,
+   0.72,
+   -2.87
+  ],
+  "taillamp-r": [
+   -0.84,
+   0.9,
+   -2.85
+  ],
+  "lantern-core-r": [
+   -0.84,
+   0.9,
+   -2.87
+  ],
+  "lantern-bezel-r": [
+   -0.84,
+   0.9,
+   -2.87
+  ],
+  "lantern-emitter-r": [
+   -0.84,
+   0.9,
+   -2.87
+  ],
+  "lantern-signature-r": [
+   -0.84,
+   0.9,
+   -2.87
+  ],
+  "taillamp-bar-top-r": [
+   -0.84,
+   1.08,
+   -2.87
+  ],
+  "taillamp-bar-bottom-r": [
+   -0.84,
+   0.72,
+   -2.87
+  ],
+  "tail-window-trim": [
+   0,
+   1.46,
+   -2.79
+  ],
+  "chrome-belt-l": [
+   1.01,
+   1,
+   -0.15
+  ],
+  "window-belt-l": [
+   0.92,
+   1.1,
+   -0.55
+  ],
+  "handle-front-l": [
+   1.01,
+   0.97,
+   1.18
+  ],
+  "handle-slider-l": [
+   1.01,
+   0.97,
+   -0.28
+  ],
+  "fender-badge-l": [
+   1.01,
+   0.96,
+   1.62
+  ],
+  "rocker-l": [
+   0.99,
+   0.28,
+   -0.15
+  ],
+  "mirror-l": [
+   1.1,
+   1.17,
+   1.02
+  ],
+  "mirror-cap-l": [
+   1.1,
+   1.21,
+   1.02
+  ],
+  "chrome-belt-r": [
+   -1.01,
+   1,
+   -0.15
+  ],
+  "window-belt-r": [
+   -0.92,
+   1.1,
+   -0.55
+  ],
+  "handle-front-r": [
+   -1.01,
+   0.97,
+   1.18
+  ],
+  "handle-slider-r": [
+   -1.01,
+   0.97,
+   -0.28
+  ],
+  "fender-badge-r": [
+   -1.01,
+   0.96,
+   1.62
+  ],
+  "rocker-r": [
+   -0.99,
+   0.28,
+   -0.15
+  ],
+  "mirror-r": [
+   -1.1,
+   1.17,
+   1.02
+  ],
+  "mirror-cap-r": [
+   -1.1,
+   1.21,
+   1.02
+  ],
+  "fuel-door": [
+   1.01,
+   0.98,
+   -1.3
+  ],
+  "arch-fr": [
+   0,
+   0.4,
+   1.72
+  ],
+  "arch-rr": [
+   0,
+   0.4,
+   -1.72
+  ],
+  "roof-rails": [
+   0,
+   1.73,
+   -0.5
+  ],
+  "lidar-wedge": [
+   0,
+   1.75,
+   0.8
+  ],
+  "wheel-fl": [
+   0.88,
+   0.38,
+   1.71
+  ],
+  "tire-fl": [
+   0.88,
+   0.38,
+   1.71
+  ],
+  "rim-fl": [
+   0.88,
+   0.38,
+   1.73
+  ],
+  "cap-fl": [
+   0.88,
+   0.38,
+   1.84
+  ],
+  "wheel-fr": [
+   -0.88,
+   0.38,
+   1.71
+  ],
+  "tire-fr": [
+   -0.88,
+   0.38,
+   1.71
+  ],
+  "rim-fr": [
+   -0.88,
+   0.38,
+   1.73
+  ],
+  "cap-fr": [
+   -0.88,
+   0.38,
+   1.84
+  ],
+  "wheel-rl": [
+   0.88,
+   0.38,
+   -1.71
+  ],
+  "tire-rl": [
+   0.88,
+   0.38,
+   -1.71
+  ],
+  "rim-rl": [
+   0.88,
+   0.38,
+   -1.7
+  ],
+  "cap-rl": [
+   0.88,
+   0.38,
+   -1.59
+  ],
+  "wheel-rr": [
+   -0.88,
+   0.38,
+   -1.71
+  ],
+  "tire-rr": [
+   -0.88,
+   0.38,
+   -1.71
+  ],
+  "rim-rr": [
+   -0.88,
+   0.38,
+   -1.7
+  ],
+  "cap-rr": [
+   -0.88,
+   0.38,
+   -1.59
+  ],
+  "cabin-interior": [
+   0,
+   0,
+   0
+  ],
+  "cabin-floor": [
+   0,
+   0.3,
+   -0.45
+  ],
+  "dash-upper": [
+   0,
+   1,
+   1.3
+  ],
+  "dash-lower": [
+   0,
+   0.8,
+   1.4
+  ],
+  "dash-chrome-strip": [
+   0,
+   0.91,
+   1.11
+  ],
+  "tri-screen": [
+   0,
+   1.12,
+   1.14
+  ],
+  "gauge-screen": [
+   0.72,
+   1.14,
+   1.06
+  ],
+  "vents-strip": [
+   0,
+   0.86,
+   1.13
+  ],
+  "tweeter-l": [
+   0.84,
+   0,
+   0
+  ],
+  "tweeter-r": [
+   -0.88,
+   0,
+   0
+  ],
+  "steering": [
+   0.54,
+   0.96,
+   0.96
+  ],
+  "steering-hub": [
+   0.54,
+   0.96,
+   0.96
+  ],
+  "tunnel-front": [
+   0,
+   0.62,
+   1.02
+  ],
+  "crystal-shifter": [
+   0,
+   0.84,
+   1.12
+  ],
+  "charge-pad": [
+   0.1,
+   0.8,
+   0.86
+  ],
+  "cupholder-l": [
+   0.11,
+   0.8,
+   0.8
+  ],
+  "cupholder-r": [
+   -0.11,
+   0.8,
+   0.8
+  ],
+  "tunnel-rear": [
+   0,
+   0.62,
+   -0.55
+  ],
+  "rear-control-screen": [
+   0,
+   0.83,
+   -0.95
+  ],
+  "seat-driver": [
+   0.52,
+   0.63,
+   0.92
+  ],
+  "seat-driver-back": [
+   0.52,
+   0.98,
+   1.12
+  ],
+  "seat-driver-headrest": [
+   0.52,
+   1.36,
+   1.18
+  ],
+  "seat-passenger": [
+   -0.52,
+   0.63,
+   0.92
+  ],
+  "seat-passenger-back": [
+   -0.52,
+   0.98,
+   1.12
+  ],
+  "seat-passenger-headrest": [
+   -0.52,
+   1.36,
+   1.18
+  ],
+  "seat-rear-l": [
+   0.5,
+   0.63,
+   -1.3
+  ],
+  "seat-rear-l-back": [
+   0.5,
+   0.98,
+   -1.08
+  ],
+  "seat-rear-l-headrest": [
+   0.5,
+   1.36,
+   -1
+  ],
+  "seat-rear-l-legrest": [
+   0.5,
+   1.18,
+   -0.82
+  ],
+  "seat-rear-l-armrest": [
+   0.5,
+   0.9,
+   -1.25
+  ],
+  "seat-rear-l-screen": [
+   0.5,
+   0.96,
+   -1.13
+  ],
+  "seat-rear-l-plate": [
+   0.5,
+   1.38,
+   -0.95
+  ],
+  "seat-rear-r": [
+   -0.5,
+   0.63,
+   -1.3
+  ],
+  "seat-rear-r-back": [
+   -0.5,
+   0.98,
+   -1.08
+  ],
+  "seat-rear-r-headrest": [
+   -0.5,
+   1.36,
+   -1
+  ],
+  "seat-rear-r-legrest": [
+   -0.5,
+   1.18,
+   -0.82
+  ],
+  "seat-rear-r-armrest": [
+   -0.5,
+   0.9,
+   -1.25
+  ],
+  "seat-rear-r-screen": [
+   -0.5,
+   0.96,
+   -1.13
+  ],
+  "seat-rear-r-plate": [
+   -0.5,
+   1.38,
+   -0.95
+  ],
+  "headliner-front": [
+   0,
+   1.7,
+   0.45
+  ],
+  "headliner-rear": [
+   0,
+   1.68,
+   -1.35
+  ],
+  "overhead-console": [
+   0,
+   1.72,
+   -0.55
+  ],
+  "ambient-strip-l": [
+   -0.76,
+   1.66,
+   -0.45
+  ],
+  "ambient-strip-r": [
+   0.76,
+   1.66,
+   -0.45
+  ],
+  "door-panel-fl": [
+   0.94,
+   0.86,
+   0.85
+  ],
+  "speaker-fl": [
+   0.9,
+   0.74,
+   0.75
+  ],
+  "door-panel-fl-crystal": [
+   0.9,
+   0.96,
+   0.47
+  ],
+  "door-panel-fr": [
+   -0.94,
+   0.86,
+   0.85
+  ],
+  "speaker-fr": [
+   -0.9,
+   0.74,
+   0.75
+  ],
+  "door-panel-fr-crystal": [
+   -0.9,
+   0.96,
+   0.47
+  ],
+  "door-panel-rl": [
+   0.94,
+   0.86,
+   -0.95
+  ],
+  "speaker-rl": [
+   0.9,
+   0.74,
+   -1.05
+  ],
+  "door-panel-rl-crystal": [
+   0.9,
+   0.96,
+   -1.33
+  ],
+  "door-panel-rr": [
+   -0.94,
+   0.86,
+   -0.95
+  ],
+  "speaker-rr": [
+   -0.9,
+   0.74,
+   -1.05
+  ],
+  "door-panel-rr-crystal": [
+   -0.9,
+   0.96,
+   -1.33
+  ],
+  "curtain-l": [
+   0.88,
+   1.32,
+   -1.55
+  ],
+  "curtain-r": [
+   -0.88,
+   1.32,
+   -1.55
+  ],
+  "starlight-headliner": [
+   0,
+   1.69,
+   0.39
+  ],
+  "vent-grille": [
+   0,
+   0.86,
+   1.11
+  ],
+  "crystal-sconce-l": [
+   0.87,
+   1.28,
+   0.42
+  ],
+  "crystal-sconce-band-l": [
+   0.87,
+   1.28,
+   0.42
+  ],
+  "crystal-sconce-r": [
+   -0.87,
+   1.28,
+   0.42
+  ],
+  "crystal-sconce-band-r": [
+   -0.87,
+   1.28,
+   0.42
+  ],
+  "console-island-charge-tray": [
+   0,
+   0.79,
+   0.86
+  ],
+  "charge-pad-r": [
+   -0.1,
+   0.8,
+   0.86
+  ],
+  "console-island-knob-base": [
+   0,
+   0.81,
+   1.12
+  ],
+  "console-island-knob-ring": [
+   0,
+   0.82,
+   1.12
+  ],
+  "seat-third-row": [
+   0,
+   0.6,
+   -1.98
+  ],
+  "seat-third-row-back": [
+   0,
+   0.86,
+   -2.19
+  ],
+  "seat-third-row-headrest": [
+   0,
+   1.21,
+   -2.26
+  ],
+  "trunk-floor": [
+   0,
+   0.3,
+   -2.55
+  ],
+  "trunk-sill": [
+   0,
+   0.34,
+   -2.8
+  ],
+  "wheel-cap-fl": [
+   1.01,
+   0.38,
+   1.72
+  ],
+  "wheel-cap-fr": [
+   -1.01,
+   0.38,
+   1.72
+  ],
+  "wheel-cap-rl": [
+   1.01,
+   0.38,
+   -1.72
+  ],
+  "wheel-cap-rr": [
+   -1.01,
+   0.38,
+   -1.72
+  ],
+  "handle-star-fl": [
+   1.03,
+   0.97,
+   1.18
+  ],
+  "handle-star-fr": [
+   -1.03,
+   0.97,
+   1.18
+  ],
+  "handle-star-rl": [
+   1.03,
+   0.97,
+   -0.28
+  ],
+  "handle-star-rr": [
+   -1.03,
+   0.97,
+   -0.28
+  ],
+  "roof-spoiler": [
+   0,
+   1.55,
+   -2.42
+  ],
+  "rear-reflector-l": [
+   0.72,
+   0.3,
+   -2.49
+  ],
+  "rear-reflector-r": [
+   -0.72,
+   0.3,
+   -2.49
+  ],
+  "tail-chrome-strip": [
+   0,
+   1.32,
+   -2.85
+  ],
+  "mirror-arm-l": [
+   1.02,
+   1.15,
+   1.02
+  ],
+  "mirror-arm-r": [
+   -1.02,
+   1.15,
+   1.02
+  ]
+ }
+}

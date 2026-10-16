@@ -1,0 +1,237 @@
+{
+  "gitRev": "9afac60",
+  "codeStatus": {
+    "src/model/createV800Model.ts": "2026-10-16T10:19:52.247Z",
+    "src/model/V800Adapter.ts": "2026-10-16T10:15:51.673Z",
+    "src/model/preview.ts": "2026-10-16T09:59:39.254Z"
+  },
+  "captureTime": "2026-10-16T10:33:04.514Z",
+  "env": {
+    "edge": "Edg/155.0.4283.45 headless=new --disable-gpu (SwiftShader)",
+    "dpr": 1,
+    "vite": 5199,
+    "cdp": 9333
+  },
+  "A_perf": {
+    "clicked": true,
+    "samples": 56,
+    "fpsAvg": 6.5,
+    "fpsMin": 5,
+    "fpsMax": 7,
+    "maxCalls": 331,
+    "maxTris": 203171,
+    "endCalls": 214,
+    "note": "SwiftShader 软渲染，FPS 不代表真机；calls/tris 为真实提交数；与 Phase 1 同环境同口径",
+    "raw": [
+      {
+        "fps": 6,
+        "dpr": 1,
+        "calls": 330,
+        "tris": 203139,
+        "t": 0.2
+      },
+      {
+        "fps": 6,
+        "dpr": 1,
+        "calls": 331,
+        "tris": 203171,
+        "t": 5.6
+      },
+      {
+        "fps": 7,
+        "dpr": 1,
+        "calls": 326,
+        "tris": 203071,
+        "t": 10.8
+      },
+      {
+        "fps": 6,
+        "dpr": 1,
+        "calls": 222,
+        "tris": 199751,
+        "t": 16.3
+      },
+      {
+        "fps": 6,
+        "dpr": 1,
+        "calls": 214,
+        "tris": 199615,
+        "t": 21.8
+      },
+      {
+        "fps": 7,
+        "dpr": 1,
+        "calls": 214,
+        "tris": 199615,
+        "t": 27.4
+      },
+      {
+        "fps": 7,
+        "dpr": 1,
+        "calls": 326,
+        "tris": 203071,
+        "t": 32.8
+      },
+      {
+        "fps": 7,
+        "dpr": 1,
+        "calls": 326,
+        "tris": 203071,
+        "t": 38.4
+      },
+      {
+        "fps": 7,
+        "dpr": 1,
+        "calls": 214,
+        "tris": 199615,
+        "t": 43.6
+      },
+      {
+        "fps": 7,
+        "dpr": 1,
+        "calls": 214,
+        "tris": 199615,
+        "t": 49.2
+      },
+      {
+        "fps": 6,
+        "dpr": 1,
+        "calls": 222,
+        "tris": 199751,
+        "t": 54.6
+      },
+      {
+        "fps": 6,
+        "dpr": 1,
+        "calls": 214,
+        "tris": 199615,
+        "t": 60
+      }
+    ]
+  },
+  "B_turntable": [
+    "B2-turntable-az000.png",
+    "B2-turntable-az045.png",
+    "B2-turntable-az090.png",
+    "B2-turntable-az135.png",
+    "B2-turntable-az180.png",
+    "B2-turntable-az225.png",
+    "B2-turntable-az270.png",
+    "B2-turntable-az315.png"
+  ],
+  "C_cabin": {
+    "previewInfo": {
+      "tris": 91352,
+      "calls": 325,
+      "box": [
+        2.4249999940395357,
+        2.683974154699185,
+        5.601999999776482
+      ]
+    },
+    "front": {
+      "calls": 59,
+      "tris": 10808,
+      "file": "C2-cabin-front.png"
+    },
+    "rear": {
+      "calls": 43,
+      "tris": 8608,
+      "file": "C2-cabin-rear.png"
+    },
+    "third": {
+      "calls": 15,
+      "tris": 2592,
+      "file": "C2-cabin-third.png"
+    }
+  },
+  "D_lampgold": [
+    "D2-lampgold-front-plain.png",
+    "D2-lampgold-front-look-left.png",
+    "D2-lampgold-front-look-right.png",
+    "D2-lampgold-rear-look-left.png"
+  ],
+  "E_hooks": {
+    "uvassert": {
+      "tables": [],
+      "logs": []
+    },
+    "batchmerge": {
+      "tables": [],
+      "logs": []
+    }
+  },
+  "F_closeups": [
+    "F2-quilt-rear-seatbacks.png",
+    "F2-wood-tunnel-front.png",
+    "F2-crystal-shifter.png",
+    "F2-starlight-up.png",
+    "F2-dash-screen.png",
+    "F2-lampgold-speaker-rl-close.png",
+    "F2-lampgold-tweeter-l-close.png",
+    "F2-wheel-rim-fl-face.png",
+    "F2-taillamp-bar-close.png",
+    "F2-greenhouse-inside-look-left.png",
+    "F2-greenhouse-inside-look-front.png",
+    "F2-cabin-front-standalone.png"
+  ],
+  "errors": {
+    "A": [],
+    "preview": [
+      "console: Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ]
+  },
+  "F_closeups_info": {
+    "boxes": {
+      "frontSeat": [
+        -0.78,
+        0.56,
+        0.666,
+        0.78,
+        0.705,
+        1.174
+      ],
+      "rearSeat": [
+        -0.78,
+        0.56,
+        -1.564,
+        0.78,
+        0.705,
+        -1.036
+      ],
+      "thirdSeat": "exists"
+    },
+    "rimBox": [
+      0.74,
+      0.082,
+      1.427,
+      1.01,
+      0.682,
+      2.027
+    ],
+    "tireBox": [
+      0.75,
+      1
+    ],
+    "taillampBox": [
+      0.78,
+      1.07,
+      -2.876,
+      0.9,
+      1.1,
+      -2.873
+    ],
+    "greenhouseBox": [
+      -0.915,
+      1.101,
+      -2.409,
+      0.915,
+      1.645,
+      0.979
+    ],
+    "fullModelFrame": {
+      "tris": 23264,
+      "calls": 96
+    }
+  }
+}
