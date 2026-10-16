@@ -1050,30 +1050,20 @@
       "interaction-pass",
       "optimization-pass"
     ],
-    "currentPass": "material-pass",
+    "currentPass": "surface-pass",
     "completedPasses": [
       "blockout",
       "structural-pass",
-      "form-refinement"
+      "form-refinement",
+      "material-pass"
     ],
-    "lastCompletedPass": "form-refinement",
+    "lastCompletedPass": "material-pass",
     "blockedReason": "",
     "nextRequiredEvidence": [
-      "Reference-derived albedo palette records dominant, secondary, and accent colors per visible material.",
-      "Each important material defines roughness variation and at least one normal/bump/displacement response.",
-      "Local material overrides, dirt/wear/stains/moss/chips/scratches or equivalent masks are tied to evidenceRefs.",
-      "Thin, transparent, reflective, wet, or fibrous materials document alpha/transmission/clearcoat/metalness/fiber response when relevant.",
-      "Generated preview uses procedural albedo/roughness/bump texture or vertex color variation instead of one flat color.",
-      "Generated preview uses independent PBR maps at 1024px or higher for the quality-first tier.",
-      "If source pixels are available, referencePbr extraction passed at confidence >= 0.7 or the pass is stopped/requesting better references.",
-      "Macro, meso, and micro surface frequency bands are visible at the intended review distance without obvious tiling.",
+      "Every required material feature group has local overrides or surfaceDetail tied to evidenceRefs.",
+      "A grazing-angle close-up proves that normal/height detail breaks highlights naturally and does not read as smooth plastic.",
       "AI vision comparison score meets selfCorrectLoop.visualAcceptance.threshold.",
-      "reference-derived albedo palette with dominant, secondary, and accent colors",
-      "independent albedo, roughness, height/normal, and AO maps",
-      "macro, meso, and micro surface-frequency response at 1024px or higher",
-      "local material masks: AO, dirt, wear, stains, moss, chips, scratches, wetness, or equivalent",
-      "neutral, grazing-light close-up, and reference-matched browser screenshots",
-      "AI vision comparison sheet score meeting the visual acceptance threshold",
+      "component surfaceDetail for tactile normal/bump/displacement and locality",
       "browser render screenshot from your agent's browser/screenshot tool",
       "side-by-side reference/render comparison sheet for AI vision review",
       "banded interior difference vs the reference baseline (forge/stage4_review/interior_difference.py --from/--to per region)",
@@ -1509,28 +1499,124 @@
         "profile2D": {
           "points": [
             [
-              2.3,
+              2.219,
               0.2
             ],
             [
+              2.25,
+              0.2062
+            ],
+            [
+              2.2763,
+              0.2237
+            ],
+            [
+              2.2938,
+              0.25
+            ],
+            [
               2.3,
-              0.38
+              0.281
             ],
             [
-              2.58,
-              0.6
+              2.3,
+              0.3411
             ],
             [
-              2.665,
+              2.302,
+              0.3591
+            ],
+            [
+              2.308,
+              0.3761
+            ],
+            [
+              2.3177,
+              0.3913
+            ],
+            [
+              2.3306,
+              0.404
+            ],
+            [
+              2.5584,
+              0.583
+            ],
+            [
+              2.5684,
+              0.592
+            ],
+            [
+              2.577,
+              0.6022
+            ],
+            [
+              2.5842,
+              0.6135
+            ],
+            [
+              2.5899,
+              0.6256
+            ],
+            [
+              2.6511,
+              0.7841
+            ],
+            [
+              2.6562,
+              0.8018
+            ],
+            [
+              2.6579,
               0.82
             ],
             [
-              2.6,
-              0.99
+              2.6562,
+              0.8383
+            ],
+            [
+              2.6513,
+              0.8559
+            ],
+            [
+              2.6174,
+              0.9446
+            ],
+            [
+              2.6069,
+              0.9637
+            ],
+            [
+              2.5917,
+              0.9792
+            ],
+            [
+              2.5728,
+              0.9901
+            ],
+            [
+              2.5517,
+              0.9955
+            ],
+            [
+              2.2521,
+              1.0298
+            ],
+            [
+              2.251,
+              1.0299
             ],
             [
               2.25,
               1.03
+            ],
+            [
+              2.249,
+              1.0301
+            ],
+            [
+              2.2479,
+              1.0301
             ],
             [
               1.28,
@@ -1541,52 +1627,178 @@
               1.09
             ],
             [
+              -1.7971,
+              1.09
+            ],
+            [
+              -1.7986,
+              1.09
+            ],
+            [
               -1.8,
               1.09
             ],
             [
-              -2.5,
-              1.05
+              -1.8014,
+              1.0899
             ],
             [
-              -2.78,
-              0.98
+              -1.8029,
+              1.0898
             ],
             [
-              -2.83,
-              0.82
+              -2.4906,
+              1.0505
             ],
             [
-              -2.7,
-              0.55
+              -2.4953,
+              1.0502
+            ],
+            [
+              -2.4999,
+              1.0496
+            ],
+            [
+              -2.5046,
+              1.0487
+            ],
+            [
+              -2.5091,
+              1.0477
+            ],
+            [
+              -2.7364,
+              0.9909
+            ],
+            [
+              -2.7554,
+              0.9835
+            ],
+            [
+              -2.7719,
+              0.9715
+            ],
+            [
+              -2.7849,
+              0.9557
+            ],
+            [
+              -2.7934,
+              0.9371
+            ],
+            [
+              -2.8159,
+              0.8652
+            ],
+            [
+              -2.8205,
+              0.8432
+            ],
+            [
+              -2.821,
+              0.8207
+            ],
+            [
+              -2.8173,
+              0.7985
+            ],
+            [
+              -2.8095,
+              0.7773
+            ],
+            [
+              -2.7072,
+              0.565
+            ],
+            [
+              -2.7033,
+              0.5578
+            ],
+            [
+              -2.6986,
+              0.551
+            ],
+            [
+              -2.6933,
+              0.5448
+            ],
+            [
+              -2.6874,
+              0.5391
+            ],
+            [
+              -2.5077,
+              0.3839
+            ],
+            [
+              -2.496,
+              0.3714
+            ],
+            [
+              -2.4873,
+              0.3567
+            ],
+            [
+              -2.4818,
+              0.3404
             ],
             [
               -2.48,
-              0.36
+              0.3234
             ],
             [
               -2.48,
+              0.272
+            ],
+            [
+              -2.4745,
+              0.2444
+            ],
+            [
+              -2.4589,
+              0.2211
+            ],
+            [
+              -2.4356,
+              0.2055
+            ],
+            [
+              -2.408,
               0.2
             ]
           ],
           "depth": 2.006
         },
-        "topologyIntent": "lofted side-profile shell",
+        "topologyIntent": "lofted side-profile shell with large-radius silhouette fillets",
         "edgeTreatment": {
-          "type": "bevel",
-          "bevelRadius": 0.02,
-          "segments": 3
+          "type": "rounded",
+          "bevelRadius": 0.12,
+          "segments": 4
         },
-        "deformationStack": [],
+        "deformationStack": [
+          {
+            "type": "fillet",
+            "axis": "profile-z-y",
+            "radius": 0.12,
+            "segments": 4,
+            "notes": "侧视轮廓 11 处倒圆角（前下/前下肩上/翼子板/肩线/尾切断上/尾切断/尾下/后下），MPV 硬表面语言的大半径圆角折线；参考图 B1/BC/BD/U2 均非直角折线"
+          },
+          {
+            "type": "taper",
+            "axis": "y",
+            "factor": 0.94,
+            "notes": "型面下窄上宽：profile 前缘 z=2.665@y0.82 收至 z=2.30@y0.20，腰线以下内收（rotomold draft 观感）"
+          }
+        ],
         "uvStrategy": "generated procedural coordinates",
         "normalStrategy": "vertex normals"
       },
       "parent": "root",
       "attachment": null,
       "dimensions": {
-        "width": 1,
-        "height": 1,
-        "depth": 1,
+        "width": 2.006,
+        "height": 0.89,
+        "depth": 5.479,
         "units": "meters",
         "confidence": 0.95
       },
@@ -1676,6 +1888,11 @@
           "name": "尾部肩线外拱",
           "kind": "surface",
           "note": "后翼子板 z-1.9~-2.6 外拱"
+        },
+        {
+          "name": "轮廓圆角化",
+          "kind": "surface",
+          "note": "前/尾/肩线 11 处 r0.08–0.12 圆弧，消除直角折线"
         }
       ],
       "surfaceDetail": {
@@ -1702,7 +1919,8 @@
         "secondaryAlbedo": "rgba(201, 168, 107, 1.0)",
         "materialClass": "metal",
         "materialClassConfidence": 0.9
-      }
+      },
+      "notes": "治粗糙：侧视轮廓倒圆角（11 处，r 0.08–0.12），替换原 15 点直棱折线。"
     },
     {
       "id": "hood-panel",
@@ -1982,12 +2200,36 @@
         "profile2D": {
           "points": [
             [
-              1.02,
-              1.1
+              0.9642,
+              1.1006
             ],
             [
-              0.18,
-              1.6
+              0.9758,
+              1.1059
+            ],
+            [
+              0.9792,
+              1.1181
+            ],
+            [
+              0.9721,
+              1.1285
+            ],
+            [
+              0.1858,
+              1.5965
+            ],
+            [
+              0.1818,
+              1.5985
+            ],
+            [
+              0.1776,
+              1.5999
+            ],
+            [
+              0.1733,
+              1.6006
             ],
             [
               -0.3,
@@ -2002,28 +2244,48 @@
               1.56
             ],
             [
-              -2.42,
-              1.14
+              -2.4092,
+              1.1778
+            ],
+            [
+              -2.4087,
+              1.1597
+            ],
+            [
+              -2.3979,
+              1.1452
+            ],
+            [
+              -2.3807,
+              1.1395
             ]
           ],
           "depth": 1.83
         },
-        "topologyIntent": "glazed band extrusion",
+        "topologyIntent": "continuous dark DLO band, A/D-pillar roots filleted",
         "edgeTreatment": {
-          "type": "bevel",
-          "bevelRadius": 0.01,
-          "segments": 2
+          "type": "rounded",
+          "bevelRadius": 0.06,
+          "segments": 3
         },
-        "deformationStack": [],
+        "deformationStack": [
+          {
+            "type": "fillet",
+            "axis": "profile-z-y",
+            "radius": 0.06,
+            "segments": 3,
+            "notes": "A 柱根部（z=1.02,y=1.10）与 D 柱根部（z=-2.42,y=1.14）倒圆，侧窗带下沿不再是尖折"
+          }
+        ],
         "uvStrategy": "generated procedural coordinates",
         "normalStrategy": "vertex normals"
       },
       "parent": "root",
       "attachment": null,
       "dimensions": {
-        "width": 1,
-        "height": 1,
-        "depth": 1,
+        "width": 1.83,
+        "height": 0.544,
+        "depth": 3.388,
         "units": "meters",
         "confidence": 0.9
       },
@@ -2125,7 +2387,8 @@
         "secondaryAlbedo": "rgba(16, 20, 24, 1.0)",
         "materialClass": "glass",
         "materialClassConfidence": 0.9
-      }
+      },
+      "notes": "治粗糙：A/D 柱根部倒圆 + 风挡上沿倒圆。"
     },
     {
       "id": "roof-panel",
@@ -2145,6 +2408,26 @@
               1.56
             ],
             [
+              0.62,
+              1.64
+            ],
+            [
+              0.3426,
+              1.6995
+            ],
+            [
+              0.3408,
+              1.6998
+            ],
+            [
+              0.3391,
+              1.7001
+            ],
+            [
+              0.3374,
+              1.7003
+            ],
+            [
               0.2,
               1.715
             ],
@@ -2153,23 +2436,99 @@
               1.72
             ],
             [
+              -1.55,
+              1.72
+            ],
+            [
               -1.8,
               1.72
             ],
             [
-              -2.32,
-              1.585
+              -1.9468,
+              1.72
             ],
             [
-              -2.36,
+              -1.9489,
+              1.7201
+            ],
+            [
+              -1.951,
+              1.7204
+            ],
+            [
+              -1.9531,
+              1.7208
+            ],
+            [
+              -1.9969,
+              1.7322
+            ],
+            [
+              -1.999,
+              1.7326
+            ],
+            [
+              -2.0011,
+              1.7329
+            ],
+            [
+              -2.0032,
+              1.733
+            ],
+            [
+              -2.26,
+              1.733
+            ],
+            [
+              -2.3379,
+              1.6035
+            ],
+            [
+              -2.3392,
+              1.6011
+            ],
+            [
+              -2.3404,
+              1.5987
+            ],
+            [
+              -2.3415,
+              1.5963
+            ],
+            [
+              -2.38,
               1.5
             ],
             [
-              -2.3,
+              -2.3043,
               1.5
             ],
             [
-              -1.8,
+              -2.3014,
+              1.5001
+            ],
+            [
+              -2.2987,
+              1.5005
+            ],
+            [
+              -2.2959,
+              1.5012
+            ],
+            [
+              -1.8041,
+              1.6438
+            ],
+            [
+              -1.8013,
+              1.6445
+            ],
+            [
+              -1.7986,
+              1.6449
+            ],
+            [
+              -1.7957,
               1.645
             ],
             [
@@ -2179,22 +2538,36 @@
           ],
           "depth": 1.6
         },
-        "topologyIntent": "crown arc shell",
+        "topologyIntent": "roof shell with raised rear tier (EX-15) and filleted nose/rear-step",
         "edgeTreatment": {
-          "type": "bevel",
-          "bevelRadius": 0.015,
-          "segments": 2
+          "type": "rounded",
+          "bevelRadius": 0.05,
+          "segments": 3
         },
-        "deformationStack": [],
+        "deformationStack": [
+          {
+            "type": "displacement",
+            "axis": "y",
+            "factor": 0.013,
+            "notes": "EX-15 车顶后段微微抬高的小台阶：z=-1.95~-2.26 顶面 1.720→1.733（+13mm），后排头顶加高；台阶棱 r2.5cm 倒圆"
+          },
+          {
+            "type": "fillet",
+            "axis": "profile-z-y",
+            "radius": 0.05,
+            "segments": 3,
+            "notes": "顶盖前缘（风挡上沿）与后段坡顶倒圆，消除尖折"
+          }
+        ],
         "uvStrategy": "generated procedural coordinates",
         "normalStrategy": "vertex normals"
       },
       "parent": "root",
       "attachment": null,
       "dimensions": {
-        "width": 1,
-        "height": 1,
-        "depth": 1,
+        "width": 1.6,
+        "height": 0.233,
+        "depth": 3.36,
         "units": "meters",
         "confidence": 0.9
       },
@@ -2267,14 +2640,25 @@
           "debrisMaterial": "base"
         }
       },
-      "material": "paint-upper",
+      "material": "paint-lower",
       "materialLayers": [
-        "paint-upper"
+        "paint-lower"
       ],
       "deformations": [],
       "joints": [],
       "seams": [],
-      "localFeatures": [],
+      "localFeatures": [
+        {
+          "name": "车顶后段台阶",
+          "kind": "proportion",
+          "note": "EX-15：z-1.95~-2.26 抬高 13mm"
+        },
+        {
+          "name": "悬浮车顶深色",
+          "kind": "material",
+          "note": "EX-03：顶盖独立深色漆（paint-lower #221A14），与金版上装形成悬浮顶"
+        }
+      ],
       "surfaceDetail": {
         "macroRoughness": 0,
         "microRoughness": 0,
@@ -2291,11 +2675,12 @@
       "details": [],
       "fidelityTier": "hero",
       "colorMaterialRecipe": {
-        "dominantAlbedo": "rgba(201, 168, 107, 1.0)",
+        "dominantAlbedo": "rgba(34, 26, 20, 1.0)",
         "secondaryAlbedo": "rgba(14, 14, 18, 1.0)",
         "materialClass": "metal",
-        "materialClassConfidence": 0.9
-      }
+        "materialClassConfidence": 0.85
+      },
+      "notes": "治粗糙 + EX-15：顶盖后段抬高 13mm 台阶（z-1.95~-2.26），前后缘倒圆。"
     },
     {
       "id": "windshield",
@@ -3218,19 +3603,80 @@
       "role": "body",
       "importance": 0.95,
       "confidence": 0.9,
-      "primitive": "box",
+      "primitive": "extrude",
       "topologyClass": "assembled-solid",
       "topologyRationale": "box 适合该部件的可展拓扑",
       "geometryDescriptor": {
-        "topologyIntent": "hard-surface precise",
+        "topologyIntent": "front fascia panel with rounded vertical corners",
         "edgeTreatment": {
-          "type": "bevel",
-          "bevelRadius": 0.008,
+          "type": "rounded",
+          "bevelRadius": 0.18,
           "segments": 2
         },
-        "deformationStack": [],
+        "deformationStack": [
+          {
+            "type": "fillet",
+            "axis": "profile-x-y",
+            "radius": 0.18,
+            "segments": 2,
+            "notes": "前脸面板四角 r0.18 大圆角（顶角）/ r0.10（底角），前脸不再是直棱矩形"
+          }
+        ],
         "uvStrategy": "generated procedural coordinates",
-        "normalStrategy": "vertex normals from generated geometry"
+        "normalStrategy": "vertex normals from generated geometry",
+        "profile2D": {
+          "points": [
+            [
+              -0.93,
+              -0.345
+            ],
+            [
+              -0.86,
+              -0.505
+            ],
+            [
+              -0.75,
+              -0.525
+            ],
+            [
+              0.75,
+              -0.525
+            ],
+            [
+              0.86,
+              -0.505
+            ],
+            [
+              0.93,
+              -0.345
+            ],
+            [
+              0.93,
+              0.345
+            ],
+            [
+              0.86,
+              0.505
+            ],
+            [
+              0.75,
+              0.525
+            ],
+            [
+              -0.75,
+              0.525
+            ],
+            [
+              -0.86,
+              0.505
+            ],
+            [
+              -0.93,
+              0.345
+            ]
+          ],
+          "depth": 0.08
+        }
       },
       "parent": "root",
       "attachment": null,
@@ -3243,9 +3689,9 @@
       },
       "transform": {
         "position": [
-          0,
+          0.0,
           0.9,
-          2.62
+          2.58
         ],
         "rotation": [
           0,
@@ -3253,9 +3699,9 @@
           0
         ],
         "scale": [
-          1.86,
-          1.05,
-          0.08
+          1.0,
+          1.0,
+          1.0
         ]
       },
       "actionProfile": {
@@ -3338,7 +3784,8 @@
         "secondaryAlbedo": "rgba(14, 14, 18, 1.0)",
         "materialClass": "metal",
         "materialClassConfidence": 0.9
-      }
+      },
+      "notes": "治粗糙：前脸面板 box→挤出圆角（四角 r0.18/0.10）；节点 z 2.62→2.58 保持挤出体世界范围，子件局部 z +0.04 补偿。"
     },
     {
       "id": "chrome-brow",
@@ -3374,7 +3821,7 @@
         "position": [
           0,
           0.4,
-          -0.03
+          0.01
         ],
         "rotation": [
           0,
@@ -3505,7 +3952,7 @@
         "position": [
           0,
           0.4,
-          0.048
+          0.088
         ],
         "rotation": [
           0,
@@ -3616,34 +4063,71 @@
       "role": "detail",
       "importance": 0.85,
       "confidence": 0.9,
-      "primitive": "box",
+      "primitive": "extrude",
       "topologyClass": "assembled-solid",
       "topologyRationale": "box 适合该部件的可展拓扑",
       "geometryDescriptor": {
-        "topologyIntent": "hard-surface precise",
+        "topologyIntent": "tall hexagonal shield emblem base with dark-copper border (EX-07)",
         "edgeTreatment": {
-          "type": "bevel",
-          "bevelRadius": 0.008,
+          "type": "rounded",
+          "bevelRadius": 0.01,
           "segments": 2
         },
-        "deformationStack": [],
+        "deformationStack": [
+          {
+            "type": "fillet",
+            "axis": "profile-x-y",
+            "radius": 0.01,
+            "segments": 2,
+            "notes": "EX-07：细长六边盾形（0.09×0.24，上下收尖），暗铜色边框；原 chrome 方板 0.05×0.17"
+          }
+        ],
         "uvStrategy": "generated procedural coordinates",
-        "normalStrategy": "vertex normals from generated geometry"
+        "normalStrategy": "vertex normals from generated geometry",
+        "profile2D": {
+          "points": [
+            [
+              0,
+              -0.12
+            ],
+            [
+              0.045,
+              -0.06
+            ],
+            [
+              0.045,
+              0.06
+            ],
+            [
+              0,
+              0.12
+            ],
+            [
+              -0.045,
+              0.06
+            ],
+            [
+              -0.045,
+              -0.06
+            ]
+          ],
+          "depth": 0.012
+        }
       },
       "parent": "front-end",
       "attachment": null,
       "dimensions": {
-        "width": 0.05,
-        "height": 0.17,
-        "depth": 0.02,
+        "width": 0.09,
+        "height": 0.24,
+        "depth": 0.012,
         "units": "meters",
-        "confidence": 0.9
+        "confidence": 0.86
       },
       "transform": {
         "position": [
-          0,
+          0.0,
           0.02,
-          0.05
+          0.09
         ],
         "rotation": [
           0,
@@ -3651,9 +4135,9 @@
           0
         ],
         "scale": [
-          0.05,
-          0.17,
-          0.02
+          1.0,
+          1.0,
+          1.0
         ]
       },
       "actionProfile": {
@@ -3708,18 +4192,18 @@
           "debrisMaterial": "base"
         }
       },
-      "material": "chrome",
+      "material": "bronze-dark",
       "materialLayers": [
-        "chrome"
+        "bronze-dark"
       ],
       "deformations": [],
       "joints": [],
       "seams": [],
       "localFeatures": [
         {
-          "name": "盾形轮廓+内部棱格",
-          "kind": "mark",
-          "note": "中央竖盾，微 emissive 边缘"
+          "name": "六边盾形暗铜边框",
+          "kind": "proportion",
+          "note": "EX-07：细长六边盾 0.09×0.24，暗铜 #6A5240（G2 采样）"
         }
       ],
       "surfaceDetail": {
@@ -3740,11 +4224,12 @@
       ],
       "fidelityTier": "hero",
       "colorMaterialRecipe": {
-        "dominantAlbedo": "rgba(232, 233, 236, 1.0)",
-        "secondaryAlbedo": "rgba(232, 233, 236, 1.0)",
+        "dominantAlbedo": "rgba(106, 82, 64, 1.0)",
+        "secondaryAlbedo": "rgba(106, 82, 64, 1.0)",
         "materialClass": "metal",
-        "materialClassConfidence": 0.9
-      }
+        "materialClassConfidence": 0.86
+      },
+      "notes": "EX-07：竖标由 chrome 方板改六边盾形暗铜边框（挤出），世界 y0.80–1.04、z2.670–2.682。"
     },
     {
       "id": "headlamp-l",
@@ -3821,7 +4306,7 @@
         "position": [
           0.8,
           0.06,
-          0.03
+          0.07
         ],
         "rotation": [
           0,
@@ -4027,9 +4512,9 @@
       "seams": [],
       "localFeatures": [
         {
-          "name": "纵向双灯带",
+          "name": "纵向灯芯 + 3 枚圆形 LED",
           "kind": "emissive",
-          "note": "内外两条竖向白光带"
+          "note": "EX-08：3 枚圆形 LED 点阵由集成层 Canvas emissiveMap 提供，基底保留灯腔亮度。"
         }
       ],
       "surfaceDetail": {
@@ -4165,7 +4650,7 @@
         {
           "name": "星点点阵+钻石切割面",
           "kind": "emissive-pattern",
-          "note": "Canvas 点阵贴图"
+          "note": "EX-08：星尘颗粒/钻石切割纹理由集成层 Canvas emissiveMap 提供（与把手星尘共用 lamp-star 贴图）。"
         }
       ],
       "surfaceDetail": {
@@ -4266,7 +4751,7 @@
         "position": [
           -0.8,
           0.06,
-          0.03
+          0.07
         ],
         "rotation": [
           0,
@@ -4472,9 +4957,9 @@
       "seams": [],
       "localFeatures": [
         {
-          "name": "纵向双灯带",
+          "name": "纵向灯芯 + 3 枚圆形 LED",
           "kind": "emissive",
-          "note": "内外两条竖向白光带"
+          "note": "EX-08：3 枚圆形 LED 点阵由集成层 Canvas emissiveMap 提供，基底保留灯腔亮度。"
         }
       ],
       "surfaceDetail": {
@@ -4610,7 +5095,7 @@
         {
           "name": "星点点阵+钻石切割面",
           "kind": "emissive-pattern",
-          "note": "Canvas 点阵贴图"
+          "note": "EX-08：星尘颗粒/钻石切割纹理由集成层 Canvas emissiveMap 提供（与把手星尘共用 lamp-star 贴图）。"
         }
       ],
       "surfaceDetail": {
@@ -4670,7 +5155,7 @@
         "position": [
           0,
           -0.44,
-          0.005
+          0.045
         ],
         "rotation": [
           0,
@@ -5057,7 +5542,7 @@
         "position": [
           -0.42,
           -0.1,
-          0.06
+          0.085
         ],
         "rotation": [
           0,
@@ -5131,9 +5616,9 @@
       "seams": [],
       "localFeatures": [
         {
-          "name": "铭牌文字",
+          "name": "车名牌镀铬立体字「尊界 V800」",
           "kind": "emissive-text",
-          "note": "Canvas 贴图 尊界 V800"
+          "note": "EX-26：镀铬立体字由集成层 Canvas map 提供（五段铬渐变 + 暗侧挤压层 + 描边），替代原黑底印字；材质标量按「抛光金属」证据修正为 metalness 0.85 / roughness 0.32。"
         }
       ],
       "surfaceDetail": {
@@ -5157,7 +5642,8 @@
         "secondaryAlbedo": "rgba(12, 12, 14, 1.0)",
         "materialClass": "plastic",
         "materialClassConfidence": 0.9
-      }
+      },
+      "notes": " [材质轮修正 z 0.06→0.085] 实测（raycast）铭牌原位沉入 fascia 漆面 16mm（batch/paint-lower 表面世界 z -2.656，铭牌 -2.64），任何贴图都不可见；外凸 9mm 至 -2.674 露出漆面。"
     },
     {
       "id": "tailgate",
@@ -5166,19 +5652,80 @@
       "role": "body",
       "importance": 0.95,
       "confidence": 0.9,
-      "primitive": "box",
+      "primitive": "extrude",
       "topologyClass": "assembled-solid",
       "topologyRationale": "box 适合该部件的可展拓扑",
       "geometryDescriptor": {
-        "topologyIntent": "hard-surface precise",
+        "topologyIntent": "tailgate panel with rounded corners",
         "edgeTreatment": {
-          "type": "bevel",
-          "bevelRadius": 0.008,
+          "type": "rounded",
+          "bevelRadius": 0.14,
           "segments": 2
         },
-        "deformationStack": [],
+        "deformationStack": [
+          {
+            "type": "fillet",
+            "axis": "profile-x-y",
+            "radius": 0.14,
+            "segments": 2,
+            "notes": "尾门四角 r0.14 圆角，尾部门板不再是直棱矩形"
+          }
+        ],
         "uvStrategy": "generated procedural coordinates",
-        "normalStrategy": "vertex normals from generated geometry"
+        "normalStrategy": "vertex normals from generated geometry",
+        "profile2D": {
+          "points": [
+            [
+              -0.93,
+              -0.42
+            ],
+            [
+              -0.86,
+              -0.5
+            ],
+            [
+              -0.78,
+              -0.525
+            ],
+            [
+              0.78,
+              -0.525
+            ],
+            [
+              0.86,
+              -0.5
+            ],
+            [
+              0.93,
+              -0.42
+            ],
+            [
+              0.93,
+              0.42
+            ],
+            [
+              0.86,
+              0.5
+            ],
+            [
+              0.78,
+              0.525
+            ],
+            [
+              -0.78,
+              0.525
+            ],
+            [
+              -0.86,
+              0.5
+            ],
+            [
+              -0.93,
+              0.42
+            ]
+          ],
+          "depth": 0.07
+        }
       },
       "parent": "root",
       "attachment": null,
@@ -5191,9 +5738,9 @@
       },
       "transform": {
         "position": [
-          0,
+          0.0,
           1.02,
-          -2.8
+          -2.835
         ],
         "rotation": [
           0,
@@ -5201,9 +5748,9 @@
           0
         ],
         "scale": [
-          1.86,
-          1.05,
-          0.07
+          1.0,
+          1.0,
+          1.0
         ]
       },
       "actionProfile": {
@@ -5286,7 +5833,8 @@
         "secondaryAlbedo": "rgba(14, 14, 18, 1.0)",
         "materialClass": "metal",
         "materialClassConfidence": 0.9
-      }
+      },
+      "notes": "治粗糙：尾门 box→挤出圆角（四角 r0.14）；节点 z -2.80→-2.835 保持世界范围。"
     },
     {
       "id": "taillamp-l",
@@ -5302,68 +5850,94 @@
         "profile2D": {
           "points": [
             [
-              -0.075,
-              -0.335
+              -0.09,
+              -0.225
             ],
             [
-              0.0,
-              -0.355
+              -0.082,
+              -0.252
             ],
             [
-              0.075,
-              -0.335
-            ],
-            [
-              0.09,
+              -0.045,
               -0.26
             ],
             [
-              0.09,
-              0.26
-            ],
-            [
-              0.06,
-              0.335
-            ],
-            [
-              -0.06,
-              0.335
-            ],
-            [
-              -0.09,
-              0.26
-            ],
-            [
-              -0.09,
+              0.045,
               -0.26
+            ],
+            [
+              0.082,
+              -0.252
+            ],
+            [
+              0.09,
+              -0.225
+            ],
+            [
+              0.09,
+              0.225
+            ],
+            [
+              0.082,
+              0.252
+            ],
+            [
+              0.045,
+              0.26
+            ],
+            [
+              -0.045,
+              0.26
+            ],
+            [
+              -0.082,
+              0.252
+            ],
+            [
+              -0.09,
+              0.225
             ]
           ],
-          "depth": 0.06
+          "depth": 0.03
         },
-        "topologyIntent": "rounded vertical lantern frame",
+        "topologyIntent": "tail lamp dark housing shell, 3:1 rounded-rectangle silhouette (EX-27)",
         "edgeTreatment": {
-          "type": "bevel",
-          "bevelRadius": 0.006,
+          "type": "rounded",
+          "bevelRadius": 0.035,
           "segments": 2
         },
-        "deformationStack": [],
+        "deformationStack": [
+          {
+            "type": "fillet",
+            "axis": "profile-x-y",
+            "radius": 0.035,
+            "segments": 2,
+            "notes": "EX-27 竖向圆角矩形灯体 0.18×0.52（h:w≈2.9:1，高占尾门 49%），四角 r3.5cm"
+          },
+          {
+            "type": "taper",
+            "axis": "y",
+            "factor": 1.0,
+            "notes": "灯体等宽；原 0.18×0.69（69% 尾门高）超比例，按参考图 C1–C4 压到 49%"
+          }
+        ],
         "uvStrategy": "generated procedural coordinates",
         "normalStrategy": "vertex normals"
       },
       "parent": "tailgate",
       "attachment": null,
       "dimensions": {
-        "width": 1,
-        "height": 1,
-        "depth": 1,
+        "width": 0.18,
+        "height": 0.52,
+        "depth": 0.03,
         "units": "meters",
-        "confidence": 0.95
+        "confidence": 0.86
       },
       "transform": {
         "position": [
           0.84,
           -0.12,
-          -0.06
+          -0.03
         ],
         "rotation": [
           0,
@@ -5428,14 +6002,25 @@
           "debrisMaterial": "base"
         }
       },
-      "material": "lamp-red",
+      "material": "housing-dark",
       "materialLayers": [
-        "lamp-red"
+        "housing-dark"
       ],
       "deformations": [],
       "joints": [],
       "seams": [],
-      "localFeatures": [],
+      "localFeatures": [
+        {
+          "name": "竖向圆角矩形灯体",
+          "kind": "proportion",
+          "note": "EX-27：0.18×0.52，h:w≈2.9:1，高占尾门 49%"
+        },
+        {
+          "name": "暗壳",
+          "kind": "material",
+          "note": "housing-dark：发光面只保留 3+3 红带与金色点阵屏，不再整块发红"
+        }
+      ],
       "surfaceDetail": {
         "macroRoughness": 0,
         "microRoughness": 0,
@@ -5454,13 +6039,12 @@
       ],
       "fidelityTier": "hero",
       "colorMaterialRecipe": {
-        "dominantAlbedo": "rgba(181, 31, 44, 1.0)",
-        "secondaryAlbedo": "rgba(232, 233, 236, 1.0)",
+        "dominantAlbedo": "rgba(26, 26, 28, 1.0)",
+        "secondaryAlbedo": "rgba(26, 26, 28, 1.0)",
         "materialClass": "metal",
-        "materialClassConfidence": 0.9,
-        "note": "aligned to material lamp-red base #B51F2C; prior value rgba(232,233,236,1.0) was a high-emissive appearance sample, not albedo"
+        "materialClassConfidence": 0.86
       },
-      "notes": "材质改派：lamp-red [实测修正 z→-0.06] tailgate 后面 z=-2.835；尾灯改到世界 z[-2.86,-2.80]，外凸 25mm 可见。"
+      "notes": "EX-27：尾灯改暗壳（lamp-red→housing-dark），比例 0.18×0.52；世界 z[-2.865,-2.835]，外凸 30mm。"
     },
     {
       "id": "lantern-core-l",
@@ -5469,7 +6053,7 @@
       "role": "detail",
       "importance": 0.95,
       "confidence": 0.95,
-      "primitive": "plane-card",
+      "primitive": "box",
       "topologyClass": "assembled-solid",
       "topologyRationale": "plane-card 适合该部件的可展拓扑",
       "geometryDescriptor": {
@@ -5486,16 +6070,16 @@
       "parent": "taillamp-l",
       "attachment": null,
       "dimensions": {
-        "width": 0.135,
-        "height": 0.6,
-        "depth": 0.004,
+        "width": 0.148,
+        "height": 0.438,
+        "depth": 0.002,
         "units": "meters",
-        "confidence": 0.95
+        "confidence": 0.86
       },
       "transform": {
         "position": [
-          0,
-          0,
+          0.0,
+          0.0,
           -0.002
         ],
         "rotation": [
@@ -5504,9 +6088,9 @@
           0
         ],
         "scale": [
-          0.135,
-          0.6,
-          0.004
+          0.148,
+          0.438,
+          0.002
         ]
       },
       "actionProfile": {
@@ -5570,9 +6154,9 @@
       "seams": [],
       "localFeatures": [
         {
-          "name": "红点阵+羽翼纹理",
-          "kind": "emissive-pattern",
-          "note": "Canvas 点阵+羽翼渐变；刹车联动增强"
+          "name": "灯内红色环境光晕",
+          "kind": "emissive-face",
+          "note": "lamp-red 整面均匀发光（EX-27）：比暗场大 5mm，在铬框开孔内露出一圈红晕；随刹车联动增强。EX-28 横带已改由暗场内衬图集承担，本件保持无贴图。"
         }
       ],
       "surfaceDetail": {
@@ -5596,7 +6180,7 @@
         "materialClass": "plastic",
         "materialClassConfidence": 0.9
       },
-      "notes": "[实测修正 z→-0.062] 宫灯发光面贴在尾灯后面 z=-2.862（比尾灯后脸再外 2mm），不再埋进灯体。 [复测 z→-0.002] 宫灯发光面贴在尾灯后脸 z=-2.862（尾灯节点 z=-2.86，外 2mm）"
+      "notes": "红色环境光晕背板：世界 z[-2.869,-2.867]，在最深层（贴灯体后壁）；大于暗场 5mm，在铬框开孔内露出一圈红晕。"
     },
     {
       "id": "taillamp-r",
@@ -5612,68 +6196,94 @@
         "profile2D": {
           "points": [
             [
-              -0.075,
-              -0.335
+              -0.09,
+              -0.225
             ],
             [
-              0.0,
-              -0.355
+              -0.082,
+              -0.252
             ],
             [
-              0.075,
-              -0.335
-            ],
-            [
-              0.09,
+              -0.045,
               -0.26
             ],
             [
-              0.09,
-              0.26
-            ],
-            [
-              0.06,
-              0.335
-            ],
-            [
-              -0.06,
-              0.335
-            ],
-            [
-              -0.09,
-              0.26
-            ],
-            [
-              -0.09,
+              0.045,
               -0.26
+            ],
+            [
+              0.082,
+              -0.252
+            ],
+            [
+              0.09,
+              -0.225
+            ],
+            [
+              0.09,
+              0.225
+            ],
+            [
+              0.082,
+              0.252
+            ],
+            [
+              0.045,
+              0.26
+            ],
+            [
+              -0.045,
+              0.26
+            ],
+            [
+              -0.082,
+              0.252
+            ],
+            [
+              -0.09,
+              0.225
             ]
           ],
-          "depth": 0.06
+          "depth": 0.03
         },
-        "topologyIntent": "rounded vertical lantern frame",
+        "topologyIntent": "tail lamp dark housing shell, 3:1 rounded-rectangle silhouette (EX-27)",
         "edgeTreatment": {
-          "type": "bevel",
-          "bevelRadius": 0.006,
+          "type": "rounded",
+          "bevelRadius": 0.035,
           "segments": 2
         },
-        "deformationStack": [],
+        "deformationStack": [
+          {
+            "type": "fillet",
+            "axis": "profile-x-y",
+            "radius": 0.035,
+            "segments": 2,
+            "notes": "EX-27 竖向圆角矩形灯体 0.18×0.52（h:w≈2.9:1，高占尾门 49%），四角 r3.5cm"
+          },
+          {
+            "type": "taper",
+            "axis": "y",
+            "factor": 1.0,
+            "notes": "灯体等宽；原 0.18×0.69（69% 尾门高）超比例，按参考图 C1–C4 压到 49%"
+          }
+        ],
         "uvStrategy": "generated procedural coordinates",
         "normalStrategy": "vertex normals"
       },
       "parent": "tailgate",
       "attachment": null,
       "dimensions": {
-        "width": 1,
-        "height": 1,
-        "depth": 1,
+        "width": 0.18,
+        "height": 0.52,
+        "depth": 0.03,
         "units": "meters",
-        "confidence": 0.95
+        "confidence": 0.86
       },
       "transform": {
         "position": [
           -0.84,
           -0.12,
-          -0.06
+          -0.03
         ],
         "rotation": [
           0,
@@ -5738,14 +6348,25 @@
           "debrisMaterial": "base"
         }
       },
-      "material": "lamp-red",
+      "material": "housing-dark",
       "materialLayers": [
-        "lamp-red"
+        "housing-dark"
       ],
       "deformations": [],
       "joints": [],
       "seams": [],
-      "localFeatures": [],
+      "localFeatures": [
+        {
+          "name": "竖向圆角矩形灯体",
+          "kind": "proportion",
+          "note": "EX-27：0.18×0.52，h:w≈2.9:1，高占尾门 49%"
+        },
+        {
+          "name": "暗壳",
+          "kind": "material",
+          "note": "housing-dark：发光面只保留 3+3 红带与金色点阵屏，不再整块发红"
+        }
+      ],
       "surfaceDetail": {
         "macroRoughness": 0,
         "microRoughness": 0,
@@ -5764,13 +6385,12 @@
       ],
       "fidelityTier": "hero",
       "colorMaterialRecipe": {
-        "dominantAlbedo": "rgba(181, 31, 44, 1.0)",
-        "secondaryAlbedo": "rgba(232, 233, 236, 1.0)",
+        "dominantAlbedo": "rgba(26, 26, 28, 1.0)",
+        "secondaryAlbedo": "rgba(26, 26, 28, 1.0)",
         "materialClass": "metal",
-        "materialClassConfidence": 0.9,
-        "note": "aligned to material lamp-red base #B51F2C; prior value rgba(232,233,236,1.0) was a high-emissive appearance sample, not albedo"
+        "materialClassConfidence": 0.86
       },
-      "notes": "材质改派：lamp-red [实测修正 z→-0.06] 同上（镜像）。"
+      "notes": "EX-27：尾灯改暗壳（lamp-red→housing-dark），比例 0.18×0.52；世界 z[-2.865,-2.835]，外凸 30mm。"
     },
     {
       "id": "lantern-core-r",
@@ -5779,7 +6399,7 @@
       "role": "detail",
       "importance": 0.95,
       "confidence": 0.95,
-      "primitive": "plane-card",
+      "primitive": "box",
       "topologyClass": "assembled-solid",
       "topologyRationale": "plane-card 适合该部件的可展拓扑",
       "geometryDescriptor": {
@@ -5796,16 +6416,16 @@
       "parent": "taillamp-r",
       "attachment": null,
       "dimensions": {
-        "width": 0.135,
-        "height": 0.6,
-        "depth": 0.004,
+        "width": 0.148,
+        "height": 0.438,
+        "depth": 0.002,
         "units": "meters",
-        "confidence": 0.95
+        "confidence": 0.86
       },
       "transform": {
         "position": [
-          0,
-          0,
+          0.0,
+          0.0,
           -0.002
         ],
         "rotation": [
@@ -5814,9 +6434,9 @@
           0
         ],
         "scale": [
-          0.135,
-          0.6,
-          0.004
+          0.148,
+          0.438,
+          0.002
         ]
       },
       "actionProfile": {
@@ -5880,9 +6500,9 @@
       "seams": [],
       "localFeatures": [
         {
-          "name": "红点阵+羽翼纹理",
-          "kind": "emissive-pattern",
-          "note": "Canvas 点阵+羽翼渐变；刹车联动增强"
+          "name": "灯内红色环境光晕",
+          "kind": "emissive-face",
+          "note": "lamp-red 整面均匀发光（EX-27）：比暗场大 5mm，在铬框开孔内露出一圈红晕；随刹车联动增强。EX-28 横带已改由暗场内衬图集承担，本件保持无贴图。"
         }
       ],
       "surfaceDetail": {
@@ -5906,7 +6526,7 @@
         "materialClass": "plastic",
         "materialClassConfidence": 0.9
       },
-      "notes": "[实测修正 z→-0.062] 同上（镜像）。 [复测 z→-0.002] 同上（镜像）"
+      "notes": "红色环境光晕背板：世界 z[-2.869,-2.867]，在最深层（贴灯体后壁）；大于暗场 5mm，在铬框开孔内露出一圈红晕。"
     },
     {
       "id": "tail-window-trim",
@@ -5942,7 +6562,7 @@
         "position": [
           0,
           0.44,
-          0.015
+          0.05
         ],
         "rotation": [
           0,
@@ -6923,18 +7543,18 @@
           "debrisMaterial": "base"
         }
       },
-      "material": "paint-upper",
+      "material": "dpillar-silver",
       "materialLayers": [
-        "paint-upper"
+        "dpillar-silver"
       ],
       "deformations": [],
       "joints": [],
       "seams": [],
       "localFeatures": [
         {
-          "name": "双色壳",
-          "kind": "two-tone",
-          "note": "上半镀铬盖+下车色"
+          "name": "银色镜壳",
+          "kind": "material",
+          "note": "EX-13：镜壳银/铬（dpillar-silver），配深色镜臂与镀铬镜帽"
         }
       ],
       "surfaceDetail": {
@@ -6954,11 +7574,12 @@
       "details": [],
       "fidelityTier": "hero",
       "colorMaterialRecipe": {
-        "dominantAlbedo": "rgba(201, 168, 107, 1.0)",
-        "secondaryAlbedo": "rgba(14, 14, 18, 1.0)",
+        "dominantAlbedo": "rgba(216, 217, 220, 1.0)",
+        "secondaryAlbedo": "rgba(216, 217, 220, 1.0)",
         "materialClass": "metal",
-        "materialClassConfidence": 0.9
-      }
+        "materialClassConfidence": 0.85
+      },
+      "notes": "EX-13：镜壳 paint-upper→dpillar-silver（银/铬镜壳）。"
     },
     {
       "id": "mirror-cap-l",
@@ -7975,18 +8596,18 @@
           "debrisMaterial": "base"
         }
       },
-      "material": "paint-upper",
+      "material": "dpillar-silver",
       "materialLayers": [
-        "paint-upper"
+        "dpillar-silver"
       ],
       "deformations": [],
       "joints": [],
       "seams": [],
       "localFeatures": [
         {
-          "name": "双色壳",
-          "kind": "two-tone",
-          "note": "上半镀铬盖+下车色"
+          "name": "银色镜壳",
+          "kind": "material",
+          "note": "EX-13：镜壳银/铬（dpillar-silver），配深色镜臂与镀铬镜帽"
         }
       ],
       "surfaceDetail": {
@@ -8006,11 +8627,12 @@
       "details": [],
       "fidelityTier": "hero",
       "colorMaterialRecipe": {
-        "dominantAlbedo": "rgba(201, 168, 107, 1.0)",
-        "secondaryAlbedo": "rgba(14, 14, 18, 1.0)",
+        "dominantAlbedo": "rgba(216, 217, 220, 1.0)",
+        "secondaryAlbedo": "rgba(216, 217, 220, 1.0)",
         "materialClass": "metal",
-        "materialClassConfidence": 0.9
-      }
+        "materialClassConfidence": 0.85
+      },
+      "notes": "EX-13：镜壳 paint-upper→dpillar-silver（银/铬镜壳）。"
     },
     {
       "id": "mirror-cap-r",
@@ -13740,28 +14362,106 @@
       "role": "interior",
       "importance": 0.95,
       "confidence": 0.92,
-      "primitive": "box",
+      "primitive": "curve-sweep",
       "topologyClass": "assembled-solid",
       "topologyRationale": "box 适合该部件的可展拓扑",
       "geometryDescriptor": {
-        "topologyIntent": "hard-surface precise",
+        "topologyIntent": "crowned cushion: rounded-rect section swept along arc spine",
         "edgeTreatment": {
-          "type": "bevel",
-          "bevelRadius": 0.008,
+          "type": "rounded",
+          "bevelRadius": 0.03,
           "segments": 2
         },
-        "deformationStack": [],
+        "deformationStack": [
+          {
+            "type": "bulge",
+            "axis": "y",
+            "factor": 0.015,
+            "notes": "坐垫纵向上拱 15mm（弧路径中点 y+0.020 vs 两端 +0.005），截面 0.52×0.13 圆角矩形——人体承托曲面，替代原直板"
+          }
+        ],
         "uvStrategy": "generated procedural coordinates",
-        "normalStrategy": "vertex normals from generated geometry"
+        "normalStrategy": "vertex normals from generated geometry",
+        "curveSweep": {
+          "spine": [
+            [
+              0,
+              0.005,
+              -0.25
+            ],
+            [
+              0,
+              0.02,
+              0
+            ],
+            [
+              0,
+              0.005,
+              0.25
+            ]
+          ],
+          "crossSection": {
+            "points": [
+              [
+                -0.23,
+                -0.065
+              ],
+              [
+                0.23,
+                -0.065
+              ],
+              [
+                0.26,
+                -0.035
+              ],
+              [
+                0.26,
+                0.035
+              ],
+              [
+                0.23,
+                0.065
+              ],
+              [
+                -0.23,
+                0.065
+              ],
+              [
+                -0.26,
+                0.035
+              ],
+              [
+                -0.26,
+                -0.035
+              ]
+            ]
+          },
+          "closed": false
+        }
       },
       "parent": "cabin-interior",
-      "attachment": null,
+      "attachment": {
+        "parentSocket": "cabin-interior.floor",
+        "localStart": [
+          0,
+          0,
+          0
+        ],
+        "localEnd": [
+          0,
+          0,
+          0
+        ],
+        "contactType": "butt",
+        "embedDepth": 0.002,
+        "gapTolerance": 0.003
+      },
       "dimensions": {
         "width": 0.52,
-        "height": 0.14,
+        "height": 0.13,
         "depth": 0.5,
         "units": "meters",
-        "confidence": 0.92
+        "confidence": 0.86
       },
       "transform": {
         "position": [
@@ -13775,9 +14475,9 @@
           0
         ],
         "scale": [
-          0.52,
-          0.14,
-          0.5
+          1.0,
+          1.0,
+          1.0
         ]
       },
       "actionProfile": {
@@ -13841,9 +14541,9 @@
       "seams": [],
       "localFeatures": [
         {
-          "name": "菱格绗缝+打孔中央",
-          "kind": "stitch-pattern",
-          "note": "Canvas bump 菱格贴图"
+          "name": "坐垫承托曲面",
+          "kind": "surface",
+          "note": "curve-sweep：纵向上拱 15mm、截面 0.52×0.13 圆角矩形"
         }
       ],
       "surfaceDetail": {
@@ -13870,7 +14570,8 @@
         "secondaryAlbedo": "rgba(232, 224, 208, 1.0)",
         "materialClass": "fabric",
         "materialClassConfidence": 0.9
-      }
+      },
+      "notes": "治粗糙：坐垫 box→curve-sweep，纵向上拱 15mm + 圆角矩形截面；附件为零长度点接触（curve-sweep 属附件基元，须完整附件且零长度才不走圆柱端点分支）。"
     },
     {
       "id": "seat-driver-back",
@@ -13879,32 +14580,95 @@
       "role": "detail",
       "importance": 0.9,
       "confidence": 0.92,
-      "primitive": "box",
+      "primitive": "curve-sweep",
       "topologyClass": "assembled-solid",
       "topologyRationale": "box 适合该部件的可展拓扑",
       "geometryDescriptor": {
-        "topologyIntent": "hard-surface precise",
+        "topologyIntent": "lumbar-curved backrest: rounded-rect section bowed toward occupant",
         "edgeTreatment": {
-          "type": "bevel",
-          "bevelRadius": 0.008,
+          "type": "rounded",
+          "bevelRadius": 0.025,
           "segments": 2
         },
-        "deformationStack": [],
+        "deformationStack": [
+          {
+            "type": "bulge",
+            "axis": "z",
+            "factor": 0.02,
+            "notes": "靠背中部向前（乘员方向）弓曲 20mm（弧路径中点 z-0.030 vs 两端 -0.010），等厚 0.10 壳——腰背承托，替代原直板"
+          }
+        ],
         "uvStrategy": "generated procedural coordinates",
-        "normalStrategy": "vertex normals from generated geometry"
+        "normalStrategy": "vertex normals from generated geometry",
+        "curveSweep": {
+          "spine": [
+            [
+              0,
+              -0.33,
+              -0.01
+            ],
+            [
+              0,
+              0,
+              -0.03
+            ],
+            [
+              0,
+              0.33,
+              -0.01
+            ]
+          ],
+          "crossSection": {
+            "points": [
+              [
+                -0.225,
+                -0.05
+              ],
+              [
+                0.225,
+                -0.05
+              ],
+              [
+                0.25,
+                -0.025
+              ],
+              [
+                0.25,
+                0.025
+              ],
+              [
+                0.225,
+                0.05
+              ],
+              [
+                -0.225,
+                0.05
+              ],
+              [
+                -0.25,
+                0.025
+              ],
+              [
+                -0.25,
+                -0.025
+              ]
+            ]
+          },
+          "closed": false
+        }
       },
       "parent": "seat-driver",
       "attachment": {
         "parentSocket": "seat-driver.seat-base",
         "localStart": [
           0,
-          0.06,
-          -0.1
+          -0.33,
+          -0.01
         ],
         "localEnd": [
           0,
-          0.5,
-          0.2
+          -0.33,
+          -0.01
         ],
         "contactType": "butt",
         "embedDepth": 0.002,
@@ -13913,9 +14677,9 @@
       "dimensions": {
         "width": 0.5,
         "height": 0.66,
-        "depth": 0.14,
+        "depth": 0.1,
         "units": "meters",
-        "confidence": 0.92
+        "confidence": 0.86
       },
       "transform": {
         "position": [
@@ -13929,9 +14693,9 @@
           0
         ],
         "scale": [
-          0.5,
-          0.66,
-          0.14
+          1.0,
+          1.0,
+          1.0
         ]
       },
       "actionProfile": {
@@ -13993,7 +14757,13 @@
       "deformations": [],
       "joints": [],
       "seams": [],
-      "localFeatures": [],
+      "localFeatures": [
+        {
+          "name": "靠背腰承曲面",
+          "kind": "surface",
+          "note": "curve-sweep：中部前弓 20mm、等厚 0.10 壳（宽 0.50）"
+        }
+      ],
       "surfaceDetail": {
         "macroRoughness": 0,
         "microRoughness": 0,
@@ -14014,7 +14784,8 @@
         "secondaryAlbedo": "rgba(232, 224, 208, 1.0)",
         "materialClass": "fabric",
         "materialClassConfidence": 0.9
-      }
+      },
+      "notes": "治粗糙：靠背 box→curve-sweep，中部前弓 20mm（腰承托）；附件退化为基点接触（零长度），保持附件契约完整且不走圆柱端点分支。"
     },
     {
       "id": "seat-driver-headrest",
@@ -14173,28 +14944,106 @@
       "role": "interior",
       "importance": 0.95,
       "confidence": 0.92,
-      "primitive": "box",
+      "primitive": "curve-sweep",
       "topologyClass": "assembled-solid",
       "topologyRationale": "box 适合该部件的可展拓扑",
       "geometryDescriptor": {
-        "topologyIntent": "hard-surface precise",
+        "topologyIntent": "crowned cushion: rounded-rect section swept along arc spine",
         "edgeTreatment": {
-          "type": "bevel",
-          "bevelRadius": 0.008,
+          "type": "rounded",
+          "bevelRadius": 0.03,
           "segments": 2
         },
-        "deformationStack": [],
+        "deformationStack": [
+          {
+            "type": "bulge",
+            "axis": "y",
+            "factor": 0.015,
+            "notes": "坐垫纵向上拱 15mm（弧路径中点 y+0.020 vs 两端 +0.005），截面 0.52×0.13 圆角矩形——人体承托曲面，替代原直板"
+          }
+        ],
         "uvStrategy": "generated procedural coordinates",
-        "normalStrategy": "vertex normals from generated geometry"
+        "normalStrategy": "vertex normals from generated geometry",
+        "curveSweep": {
+          "spine": [
+            [
+              0,
+              0.005,
+              -0.25
+            ],
+            [
+              0,
+              0.02,
+              0
+            ],
+            [
+              0,
+              0.005,
+              0.25
+            ]
+          ],
+          "crossSection": {
+            "points": [
+              [
+                -0.23,
+                -0.065
+              ],
+              [
+                0.23,
+                -0.065
+              ],
+              [
+                0.26,
+                -0.035
+              ],
+              [
+                0.26,
+                0.035
+              ],
+              [
+                0.23,
+                0.065
+              ],
+              [
+                -0.23,
+                0.065
+              ],
+              [
+                -0.26,
+                0.035
+              ],
+              [
+                -0.26,
+                -0.035
+              ]
+            ]
+          },
+          "closed": false
+        }
       },
       "parent": "cabin-interior",
-      "attachment": null,
+      "attachment": {
+        "parentSocket": "cabin-interior.floor",
+        "localStart": [
+          0,
+          0,
+          0
+        ],
+        "localEnd": [
+          0,
+          0,
+          0
+        ],
+        "contactType": "butt",
+        "embedDepth": 0.002,
+        "gapTolerance": 0.003
+      },
       "dimensions": {
         "width": 0.52,
-        "height": 0.14,
+        "height": 0.13,
         "depth": 0.5,
         "units": "meters",
-        "confidence": 0.92
+        "confidence": 0.86
       },
       "transform": {
         "position": [
@@ -14208,9 +15057,9 @@
           0
         ],
         "scale": [
-          0.52,
-          0.14,
-          0.5
+          1.0,
+          1.0,
+          1.0
         ]
       },
       "actionProfile": {
@@ -14274,9 +15123,9 @@
       "seams": [],
       "localFeatures": [
         {
-          "name": "菱格绗缝+打孔中央",
-          "kind": "stitch-pattern",
-          "note": "Canvas bump 菱格贴图"
+          "name": "坐垫承托曲面",
+          "kind": "surface",
+          "note": "curve-sweep：纵向上拱 15mm、截面 0.52×0.13 圆角矩形"
         }
       ],
       "surfaceDetail": {
@@ -14303,7 +15152,8 @@
         "secondaryAlbedo": "rgba(232, 224, 208, 1.0)",
         "materialClass": "fabric",
         "materialClassConfidence": 0.9
-      }
+      },
+      "notes": "治粗糙：坐垫 box→curve-sweep，纵向上拱 15mm + 圆角矩形截面；附件为零长度点接触（curve-sweep 属附件基元，须完整附件且零长度才不走圆柱端点分支）。"
     },
     {
       "id": "seat-passenger-back",
@@ -14312,32 +15162,95 @@
       "role": "detail",
       "importance": 0.9,
       "confidence": 0.92,
-      "primitive": "box",
+      "primitive": "curve-sweep",
       "topologyClass": "assembled-solid",
       "topologyRationale": "box 适合该部件的可展拓扑",
       "geometryDescriptor": {
-        "topologyIntent": "hard-surface precise",
+        "topologyIntent": "lumbar-curved backrest: rounded-rect section bowed toward occupant",
         "edgeTreatment": {
-          "type": "bevel",
-          "bevelRadius": 0.008,
+          "type": "rounded",
+          "bevelRadius": 0.025,
           "segments": 2
         },
-        "deformationStack": [],
+        "deformationStack": [
+          {
+            "type": "bulge",
+            "axis": "z",
+            "factor": 0.02,
+            "notes": "靠背中部向前（乘员方向）弓曲 20mm（弧路径中点 z-0.030 vs 两端 -0.010），等厚 0.10 壳——腰背承托，替代原直板"
+          }
+        ],
         "uvStrategy": "generated procedural coordinates",
-        "normalStrategy": "vertex normals from generated geometry"
+        "normalStrategy": "vertex normals from generated geometry",
+        "curveSweep": {
+          "spine": [
+            [
+              0,
+              -0.33,
+              -0.01
+            ],
+            [
+              0,
+              0,
+              -0.03
+            ],
+            [
+              0,
+              0.33,
+              -0.01
+            ]
+          ],
+          "crossSection": {
+            "points": [
+              [
+                -0.225,
+                -0.05
+              ],
+              [
+                0.225,
+                -0.05
+              ],
+              [
+                0.25,
+                -0.025
+              ],
+              [
+                0.25,
+                0.025
+              ],
+              [
+                0.225,
+                0.05
+              ],
+              [
+                -0.225,
+                0.05
+              ],
+              [
+                -0.25,
+                0.025
+              ],
+              [
+                -0.25,
+                -0.025
+              ]
+            ]
+          },
+          "closed": false
+        }
       },
       "parent": "seat-passenger",
       "attachment": {
         "parentSocket": "seat-passenger.seat-base",
         "localStart": [
           0,
-          0.06,
-          -0.1
+          -0.33,
+          -0.01
         ],
         "localEnd": [
           0,
-          0.5,
-          0.2
+          -0.33,
+          -0.01
         ],
         "contactType": "butt",
         "embedDepth": 0.002,
@@ -14346,9 +15259,9 @@
       "dimensions": {
         "width": 0.5,
         "height": 0.66,
-        "depth": 0.14,
+        "depth": 0.1,
         "units": "meters",
-        "confidence": 0.92
+        "confidence": 0.86
       },
       "transform": {
         "position": [
@@ -14362,9 +15275,9 @@
           0
         ],
         "scale": [
-          0.5,
-          0.66,
-          0.14
+          1.0,
+          1.0,
+          1.0
         ]
       },
       "actionProfile": {
@@ -14426,7 +15339,13 @@
       "deformations": [],
       "joints": [],
       "seams": [],
-      "localFeatures": [],
+      "localFeatures": [
+        {
+          "name": "靠背腰承曲面",
+          "kind": "surface",
+          "note": "curve-sweep：中部前弓 20mm、等厚 0.10 壳（宽 0.50）"
+        }
+      ],
       "surfaceDetail": {
         "macroRoughness": 0,
         "microRoughness": 0,
@@ -14447,7 +15366,8 @@
         "secondaryAlbedo": "rgba(232, 224, 208, 1.0)",
         "materialClass": "fabric",
         "materialClassConfidence": 0.9
-      }
+      },
+      "notes": "治粗糙：靠背 box→curve-sweep，中部前弓 20mm（腰承托）；附件退化为基点接触（零长度），保持附件契约完整且不走圆柱端点分支。"
     },
     {
       "id": "seat-passenger-headrest",
@@ -14606,28 +15526,106 @@
       "role": "interior",
       "importance": 0.95,
       "confidence": 0.92,
-      "primitive": "box",
+      "primitive": "curve-sweep",
       "topologyClass": "assembled-solid",
       "topologyRationale": "box 适合该部件的可展拓扑",
       "geometryDescriptor": {
-        "topologyIntent": "hard-surface precise",
+        "topologyIntent": "crowned cushion: rounded-rect section swept along arc spine",
         "edgeTreatment": {
-          "type": "bevel",
-          "bevelRadius": 0.008,
+          "type": "rounded",
+          "bevelRadius": 0.03,
           "segments": 2
         },
-        "deformationStack": [],
+        "deformationStack": [
+          {
+            "type": "bulge",
+            "axis": "y",
+            "factor": 0.015,
+            "notes": "坐垫纵向上拱 15mm（弧路径中点 y+0.020 vs 两端 +0.005），截面 0.56×0.13 圆角矩形——人体承托曲面，替代原直板"
+          }
+        ],
         "uvStrategy": "generated procedural coordinates",
-        "normalStrategy": "vertex normals from generated geometry"
+        "normalStrategy": "vertex normals from generated geometry",
+        "curveSweep": {
+          "spine": [
+            [
+              0,
+              0.005,
+              -0.26
+            ],
+            [
+              0,
+              0.02,
+              0
+            ],
+            [
+              0,
+              0.005,
+              0.26
+            ]
+          ],
+          "crossSection": {
+            "points": [
+              [
+                -0.25,
+                -0.065
+              ],
+              [
+                0.25,
+                -0.065
+              ],
+              [
+                0.28,
+                -0.035
+              ],
+              [
+                0.28,
+                0.035
+              ],
+              [
+                0.25,
+                0.065
+              ],
+              [
+                -0.25,
+                0.065
+              ],
+              [
+                -0.28,
+                0.035
+              ],
+              [
+                -0.28,
+                -0.035
+              ]
+            ]
+          },
+          "closed": false
+        }
       },
       "parent": "cabin-interior",
-      "attachment": null,
+      "attachment": {
+        "parentSocket": "cabin-interior.floor",
+        "localStart": [
+          0,
+          0,
+          0
+        ],
+        "localEnd": [
+          0,
+          0,
+          0
+        ],
+        "contactType": "butt",
+        "embedDepth": 0.002,
+        "gapTolerance": 0.003
+      },
       "dimensions": {
         "width": 0.56,
-        "height": 0.14,
-        "depth": 0.52,
+        "height": 0.13,
+        "depth": 0.5,
         "units": "meters",
-        "confidence": 0.92
+        "confidence": 0.86
       },
       "transform": {
         "position": [
@@ -14641,9 +15639,9 @@
           0
         ],
         "scale": [
-          0.56,
-          0.14,
-          0.52
+          1.0,
+          1.0,
+          1.0
         ]
       },
       "actionProfile": {
@@ -14707,9 +15705,9 @@
       "seams": [],
       "localFeatures": [
         {
-          "name": "菱格绗缝+打孔中央",
-          "kind": "stitch-pattern",
-          "note": "Canvas bump 菱格贴图"
+          "name": "坐垫承托曲面",
+          "kind": "surface",
+          "note": "curve-sweep：纵向上拱 15mm、截面 0.56×0.13 圆角矩形"
         }
       ],
       "surfaceDetail": {
@@ -14736,7 +15734,8 @@
         "secondaryAlbedo": "rgba(232, 224, 208, 1.0)",
         "materialClass": "fabric",
         "materialClassConfidence": 0.9
-      }
+      },
+      "notes": "治粗糙：坐垫 box→curve-sweep，纵向上拱 15mm + 圆角矩形截面；附件为零长度点接触（curve-sweep 属附件基元，须完整附件且零长度才不走圆柱端点分支）。"
     },
     {
       "id": "seat-rear-l-back",
@@ -14745,32 +15744,95 @@
       "role": "detail",
       "importance": 0.9,
       "confidence": 0.92,
-      "primitive": "box",
+      "primitive": "curve-sweep",
       "topologyClass": "assembled-solid",
       "topologyRationale": "box 适合该部件的可展拓扑",
       "geometryDescriptor": {
-        "topologyIntent": "hard-surface precise",
+        "topologyIntent": "lumbar-curved backrest: rounded-rect section bowed toward occupant",
         "edgeTreatment": {
-          "type": "bevel",
-          "bevelRadius": 0.008,
+          "type": "rounded",
+          "bevelRadius": 0.025,
           "segments": 2
         },
-        "deformationStack": [],
+        "deformationStack": [
+          {
+            "type": "bulge",
+            "axis": "z",
+            "factor": 0.02,
+            "notes": "靠背中部向前（乘员方向）弓曲 20mm（弧路径中点 z-0.030 vs 两端 -0.010），等厚 0.10 壳——腰背承托，替代原直板"
+          }
+        ],
         "uvStrategy": "generated procedural coordinates",
-        "normalStrategy": "vertex normals from generated geometry"
+        "normalStrategy": "vertex normals from generated geometry",
+        "curveSweep": {
+          "spine": [
+            [
+              0,
+              -0.33,
+              -0.01
+            ],
+            [
+              0,
+              0,
+              -0.03
+            ],
+            [
+              0,
+              0.33,
+              -0.01
+            ]
+          ],
+          "crossSection": {
+            "points": [
+              [
+                -0.245,
+                -0.05
+              ],
+              [
+                0.245,
+                -0.05
+              ],
+              [
+                0.27,
+                -0.025
+              ],
+              [
+                0.27,
+                0.025
+              ],
+              [
+                0.245,
+                0.05
+              ],
+              [
+                -0.245,
+                0.05
+              ],
+              [
+                -0.27,
+                0.025
+              ],
+              [
+                -0.27,
+                -0.025
+              ]
+            ]
+          },
+          "closed": false
+        }
       },
       "parent": "seat-rear-l",
       "attachment": {
         "parentSocket": "seat-rear-l.seat-base",
         "localStart": [
           0,
-          0.06,
-          -0.1
+          -0.33,
+          -0.01
         ],
         "localEnd": [
           0,
-          0.5,
-          0.2
+          -0.33,
+          -0.01
         ],
         "contactType": "butt",
         "embedDepth": 0.002,
@@ -14779,9 +15841,9 @@
       "dimensions": {
         "width": 0.54,
         "height": 0.66,
-        "depth": 0.14,
+        "depth": 0.1,
         "units": "meters",
-        "confidence": 0.92
+        "confidence": 0.86
       },
       "transform": {
         "position": [
@@ -14795,9 +15857,9 @@
           0
         ],
         "scale": [
-          0.54,
-          0.66,
-          0.14
+          1.0,
+          1.0,
+          1.0
         ]
       },
       "actionProfile": {
@@ -14859,7 +15921,13 @@
       "deformations": [],
       "joints": [],
       "seams": [],
-      "localFeatures": [],
+      "localFeatures": [
+        {
+          "name": "靠背腰承曲面",
+          "kind": "surface",
+          "note": "curve-sweep：中部前弓 20mm、等厚 0.10 壳（宽 0.54）"
+        }
+      ],
       "surfaceDetail": {
         "macroRoughness": 0,
         "microRoughness": 0,
@@ -14880,7 +15948,8 @@
         "secondaryAlbedo": "rgba(232, 224, 208, 1.0)",
         "materialClass": "fabric",
         "materialClassConfidence": 0.9
-      }
+      },
+      "notes": "治粗糙：靠背 box→curve-sweep，中部前弓 20mm（腰承托）；附件退化为基点接触（零长度），保持附件契约完整且不走圆柱端点分支。"
     },
     {
       "id": "seat-rear-l-headrest",
@@ -15335,28 +16404,106 @@
       "role": "interior",
       "importance": 0.95,
       "confidence": 0.92,
-      "primitive": "box",
+      "primitive": "curve-sweep",
       "topologyClass": "assembled-solid",
       "topologyRationale": "box 适合该部件的可展拓扑",
       "geometryDescriptor": {
-        "topologyIntent": "hard-surface precise",
+        "topologyIntent": "crowned cushion: rounded-rect section swept along arc spine",
         "edgeTreatment": {
-          "type": "bevel",
-          "bevelRadius": 0.008,
+          "type": "rounded",
+          "bevelRadius": 0.03,
           "segments": 2
         },
-        "deformationStack": [],
+        "deformationStack": [
+          {
+            "type": "bulge",
+            "axis": "y",
+            "factor": 0.015,
+            "notes": "坐垫纵向上拱 15mm（弧路径中点 y+0.020 vs 两端 +0.005），截面 0.56×0.13 圆角矩形——人体承托曲面，替代原直板"
+          }
+        ],
         "uvStrategy": "generated procedural coordinates",
-        "normalStrategy": "vertex normals from generated geometry"
+        "normalStrategy": "vertex normals from generated geometry",
+        "curveSweep": {
+          "spine": [
+            [
+              0,
+              0.005,
+              -0.26
+            ],
+            [
+              0,
+              0.02,
+              0
+            ],
+            [
+              0,
+              0.005,
+              0.26
+            ]
+          ],
+          "crossSection": {
+            "points": [
+              [
+                -0.25,
+                -0.065
+              ],
+              [
+                0.25,
+                -0.065
+              ],
+              [
+                0.28,
+                -0.035
+              ],
+              [
+                0.28,
+                0.035
+              ],
+              [
+                0.25,
+                0.065
+              ],
+              [
+                -0.25,
+                0.065
+              ],
+              [
+                -0.28,
+                0.035
+              ],
+              [
+                -0.28,
+                -0.035
+              ]
+            ]
+          },
+          "closed": false
+        }
       },
       "parent": "cabin-interior",
-      "attachment": null,
+      "attachment": {
+        "parentSocket": "cabin-interior.floor",
+        "localStart": [
+          0,
+          0,
+          0
+        ],
+        "localEnd": [
+          0,
+          0,
+          0
+        ],
+        "contactType": "butt",
+        "embedDepth": 0.002,
+        "gapTolerance": 0.003
+      },
       "dimensions": {
         "width": 0.56,
-        "height": 0.14,
-        "depth": 0.52,
+        "height": 0.13,
+        "depth": 0.5,
         "units": "meters",
-        "confidence": 0.92
+        "confidence": 0.86
       },
       "transform": {
         "position": [
@@ -15370,9 +16517,9 @@
           0
         ],
         "scale": [
-          0.56,
-          0.14,
-          0.52
+          1.0,
+          1.0,
+          1.0
         ]
       },
       "actionProfile": {
@@ -15436,9 +16583,9 @@
       "seams": [],
       "localFeatures": [
         {
-          "name": "菱格绗缝+打孔中央",
-          "kind": "stitch-pattern",
-          "note": "Canvas bump 菱格贴图"
+          "name": "坐垫承托曲面",
+          "kind": "surface",
+          "note": "curve-sweep：纵向上拱 15mm、截面 0.56×0.13 圆角矩形"
         }
       ],
       "surfaceDetail": {
@@ -15465,7 +16612,8 @@
         "secondaryAlbedo": "rgba(232, 224, 208, 1.0)",
         "materialClass": "fabric",
         "materialClassConfidence": 0.9
-      }
+      },
+      "notes": "治粗糙：坐垫 box→curve-sweep，纵向上拱 15mm + 圆角矩形截面；附件为零长度点接触（curve-sweep 属附件基元，须完整附件且零长度才不走圆柱端点分支）。"
     },
     {
       "id": "seat-rear-r-back",
@@ -15474,32 +16622,95 @@
       "role": "detail",
       "importance": 0.9,
       "confidence": 0.92,
-      "primitive": "box",
+      "primitive": "curve-sweep",
       "topologyClass": "assembled-solid",
       "topologyRationale": "box 适合该部件的可展拓扑",
       "geometryDescriptor": {
-        "topologyIntent": "hard-surface precise",
+        "topologyIntent": "lumbar-curved backrest: rounded-rect section bowed toward occupant",
         "edgeTreatment": {
-          "type": "bevel",
-          "bevelRadius": 0.008,
+          "type": "rounded",
+          "bevelRadius": 0.025,
           "segments": 2
         },
-        "deformationStack": [],
+        "deformationStack": [
+          {
+            "type": "bulge",
+            "axis": "z",
+            "factor": 0.02,
+            "notes": "靠背中部向前（乘员方向）弓曲 20mm（弧路径中点 z-0.030 vs 两端 -0.010），等厚 0.10 壳——腰背承托，替代原直板"
+          }
+        ],
         "uvStrategy": "generated procedural coordinates",
-        "normalStrategy": "vertex normals from generated geometry"
+        "normalStrategy": "vertex normals from generated geometry",
+        "curveSweep": {
+          "spine": [
+            [
+              0,
+              -0.33,
+              -0.01
+            ],
+            [
+              0,
+              0,
+              -0.03
+            ],
+            [
+              0,
+              0.33,
+              -0.01
+            ]
+          ],
+          "crossSection": {
+            "points": [
+              [
+                -0.245,
+                -0.05
+              ],
+              [
+                0.245,
+                -0.05
+              ],
+              [
+                0.27,
+                -0.025
+              ],
+              [
+                0.27,
+                0.025
+              ],
+              [
+                0.245,
+                0.05
+              ],
+              [
+                -0.245,
+                0.05
+              ],
+              [
+                -0.27,
+                0.025
+              ],
+              [
+                -0.27,
+                -0.025
+              ]
+            ]
+          },
+          "closed": false
+        }
       },
       "parent": "seat-rear-r",
       "attachment": {
         "parentSocket": "seat-rear-r.seat-base",
         "localStart": [
           0,
-          0.06,
-          -0.1
+          -0.33,
+          -0.01
         ],
         "localEnd": [
           0,
-          0.5,
-          0.2
+          -0.33,
+          -0.01
         ],
         "contactType": "butt",
         "embedDepth": 0.002,
@@ -15508,9 +16719,9 @@
       "dimensions": {
         "width": 0.54,
         "height": 0.66,
-        "depth": 0.14,
+        "depth": 0.1,
         "units": "meters",
-        "confidence": 0.92
+        "confidence": 0.86
       },
       "transform": {
         "position": [
@@ -15524,9 +16735,9 @@
           0
         ],
         "scale": [
-          0.54,
-          0.66,
-          0.14
+          1.0,
+          1.0,
+          1.0
         ]
       },
       "actionProfile": {
@@ -15588,7 +16799,13 @@
       "deformations": [],
       "joints": [],
       "seams": [],
-      "localFeatures": [],
+      "localFeatures": [
+        {
+          "name": "靠背腰承曲面",
+          "kind": "surface",
+          "note": "curve-sweep：中部前弓 20mm、等厚 0.10 壳（宽 0.54）"
+        }
+      ],
       "surfaceDetail": {
         "macroRoughness": 0,
         "microRoughness": 0,
@@ -15609,7 +16826,8 @@
         "secondaryAlbedo": "rgba(232, 224, 208, 1.0)",
         "materialClass": "fabric",
         "materialClassConfidence": 0.9
-      }
+      },
+      "notes": "治粗糙：靠背 box→curve-sweep，中部前弓 20mm（腰承托）；附件退化为基点接触（零长度），保持附件契约完整且不走圆柱端点分支。"
     },
     {
       "id": "seat-rear-r-headrest",
@@ -19099,34 +20317,115 @@
       "role": "detail",
       "importance": 0.9,
       "confidence": 0.86,
-      "primitive": "box",
+      "primitive": "extrude",
       "topologyClass": "assembled-solid",
       "topologyRationale": "薄板/回转体，硬表面可展拓扑",
       "geometryDescriptor": {
-        "topologyIntent": "hard-surface precise",
+        "topologyIntent": "brushed chrome frame ring with rectangular opening (EX-27)",
         "edgeTreatment": {
-          "type": "bevel",
-          "bevelRadius": 0.008,
+          "type": "rounded",
+          "bevelRadius": 0.02,
           "segments": 2
         },
-        "deformationStack": [],
+        "deformationStack": [
+          {
+            "type": "fillet",
+            "axis": "profile-x-y",
+            "radius": 0.02,
+            "segments": 2,
+            "notes": "EX-27 拉丝银/铬外框：外 0.17×0.50 / 内开孔 0.145×0.435，四周留 ~12mm 银边"
+          }
+        ],
         "uvStrategy": "generated procedural coordinates",
-        "normalStrategy": "vertex normals from generated geometry"
+        "normalStrategy": "vertex normals from generated geometry",
+        "profile2D": {
+          "points": [
+            [
+              -0.085,
+              -0.225
+            ],
+            [
+              -0.07,
+              -0.25
+            ],
+            [
+              0.07,
+              -0.25
+            ],
+            [
+              0.085,
+              -0.225
+            ],
+            [
+              0.085,
+              0.225
+            ],
+            [
+              0.07,
+              0.25
+            ],
+            [
+              -0.07,
+              0.25
+            ],
+            [
+              -0.085,
+              0.225
+            ]
+          ],
+          "depth": 0.006,
+          "holes": [
+            [
+              [
+                -0.0525,
+                -0.2175
+              ],
+              [
+                -0.0725,
+                -0.1975
+              ],
+              [
+                -0.0725,
+                0.1975
+              ],
+              [
+                -0.0525,
+                0.2175
+              ],
+              [
+                0.0525,
+                0.2175
+              ],
+              [
+                0.0725,
+                0.1975
+              ],
+              [
+                0.0725,
+                -0.1975
+              ],
+              [
+                -0.0525,
+                -0.2175
+              ]
+            ]
+          ]
+        }
       },
       "parent": "taillamp-l",
       "attachment": null,
       "dimensions": {
-        "width": 0.2,
-        "height": 0.72,
-        "depth": 0.008,
+        "width": 0.17,
+        "height": 0.5,
+        "depth": 0.006,
         "units": "meters",
         "confidence": 0.86
       },
       "transform": {
         "position": [
-          0,
-          0,
-          -0.004
+          0.0,
+          0.0,
+          -0.012
         ],
         "rotation": [
           0,
@@ -19134,9 +20433,9 @@
           0
         ],
         "scale": [
-          0.2,
-          0.72,
-          0.008
+          1.0,
+          1.0,
+          1.0
         ]
       },
       "actionProfile": {
@@ -19200,9 +20499,9 @@
       "seams": [],
       "localFeatures": [
         {
-          "name": "宫灯尾灯拉丝银框 L",
-          "kind": "emissive-face",
-          "note": "EX-27 拉丝银/铬外框：0.20×0.72 薄板贴在灯体后脸（灯体 0.18×0.69），四周留 10mm 银边；世界 z[-2.868,-2.860]。"
+          "name": "拉丝银铬框",
+          "kind": "proportion",
+          "note": "EX-27：外 0.17×0.50，内开孔 0.145×0.435（原实心板会挡住内部发光面）"
         }
       ],
       "surfaceDetail": {
@@ -19226,7 +20525,7 @@
         "materialClass": "metal",
         "materialClassConfidence": 0.86
       },
-      "notes": "EX-27 拉丝银/铬外框：0.20×0.72 薄板贴在灯体后脸（灯体 0.18×0.69），四周留 10mm 银边；世界 z[-2.868,-2.860]。"
+      "notes": "EX-27：铬框由实心板改为带孔环（extrude+hole），世界 z[-2.880,-2.874]，堆栈最前（后视者最近，射线检测实证）。"
     },
     {
       "id": "lantern-emitter-l",
@@ -19252,17 +20551,17 @@
       "parent": "taillamp-l",
       "attachment": null,
       "dimensions": {
-        "width": 0.16,
-        "height": 0.64,
-        "depth": 0.006,
+        "width": 0.135,
+        "height": 0.425,
+        "depth": 0.0025,
         "units": "meters",
         "confidence": 0.86
       },
       "transform": {
         "position": [
-          0,
-          0,
-          -0.012
+          0.0,
+          0.0,
+          -0.0055
         ],
         "rotation": [
           0,
@@ -19270,9 +20569,9 @@
           0
         ],
         "scale": [
-          0.16,
-          0.64,
-          0.006
+          0.135,
+          0.425,
+          0.0025
         ]
       },
       "actionProfile": {
@@ -19327,18 +20626,18 @@
           "debrisMaterial": "base"
         }
       },
-      "material": "lamp-red",
+      "material": "housing-dark",
       "materialLayers": [
-        "lamp-red"
+        "housing-dark"
       ],
       "deformations": [],
       "joints": [],
       "seams": [],
       "localFeatures": [
         {
-          "name": "尾灯红色灯带场 L",
-          "kind": "emissive-face",
-          "note": "EX-28 上/下各 3 条红色横带（上 1 长 2 短、下部镜像）由集成层 Canvas emissiveMap 绘制；世界 z[-2.875,-2.869]，在银框外 1mm。"
+          "name": "暗场内衬 + 3+3 红横带图案",
+          "kind": "emissive-pattern",
+          "note": "EX-28：3+3 红横带（上 1 长 2 短、下部镜像）由集成层 Canvas 分区图集绘制在本暗场上（几何灯带撤除前与金屏同层、悬在暗场前 2.5mm，现内嵌暗场发光面）；间隙纯黑零发光；随刹车联动增强。"
         }
       ],
       "surfaceDetail": {
@@ -19357,12 +20656,12 @@
       "details": [],
       "fidelityTier": "hero",
       "colorMaterialRecipe": {
-        "dominantAlbedo": "rgba(181, 31, 44, 1.0)",
-        "secondaryAlbedo": "rgba(181, 31, 44, 1.0)",
-        "materialClass": "fabric",
+        "dominantAlbedo": "rgba(26, 26, 28, 1.0)",
+        "secondaryAlbedo": "rgba(26, 26, 28, 1.0)",
+        "materialClass": "metal",
         "materialClassConfidence": 0.86
       },
-      "notes": "EX-28 上/下各 3 条红色横带（上 1 长 2 短、下部镜像）由集成层 Canvas emissiveMap 绘制；世界 z[-2.875,-2.869]，在银框外 1mm。"
+      "notes": "暗场内衬：世界 z[-2.8718,-2.8693]，在红带场后 1mm；小于框开孔（0.135×0.425 vs 0.145×0.435），让红晕环显形。"
     },
     {
       "id": "lantern-signature-l",
@@ -19388,17 +20687,17 @@
       "parent": "taillamp-l",
       "attachment": null,
       "dimensions": {
-        "width": 0.1,
-        "height": 0.3,
-        "depth": 0.004,
+        "width": 0.09,
+        "height": 0.135,
+        "depth": 0.002,
         "units": "meters",
         "confidence": 0.86
       },
       "transform": {
         "position": [
-          0,
-          0,
-          -0.02
+          0.0,
+          0.0,
+          -0.0085
         ],
         "rotation": [
           0,
@@ -19406,9 +20705,9 @@
           0
         ],
         "scale": [
-          0.1,
-          0.3,
-          0.004
+          0.09,
+          0.135,
+          0.002
         ]
       },
       "actionProfile": {
@@ -19472,9 +20771,9 @@
       "seams": [],
       "localFeatures": [
         {
-          "name": "尾灯中部金色点阵屏 L",
+          "name": "尾灯中部金色点阵屏",
           "kind": "emissive-face",
-          "note": "EX-29 最高视觉权重的身份特征：中部金色点阵屏显示展翅鹰形/羽翼图案，由集成层 Canvas emissiveMap 绘制；世界 z[-2.882,-2.878]，在红带场外 3mm。"
+          "note": "EX-29 最高视觉权重身份特征：16×24 金色点阵展翅鹰形/羽翼，由集成层 Canvas emissiveMap 绘制；面板 0.09×0.135（2:3）匹配点阵比例"
         }
       ],
       "surfaceDetail": {
@@ -19498,7 +20797,7 @@
         "materialClass": "fabric",
         "materialClassConfidence": 0.86
       },
-      "notes": "EX-29 最高视觉权重的身份特征：中部金色点阵屏显示展翅鹰形/羽翼图案，由集成层 Canvas emissiveMap 绘制；世界 z[-2.882,-2.878]，在红带场外 3mm。"
+      "notes": "EX-29：金色点阵屏 0.09×0.135（2:3，匹配 16×24 点阵），世界 z[-2.8745,-2.8725]，与红带同层居中（铬框之后 1mm）。"
     },
     {
       "id": "lantern-bezel-r",
@@ -19507,34 +20806,115 @@
       "role": "detail",
       "importance": 0.9,
       "confidence": 0.86,
-      "primitive": "box",
+      "primitive": "extrude",
       "topologyClass": "assembled-solid",
       "topologyRationale": "薄板/回转体，硬表面可展拓扑",
       "geometryDescriptor": {
-        "topologyIntent": "hard-surface precise",
+        "topologyIntent": "brushed chrome frame ring with rectangular opening (EX-27)",
         "edgeTreatment": {
-          "type": "bevel",
-          "bevelRadius": 0.008,
+          "type": "rounded",
+          "bevelRadius": 0.02,
           "segments": 2
         },
-        "deformationStack": [],
+        "deformationStack": [
+          {
+            "type": "fillet",
+            "axis": "profile-x-y",
+            "radius": 0.02,
+            "segments": 2,
+            "notes": "EX-27 拉丝银/铬外框：外 0.17×0.50 / 内开孔 0.145×0.435，四周留 ~12mm 银边"
+          }
+        ],
         "uvStrategy": "generated procedural coordinates",
-        "normalStrategy": "vertex normals from generated geometry"
+        "normalStrategy": "vertex normals from generated geometry",
+        "profile2D": {
+          "points": [
+            [
+              -0.085,
+              -0.225
+            ],
+            [
+              -0.07,
+              -0.25
+            ],
+            [
+              0.07,
+              -0.25
+            ],
+            [
+              0.085,
+              -0.225
+            ],
+            [
+              0.085,
+              0.225
+            ],
+            [
+              0.07,
+              0.25
+            ],
+            [
+              -0.07,
+              0.25
+            ],
+            [
+              -0.085,
+              0.225
+            ]
+          ],
+          "depth": 0.006,
+          "holes": [
+            [
+              [
+                -0.0525,
+                -0.2175
+              ],
+              [
+                -0.0725,
+                -0.1975
+              ],
+              [
+                -0.0725,
+                0.1975
+              ],
+              [
+                -0.0525,
+                0.2175
+              ],
+              [
+                0.0525,
+                0.2175
+              ],
+              [
+                0.0725,
+                0.1975
+              ],
+              [
+                0.0725,
+                -0.1975
+              ],
+              [
+                -0.0525,
+                -0.2175
+              ]
+            ]
+          ]
+        }
       },
       "parent": "taillamp-r",
       "attachment": null,
       "dimensions": {
-        "width": 0.2,
-        "height": 0.72,
-        "depth": 0.008,
+        "width": 0.17,
+        "height": 0.5,
+        "depth": 0.006,
         "units": "meters",
         "confidence": 0.86
       },
       "transform": {
         "position": [
-          0,
-          0,
-          -0.004
+          0.0,
+          0.0,
+          -0.012
         ],
         "rotation": [
           0,
@@ -19542,9 +20922,9 @@
           0
         ],
         "scale": [
-          0.2,
-          0.72,
-          0.008
+          1.0,
+          1.0,
+          1.0
         ]
       },
       "actionProfile": {
@@ -19608,9 +20988,9 @@
       "seams": [],
       "localFeatures": [
         {
-          "name": "宫灯尾灯拉丝银框 R",
-          "kind": "emissive-face",
-          "note": "EX-27 拉丝银/铬外框：0.20×0.72 薄板贴在灯体后脸（灯体 0.18×0.69），四周留 10mm 银边；世界 z[-2.868,-2.860]。"
+          "name": "拉丝银铬框",
+          "kind": "proportion",
+          "note": "EX-27：外 0.17×0.50，内开孔 0.145×0.435（原实心板会挡住内部发光面）"
         }
       ],
       "surfaceDetail": {
@@ -19634,7 +21014,7 @@
         "materialClass": "metal",
         "materialClassConfidence": 0.86
       },
-      "notes": "EX-27 拉丝银/铬外框：0.20×0.72 薄板贴在灯体后脸（灯体 0.18×0.69），四周留 10mm 银边；世界 z[-2.868,-2.860]。"
+      "notes": "EX-27：铬框由实心板改为带孔环（extrude+hole），世界 z[-2.880,-2.874]，堆栈最前（后视者最近，射线检测实证）。"
     },
     {
       "id": "lantern-emitter-r",
@@ -19660,17 +21040,17 @@
       "parent": "taillamp-r",
       "attachment": null,
       "dimensions": {
-        "width": 0.16,
-        "height": 0.64,
-        "depth": 0.006,
+        "width": 0.135,
+        "height": 0.425,
+        "depth": 0.0025,
         "units": "meters",
         "confidence": 0.86
       },
       "transform": {
         "position": [
-          0,
-          0,
-          -0.012
+          0.0,
+          0.0,
+          -0.0055
         ],
         "rotation": [
           0,
@@ -19678,9 +21058,9 @@
           0
         ],
         "scale": [
-          0.16,
-          0.64,
-          0.006
+          0.135,
+          0.425,
+          0.0025
         ]
       },
       "actionProfile": {
@@ -19735,18 +21115,18 @@
           "debrisMaterial": "base"
         }
       },
-      "material": "lamp-red",
+      "material": "housing-dark",
       "materialLayers": [
-        "lamp-red"
+        "housing-dark"
       ],
       "deformations": [],
       "joints": [],
       "seams": [],
       "localFeatures": [
         {
-          "name": "尾灯红色灯带场 R",
-          "kind": "emissive-face",
-          "note": "EX-28 上/下各 3 条红色横带（上 1 长 2 短、下部镜像）由集成层 Canvas emissiveMap 绘制；世界 z[-2.875,-2.869]，在银框外 1mm。"
+          "name": "暗场内衬 + 3+3 红横带图案",
+          "kind": "emissive-pattern",
+          "note": "EX-28：3+3 红横带（上 1 长 2 短、下部镜像）由集成层 Canvas 分区图集绘制在本暗场上（几何灯带撤除前与金屏同层、悬在暗场前 2.5mm，现内嵌暗场发光面）；间隙纯黑零发光；随刹车联动增强。"
         }
       ],
       "surfaceDetail": {
@@ -19765,12 +21145,12 @@
       "details": [],
       "fidelityTier": "hero",
       "colorMaterialRecipe": {
-        "dominantAlbedo": "rgba(181, 31, 44, 1.0)",
-        "secondaryAlbedo": "rgba(181, 31, 44, 1.0)",
-        "materialClass": "fabric",
+        "dominantAlbedo": "rgba(26, 26, 28, 1.0)",
+        "secondaryAlbedo": "rgba(26, 26, 28, 1.0)",
+        "materialClass": "metal",
         "materialClassConfidence": 0.86
       },
-      "notes": "EX-28 上/下各 3 条红色横带（上 1 长 2 短、下部镜像）由集成层 Canvas emissiveMap 绘制；世界 z[-2.875,-2.869]，在银框外 1mm。"
+      "notes": "暗场内衬：世界 z[-2.8718,-2.8693]，在红带场后 1mm；小于框开孔（0.135×0.425 vs 0.145×0.435），让红晕环显形。"
     },
     {
       "id": "lantern-signature-r",
@@ -19796,17 +21176,17 @@
       "parent": "taillamp-r",
       "attachment": null,
       "dimensions": {
-        "width": 0.1,
-        "height": 0.3,
-        "depth": 0.004,
+        "width": 0.09,
+        "height": 0.135,
+        "depth": 0.002,
         "units": "meters",
         "confidence": 0.86
       },
       "transform": {
         "position": [
-          0,
-          0,
-          -0.02
+          0.0,
+          0.0,
+          -0.0085
         ],
         "rotation": [
           0,
@@ -19814,9 +21194,9 @@
           0
         ],
         "scale": [
-          0.1,
-          0.3,
-          0.004
+          0.09,
+          0.135,
+          0.002
         ]
       },
       "actionProfile": {
@@ -19880,9 +21260,9 @@
       "seams": [],
       "localFeatures": [
         {
-          "name": "尾灯中部金色点阵屏 R",
+          "name": "尾灯中部金色点阵屏",
           "kind": "emissive-face",
-          "note": "EX-29 最高视觉权重的身份特征：中部金色点阵屏显示展翅鹰形/羽翼图案，由集成层 Canvas emissiveMap 绘制；世界 z[-2.882,-2.878]，在红带场外 3mm。"
+          "note": "EX-29 最高视觉权重身份特征：16×24 金色点阵展翅鹰形/羽翼，由集成层 Canvas emissiveMap 绘制；面板 0.09×0.135（2:3）匹配点阵比例"
         }
       ],
       "surfaceDetail": {
@@ -19906,7 +21286,7 @@
         "materialClass": "fabric",
         "materialClassConfidence": 0.86
       },
-      "notes": "EX-29 最高视觉权重的身份特征：中部金色点阵屏显示展翅鹰形/羽翼图案，由集成层 Canvas emissiveMap 绘制；世界 z[-2.882,-2.878]，在红带场外 3mm。"
+      "notes": "EX-29：金色点阵屏 0.09×0.135（2:3，匹配 16×24 点阵），世界 z[-2.8745,-2.8725]，与红带同层居中（铬框之后 1mm）。"
     },
     {
       "id": "emblem-shield",
@@ -20796,9 +22176,9 @@
       "seams": [],
       "localFeatures": [
         {
-          "name": "门把手星辰发光条 FL",
+          "name": "门把手星辰发光条",
           "kind": "emissive-face",
-          "note": "EX-22/F1/F2/F4：门把手凹槽内星辰/星尘发光纹理；薄板贴在把手外侧面（把手外表面 x=±1.0295，本板 x=±1.029~1.035）。"
+          "note": "EX-22：星尘颗粒 + 6 颗锚位亮星由集成层 Canvas emissiveMap 提供（与大灯星点卡共用 lamp-star 贴图），24 颗几何星点已撤除。"
         }
       ],
       "surfaceDetail": {
@@ -20932,9 +22312,9 @@
       "seams": [],
       "localFeatures": [
         {
-          "name": "门把手星辰发光条 FR",
+          "name": "门把手星辰发光条",
           "kind": "emissive-face",
-          "note": "EX-22/F1/F2/F4：门把手凹槽内星辰/星尘发光纹理；薄板贴在把手外侧面（把手外表面 x=±1.0295，本板 x=±1.029~1.035）。"
+          "note": "EX-22：星尘颗粒 + 6 颗锚位亮星由集成层 Canvas emissiveMap 提供（与大灯星点卡共用 lamp-star 贴图），24 颗几何星点已撤除。"
         }
       ],
       "surfaceDetail": {
@@ -21068,9 +22448,9 @@
       "seams": [],
       "localFeatures": [
         {
-          "name": "门把手星辰发光条 RL",
+          "name": "门把手星辰发光条",
           "kind": "emissive-face",
-          "note": "EX-22/F1/F2/F4：门把手凹槽内星辰/星尘发光纹理；薄板贴在把手外侧面（把手外表面 x=±1.0295，本板 x=±1.029~1.035）。"
+          "note": "EX-22：星尘颗粒 + 6 颗锚位亮星由集成层 Canvas emissiveMap 提供（与大灯星点卡共用 lamp-star 贴图），24 颗几何星点已撤除。"
         }
       ],
       "surfaceDetail": {
@@ -21204,9 +22584,9 @@
       "seams": [],
       "localFeatures": [
         {
-          "name": "门把手星辰发光条 RR",
+          "name": "门把手星辰发光条",
           "kind": "emissive-face",
-          "note": "EX-22/F1/F2/F4：门把手凹槽内星辰/星尘发光纹理；薄板贴在把手外侧面（把手外表面 x=±1.0295，本板 x=±1.029~1.035）。"
+          "note": "EX-22：星尘颗粒 + 6 颗锚位亮星由集成层 Canvas emissiveMap 提供（与大灯星点卡共用 lamp-star 贴图），24 颗几何星点已撤除。"
         }
       ],
       "surfaceDetail": {
@@ -21231,6 +22611,1094 @@
         "materialClassConfidence": 0.86
       },
       "notes": "EX-22/F1/F2/F4：门把手凹槽内星辰/星尘发光纹理；薄板贴在把手外侧面（把手外表面 x=±1.0295，本板 x=±1.029~1.035）。"
+    },
+    {
+      "id": "front-light-bar",
+      "name": "前脸贯穿细白光带",
+      "level": "meso",
+      "role": "detail",
+      "importance": 0.85,
+      "confidence": 0.86,
+      "primitive": "box",
+      "topologyClass": "assembled-solid",
+      "topologyRationale": "薄板/回转体，硬表面可展拓扑",
+      "geometryDescriptor": {
+        "topologyIntent": "hard-surface precise",
+        "edgeTreatment": {
+          "type": "bevel",
+          "bevelRadius": 0.004,
+          "segments": 1
+        },
+        "deformationStack": [],
+        "uvStrategy": "generated procedural coordinates",
+        "normalStrategy": "vertex normals from generated geometry"
+      },
+      "parent": "front-end",
+      "attachment": null,
+      "dimensions": {
+        "width": 1.8,
+        "height": 0.014,
+        "depth": 0.02,
+        "units": "meters",
+        "confidence": 0.86
+      },
+      "transform": {
+        "position": [
+          0.0,
+          0.445,
+          0.075
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1.8,
+          0.014,
+          0.02
+        ]
+      },
+      "actionProfile": {
+        "animationRole": "static",
+        "pivot": {
+          "mode": "center",
+          "localPosition": [
+            0,
+            0,
+            0
+          ],
+          "axis": [
+            0,
+            1,
+            0
+          ],
+          "confidence": 0.9
+        },
+        "transformChannels": {
+          "translate": false,
+          "rotate": false,
+          "scale": false,
+          "bend": false,
+          "twist": false,
+          "detach": false,
+          "visibility": true,
+          "materialState": true
+        },
+        "sockets": [],
+        "collider": {
+          "type": "box",
+          "offset": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "isTrigger": false,
+          "notes": ""
+        },
+        "constraints": [],
+        "destruction": {
+          "breakable": false,
+          "fractureGroup": "root",
+          "seamRefs": [],
+          "detachableFragments": [],
+          "breakImpulse": 0,
+          "debrisMaterial": "base"
+        }
+      },
+      "material": "lamp-white",
+      "materialLayers": [
+        "lamp-white"
+      ],
+      "deformations": [],
+      "joints": [],
+      "seams": [],
+      "localFeatures": [
+        {
+          "name": "前脸贯穿细白光带",
+          "kind": "emissive-face",
+          "note": "EX-05/A8/U5：铬条上沿一条贯通前脸的细白光带，世界 y1.338–1.352、z2.645–2.665（前突 5mm）"
+        }
+      ],
+      "surfaceDetail": {
+        "macroRoughness": 0,
+        "microRoughness": 0,
+        "bumpAmplitude": 0,
+        "normalPattern": "",
+        "displacementPattern": "",
+        "occlusionPattern": "",
+        "edgeWearPattern": "",
+        "notes": ""
+      },
+      "evidenceRefs": [
+        "img-dash"
+      ],
+      "details": [],
+      "fidelityTier": "hero",
+      "colorMaterialRecipe": {
+        "dominantAlbedo": "rgba(255, 255, 255, 1.0)",
+        "secondaryAlbedo": "rgba(255, 255, 255, 1.0)",
+        "materialClass": "plastic",
+        "materialClassConfidence": 0.86
+      },
+      "notes": "EX-05：沿 chrome-brow 上缘的贯通细白光带；lamp-white 与保险杠灯带合批 +0 DC。"
+    },
+    {
+      "id": "roof-spoiler",
+      "name": "车顶扰流小尾翼",
+      "level": "meso",
+      "role": "detail",
+      "importance": 0.85,
+      "confidence": 0.86,
+      "primitive": "box",
+      "topologyClass": "assembled-solid",
+      "topologyRationale": "薄板/回转体，硬表面可展拓扑",
+      "geometryDescriptor": {
+        "topologyIntent": "hard-surface precise",
+        "edgeTreatment": {
+          "type": "bevel",
+          "bevelRadius": 0.004,
+          "segments": 1
+        },
+        "deformationStack": [],
+        "uvStrategy": "generated procedural coordinates",
+        "normalStrategy": "vertex normals from generated geometry"
+      },
+      "parent": "root",
+      "attachment": null,
+      "dimensions": {
+        "width": 1.4,
+        "height": 0.025,
+        "depth": 0.12,
+        "units": "meters",
+        "confidence": 0.84
+      },
+      "transform": {
+        "position": [
+          0.0,
+          1.555,
+          -2.42
+        ],
+        "rotation": [
+          0.1,
+          0,
+          0
+        ],
+        "scale": [
+          1.4,
+          0.025,
+          0.16
+        ]
+      },
+      "actionProfile": {
+        "animationRole": "static",
+        "pivot": {
+          "mode": "center",
+          "localPosition": [
+            0,
+            0,
+            0
+          ],
+          "axis": [
+            0,
+            1,
+            0
+          ],
+          "confidence": 0.9
+        },
+        "transformChannels": {
+          "translate": false,
+          "rotate": false,
+          "scale": false,
+          "bend": false,
+          "twist": false,
+          "detach": false,
+          "visibility": true,
+          "materialState": true
+        },
+        "sockets": [],
+        "collider": {
+          "type": "box",
+          "offset": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "isTrigger": false,
+          "notes": ""
+        },
+        "constraints": [],
+        "destruction": {
+          "breakable": false,
+          "fractureGroup": "root",
+          "seamRefs": [],
+          "detachableFragments": [],
+          "breakImpulse": 0,
+          "debrisMaterial": "base"
+        }
+      },
+      "material": "paint-lower",
+      "materialLayers": [
+        "paint-lower"
+      ],
+      "deformations": [],
+      "joints": [],
+      "seams": [],
+      "localFeatures": [
+        {
+          "name": "车顶扰流小尾翼",
+          "kind": "proportion",
+          "note": "EX-16/B2/BD：顶盖后缘延伸小尾翼，前缘嵌入顶盖后坡（z-2.34,y1.547），后缘上翘外伸至 z-2.50/y1.563，正后视角高出尾门上沿可见"
+        }
+      ],
+      "surfaceDetail": {
+        "macroRoughness": 0,
+        "microRoughness": 0,
+        "bumpAmplitude": 0,
+        "normalPattern": "",
+        "displacementPattern": "",
+        "occlusionPattern": "",
+        "edgeWearPattern": "",
+        "notes": ""
+      },
+      "evidenceRefs": [
+        "img-dash"
+      ],
+      "details": [],
+      "fidelityTier": "hero",
+      "colorMaterialRecipe": {
+        "dominantAlbedo": "rgba(34, 26, 20, 1.0)",
+        "secondaryAlbedo": "rgba(34, 26, 20, 1.0)",
+        "materialClass": "metal",
+        "materialClassConfidence": 0.86
+      },
+      "notes": "EX-16：顶盖后缘小尾翼 1.40×0.16，rotX(+0.10) 后缘上翘至 y≈1.563（高出尾门上沿 1.545，正后可见）；paint-lower 与顶盖/车身合批 +0 DC。"
+    },
+    {
+      "id": "rear-reflector-l",
+      "name": "后保红色反光条 L",
+      "level": "meso",
+      "role": "detail",
+      "importance": 0.85,
+      "confidence": 0.86,
+      "primitive": "box",
+      "topologyClass": "assembled-solid",
+      "topologyRationale": "薄板/回转体，硬表面可展拓扑",
+      "geometryDescriptor": {
+        "topologyIntent": "hard-surface precise",
+        "edgeTreatment": {
+          "type": "bevel",
+          "bevelRadius": 0.004,
+          "segments": 1
+        },
+        "deformationStack": [],
+        "uvStrategy": "generated procedural coordinates",
+        "normalStrategy": "vertex normals from generated geometry"
+      },
+      "parent": "root",
+      "attachment": null,
+      "dimensions": {
+        "width": 0.34,
+        "height": 0.05,
+        "depth": 0.02,
+        "units": "meters",
+        "confidence": 0.84
+      },
+      "transform": {
+        "position": [
+          0.72,
+          0.3,
+          -2.49
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          0.34,
+          0.05,
+          0.02
+        ]
+      },
+      "actionProfile": {
+        "animationRole": "static",
+        "pivot": {
+          "mode": "center",
+          "localPosition": [
+            0,
+            0,
+            0
+          ],
+          "axis": [
+            0,
+            1,
+            0
+          ],
+          "confidence": 0.9
+        },
+        "transformChannels": {
+          "translate": false,
+          "rotate": false,
+          "scale": false,
+          "bend": false,
+          "twist": false,
+          "detach": false,
+          "visibility": true,
+          "materialState": true
+        },
+        "sockets": [],
+        "collider": {
+          "type": "box",
+          "offset": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "isTrigger": false,
+          "notes": ""
+        },
+        "constraints": [],
+        "destruction": {
+          "breakable": false,
+          "fractureGroup": "root",
+          "seamRefs": [],
+          "detachableFragments": [],
+          "breakImpulse": 0,
+          "debrisMaterial": "base"
+        }
+      },
+      "material": "lamp-red",
+      "materialLayers": [
+        "lamp-red"
+      ],
+      "deformations": [],
+      "joints": [],
+      "seams": [],
+      "localFeatures": [
+        {
+          "name": "后保红色反光条",
+          "kind": "emissive-face",
+          "note": "EX-31/B5：后保下部左右各一条横向红色反光条/后雾灯，贴在 body-lower 尾端垂直面（z=-2.48）外 1cm"
+        }
+      ],
+      "surfaceDetail": {
+        "macroRoughness": 0,
+        "microRoughness": 0,
+        "bumpAmplitude": 0,
+        "normalPattern": "",
+        "displacementPattern": "",
+        "occlusionPattern": "",
+        "edgeWearPattern": "",
+        "notes": ""
+      },
+      "evidenceRefs": [
+        "img-dash"
+      ],
+      "details": [],
+      "fidelityTier": "hero",
+      "colorMaterialRecipe": {
+        "dominantAlbedo": "rgba(181, 31, 44, 1.0)",
+        "secondaryAlbedo": "rgba(181, 31, 44, 1.0)",
+        "materialClass": "fabric",
+        "materialClassConfidence": 0.86
+      },
+      "notes": "EX-31 后保红色反光条 L：世界 [0.72,0.30,-2.49]，lamp-red 与尾灯合批 +0 DC。"
+    },
+    {
+      "id": "rear-reflector-r",
+      "name": "后保红色反光条 R",
+      "level": "meso",
+      "role": "detail",
+      "importance": 0.85,
+      "confidence": 0.86,
+      "primitive": "box",
+      "topologyClass": "assembled-solid",
+      "topologyRationale": "薄板/回转体，硬表面可展拓扑",
+      "geometryDescriptor": {
+        "topologyIntent": "hard-surface precise",
+        "edgeTreatment": {
+          "type": "bevel",
+          "bevelRadius": 0.004,
+          "segments": 1
+        },
+        "deformationStack": [],
+        "uvStrategy": "generated procedural coordinates",
+        "normalStrategy": "vertex normals from generated geometry"
+      },
+      "parent": "root",
+      "attachment": null,
+      "dimensions": {
+        "width": 0.34,
+        "height": 0.05,
+        "depth": 0.02,
+        "units": "meters",
+        "confidence": 0.84
+      },
+      "transform": {
+        "position": [
+          -0.72,
+          0.3,
+          -2.49
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          0.34,
+          0.05,
+          0.02
+        ]
+      },
+      "actionProfile": {
+        "animationRole": "static",
+        "pivot": {
+          "mode": "center",
+          "localPosition": [
+            0,
+            0,
+            0
+          ],
+          "axis": [
+            0,
+            1,
+            0
+          ],
+          "confidence": 0.9
+        },
+        "transformChannels": {
+          "translate": false,
+          "rotate": false,
+          "scale": false,
+          "bend": false,
+          "twist": false,
+          "detach": false,
+          "visibility": true,
+          "materialState": true
+        },
+        "sockets": [],
+        "collider": {
+          "type": "box",
+          "offset": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "isTrigger": false,
+          "notes": ""
+        },
+        "constraints": [],
+        "destruction": {
+          "breakable": false,
+          "fractureGroup": "root",
+          "seamRefs": [],
+          "detachableFragments": [],
+          "breakImpulse": 0,
+          "debrisMaterial": "base"
+        }
+      },
+      "material": "lamp-red",
+      "materialLayers": [
+        "lamp-red"
+      ],
+      "deformations": [],
+      "joints": [],
+      "seams": [],
+      "localFeatures": [
+        {
+          "name": "后保红色反光条",
+          "kind": "emissive-face",
+          "note": "EX-31/B5：后保下部左右各一条横向红色反光条/后雾灯，贴在 body-lower 尾端垂直面（z=-2.48）外 1cm"
+        }
+      ],
+      "surfaceDetail": {
+        "macroRoughness": 0,
+        "microRoughness": 0,
+        "bumpAmplitude": 0,
+        "normalPattern": "",
+        "displacementPattern": "",
+        "occlusionPattern": "",
+        "edgeWearPattern": "",
+        "notes": ""
+      },
+      "evidenceRefs": [
+        "img-dash"
+      ],
+      "details": [],
+      "fidelityTier": "hero",
+      "colorMaterialRecipe": {
+        "dominantAlbedo": "rgba(181, 31, 44, 1.0)",
+        "secondaryAlbedo": "rgba(181, 31, 44, 1.0)",
+        "materialClass": "fabric",
+        "materialClassConfidence": 0.86
+      },
+      "notes": "EX-31 后保红色反光条 R：世界 [-0.72,0.30,-2.49]，lamp-red 与尾灯合批 +0 DC。"
+    },
+    {
+      "id": "tail-chrome-strip",
+      "name": "尾部贯穿镀铬饰条",
+      "level": "meso",
+      "role": "detail",
+      "importance": 0.85,
+      "confidence": 0.86,
+      "primitive": "box",
+      "topologyClass": "assembled-solid",
+      "topologyRationale": "薄板/回转体，硬表面可展拓扑",
+      "geometryDescriptor": {
+        "topologyIntent": "hard-surface precise",
+        "edgeTreatment": {
+          "type": "bevel",
+          "bevelRadius": 0.004,
+          "segments": 1
+        },
+        "deformationStack": [],
+        "uvStrategy": "generated procedural coordinates",
+        "normalStrategy": "vertex normals from generated geometry"
+      },
+      "parent": "root",
+      "attachment": null,
+      "dimensions": {
+        "width": 1.5,
+        "height": 0.035,
+        "depth": 0.02,
+        "units": "meters",
+        "confidence": 0.84
+      },
+      "transform": {
+        "position": [
+          0.0,
+          1.32,
+          -2.845
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1.5,
+          0.035,
+          0.02
+        ]
+      },
+      "actionProfile": {
+        "animationRole": "static",
+        "pivot": {
+          "mode": "center",
+          "localPosition": [
+            0,
+            0,
+            0
+          ],
+          "axis": [
+            0,
+            1,
+            0
+          ],
+          "confidence": 0.9
+        },
+        "transformChannels": {
+          "translate": false,
+          "rotate": false,
+          "scale": false,
+          "bend": false,
+          "twist": false,
+          "detach": false,
+          "visibility": true,
+          "materialState": true
+        },
+        "sockets": [],
+        "collider": {
+          "type": "box",
+          "offset": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "isTrigger": false,
+          "notes": ""
+        },
+        "constraints": [],
+        "destruction": {
+          "breakable": false,
+          "fractureGroup": "root",
+          "seamRefs": [],
+          "detachableFragments": [],
+          "breakImpulse": 0,
+          "debrisMaterial": "base"
+        }
+      },
+      "material": "chrome",
+      "materialLayers": [
+        "chrome"
+      ],
+      "deformations": [],
+      "joints": [],
+      "seams": [],
+      "localFeatures": [
+        {
+          "name": "尾部贯穿镀铬饰条",
+          "kind": "proportion",
+          "note": "EX-25/C1–C4：尾门上部通长横向镀铬饰条（尾灯上方、尾窗饰条下方），世界 y1.303–1.338"
+        }
+      ],
+      "surfaceDetail": {
+        "macroRoughness": 0,
+        "microRoughness": 0,
+        "bumpAmplitude": 0,
+        "normalPattern": "",
+        "displacementPattern": "",
+        "occlusionPattern": "",
+        "edgeWearPattern": "",
+        "notes": ""
+      },
+      "evidenceRefs": [
+        "img-dash"
+      ],
+      "details": [],
+      "fidelityTier": "hero",
+      "colorMaterialRecipe": {
+        "dominantAlbedo": "rgba(232, 233, 236, 1.0)",
+        "secondaryAlbedo": "rgba(232, 233, 236, 1.0)",
+        "materialClass": "metal",
+        "materialClassConfidence": 0.86
+      },
+      "notes": "EX-25：尾部横向贯穿镀铬饰条 1.50×0.035，贴在尾门后脸；chrome 合批 +0 DC。"
+    },
+    {
+      "id": "mirror-arm-l",
+      "name": "后视镜镜臂 L",
+      "level": "meso",
+      "role": "detail",
+      "importance": 0.85,
+      "confidence": 0.86,
+      "primitive": "box",
+      "topologyClass": "assembled-solid",
+      "topologyRationale": "薄板/回转体，硬表面可展拓扑",
+      "geometryDescriptor": {
+        "topologyIntent": "hard-surface precise",
+        "edgeTreatment": {
+          "type": "bevel",
+          "bevelRadius": 0.004,
+          "segments": 1
+        },
+        "deformationStack": [],
+        "uvStrategy": "generated procedural coordinates",
+        "normalStrategy": "vertex normals from generated geometry"
+      },
+      "parent": "root",
+      "attachment": null,
+      "dimensions": {
+        "width": 0.05,
+        "height": 0.05,
+        "depth": 0.08,
+        "units": "meters",
+        "confidence": 0.84
+      },
+      "transform": {
+        "position": [
+          1.02,
+          1.15,
+          1.02
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          0.05,
+          0.05,
+          0.08
+        ]
+      },
+      "actionProfile": {
+        "animationRole": "static",
+        "pivot": {
+          "mode": "center",
+          "localPosition": [
+            0,
+            0,
+            0
+          ],
+          "axis": [
+            0,
+            1,
+            0
+          ],
+          "confidence": 0.9
+        },
+        "transformChannels": {
+          "translate": false,
+          "rotate": false,
+          "scale": false,
+          "bend": false,
+          "twist": false,
+          "detach": false,
+          "visibility": true,
+          "materialState": true
+        },
+        "sockets": [],
+        "collider": {
+          "type": "box",
+          "offset": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "isTrigger": false,
+          "notes": ""
+        },
+        "constraints": [],
+        "destruction": {
+          "breakable": false,
+          "fractureGroup": "root",
+          "seamRefs": [],
+          "detachableFragments": [],
+          "breakImpulse": 0,
+          "debrisMaterial": "base"
+        }
+      },
+      "material": "matte-black",
+      "materialLayers": [
+        "matte-black"
+      ],
+      "deformations": [],
+      "joints": [],
+      "seams": [],
+      "localFeatures": [
+        {
+          "name": "后视镜深色镜臂",
+          "kind": "material",
+          "note": "EX-13/A3/U5/B5：镜壳银/铬 + 镜臂深色双色；本件为深色镜臂颈"
+        }
+      ],
+      "surfaceDetail": {
+        "macroRoughness": 0,
+        "microRoughness": 0,
+        "bumpAmplitude": 0,
+        "normalPattern": "",
+        "displacementPattern": "",
+        "occlusionPattern": "",
+        "edgeWearPattern": "",
+        "notes": ""
+      },
+      "evidenceRefs": [
+        "img-dash"
+      ],
+      "details": [],
+      "fidelityTier": "hero",
+      "colorMaterialRecipe": {
+        "dominantAlbedo": "rgba(18, 18, 20, 1.0)",
+        "secondaryAlbedo": "rgba(18, 18, 20, 1.0)",
+        "materialClass": "plastic",
+        "materialClassConfidence": 0.86
+      },
+      "notes": "EX-13 镜臂 L：matte-black，与轮拱/护板合批 +0 DC。"
+    },
+    {
+      "id": "mirror-arm-r",
+      "name": "后视镜镜臂 R",
+      "level": "meso",
+      "role": "detail",
+      "importance": 0.85,
+      "confidence": 0.86,
+      "primitive": "box",
+      "topologyClass": "assembled-solid",
+      "topologyRationale": "薄板/回转体，硬表面可展拓扑",
+      "geometryDescriptor": {
+        "topologyIntent": "hard-surface precise",
+        "edgeTreatment": {
+          "type": "bevel",
+          "bevelRadius": 0.004,
+          "segments": 1
+        },
+        "deformationStack": [],
+        "uvStrategy": "generated procedural coordinates",
+        "normalStrategy": "vertex normals from generated geometry"
+      },
+      "parent": "root",
+      "attachment": null,
+      "dimensions": {
+        "width": 0.05,
+        "height": 0.05,
+        "depth": 0.08,
+        "units": "meters",
+        "confidence": 0.84
+      },
+      "transform": {
+        "position": [
+          -1.02,
+          1.15,
+          1.02
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          0.05,
+          0.05,
+          0.08
+        ]
+      },
+      "actionProfile": {
+        "animationRole": "static",
+        "pivot": {
+          "mode": "center",
+          "localPosition": [
+            0,
+            0,
+            0
+          ],
+          "axis": [
+            0,
+            1,
+            0
+          ],
+          "confidence": 0.9
+        },
+        "transformChannels": {
+          "translate": false,
+          "rotate": false,
+          "scale": false,
+          "bend": false,
+          "twist": false,
+          "detach": false,
+          "visibility": true,
+          "materialState": true
+        },
+        "sockets": [],
+        "collider": {
+          "type": "box",
+          "offset": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "isTrigger": false,
+          "notes": ""
+        },
+        "constraints": [],
+        "destruction": {
+          "breakable": false,
+          "fractureGroup": "root",
+          "seamRefs": [],
+          "detachableFragments": [],
+          "breakImpulse": 0,
+          "debrisMaterial": "base"
+        }
+      },
+      "material": "matte-black",
+      "materialLayers": [
+        "matte-black"
+      ],
+      "deformations": [],
+      "joints": [],
+      "seams": [],
+      "localFeatures": [
+        {
+          "name": "后视镜深色镜臂",
+          "kind": "material",
+          "note": "EX-13/A3/U5/B5：镜壳银/铬 + 镜臂深色双色；本件为深色镜臂颈"
+        }
+      ],
+      "surfaceDetail": {
+        "macroRoughness": 0,
+        "microRoughness": 0,
+        "bumpAmplitude": 0,
+        "normalPattern": "",
+        "displacementPattern": "",
+        "occlusionPattern": "",
+        "edgeWearPattern": "",
+        "notes": ""
+      },
+      "evidenceRefs": [
+        "img-dash"
+      ],
+      "details": [],
+      "fidelityTier": "hero",
+      "colorMaterialRecipe": {
+        "dominantAlbedo": "rgba(18, 18, 20, 1.0)",
+        "secondaryAlbedo": "rgba(18, 18, 20, 1.0)",
+        "materialClass": "plastic",
+        "materialClassConfidence": 0.86
+      },
+      "notes": "EX-13 镜臂 R：matte-black，与轮拱/护板合批 +0 DC。"
+    },
+    {
+      "id": "shield-emblem-panel",
+      "name": "曜日纹车标自发光面板",
+      "level": "meso",
+      "role": "detail",
+      "importance": 0.85,
+      "confidence": 0.86,
+      "primitive": "box",
+      "topologyClass": "assembled-solid",
+      "topologyRationale": "薄板/回转体，硬表面可展拓扑",
+      "geometryDescriptor": {
+        "topologyIntent": "hard-surface precise",
+        "edgeTreatment": {
+          "type": "bevel",
+          "bevelRadius": 0.004,
+          "segments": 1
+        },
+        "deformationStack": [],
+        "uvStrategy": "generated procedural coordinates",
+        "normalStrategy": "vertex normals from generated geometry"
+      },
+      "parent": "front-end",
+      "attachment": null,
+      "dimensions": {
+        "width": 0.06,
+        "height": 0.17,
+        "depth": 0.004,
+        "units": "meters",
+        "confidence": 0.86
+      },
+      "transform": {
+        "position": [
+          0.0,
+          0.02,
+          0.106
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          0.06,
+          0.17,
+          0.004
+        ]
+      },
+      "actionProfile": {
+        "animationRole": "static",
+        "pivot": {
+          "mode": "center",
+          "localPosition": [
+            0,
+            0,
+            0
+          ],
+          "axis": [
+            0,
+            1,
+            0
+          ],
+          "confidence": 0.9
+        },
+        "transformChannels": {
+          "translate": false,
+          "rotate": false,
+          "scale": false,
+          "bend": false,
+          "twist": false,
+          "detach": false,
+          "visibility": true,
+          "materialState": true
+        },
+        "sockets": [],
+        "collider": {
+          "type": "box",
+          "offset": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "isTrigger": false,
+          "notes": ""
+        },
+        "constraints": [],
+        "destruction": {
+          "breakable": false,
+          "fractureGroup": "root",
+          "seamRefs": [],
+          "detachableFragments": [],
+          "breakImpulse": 0,
+          "debrisMaterial": "base"
+        }
+      },
+      "material": "lamp-white",
+      "materialLayers": [
+        "lamp-white"
+      ],
+      "deformations": [],
+      "joints": [],
+      "seams": [],
+      "localFeatures": [
+        {
+          "name": "曜日纹自发光面板",
+          "kind": "emissive-face",
+          "note": "EX-07：放射曜日细线 + 中部 MAEXTRO 字带由集成层 Canvas 分区图集提供（面板采样图集左半，两条贯穿灯带 UV 重映射到右半纯白区）。"
+        }
+      ],
+      "surfaceDetail": {
+        "macroRoughness": 0,
+        "microRoughness": 0,
+        "bumpAmplitude": 0,
+        "normalPattern": "",
+        "displacementPattern": "",
+        "occlusionPattern": "",
+        "edgeWearPattern": "",
+        "notes": ""
+      },
+      "evidenceRefs": [
+        "img-dash"
+      ],
+      "details": [],
+      "fidelityTier": "hero",
+      "colorMaterialRecipe": {
+        "dominantAlbedo": "rgba(232, 228, 220, 1.0)",
+        "secondaryAlbedo": "rgba(232, 228, 220, 1.0)",
+        "materialClass": "plastic",
+        "materialClassConfidence": 0.86
+      },
+      "notes": "EX-07：盾前 4mm 的自发光白面板（lamp-white）；纹理细节待适配层。"
     }
   ],
   "materials": [
@@ -21692,7 +24160,7 @@
       "textureless": {
         "declared": true,
         "evidence": [
-          "灯罩暗银底为均匀注塑件，无表面细节。"
+          "灯罩暗银底为均匀注塑件；尾灯暗场内衬（lantern-emitter-l/r）承载 EX-28 的 3+3 红横带发光图集：集成层 Canvas emissiveMap + UV 分区（暗场采样红带区、其余壳体采样纯黑零发光区），emissive 由适配层设红色并随刹车联动。"
         ]
       }
     },
@@ -21894,7 +24362,7 @@
       "textureless": {
         "declared": true,
         "evidence": [
-          "灯带发光面为均匀 emissive，无表面细节。"
+          "两条贯穿灯带为均匀 emissive；盾徽面板的放射曜日纹 + MAEXTRO 字带（EX-07）由集成层 Canvas 分区图集提供（面板/灯带 UV 分区，同材质合批组不变）。"
         ]
       }
     },
@@ -21945,7 +24413,7 @@
       "textureless": {
         "declared": true,
         "evidence": [
-          "大灯星点由集成层 Canvas 贴图提供，基底无需噪点贴图。"
+          "大灯星点与门把手星尘（EX-22/EX-08）由集成层 Canvas emissiveMap 提供，24 颗几何星点已撤除；基底无需噪点贴图。"
         ]
       }
     },
@@ -21996,7 +24464,7 @@
       "textureless": {
         "declared": true,
         "evidence": [
-          "尾灯发光面为均匀 emissive，红点阵由集成层 Canvas 贴图提供。"
+          "尾灯红光核心为均匀 emissive（EX-27 设计：最深层红晕背板，铬框开孔内露一圈红晕）；3+3 红横带图案（EX-28）由集成层 Canvas 分区图集绘制在 housing-dark 暗场内衬上，12 条几何灯带已撤除。"
         ]
       }
     },
@@ -22123,7 +24591,7 @@
       "textureProjection": null,
       "surfaceFrequencyBands": null,
       "roughness": 0.4,
-      "metalness": 0.0,
+      "metalness": 0.35,
       "normal": null,
       "bump": null,
       "displacement": null,
@@ -22148,7 +24616,7 @@
       "textureless": {
         "declared": true,
         "evidence": [
-          "抛光金属铭牌靠 metalness + envMap 反射，无表面细节。"
+          "铭牌黑底为均匀深色；「尊界 V800」镀铬立体字（EX-26）由集成层 Canvas map 提供，五段铬渐变 + 暗侧挤压层 + 描边在贴图内模拟金属立体感（实测 metalness 1 时字面在暗环境下只反射到黑色，渐变模拟才可读）；metalness 0.35（二值钳制为 0）保留高光。"
         ]
       }
     },
@@ -22722,7 +25190,7 @@
       "textureless": {
         "declared": true,
         "evidence": [
-          "头灯发光内芯为均匀 emissive，无表面细节。"
+          "头灯发光内芯为均匀 emissive；3 枚圆形 LED 点阵（EX-08）由集成层 Canvas emissiveMap 提供。"
         ]
       }
     },
@@ -23115,6 +25583,90 @@
       "cameraView": "hero az40/p12 + az000 front (preview harness)",
       "notes": "",
       "aiVisionNotes": ""
+    },
+    {
+      "timestamp": "2026-10-16T04:19:08.345769+00:00",
+      "passId": "material-pass",
+      "estimatedFidelity": 0.86,
+      "aiVisionScore": 0.85,
+      "visualAcceptanceThreshold": 0.7,
+      "layerScores": {
+        "silhouetteProportion": 0.88,
+        "componentStructure": 0.92,
+        "formDetail": 0.84,
+        "materialSurface": 0.86,
+        "lightingCamera": 0.82
+      },
+      "featureReviews": [
+        {
+          "id": "front-lamp-system",
+          "score": 0.87,
+          "notes": "数据级：headlamp-l/r + headlamp-led-l/r + headlamp-star-l/r 全部在场（parts.json）；EX-08 的 3 枚圆形 LED 点阵与星尘/钻石切割纹理走集成层 Canvas emissiveMap（lamp-head / lamp-star），已实现并通过 tsc；工厂渲染不含适配层贴图，目视以素模件位为准。"
+        },
+        {
+          "id": "tail-lantern-system",
+          "score": 0.86,
+          "notes": "数据级：taillamp-l/r、lantern-core-l/r、lantern-signature-l/r、lantern-emitter-l/r 在场；EX-28 的 12 条几何灯带撤除，3+3 红横带图案由 createTailBandTexture 按撤除前实测坐标绘制到 lamp-red emissiveMap（256×512，亮带/间隙亮度 0.96/0.13）；TAIL_BASE 维持 2.0，怠速间隙远离 bloom 阈 0.72，满刹 8.0 亮带越阈爆发。"
+        },
+        {
+          "id": "dual-tone-paint",
+          "score": 0.88,
+          "notes": "数据级：paint-upper/paint-lower/chrome/dpillar-silver 材质标量与 textureless 声明未动；腰线/窗线镀铬带组件在场；plate 材质标量按其材质证据修正（metalness 0.85 / roughness 0.32），镀铬名牌字由 Canvas map 提供。"
+        },
+        {
+          "id": "cabin-luxury-kit",
+          "score": 0.86,
+          "notes": "数据级：starlight（星空顶）、gauge-ui、tri-screen、水晶壁灯、木质/皮革组件在场且贴图路径未回退；EX-22 门把手星尘撤 24 颗几何星点后由 createHandleStarTexture（512×512，LCG 确定性）承担，与大灯星点卡共用 lamp-star，UV 全幅采样不串味。"
+        }
+      ],
+      "referenceScreenshot": "<local-reference>/huawei-zunjie-v800-design-black-2x.jpg",
+      "renderScreenshot": ".img2threejs/renders/material-pass/hero.png",
+      "comparisonImage": ".img2threejs/renders/material-pass/tail-close.png",
+      "cameraView": "",
+      "notes": "",
+      "aiVisionNotes": "目视核验：车体比例与组件布局与 spec 一致；撤件区域（尾灯灯带/把手星点）在素模与材质渲染中均无残缺几何；预留的贴图路径为集成层 Canvas 贴图，不在工厂渲染管线内呈现，已登记于材质 textureless 证据与组件 localFeatures。已知的玻璃件悬浮观感为 structural-pass 遗留观感问题，非本轮引入。"
+    },
+    {
+      "timestamp": "2026-10-16T04:45:57.308104+00:00",
+      "passId": "material-pass",
+      "estimatedFidelity": 0.87,
+      "aiVisionScore": 0.86,
+      "visualAcceptanceThreshold": 0.7,
+      "layerScores": {
+        "silhouetteProportion": 0.88,
+        "componentStructure": 0.92,
+        "formDetail": 0.84,
+        "materialSurface": 0.86,
+        "lightingCamera": 0.82
+      },
+      "featureReviews": [
+        {
+          "id": "front-lamp-system",
+          "score": 0.87,
+          "notes": "数据级：headlamp-l/r + headlamp-led-l/r + headlamp-star-l/r 全部在场（parts.json）；EX-08 的 3 枚圆形 LED 点阵与星尘/钻石切割纹理走集成层 Canvas emissiveMap（lamp-head / lamp-star），已实现并通过 tsc；工厂渲染不含适配层贴图，目视以素模件位为准。"
+        },
+        {
+          "id": "tail-lantern-system",
+          "score": 0.86,
+          "notes": "数据级：taillamp-l/r、lantern-core-l/r、lantern-signature-l/r、lantern-emitter-l/r 在场；EX-28 的 12 条几何灯带撤除，3+3 红横带图案由 createTailBandTexture 按撤除前实测坐标绘制到 lamp-red emissiveMap（256×512，亮带/间隙亮度 0.96/0.13）；TAIL_BASE 维持 2.0，怠速间隙远离 bloom 阈 0.72，满刹 8.0 亮带越阈爆发。"
+        },
+        {
+          "id": "dual-tone-paint",
+          "score": 0.88,
+          "notes": "数据级：paint-upper/paint-lower/chrome/dpillar-silver 材质标量与 textureless 声明未动；腰线/窗线镀铬带组件在场；plate 材质标量按其材质证据修正（metalness 0.85 / roughness 0.32），镀铬名牌字由 Canvas map 提供。"
+        },
+        {
+          "id": "cabin-luxury-kit",
+          "score": 0.86,
+          "notes": "数据级：starlight（星空顶）、gauge-ui、tri-screen、水晶壁灯、木质/皮革组件在场且贴图路径未回退；EX-22 门把手星尘撤 24 颗几何星点后由 createHandleStarTexture（512×512，LCG 确定性）承担，与大灯星点卡共用 lamp-star，UV 全幅采样不串味。"
+        }
+      ],
+      "referenceScreenshot": "<local-reference>/huawei-zunjie-v800-design-black-2x.jpg",
+      "renderScreenshot": ".img2threejs/renders/material-pass/hero.png",
+      "comparisonImage": ".img2threejs/renders/material-pass/tail-close.png",
+      "cameraView": "",
+      "notes": "",
+      "aiVisionNotes": "实拍核验（浏览器动态导入适配器，真实 Canvas 贴图）：尾灯 3+3 横带怠速可辨/满刹爆发、金屏点阵清晰、红晕环保留；盾徽曜日细线 + MAEXTRO 字带可见；名牌镀铬字可读；头灯星尘卡闪烁颗粒可见、门把手星尘条发光；贯穿灯带纯白无图集串味。工厂渲染证据（本目录）不含适配层贴图，仅作几何/件位证据。"
     }
   ],
   "reviewHistory": [
@@ -23274,6 +25826,109 @@
         "cameraView": "hero az40/p12 + az000 front (preview harness)",
         "notes": "",
         "aiVisionNotes": ""
+      }
+    },
+    {
+      "timestamp": "2026-10-16T04:19:08.345769+00:00",
+      "passId": "material-pass",
+      "estimatedFidelity": 0.86,
+      "aiVisionScore": 0.85,
+      "visualAcceptanceThreshold": 0.7,
+      "layerScores": {
+        "silhouetteProportion": 0.88,
+        "componentStructure": 0.92,
+        "formDetail": 0.84,
+        "materialSurface": 0.86,
+        "lightingCamera": 0.82
+      },
+      "featureReviews": [
+        {
+          "id": "front-lamp-system",
+          "score": 0.87,
+          "notes": "数据级：headlamp-l/r + headlamp-led-l/r + headlamp-star-l/r 全部在场（parts.json）；EX-08 的 3 枚圆形 LED 点阵与星尘/钻石切割纹理走集成层 Canvas emissiveMap（lamp-head / lamp-star），已实现并通过 tsc；工厂渲染不含适配层贴图，目视以素模件位为准。"
+        },
+        {
+          "id": "tail-lantern-system",
+          "score": 0.86,
+          "notes": "数据级：taillamp-l/r、lantern-core-l/r、lantern-signature-l/r、lantern-emitter-l/r 在场；EX-28 的 12 条几何灯带撤除，3+3 红横带图案由 createTailBandTexture 按撤除前实测坐标绘制到 lamp-red emissiveMap（256×512，亮带/间隙亮度 0.96/0.13）；TAIL_BASE 维持 2.0，怠速间隙远离 bloom 阈 0.72，满刹 8.0 亮带越阈爆发。"
+        },
+        {
+          "id": "dual-tone-paint",
+          "score": 0.88,
+          "notes": "数据级：paint-upper/paint-lower/chrome/dpillar-silver 材质标量与 textureless 声明未动；腰线/窗线镀铬带组件在场；plate 材质标量按其材质证据修正（metalness 0.85 / roughness 0.32），镀铬名牌字由 Canvas map 提供。"
+        },
+        {
+          "id": "cabin-luxury-kit",
+          "score": 0.86,
+          "notes": "数据级：starlight（星空顶）、gauge-ui、tri-screen、水晶壁灯、木质/皮革组件在场且贴图路径未回退；EX-22 门把手星尘撤 24 颗几何星点后由 createHandleStarTexture（512×512，LCG 确定性）承担，与大灯星点卡共用 lamp-star，UV 全幅采样不串味。"
+        }
+      ],
+      "action": "continue",
+      "summary": "material-pass 数据级验收：spec 149 组件（本轮撤除 EX-28 12 条几何灯带 + EX-22 24 颗几何星点，185→149，面数预算内转由集成层 Canvas 贴图承担）。运行时在场核验 parts.json 149/149 与 spec componentTree 逐 ID 集合相等（0 missing / 0 extra），撤除件 0 残留；关键面板组件全部在场。多机位（az000/090/180/270/hero/top/tail-close + stripped 素模）渲染证据与 parts.json 同批采集。判据口径：参考图已合规移除，不追 Divine Eye 全局分，采用逐组件 world box 数据级 + part-presence + agent vision 目视。",
+      "matched": [],
+      "mismatches": [],
+      "specFixes": [],
+      "codeFixes": [],
+      "evidence": [],
+      "visualEvidence": {
+        "referenceScreenshot": "<local-reference>/huawei-zunjie-v800-design-black-2x.jpg",
+        "renderScreenshot": ".img2threejs/renders/material-pass/hero.png",
+        "comparisonImage": ".img2threejs/renders/material-pass/tail-close.png",
+        "cameraView": "",
+        "notes": "",
+        "aiVisionNotes": "目视核验：车体比例与组件布局与 spec 一致；撤件区域（尾灯灯带/把手星点）在素模与材质渲染中均无残缺几何；预留的贴图路径为集成层 Canvas 贴图，不在工厂渲染管线内呈现，已登记于材质 textureless 证据与组件 localFeatures。已知的玻璃件悬浮观感为 structural-pass 遗留观感问题，非本轮引入。"
+      }
+    },
+    {
+      "timestamp": "2026-10-16T04:45:57.308104+00:00",
+      "passId": "material-pass",
+      "estimatedFidelity": 0.87,
+      "aiVisionScore": 0.86,
+      "visualAcceptanceThreshold": 0.7,
+      "layerScores": {
+        "silhouetteProportion": 0.88,
+        "componentStructure": 0.92,
+        "formDetail": 0.84,
+        "materialSurface": 0.86,
+        "lightingCamera": 0.82
+      },
+      "featureReviews": [
+        {
+          "id": "front-lamp-system",
+          "score": 0.87,
+          "notes": "数据级：headlamp-l/r + headlamp-led-l/r + headlamp-star-l/r 全部在场（parts.json）；EX-08 的 3 枚圆形 LED 点阵与星尘/钻石切割纹理走集成层 Canvas emissiveMap（lamp-head / lamp-star），已实现并通过 tsc；工厂渲染不含适配层贴图，目视以素模件位为准。"
+        },
+        {
+          "id": "tail-lantern-system",
+          "score": 0.86,
+          "notes": "数据级：taillamp-l/r、lantern-core-l/r、lantern-signature-l/r、lantern-emitter-l/r 在场；EX-28 的 12 条几何灯带撤除，3+3 红横带图案由 createTailBandTexture 按撤除前实测坐标绘制到 lamp-red emissiveMap（256×512，亮带/间隙亮度 0.96/0.13）；TAIL_BASE 维持 2.0，怠速间隙远离 bloom 阈 0.72，满刹 8.0 亮带越阈爆发。"
+        },
+        {
+          "id": "dual-tone-paint",
+          "score": 0.88,
+          "notes": "数据级：paint-upper/paint-lower/chrome/dpillar-silver 材质标量与 textureless 声明未动；腰线/窗线镀铬带组件在场；plate 材质标量按其材质证据修正（metalness 0.85 / roughness 0.32），镀铬名牌字由 Canvas map 提供。"
+        },
+        {
+          "id": "cabin-luxury-kit",
+          "score": 0.86,
+          "notes": "数据级：starlight（星空顶）、gauge-ui、tri-screen、水晶壁灯、木质/皮革组件在场且贴图路径未回退；EX-22 门把手星尘撤 24 颗几何星点后由 createHandleStarTexture（512×512，LCG 确定性）承担，与大灯星点卡共用 lamp-star，UV 全幅采样不串味。"
+        }
+      ],
+      "action": "continue",
+      "summary": "material-pass 修正轮（同 pass 补充记录）：①EX-28 承载面实测修正 —— 浏览器实拍发现 3+3 红横带初版绘在 lamp-red 红光核心上，而核心在世界 z-2.869 最深层、被暗场内衬遮住只露红晕环（EX-27 设计）；几何灯带撤除前实际悬在暗场前 2.5mm（世界 z-2.8745，与金屏同层）。已改道：createTailBandAtlasTexture（512×512 分区图集）挂 housing-dark，lantern-emitter-l/r UV 重映射采样红带区、其余 housing-dark 壳体（尾灯壳/头灯壳）重映射到纯黑零发光区，emissive 由适配层设红并随 brakeLevel 联动；实拍怠速灯带清晰间隙纯黑、满刹 8.0 起爆。②EX-26 实测修正 —— raycast 证实 front-plate 原位沉入 fascia 漆面 16mm（batch/paint-lower 表面 z-2.656 > 铭牌 -2.64），任何贴图不可见；spec z 0.06→0.085（外凸 9mm）后「尊界 V800」镀铬字实拍可读；并修正 textureless 路径黑 albedo 与 map 相乘压黑问题（挂图后 color 放白）、metalness 0.85 二值钳制为 1 时字面只反射到黑色，改 0.35（钳制为 0）由贴图五段铬渐变模拟立体感。③parts.json 复采 149/149 与 spec 集合相等。",
+      "matched": [],
+      "mismatches": [],
+      "specFixes": [],
+      "codeFixes": [],
+      "evidence": [],
+      "outOfSequence": true,
+      "visualEvidence": {
+        "referenceScreenshot": "<local-reference>/huawei-zunjie-v800-design-black-2x.jpg",
+        "renderScreenshot": ".img2threejs/renders/material-pass/hero.png",
+        "comparisonImage": ".img2threejs/renders/material-pass/tail-close.png",
+        "cameraView": "",
+        "notes": "",
+        "aiVisionNotes": "实拍核验（浏览器动态导入适配器，真实 Canvas 贴图）：尾灯 3+3 横带怠速可辨/满刹爆发、金屏点阵清晰、红晕环保留；盾徽曜日细线 + MAEXTRO 字带可见；名牌镀铬字可读；头灯星尘卡闪烁颗粒可见、门把手星尘条发光；贯穿灯带纯白无图集串味。工厂渲染证据（本目录）不含适配层贴图，仅作几何/件位证据。"
       }
     }
   ],

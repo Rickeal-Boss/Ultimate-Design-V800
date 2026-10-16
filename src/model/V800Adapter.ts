@@ -402,6 +402,308 @@ function createWheelFaceTexture(size: number): THREE.CanvasTexture {
   return tex;
 }
 
+// ---------------------------------------------------------------------------
+// EX 身份特征贴图（spec textureless 声明 → 集成层 Canvas 路径，同金色签名屏先例）。
+// 坐标换算口径：CanvasTexture flipY=true，画布 y=0 对应几何 v=1（顶）；
+// 各函数按「组件局部坐标 → 画布像素」显式换算，不靠目测对位。
+// 色彩空间口径：全部为颜色/发光内容 → SRGBColorSpace；无数据贴图（法线/粗糙度）。
+// ---------------------------------------------------------------------------
+
+/** EX-28 采样面板：尾灯暗场内衬 lantern-emitter 的几何 0.135×0.425，半宽/半高 */
+const TAIL_FIELD_HALF_W = 0.0675;
+const TAIL_FIELD_HALF_H = 0.2125;
+/** EX-28 灯带布局（spec taillamp-band-* 撤除前实测坐标）：局部 y 中心 / x 中心 / 宽 */
+const TAIL_BANDS: ReadonlyArray<{ y: number; x: number; w: number }> = [
+  { y: 0.175, x: 0, w: 0.13 }, // 上长带（横贯）
+  { y: 0.118, x: -0.034, w: 0.062 }, // 上短·左（中央留 6mm 间隙）
+  { y: 0.118, x: 0.034, w: 0.062 }, // 上短·右
+  { y: -0.118, x: -0.034, w: 0.062 }, // 下短·左
+  { y: -0.118, x: 0.034, w: 0.062 }, // 下短·右
+  { y: -0.175, x: 0, w: 0.13 } // 下长带（横贯）
+];
+const TAIL_BAND_H = 0.032;
+
+/**
+ * EX-28 尾灯 3+3 红横带图集（512×512）。
+ * 分层依据（spec 世界 z，越负越靠观察者）：壳体 -2.865 ← 暗场内衬 -2.8718 ←
+ * 红带/金屏 -2.8745；红光核心在最深层（-2.869），被暗场遮住只露一圈红晕（EX-27 设计）。
+ * 所以横带图案的承载面是暗场内衬（lantern-emitter，housing-dark），不是红光核心。
+ * 图集左半 = 红带区（黑底 + 亮带，乘在适配层设置的红色 emissive 上）；
+ * 右半 = 纯黑零发光区，供 housing-dark 其余壳体（尾灯壳/头灯壳）UV 重映射落点，
+ * 同材质同贴图下壳体外观零变化，合批组不变、DC 零增量。
+ * glow 不画进贴图：辉光交给 emissiveIntensity（随 brakeLevel 联动）+ bloom。
+ */
+function createTailBandAtlasTexture(): THREE.CanvasTexture {
+  const S = 512;
+  const canvas = document.createElement('canvas');
+  canvas.width = S;
+  canvas.height = S;
+  const ctx = canvas.getContext('2d')!;
+  // 全幅黑底：黑 = 零发光（右半壳体落点直接可用）
+  ctx.fillStyle = 'rgb(0, 0, 0)';
+  ctx.fillRect(0, 0, S, S);
+  // ---- 左半：暗场红带区 ----
+  const px = (x: number): number =>
+    ((x + TAIL_FIELD_HALF_W) / (TAIL_FIELD_HALF_W * 2)) * (S / 2);
+  const pyTop = (y: number): number =>
+    (1 - (y + TAIL_FIELD_HALF_H) / (TAIL_FIELD_HALF_H * 2)) * S;
+  const bandPxH = (TAIL_BAND_H / (TAIL_FIELD_HALF_H * 2)) * S;
+  for (const b of TAIL_BANDS) {
+    const x0 = px(b.x - b.w / 2);
+    const w = (b.w / (TAIL_FIELD_HALF_W * 2)) * (S / 2);
+    const y0 = pyTop(b.y + TAIL_BAND_H / 2);
+    const grad = ctx.createLinearGradient(0, y0, 0, y0 + bandPxH);
+    grad.addColorStop(0, 'rgb(190, 92, 88)');
+    grad.addColorStop(0.24, 'rgb(255, 246, 244)');
+    grad.addColorStop(0.76, 'rgb(255, 246, 244)');
+    grad.addColorStop(1, 'rgb(190, 92, 88)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(x0, y0, w, bandPxH);
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/**
+ * EX-22/EX-08 星尘颗粒面板（512×512），lamp-star 材质共用：
+ * 门把手星辰发光条（4 条）与大灯星点卡（2 张）采样同一张贴图 —— 两者要的都是
+ * 「暗基底上的星尘」，共用一份不串味（发光条沿长度采样、星点卡沿高度采样，
+ * 星尘图案无方向性）。确定性 LCG 种子；6 颗锚位亮星对齐撤除前几何星点的
+ * 把手长度向位置（u=0.125..0.875），v 上下交错避免在大灯卡上排成一条横线。
+ */
+function createHandleStarTexture(): THREE.CanvasTexture {
+  const S = 512;
+  const canvas = document.createElement('canvas');
+  canvas.width = S;
+  canvas.height = S;
+  const ctx = canvas.getContext('2d')!;
+  // 基底 0.27 亮度冷白：发光条保留「条」的存在感，星尘在其上提亮
+  ctx.fillStyle = 'rgb(64, 70, 82)';
+  ctx.fillRect(0, 0, S, S);
+  // 钻石切割棱面走向：极淡斜向亮线（只做质感提示，不抢星尘）
+  ctx.strokeStyle = 'rgba(210, 220, 238, 0.06)';
+  ctx.lineWidth = 10;
+  const rnd = makeLcg(0xa2c17e); // 固定种子：星尘图案逐次加载一致
+  for (let i = 0; i < 14; i++) {
+    const o = rnd() * S;
+    ctx.beginPath();
+    ctx.moveTo(o - S * 0.2, -20);
+    ctx.lineTo(o + S * 0.45, S + 20);
+    ctx.stroke();
+  }
+  // 星尘颗粒：3 档大小（与星空顶同手法）
+  for (let i = 0; i < 340; i++) {
+    const x = rnd() * S;
+    const y = rnd() * S;
+    const roll = rnd();
+    const radius = roll > 0.93 ? 2.6 : roll > 0.7 ? 1.6 : 0.9;
+    const alpha = 0.35 + rnd() * 0.65;
+    ctx.fillStyle = `rgba(238, 244, 255, ${alpha})`;
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
+    if (radius > 2.2) {
+      // 亮颗粒加十字星芒（把手「闪烁感」的静态基础，动态闪烁交给头灯联动路径）
+      ctx.strokeStyle = `rgba(238, 244, 255, ${alpha * 0.5})`;
+      ctx.lineWidth = 1;
+      const len = radius * 4;
+      ctx.beginPath();
+      ctx.moveTo(x - len, y);
+      ctx.lineTo(x + len, y);
+      ctx.moveTo(x, y - len);
+      ctx.lineTo(x, y + len);
+      ctx.stroke();
+    }
+  }
+  // 6 颗锚位亮星：对齐撤除前 handle-star-dot-* 的 u 位置
+  for (let i = 0; i < 6; i++) {
+    const x = (0.125 + i * 0.15) * S;
+    const y = (i % 2 === 0 ? 0.32 : 0.68) * S;
+    const halo = ctx.createRadialGradient(x, y, 0, x, y, 14);
+    halo.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
+    halo.addColorStop(0.4, 'rgba(238, 244, 255, 0.4)');
+    halo.addColorStop(1, 'rgba(238, 244, 255, 0)');
+    ctx.fillStyle = halo;
+    ctx.beginPath();
+    ctx.arc(x, y, 14, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgb(255, 255, 255)';
+    ctx.beginPath();
+    ctx.arc(x, y, 3.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(x - 11, y);
+    ctx.lineTo(x + 11, y);
+    ctx.moveTo(x, y - 11);
+    ctx.lineTo(x, y + 11);
+    ctx.stroke();
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/**
+ * EX-26 车名牌「尊界 V800」镀铬立体字（1024×272，字标类允许 1024²）。
+ * 参考图为镀铬立体字而非黑底印字：黑底保留（plate 组件身份），字面用
+ * 五段铬渐变 + 暗侧挤压层 + 细暗描边模拟立体感；金属反射由 spec 侧
+ * plate 材质标量（metalness/roughness 已按其材质证据修正）接 envMap。
+ * 文字性商标引用，同 MAEXTRO 字标先例。
+ */
+function createNameplateTexture(): THREE.CanvasTexture {
+  const W = 1024;
+  const H = 272;
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d')!;
+  const bg = ctx.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, 'rgb(18, 19, 22)');
+  bg.addColorStop(0.5, 'rgb(10, 11, 13)');
+  bg.addColorStop(1, 'rgb(6, 7, 9)');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = 'rgba(196, 202, 212, 0.22)';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(9, 9, W - 18, H - 18);
+  const text = '尊界 V800';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = '700 148px "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", "Source Han Sans SC", sans-serif';
+  const natural = ctx.measureText(text).width;
+  const scale = Math.min(1, (W * 0.84) / natural);
+  const mid = H * 0.52;
+  ctx.save();
+  ctx.translate(W / 2, H / 2 + 4);
+  ctx.scale(scale, 1);
+  // ① 挤压侧壁：向下偏移的两层暗字，模拟字厚
+  ctx.fillStyle = 'rgb(30, 33, 38)';
+  ctx.fillText(text, 3, 8);
+  ctx.fillText(text, 2, 5);
+  // ② 铬面：天光白 → 亮银 → 暗银 → 地平反光 → 暗银
+  const chrome = ctx.createLinearGradient(0, -mid, 0, mid);
+  chrome.addColorStop(0, 'rgb(250, 252, 255)');
+  chrome.addColorStop(0.34, 'rgb(206, 212, 222)');
+  chrome.addColorStop(0.52, 'rgb(112, 120, 132)');
+  chrome.addColorStop(0.56, 'rgb(236, 240, 246)');
+  chrome.addColorStop(1, 'rgb(96, 104, 116)');
+  ctx.fillStyle = chrome;
+  ctx.fillText(text, 0, 0);
+  // ③ 立体描边：细暗边把铬面从黑底上收出来
+  ctx.strokeStyle = 'rgba(8, 10, 14, 0.85)';
+  ctx.lineWidth = 3;
+  ctx.strokeText(text, 0, 0);
+  ctx.restore();
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/**
+ * EX-07 盾徽面板分区贴图（512×512 图集）。
+ * lamp-white 是共享材质（shield-emblem-panel + front-light-bar + bumper-light-strip），
+ * 三者的盒面 UV 都是全幅 0..1 —— 直接画纹样会把曜日线串到两条贯穿灯带上。
+ * 解法是图集 + UV 重映射（见适配器 remapUV）：左半为盾徽面板区（白底发光面板 +
+ * 放射曜日细线 + 中部 MAEXTRO 字带），右半纯白区供两条灯带重映射落点，
+ * 同材质同贴图下互不串味，合批组不变、DC 零增量。
+ */
+function createEmblemAtlasTexture(): THREE.CanvasTexture {
+  const S = 512;
+  const canvas = document.createElement('canvas');
+  canvas.width = S;
+  canvas.height = S;
+  const ctx = canvas.getContext('2d')!;
+  // 全幅白底（灯带区直接可用）
+  ctx.fillStyle = 'rgb(255, 255, 255)';
+  ctx.fillRect(0, 0, S, S);
+  // ---- 左半：盾徽面板区 ----
+  const cx = S * 0.25;
+  const cy = S / 2;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 0, S / 2, S);
+  ctx.clip();
+  // 放射曜日细线：面板 0.06×0.17 纵横比 0.353，画布上已按米制比例换算 ——
+  // 射线端点取纵向 0.085m（256px）、横向 0.070m（300px），左右越界部分由 clip 收掉
+  ctx.strokeStyle = 'rgba(96, 102, 112, 0.8)';
+  ctx.lineWidth = 2;
+  for (let i = 0; i < 24; i++) {
+    const a = (i / 24) * Math.PI * 2;
+    const dx = Math.cos(a);
+    const dy = Math.sin(a);
+    ctx.beginPath();
+    ctx.moveTo(cx + dx * 20, cy + dy * 17);
+    ctx.lineTo(cx + dx * 300, cy + dy * 256);
+    ctx.stroke();
+  }
+  // 中部 MAEXTRO 字带：暗带 + 白字（面板上的身份锚点，同 MAEXTRO 字标先例）
+  ctx.fillStyle = 'rgb(24, 26, 30)';
+  ctx.fillRect(0, cy - 20, S / 2, 40);
+  ctx.fillStyle = 'rgb(244, 246, 250)';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = 'bold 26px "Segoe UI", Arial, sans-serif';
+  ctx.fillText('MAEXTRO', cx, cy + 1);
+  ctx.restore();
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/**
+ * EX-08 头灯 3 枚圆形 LED 点阵（128×512），lamp-head 材质（两条竖向灯芯独占）。
+ * 基底 0.33 亮度：setHeadlights(false)（intensity 0.15）时灯体仍读得出轮廓，
+ * 点阵亮芯在常亮/熄灯两态都保持圆形可辨。
+ */
+function createHeadlampLedTexture(): THREE.CanvasTexture {
+  const W = 128;
+  const H = 512;
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = 'rgb(80, 88, 100)';
+  ctx.fillRect(0, 0, W, H);
+  // 灯腔棱面：几道极淡竖向亮线
+  ctx.strokeStyle = 'rgba(220, 228, 240, 0.1)';
+  ctx.lineWidth = 6;
+  for (let i = 0; i < 4; i++) {
+    const x = 18 + i * 28 + (i % 2) * 6;
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, H);
+    ctx.stroke();
+  }
+  // 3 枚圆形 LED（v = 0.25 / 0.5 / 0.75）：柔光晕 + 实心亮芯
+  for (const vy of [0.25, 0.5, 0.75]) {
+    const y = (1 - vy) * H;
+    const halo = ctx.createRadialGradient(W / 2, y, 0, W / 2, y, 52);
+    halo.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
+    halo.addColorStop(0.35, 'rgba(226, 234, 248, 0.55)');
+    halo.addColorStop(1, 'rgba(226, 234, 248, 0)');
+    ctx.fillStyle = halo;
+    ctx.beginPath();
+    ctx.arc(W / 2, y, 52, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgb(255, 255, 255)';
+    ctx.beginPath();
+    ctx.arc(W / 2, y, 22, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.needsUpdate = true;
+  return tex;
+}
+
 export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
   const model = createZunjieV800LuxuryMPVModel({ textureSize: carTextureSizeFor(tier) });
   const runtime = model.userData.runtime as ProceduralModelRuntime | undefined;
@@ -604,6 +906,98 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
     wheelMat.needsUpdate = true;
   }
 
+  // ---- EX 身份特征贴图（Canvas 程序化，spec textureless 声明的集成层路径）----
+  // 必须在 batchMergeStatic 之前完成：UV 重映射要烘进源几何，合并时逐顶点保留。
+  const meshOf = (id: string): THREE.Mesh | null => {
+    const node = byId.get(id);
+    if (!node) return null;
+    if ((node as THREE.Mesh).isMesh) return node as THREE.Mesh;
+    let found: THREE.Mesh | null = null;
+    node.traverse((o) => {
+      if (!found && (o as THREE.Mesh).isMesh) found = o as THREE.Mesh;
+    });
+    return found;
+  };
+  /** 把 mesh 全部 UV 从全幅 0..1 线性压进 [u0,u1]×[v0,v1]（图集分区用） */
+  const remapUV = (
+    mesh: THREE.Mesh,
+    u0: number,
+    u1: number,
+    v0: number,
+    v1: number
+  ): void => {
+    const uv = mesh.geometry.getAttribute('uv');
+    if (!uv) return;
+    for (let i = 0; i < uv.count; i++) {
+      uv.setXY(i, u0 + uv.getX(i) * (u1 - u0), v0 + uv.getY(i) * (v1 - v0));
+    }
+    uv.needsUpdate = true;
+  };
+
+  // EX-28 尾灯 3+3 横带：12 条几何灯带撤除后，图案落在暗场内衬（lantern-emitter，
+  // housing-dark）上 —— 红光核心在最深层只露红晕环，见 createTailBandAtlasTexture 注释。
+  // housing-dark spec 无 emissive：适配层设同尾灯红色，并在 update() 与 brakeLevel 联动。
+  const tailFieldMat = matById.get('housing-dark') ?? null;
+  if (tailFieldMat && !tailFieldMat.emissiveMap) {
+    const tex = createTailBandAtlasTexture();
+    ownedTextures.push(tex);
+    tailFieldMat.emissiveMap = tex;
+    tailFieldMat.emissive.set(0xe03040); // 与 lamp-red 同色，间隙为纯黑零发光
+    tailFieldMat.needsUpdate = true; // 初值不重要：update() 每帧按 brakeLevel 覆盖
+    // UV 分区：暗场内衬采样红带区（左半）；尾灯壳/头灯壳重映射到纯黑区（右半），
+    // 壳体外观零变化；线性映射对任意输入 UV 都收敛到目标区，extrude 也安全
+    for (const fieldId of ['lantern-emitter-l', 'lantern-emitter-r']) {
+      const fieldMesh = meshOf(fieldId);
+      if (fieldMesh) remapUV(fieldMesh, 0.004, 0.496, 0.004, 0.996);
+    }
+    for (const shellId of ['taillamp-l', 'taillamp-r', 'headlamp-l', 'headlamp-r']) {
+      const shellMesh = meshOf(shellId);
+      if (shellMesh) remapUV(shellMesh, 0.55, 0.95, 0.3, 0.7);
+    }
+  }
+  // EX-22/EX-08 星尘颗粒：门把手发光条 + 大灯星点卡共用 lamp-star
+  const starDustMat = matById.get('lamp-star') ?? null;
+  if (starDustMat && !starDustMat.emissiveMap) {
+    const tex = createHandleStarTexture();
+    ownedTextures.push(tex);
+    starDustMat.emissiveMap = tex;
+    starDustMat.needsUpdate = true;
+  }
+  // EX-08 头灯 3 枚圆形 LED 点阵：lamp-head 两条竖向灯芯独占
+  const ledMat = matById.get('lamp-head') ?? null;
+  if (ledMat && !ledMat.emissiveMap) {
+    const tex = createHeadlampLedTexture();
+    ownedTextures.push(tex);
+    ledMat.emissiveMap = tex;
+    ledMat.needsUpdate = true;
+  }
+  // EX-26 车名牌镀铬字（map，非发光；plate 材质独占）
+  const plateMat = matById.get('plate') ?? null;
+  if (plateMat && !plateMat.map) {
+    const tex = createNameplateTexture();
+    ownedTextures.push(tex);
+    plateMat.map = tex;
+    // textureless 路径给的是黑底 albedo（#0C0C0E），会与 map 相乘把整牌压成纯黑 ——
+    // 挂 map 后底色改由贴图自带的黑底承担，材质 color 放白
+    plateMat.color.set(0xffffff);
+    plateMat.needsUpdate = true;
+  }
+  // EX-07 盾徽面板图集 + UV 分区：面板采样纹样区（左半），两条贯穿灯带重映射
+  // 到纯白区（右半），同材质合批组不变、DC 零增量
+  const whiteMat = matById.get('lamp-white') ?? null;
+  if (whiteMat && !whiteMat.emissiveMap) {
+    const tex = createEmblemAtlasTexture();
+    ownedTextures.push(tex);
+    whiteMat.emissiveMap = tex;
+    whiteMat.needsUpdate = true;
+    const panelMesh = meshOf('shield-emblem-panel');
+    if (panelMesh) remapUV(panelMesh, 0.004, 0.496, 0.004, 0.996);
+    for (const barId of ['front-light-bar', 'bumper-light-strip']) {
+      const barMesh = meshOf(barId);
+      if (barMesh) remapUV(barMesh, 0.55, 0.95, 0.3, 0.7);
+    }
+  }
+
   // ---- QA 钩子：#lightassert —— 灯光联动命中表 ----
   // 审查建议（A-1）：灯组断链曾靠 if (mat) 静默吞掉，实机零报错但刹车灯不亮。
   // URL hash 含 lightassert 时输出命中表，miss 即 console.error，断链从此可见。
@@ -614,7 +1008,12 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
       { 灯组: 'MAEXTRO 字标', 期望: 'lamp-mark', 命中: markLamp?.id ?? '(无)' },
       { 灯组: '星空顶', 期望: 'starlight', 命中: starMat ? 'starlight' : '(无)' },
       { 灯组: '金色签名屏', 期望: 'lamp-gold', 命中: goldMat ? 'lamp-gold' : '(无)' },
-      { 灯组: '轮圈盘面', 期望: 'wheel-alloy', 命中: wheelMat ? 'wheel-alloy' : '(无)' }
+      { 灯组: '轮圈盘面', 期望: 'wheel-alloy', 命中: wheelMat ? 'wheel-alloy' : '(无)' },
+      { 灯组: '尾灯 3+3 灯带贴图', 期望: 'housing-dark', 命中: tailFieldMat ? 'housing-dark' : '(无)' },
+      { 灯组: '星尘颗粒', 期望: 'lamp-star', 命中: starDustMat ? 'lamp-star' : '(无)' },
+      { 灯组: '头灯 LED 点阵', 期望: 'lamp-head', 命中: ledMat ? 'lamp-head' : '(无)' },
+      { 灯组: '车名牌镀铬字', 期望: 'plate', 命中: plateMat ? 'plate' : '(无)' },
+      { 灯组: '盾徽面板分区贴图', 期望: 'lamp-white', 命中: whiteMat ? 'lamp-white' : '(无)' }
     ];
     console.table(rows);
     if (!tailLamp || !headLamp || !markLamp) {
@@ -622,6 +1021,16 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
     }
   }
 
+  /**
+   * 怠速尾灯基线（实测复核后维持 2.0，推导如下）。
+   * 前值 2.0 被报「偏亮、灯带间隙被辉光糊」——但糊的来源是几何时期 12 条灯带 +
+   * 灯芯同强度发光、6mm 视觉间隙在斜视角下被灯芯红晕填满，而非 2.0 超阈：
+   * emissive #E03040（线性 ≈ [0.746, 0.030, 0.052]）× 2.0 的相对亮度 ≈ 0.37，
+   * 低于 UnrealBloom 阈值 0.72（Postfx.ts），怠速本就不触发 bloom。
+   * EX-28 撤几何改贴图（createTailBandAtlasTexture → 暗场内衬）后逐档核算：
+   * 亮带 0.96 / 间隙 0（纯黑零发光）→ 怠速 2.0 下间隙完全熄灭，3+3 灯带清晰可辨；
+   * 满刹 8.0 下亮带 ≈ 1.47 越阈起爆、间隙仍黑，爆发感增强。怠速压低反而削制动反馈（灯带全暗 = 玩家失去参照），故不动。
+   */
   const TAIL_BASE = 2.0;
   const HEAD_BASE = 2.5;
   let brakeLevel = TAIL_BASE;
@@ -817,6 +1226,8 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
       snapT = damp(snapT, 0, 6, dt);
       if (snapT < 0.001) snapT = 0;
       if (tailMat) tailMat.emissiveIntensity = brakeLevel + snapGain;
+      // 尾灯暗场红带（housing-dark 图集）：与灯芯同强度联动（几何灯带时期的联动路径）
+      if (tailFieldMat) tailFieldMat.emissiveIntensity = brakeLevel + snapGain;
       // 尾灯中部金色签名屏：随刹车联动，比上下横带暗
       if (goldMat) goldMat.emissiveIntensity = brakeLevel * GOLD_BRAKE_RATIO + snapGain * GOLD_BRAKE_RATIO;
       // 头灯平滑
