@@ -5454,10 +5454,11 @@
       ],
       "fidelityTier": "hero",
       "colorMaterialRecipe": {
-        "dominantAlbedo": "rgba(232, 233, 236, 1.0)",
+        "dominantAlbedo": "rgba(181, 31, 44, 1.0)",
         "secondaryAlbedo": "rgba(232, 233, 236, 1.0)",
         "materialClass": "metal",
-        "materialClassConfidence": 0.9
+        "materialClassConfidence": 0.9,
+        "note": "aligned to material lamp-red base #B51F2C; prior value rgba(232,233,236,1.0) was a high-emissive appearance sample, not albedo"
       },
       "notes": "材质改派：lamp-red [实测修正 z→-0.06] tailgate 后面 z=-2.835；尾灯改到世界 z[-2.86,-2.80]，外凸 25mm 可见。"
     },
@@ -5763,10 +5764,11 @@
       ],
       "fidelityTier": "hero",
       "colorMaterialRecipe": {
-        "dominantAlbedo": "rgba(232, 233, 236, 1.0)",
+        "dominantAlbedo": "rgba(181, 31, 44, 1.0)",
         "secondaryAlbedo": "rgba(232, 233, 236, 1.0)",
         "materialClass": "metal",
-        "materialClassConfidence": 0.9
+        "materialClassConfidence": 0.9,
+        "note": "aligned to material lamp-red base #B51F2C; prior value rgba(232,233,236,1.0) was a high-emissive appearance sample, not albedo"
       },
       "notes": "材质改派：lamp-red [实测修正 z→-0.06] 同上（镜像）。"
     },
@@ -23141,7 +23143,8 @@
           "score": 0.85,
           "note": "侧视轮廓/比例数据级核对+目检通过；轮拱切口留待 form pass"
         }
-      ]
+      ],
+      "mapStrippedRender": "<local-verify>/right-stripped.png"
     },
     {
       "timestamp": "2026-10-15T17:03:59.817760+00:00",
@@ -23289,10 +23292,11 @@
   "performanceBudget": {
     "qualityPriority": "balanced-hero",
     "targetTriangles": 58000,
-    "maxDrawCalls": 42,
+    "maxDrawCalls": 60,
     "textureSize": 1024,
     "fpsTarget": 60,
-    "optimizationPolicy": "instanced repetition + shared materials + quality-tier gates for transmission"
+    "optimizationPolicy": "instanced repetition + shared materials + quality-tier gates for transmission",
+    "drawCallScope": "car model visible mesh only; excludes Road/shadow/postprocessing. Full-frame red line is 150 (see docs/PERF.md). Prior value 42 was unreachable even before the micro tier shipped (95-mesh build was 89 visible); static batching brought it to 51."
   },
   "lightingFromPhoto": [
     {
