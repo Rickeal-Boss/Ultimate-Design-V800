@@ -15,6 +15,7 @@ import {
   frameZunjieV800LuxuryMPVCamera,
   configureZunjieV800LuxuryMPVRenderer,
 } from './createV800Model';
+import { createV800CarAdapter } from './V800Adapter';
 
 declare global {
   interface Window {
@@ -40,8 +41,28 @@ scene.environment = createZunjieV800LuxuryMPVEnvironment(renderer);
 const camera = new THREE.PerspectiveCamera(30, 1280 / 760, 0.05, 60);
 scene.add(createZunjieV800LuxuryMPVLookDevLights());
 
-const model = createZunjieV800LuxuryMPVModel({ textureSize: 1024 });
+// ---- #assembled QA 模式：hash 含 `assembled` 时加载适配层整车（createV800CarAdapter）----
+// 治「预览过（工厂裸模型）、游戏坏（适配层组装后）」整类问题：适配层内部的合批 /
+// 材质覆盖 / 迎宾光毯 / 踏板 / #uvassert / #lightassert / #batchmerge 等 QA 钩子
+// assembled 模式下天然带全（钩子多挂在适配层构造期，按 window.location.hash 触发）。
+// ⚠️ 机位语义差异：适配层 body 自带 rotY π —— 裸模型车头朝 +Z（spec coordinateFrame），
+// assembled 模式车头朝 −Z。__v800Capture 的 azimuth 约定（0° 机位在 +Z）随之反转：
+// assembled 下 azimuth 0 拍到车尾、拍正面用 azimuth 180；侧视/俯视机位不变。
+// 裸模型专属钩子（#cabin 机位 / __v800Parts / __v800CaptureCabin）在 assembled 下
+// 仍按 traverse 语义工作：合批会摘掉部分带 sculptComponent 的 leaf mesh，__v800Parts
+// 行数变少属预期降级（console 一次说明），不崩溃、不静默错拍。
+const ASSEMBLED =
+  typeof window !== 'undefined' && window.location.hash.includes('assembled');
+const model: THREE.Object3D = ASSEMBLED
+  ? createV800CarAdapter('high').root
+  : createZunjieV800LuxuryMPVModel({ textureSize: 1024 });
 scene.add(model);
+if (ASSEMBLED) {
+  console.warn(
+    '[preview] #assembled：已加载适配层整车（车头朝 −Z，capture azimuth 语义见 preview.ts 注释）；' +
+      '__v800Parts/#cabin 等依赖工厂组件索引的钩子在合并后为降级行为'
+  );
+}
 // 隐藏纯容器组件的实体占位箱（root/cabin-interior 仅为层级容器，无视觉体）
 const CONTAINER_IDS = new Set(['root', 'cabin-interior']);
 model.traverse((o) => {

@@ -222,3 +222,18 @@ Input 接线、HUD/Result 三档结算文案与样式、踏板几何（无新依
 | `npx vite build` | 通过，JS 1,242.18 kB / gzip 241.13 kB |
 | Node shim 车模统计 | Mesh 95 / InstancedMesh 0 / 材质在用 28 / 三角面 22,656 / world min Y −0.890 |
 | Node shim 三档行为 | transmission（high 保留 / medium·low 归零）、灯光联动、贴图挂载、轮速钳制、`console.warn` 均符合预期 |
+
+## 附录 D · R5「像」波实测记录（2026-10-17）
+
+| 项 | 结果 |
+|---|---|
+| spec | 184 组件（新增 apillar-l/r + cowl-panel，砍 hood-blister / tail-window-trim / front-plate / bumper-chrome-lip / console-island-knob-ring）/ strict-quality **PASS** |
+| 工厂+装配（a2 探针） | **71 mesh / 54,460 三角**（93.9%/58k）；#uvassert **0 越界**、密度判据 0 超阈 |
+| 几何 | 车顶 1.733→**1.848**；前挡 30°→**55°**（z1.117–1.631，顶塞入顶棚前缘）；机盖 1.3→**0.95**（z1.618–2.568）；A柱×2+cowl 封豁口；body-lower 挖真轮拱 R=0.452@z±1.715（93 点）；轮芯 ±0.875→**±0.855**（胎外缘 0.9825 < 侧皮 1.003）；wheel-cap ±0.992；rocker 收进拱间 [−1.25,+1.25] |
+| 朝向 | emblem-shield 绕序反转（唯一 CW→0 CW）；车尾 18 件 rotY(π) 翻转（tailgate 不翻、灯组各族自翻+z 补偿，bbox 0mm 位移） |
+| 双色统一（U5 用户原图基准） | 车身侧面 paint-lower→**paint-upper**（棕金）；dpillar/apillar/tail-window-trim→**matte-black**（黑玻璃舱）；greenhouse depth 1.83→**2.006**（与车身齐平，消门框区露内饰） |
+| 材质（适配层） | glass-dark 隐私化 trans 0.18/#10151b/rough 0.06/envInt 1.35（fallback 0.85）；光毯 ±0.90/W0.44/径向光池/opacity 0.55/damp6；HEAD_BASE 2.5→3.2；rear-control-screen 补 rotateY(π)；新增 wheel-arch-liner 合并网格 |
+| 实机像素证据（#assembled 尾视 az0） | 红 **10→657**、金 **0→7286**（r4 基线=尾灯完全不可见）——「正反面颠倒」根因（车尾件正面朝内）修复实证 |
+| 游戏层 | Game.ts 复位保留 MODEL_BASE_YAW=π（修整车调头）；CameraRig orbit 相位 3π/4（t=0 前脸 45°）；Vehicle.ts 摩擦圆机械优先总钳制（mech+regen ≤ μg，fade 曲线删除，总减速单调性保持） |
+| 回归 | tsc 0 错误 / vitest **58/58**（新增摩擦圆扫掠+回收退让 2 项）/ vite build 通过 |
+| 遗留（R6 候选） | 封闭格栅面板（185 满需腾位）、玻璃带柱分段微凹槽、鼻面下缘白条亮度、前唇镀铬条观感 |

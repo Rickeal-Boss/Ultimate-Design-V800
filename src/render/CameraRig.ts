@@ -46,8 +46,11 @@ const POSE: ModePose = {
 
 const MODES: Record<CameraMode, (speed: number, portrait: boolean, time: number) => void> = {
   orbit: (_speed, portrait, time) => {
+    // 相位 3π/4：t=0 机位落在右前 45°（游戏里车头朝 -Z，无相位时 t=0 正对车尾，
+    // 菜单首印象是屁股——2026-10-17 第四轮审查 S5④）
+    const phase = Math.PI * 0.75;
     const radius = portrait ? 9.5 : 7.8;
-    POSE.offset.set(Math.sin(time * 0.16) * radius, portrait ? 2.4 : 1.5, Math.cos(time * 0.16) * radius);
+    POSE.offset.set(Math.sin(time * 0.16 + phase) * radius, portrait ? 2.4 : 1.5, Math.cos(time * 0.16 + phase) * radius);
     POSE.look.set(0, portrait ? -1.6 : 0.85, 0);
     POSE.fov = portrait ? 58 : 42;
     POSE.k = 2;

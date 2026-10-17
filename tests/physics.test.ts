@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import { BRAKE, MS_TO_KMH, TRACK, VEHICLE, calcScore } from '../src/config/physics';
 import { createPedalState, resetPedal, stepPedal } from '../src/physics/BrakeModel';
-import { createVehicleState, regenDecel, stepVehicle } from '../src/physics/Vehicle';
+import { createVehicleState, dragForce, regenDecel, rollForce, stepVehicle } from '../src/physics/Vehicle';
 import { StateMachine } from '../src/core/StateMachine';
 
 const DT = 1 / 120;
@@ -120,10 +120,12 @@ describe('制动平衡性（核心契约）', () => {
     }
   });
 
-  it('冒险深踩（b=0.97）相对保守踩法（b=0.86）有可感知的得分收益', () => {
+  it('冒险深踩（b=0.97）不慢于保守踩法（b=0.86），且严格不增（摩擦圆改版口径）', () => {
+    // 摩擦圆总钳制后，0.86 的机械+回收总量已达 μg 的 99.6%——
+    // 深踩的边际收益物理上必然趋零；契约退守为「深踩绝不更慢」（单调性由上一条锁死）。
     const deep = brakeFrom(200 / MS_TO_KMH, 0.97).t;
     const safe = brakeFrom(200 / MS_TO_KMH, 0.86).t;
-    expect(safe - deep).toBeGreaterThan(0.15);
+    expect(safe - deep).toBeGreaterThan(0);
   });
 
   it('满踏板力的机械减速度严格等于 ABS 上限（同源常量，B-4 修复）', () => {
@@ -131,10 +133,57 @@ describe('制动平衡性（核心契约）', () => {
     expect(BRAKE.absMaxDecel).toBeCloseTo(BRAKE.absMu * 9.81, 10);
   });
 
-  it('电回收在深踩段退让到 75%（混动协调）', () => {
+  it('摩擦圆：全程「机械+回收」总减速 ≤ μg（2026-10-17 摩擦圆总钳制回归）', () => {
+    // 全滑条域扫掠：从 state.accel 里剥掉风阻/滚阻（二者不经轮胎摩擦圆），
+    // 剩下的制动系总减速（mech+regen）任何时刻都不得突破抓地上限。
+    // 注意口径：accel 用的是「步进前」速度算风阻，复算阻力必须同口径（用 prevSpeed），
+    // 否则每步混入 ~0.0017 的测量伪影（2026-10-17 实测教训）。
+    for (const b of [0.1, 0.25, 0.5, 0.7, 0.85, 0.9, 0.97, 1.0]) {
+      const v = createVehicleState();
+      v.speed = 200 / MS_TO_KMH;
+      const p = createPedalState();
+      let peakTotal = 0;
+      for (let t = 0; t < 30 && v.speed > BRAKE.stopSpeed; t += DT) {
+        stepPedal(p, DT, b);
+        const prevSpeed = v.speed;
+        stepVehicle(v, DT, { throttle: 0, brake: b, powerCut: true, pedalForce: p.pedalForce });
+        const resist = (dragForce(prevSpeed) + rollForce()) / VEHICLE.totalMassKg;
+        const brakeTotal = -v.accel - resist;
+        if (brakeTotal > peakTotal) peakTotal = brakeTotal;
+      }
+      expect(peakTotal).toBeLessThanOrEqual(BRAKE.absMaxDecel + 1e-6);
+      // 满踩时钳制应当贴住上限（摩擦圆是主动约束，不是松约束；
+      // 踏板建压 ~1.6s 后总减速必然到达 μg，只允许风阻复算口径的浮点噪声）
+      if (b === 1.0) {
+        expect(peakTotal).toBeGreaterThanOrEqual(BRAKE.absMaxDecel - 1e-6);
+      }
+    }
+  });
+
+  it('电回收请求在 b=0.25 达满值（摩擦圆改版后 fade 曲线已删）', () => {
     expect(regenDecel(0.25)).toBeCloseTo(BRAKE.regenMaxDecel, 6);
-    expect(regenDecel(0.98)).toBeCloseTo(BRAKE.regenMaxDecel * BRAKE.regenFadeFloor, 6);
+    expect(regenDecel(0.98)).toBeCloseTo(BRAKE.regenMaxDecel, 6);
     expect(regenDecel(0)).toBe(0);
+  });
+
+  it('深踩段回收按抓地余量退让（机械优先协调，HUD 回收功率随之回落）', () => {
+    // 取踏板建压完成后的稳态样本（~2s）：b=0.86 机械需求 9.28 < μg，回收全额 1.47；
+    // b=0.97 机械 10.47，回收被削到 μg−mech=0.324（b=1.0 会触发踏板断裂，
+    // 断裂后 pedalForce=0、回收回归全额——那是冗余回路语义，不属于本契约）
+    const regenAt = (b: number): number => {
+      const v = createVehicleState();
+      v.speed = 150 / MS_TO_KMH;
+      const p = createPedalState();
+      for (let t = 0; t < 2; t += DT) {
+        stepPedal(p, DT, b);
+        stepVehicle(v, DT, { throttle: 0, brake: b, powerCut: true, pedalForce: p.pedalForce });
+      }
+      // regenPowerKw = m × a_regen × v / 1000 → a_regen 反解
+      return (v.regenPowerKw * 1000) / (VEHICLE.totalMassKg * v.speed);
+    };
+    expect(regenAt(0.86)).toBeCloseTo(BRAKE.regenMaxDecel, 3);
+    expect(regenAt(0.97)).toBeGreaterThan(0.2);
+    expect(regenAt(0.97)).toBeLessThan(0.45);
   });
 
   it('一次 200→0 满刹的制动温升 < 过热阈值（不惩罚正确的满刹操作）', () => {

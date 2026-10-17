@@ -93,17 +93,17 @@ const TIRE_ATLAS_W: Record<QualityTier, number> = { high: 1024, medium: 512, low
 const WHEEL_BADGE_SIZE: Record<QualityTier, number> = { high: 512, medium: 256, low: 256 };
 /** EX-09 迎宾光毯贴图宽度（px，画布 4:3 与投影面同纵横比） */
 const CARPET_TEX_SIZE: Record<QualityTier, number> = { high: 512, medium: 384, low: 256 };
-/** EX-09 投影面尺寸（m）：宽（X）× 长（Z）——4:3 与贴图同纵横比 */
-const WELCOME_CARPET_W = 0.72;
+/** EX-09 投影面尺寸（m）：宽（X）× 长（Z）——光斑主体收进车宽内，贴门下沿 */
+const WELCOME_CARPET_W = 0.44;
 const WELCOME_CARPET_L = 0.54;
 /** 投影面离地高度（m）：避开车轮/路面 z-fight，又低于踏板视差 */
 const WELCOME_CARPET_Y = 0.018;
-/** 四车门下方的投影面落点（工厂坐标，X=±1.13 半嵌车身；Z 取门板中心） */
+/** 四车门下方的投影面落点（工厂坐标，X=±0.90 贴门下沿不外溢路面；Z 取门板中心） */
 const WELCOME_CARPET_SPOTS: ReadonlyArray<readonly [number, number]> = [
-  [1.13, 0.85],
-  [-1.13, 0.85],
-  [1.13, -0.95],
-  [-1.13, -0.95]
+  [0.90, 0.85],
+  [-0.90, 0.85],
+  [0.90, -0.95],
+  [-0.90, -0.95]
 ];
 /** 迎宾态速度门限（km/h）：低于它光毯淡入，高于它淡出（行驶中无迎宾态） */
 const WELCOME_CARPET_SPEED_GATE = 5;
@@ -119,7 +119,8 @@ const GOLD_BRAKE_RATIO = 0.75;
 
 /** 非 high 档把 transmission 降级为普通半透明时的不透明度（按材质 ID） */
 const GLASS_OPACITY_FALLBACK: Record<string, number> = {
-  'glass-dark': 0.55,
+  // 隐私玻璃降级也应偏暗不偏透（与上方 high 档隐私玻璃观感一致）
+  'glass-dark': 0.85,
   'glass-clear': 0.4,
   crystal: 0.6,
 };
@@ -1505,92 +1506,26 @@ function createWheelBadgeTexture(size: number): THREE.CanvasTexture {
 }
 
 /**
- * EX-09 迎宾光毯贴图（4:3，与投影面 0.72×0.54 同纵横比 → 鹰形不被拉伸）。
- * 内容：径向渐隐地面光池 + 金色展翅鹰形（复用尾灯签名屏同源 bitmap
- * GOLD_MATRIX_PATTERN，逐格径向金斑连成剪影 —— 几何化程序绘制，零照片像素）
- * + 星点点缀 + 椭圆外缘溶入（destination-out）。emissive 观感由贴图亮度 +
- * 适配层呼吸动画承担（材质是无光照 MeshBasicMaterial 的投影贴花）。
+ * EX-09 迎宾光毯贴图（正方形画布，图案为纯径向渐变光池 —— 中心亮、边缘平滑到 0）。
+ * 收敛修订：取消旧版鹰形/星点/星芒等硬边图案（小尺寸投影面下读作地面 X 光斑杂纹），
+ * 只保留「暖金光池」一层径向渐变 —— 渐变终点 alpha 恒为 0，天然无硬边，无需再叠
+ * destination-out 外缘溶入。emissive 观感由贴图亮度 + 适配层呼吸动画承担
+ * （材质是无光照 MeshBasicMaterial 的投影贴花）。
  */
 function createWelcomeCarpetTexture(size: number): THREE.CanvasTexture {
   const W = size;
-  const H = (size * 3) / 4;
   const canvas = document.createElement('canvas');
   canvas.width = W;
-  canvas.height = H;
+  canvas.height = W;
   const ctx = canvas.getContext('2d')!;
-  const cx = W / 2;
-  const cy = H / 2;
-  // 椭圆空间（与画布同纵横比）画两处径向渐变，避免圆形光池在 4:3 画布上过早收边
-  ctx.save();
-  ctx.translate(cx, cy);
-  ctx.scale(1, H / W);
-  // ① 地面光池
-  const pool = ctx.createRadialGradient(0, 0, 0, 0, 0, W * 0.46);
-  pool.addColorStop(0, 'rgba(255, 216, 150, 0.30)');
-  pool.addColorStop(0.55, 'rgba(240, 190, 120, 0.13)');
-  pool.addColorStop(1, 'rgba(230, 180, 110, 0)');
+  // 径向渐变光池：暖金核心 → 边缘 0（无硬边；4:3 投影面下轻微椭圆化由平面纵横比自然承担）
+  const pool = ctx.createRadialGradient(W / 2, W / 2, 0, W / 2, W / 2, W / 2);
+  pool.addColorStop(0, 'rgba(255, 224, 168, 0.92)');
+  pool.addColorStop(0.35, 'rgba(244, 198, 128, 0.55)');
+  pool.addColorStop(0.7, 'rgba(232, 180, 112, 0.2)');
+  pool.addColorStop(1, 'rgba(228, 174, 106, 0)');
   ctx.fillStyle = pool;
-  ctx.fillRect(-W, -H, W * 2, H * 2);
-  ctx.restore();
-  // ② 展翅鹰形 + 盾徽（GOLD_MATRIX_PATTERN 16×24，格边长 = H/24）
-  const cell = H / GOLD_MATRIX_PATTERN.length;
-  const ox = cx - (GOLD_MATRIX_PATTERN[0].length * cell) / 2;
-  for (let r = 0; r < GOLD_MATRIX_PATTERN.length; r++) {
-    const line = GOLD_MATRIX_PATTERN[r];
-    for (let c = 0; c < line.length; c++) {
-      if (line[c] !== '#') continue;
-      const px = ox + (c + 0.5) * cell;
-      const py = (r + 0.5) * cell;
-      const grad = ctx.createRadialGradient(px, py, 0, px, py, cell * 0.62);
-      grad.addColorStop(0, 'rgba(255, 241, 205, 0.96)');
-      grad.addColorStop(0.5, 'rgba(233, 190, 110, 0.88)');
-      grad.addColorStop(1, 'rgba(212, 158, 70, 0)');
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.arc(px, py, cell * 0.62, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-  // ③ 星点点缀：两侧留白带 + 3 档大小 + 5 颗四角星芒（确定性 LCG）
-  const rnd = makeLcg(0x09e17a);
-  const inBody = (x: number, y: number): boolean =>
-    Math.abs(x - cx) < W * 0.21 && Math.abs(y - cy) < H * 0.3;
-  for (let i = 0; i < 34; i++) {
-    const x = rnd() * W;
-    const y = rnd() * H;
-    if (inBody(x, y)) continue;
-    const roll = rnd();
-    const rad = roll > 0.9 ? 2.6 : roll > 0.6 ? 1.6 : 1;
-    ctx.fillStyle = `rgba(255, 240, 200, ${(0.4 + rnd() * 0.5).toFixed(3)})`;
-    ctx.beginPath();
-    ctx.arc(x, y, rad, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  for (let i = 0; i < 5; i++) {
-    const x = W * (0.1 + rnd() * 0.8);
-    const y = H * (0.08 + rnd() * 0.84);
-    if (inBody(x, y)) continue;
-    const len = 5 + rnd() * 5;
-    ctx.strokeStyle = `rgba(255, 244, 210, ${(0.5 + rnd() * 0.35).toFixed(3)})`;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(x - len, y);
-    ctx.lineTo(x + len, y);
-    ctx.moveTo(x, y - len);
-    ctx.lineTo(x, y + len);
-    ctx.stroke();
-  }
-  // ④ 椭圆外缘渐隐：光毯外沿溶入地面，不出硬边
-  ctx.save();
-  ctx.globalCompositeOperation = 'destination-out';
-  ctx.translate(cx, cy);
-  ctx.scale(1, H / W);
-  const fade = ctx.createRadialGradient(0, 0, W * 0.3, 0, 0, W * 0.52);
-  fade.addColorStop(0, 'rgba(0, 0, 0, 0)');
-  fade.addColorStop(1, 'rgba(0, 0, 0, 1)');
-  ctx.fillStyle = fade;
-  ctx.fillRect(-W, -H, W * 2, H * 2);
-  ctx.restore();
+  ctx.fillRect(0, 0, W, W);
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 4;
@@ -1711,17 +1646,19 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
   });
 
   // ---- P1-5 greenhouse 玻璃一致性（适配层覆盖；spec 数值不动，决策回写 spec 留给主理人）----
-  // 根因：glass-dark spec 自带 transmission 0.5，但色调 #101418 近黑 —— 透射光被乘成
-  // ≈6% 亮度，视觉读作不透明黑板，与 glass-clear 的透明观感不一致。
-  // 统一为「深色隐私玻璃但可透视」：high 档提高透射 + 提亮色调；
-  // medium/low 由下方既有归零回退接手（opacity 0.55 近似），门控行为与 glass-clear 一致。
-  // 透射 pass 本就因 glass-clear/crystal 存在，此处零新增 pass、零 DC 增量。
+  // 根因：高透射（0.82）+ 中灰色调下侧窗整条读作「天空色空带」，顶棚视觉悬空
+  // （第四轮审查 S1）。改走「隐私玻璃」观感：透射压到 0.18、色调近黑，
+  // 靠环境反射（envMapIntensity 1.35）给镜面层次替代透射 —— 玻璃读作深色实体，
+  // 座舱轮廓由反射勾勒，不再透出天空色。透射 pass 本就因 glass-clear/crystal
+  // 存在，此处零新增 pass、零 DC 增量；transparent 关闭（透射材质不再叠加混合）。
   const greenhouseMat = matById.get('glass-dark') ?? null;
   if (greenhouseMat) {
-    greenhouseMat.transmission = 0.82;
-    greenhouseMat.color.set(0x2e3640);
+    greenhouseMat.transmission = 0.18;
+    greenhouseMat.color.set(0x10151b);
+    greenhouseMat.roughness = 0.06;
+    greenhouseMat.envMapIntensity = 1.35;
     greenhouseMat.thickness = 0.02;
-    greenhouseMat.transparent = true;
+    greenhouseMat.transparent = false;
     greenhouseMat.needsUpdate = true;
   }
 
@@ -1804,7 +1741,9 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
   // 屏面朝向修正：工厂 plane-card 的 UI 面朝 +z（风挡方向），背对驾驶者 ——
   // FrontSide 材质下驾驶者视角整体背面剔除（屏「消失」），车外透过风挡才见灰板
   // （QA 终验 H4-tri-screen 灰白素板的真因）。绕局部 Y 旋转 π 让 UI 面向乘员。
-  for (const id of ['tri-screen', 'gauge-screen']) {
+  // rear-control-screen 同型缺陷：UI 面朝 +z 背对二排乘客（下方 N1 屏幕家族
+  // 处只做 UV 重映射、不翻面，无双重翻转风险）。
+  for (const id of ['tri-screen', 'gauge-screen', 'rear-control-screen']) {
     const node = byId.get(id);
     if (node) node.rotateY(Math.PI);
   }
@@ -1870,9 +1809,11 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
   const ownedTextures: THREE.Texture[] = [];
 
   // ---- EX-09 迎宾光毯（集成层运行时资产，同踏板先例：不进 spec/工厂）----
-  // 四车门下方各一张投影面（工厂坐标，X=±1.13 半嵌车身宽度，Z 取门板中心
-  // ±0.85/∓0.95，实测前后轮接地质心 z=±1.715±0.382 均不重叠），合并为单 mesh
-  // → +1 draw call。挂在 body 下（工厂坐标系），不进 batchMergeStatic 的遍历范围。
+  // 四车门下方各一张投影面（工厂坐标，X=±0.90 贴门下沿 —— 旧 ±1.13 时 0.72 宽
+  // 光斑总 span 2.98m，主体落在车外 0.48m 路面上；现 0.44 宽 × ±0.90 总 span
+  // 2.24m 收进车宽内。Z 取门板中心 ±0.85/∓0.95，实测前后轮接地质心
+  // z=±1.715±0.382 均不重叠），合并为单 mesh → +1 draw call。
+  // 挂在 body 下（工厂坐标系），不进 batchMergeStatic 的遍历范围。
   // 观感：无光照 MeshBasicMaterial 贴花（投影光不随场景明暗变化）+ 透明混合 +
   // 深度不写（贴在地面上不与路面 z-fight）。emissive 弱发光由贴图金芯亮度 +
   // 缓慢呼吸 + bloom 阈值以下的保守亮度承担；行驶中（>5km/h）淡出（无迎宾态）。
@@ -2316,6 +2257,20 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
     for (const barId of ['front-light-bar', 'bumper-light-strip']) {
       const barMesh = meshOf(barId);
       if (barMesh) remapUVToRegion(barMesh, 0.55, 0.95, 0.3, 0.7);
+    }
+  }
+  // S5 前脸贯穿灯带（front-light-bar）常亮签名：lamp-white 与盾徽面板/后保灯带
+  // 共享（head/mark 回退链也可能认领），不能整材质调强度 —— 克隆专供（同
+  // reflectorMat 先例：ID 不变、合批按材质实例独立成组），常亮 1.2 白色，
+  // 不接头灯/刹车联动。UV 已在上方向纯白灯带区重映射，克隆继承同一 emissiveMap。
+  {
+    const barMesh = meshOf('front-light-bar');
+    if (barMesh && whiteMat) {
+      const lightBarMat = whiteMat.clone();
+      lightBarMat.emissive.set(0xffffff);
+      lightBarMat.emissiveIntensity = 1.2;
+      lightBarMat.needsUpdate = true;
+      barMesh.material = lightBarMat;
     }
   }
   // P1-1 lamp-gold 图集 UV 分区：签名屏 → 点阵图案区；4 扬声器 + 2 高音罩 →
@@ -2806,7 +2761,9 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
    * 满刹 8.0 下亮带 ≈ 1.47 越阈起爆、间隙仍黑，爆发感增强。怠速压低反而削制动反馈（灯带全暗 = 玩家失去参照），故不动。
    */
   const TAIL_BASE = 2.0;
-  const HEAD_BASE = 2.5;
+  // 前脸签名增强（S5 朝向线索）：基础 2.5 正面视角辨识度不足，提到 3.2 ——
+  // 只动常亮基础值，setHeadlights 开关 / damp 联动映射语义不变（headTarget 同源）
+  const HEAD_BASE = 3.2;
   let brakeLevel = TAIL_BASE;
   let brakeTarget = TAIL_BASE;
   let headLevel = HEAD_BASE;
@@ -2954,6 +2911,44 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
         `可见 ${batchStats.drawCallsBefore} → ${batchStats.drawCallsAfter}，` +
         `Draw Call −${batchStats.drawCallReduction}`
     );
+  }
+
+  // ---- 轮拱衬筒（wheel-arch-liner）：配合工厂 body-lower 拱口开口，制造拱洞深度 ----
+  // 四个车轮位各一个黑色拱衬半筒（开口朝下/外），侧视轮上方读到深色拱内壁，
+  // 消除「轮上方薄壳贴皮」的空带感。运行时新增网格（同踏板/光毯先例：不进
+  // spec/工厂），挂在 body 下、且在 batchMergeStatic 之后加入 —— 合并器只遍历
+  // model 子树且此时本 mesh 尚不存在，天然不漏收/不重收（+~900 三角，预算内）。
+  // 轮位不写死：从工厂场景图 wheel-fl/fr/rl/rr 节点（wheels[].spin pivot）实测
+  // 世界坐标反算 body 局部坐标 —— 车身 rotY π、轮芯 x=±0.855 量级都以实例化后
+  // 实测为准，spec 再调轮距也不失配。
+  {
+    root.updateMatrixWorld(true);
+    // 半筒：CylinderGeometry 开口段 θ∈[0,π]，rotateZ(π/2) 后轴向沿 X（轮轴方向）、
+    // 拱顶朝 +Y；半径 0.44 与拱口 ≈0.45 内壁贴合，宽度 0.5 盖过胎宽（0.255）
+    const linerProto = new THREE.CylinderGeometry(
+      0.44, 0.44, 0.5, 14, 1, true, 0, Math.PI
+    ).rotateZ(Math.PI / 2);
+    const linerGeos: THREE.BufferGeometry[] = [];
+    const wp = new THREE.Vector3();
+    for (const w of wheels) {
+      w.spin.getWorldPosition(wp);
+      body.worldToLocal(wp);
+      linerGeos.push(linerProto.clone().translate(wp.x, wp.y, wp.z));
+    }
+    linerProto.dispose();
+    const linerGeo = mergeSafe(linerGeos);
+    for (const g of linerGeos) g.dispose();
+    const linerMat = new THREE.MeshStandardMaterial({
+      color: 0x0b0b0d,
+      roughness: 0.9,
+      metalness: 0,
+      side: THREE.DoubleSide // 凹面（拱内壁）/凸面都可能入画，双面保底
+    });
+    const liner = new THREE.Mesh(linerGeo, linerMat);
+    liner.name = 'wheel-arch-liner';
+    liner.castShadow = false;
+    liner.receiveShadow = false;
+    body.add(liner);
   }
 
   // ---- QA 钩子：#uvassert —— 图集串味验证（三角形-矩形相交法）----
@@ -3398,10 +3393,13 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
 
       // ---- EX-09 迎宾光毯：速度门控 + 缓慢呼吸 ----
       // 静止（<5km/h）= 迎宾态淡入；行驶中淡出（damp 帧率无关）。
-      // 呼吸幅度 ±16%（0.80..0.96 × 增益）：弱发光观感，不进 bloom。
+      // 门控 k=6：0.5s 量级收干净 —— k=3 时 55km/h 巡航仍拖 ~0.5s 残光带
+      // （用户截图的地面 X 光痕主因之一），提速到 6 后残光 <0.2s 消隐。
+      // 呼吸幅度 ±10%（0.55..0.65 × 增益）：基础亮度同步压低（光池收进车宽内
+      // 后亮度要跟随收敛，避免窄光斑过曝），仍不进 bloom。
       const carpetTarget = lastSpeedKmh < WELCOME_CARPET_SPEED_GATE ? 1 : 0;
-      welcomeGain = damp(welcomeGain, carpetTarget, 3, dt);
-      welcomeMat.opacity = (0.8 + 0.16 * Math.sin(now * 1.35)) * welcomeGain;
+      welcomeGain = damp(welcomeGain, carpetTarget, 6, dt);
+      welcomeMat.opacity = (0.55 + 0.1 * Math.sin(now * 1.35)) * welcomeGain;
       const welcomeVisible = welcomeGain > 0.02;
       if (welcomeMesh.visible !== welcomeVisible) welcomeMesh.visible = welcomeVisible;
 

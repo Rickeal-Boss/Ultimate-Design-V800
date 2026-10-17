@@ -81,22 +81,17 @@ export function motorForce(speed: number, throttle: number): number {
 }
 
 /**
- * 再生制动减速度 m/s²：b≤0.25 段纯电回收线性至 -0.15g，b>0.25 满回收混入机械制动。
- * 深踩退让：b≥0.85 起回收能力线性降至 75%（混动制动协调逻辑——重刹段让机械踏板力主导，
- * 保证「踩得越深越快」的单调性）。
+ * 再生制动「请求值」m/s²：b≤0.25 段纯电回收线性至 -0.15g，b>0.25 满回收混入机械制动。
+ * 注意（2026-10-17 摩擦圆改版）：这里只是回收请求，实际叠加量由 stepVehicle 按
+ * 抓地余量二次削减（机械优先的制动协调）——回收退让从「固定 75% 下限曲线」改为
+ * 「抓地优先的动态削减」，表现语义更真实：踩得越深、机械占比越高、回收越少。
+ * 原 fade 曲线（0.85→0.98→75%）在总钳制下会让 0.92→0.97 深踩反而慢 0.017s
+ * （建压段浅踩回收更高），与「踩得越深刹停不增时」契约冲突，已删。
  */
 export function regenDecel(brake: number): number {
   if (brake <= 0) return 0;
   const ratio = Math.min(1, brake / BRAKE.regenSplitRatio);
-  let fade = 1;
-  if (brake > BRAKE.regenFadeStart) {
-    const t = Math.min(
-      1,
-      (brake - BRAKE.regenFadeStart) / (0.98 - BRAKE.regenFadeStart)
-    );
-    fade = 1 - t * (1 - BRAKE.regenFadeFloor);
-  }
-  return BRAKE.regenMaxDecel * ratio * fade;
+  return BRAKE.regenMaxDecel * ratio;
 }
 
 /**
@@ -113,8 +108,14 @@ export function stepVehicle(state: VehicleState, dt: number, input: VehicleInput
   if (input.powerCut) {
     // 刹车段：动力切断，再生 + 机械制动。
     // 踏板断裂后由冗余回路提供全部制动力（regen 是否叠加由 REDUNDANCY.includeRegen 决定）。
+    // 制动协调（2026-10-17 摩擦圆改版，外部审查两轮 P1）：机械优先——
+    //   mech = min(demand, μg)，回收请求按抓地余量削减：regen = min(regenReq, μg − mech)。
+    //   ① 摩擦圆精确成立：任意时刻 mech+regen ≤ μg（旧实现只钳机械项，深踩 11.6~11.9 违规）；
+    //   ② 「踩得越深刹停用时不增」精确成立：总减速 = min(demand+regenReq, μg)，
+    //      对 demand 处处单调不减，且与 b 的分配方式无关；
+    //   ③ 回收退让仍然可见：深踩段 HUD 回收功率随机械占比上升而回落（b=1.0 时归零）。
     const redundant = Math.max(0, input.redundancyDecel ?? 0);
-    regen = redundant > 0
+    const regenRequest = redundant > 0
       ? (REDUNDANCY.includeRegen ? regenDecel(input.brake) : 0)
       : input.brake > 0
         ? regenDecel(input.brake)
@@ -123,6 +124,7 @@ export function stepVehicle(state: VehicleState, dt: number, input: VehicleInput
     state.mechDecelDemand = demand;
     // ABS 拟真：机械制动减速度 clamp 至 μg（冗余 2.70 m/s² 远低于上限，不触发钳制）
     mechDecel = Math.min(demand, BRAKE.absMaxDecel);
+    regen = Math.min(regenRequest, Math.max(0, BRAKE.absMaxDecel - mechDecel));
     // 热衰减：温度按摩擦功（F_mech × v）的时间积分累积——真实热衰减只认摩擦功，
     // 与「是否逼近抓地上限」无关（一次 200→0 满刹就应明显升温）。
     // 标定：brakeTempGain 使一次满刹（≈5.09 MJ）ΔT≈0.6，连续第二把触发 ×0.85。

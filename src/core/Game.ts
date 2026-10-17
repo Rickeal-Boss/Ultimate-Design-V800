@@ -34,6 +34,12 @@ const PHYSICS_HZ = 120;
  * 车明明在减速却灭灯。取 4.5（介于怠速 1.6 与全力 8 之间）：在刹，但不是你踩的。
  */
 const REDUNDANT_BRAKE_LIGHT = 4.5;
+/**
+ * 车模基准偏航（弧度）：spec 坐标系车头 +Z，游戏前进方向 -Z，
+ * createV800CarAdapter 构建时给 body.rotation.y = π。任何复位/翻滚重置
+ * 都必须保留该偏航、只清俯仰/横滚——清零即整车调头（2026-10-17 外部审查实锤）。
+ */
+const MODEL_BASE_YAW = Math.PI;
 
 export class Game {
   private readonly scene = new THREE.Scene();
@@ -177,7 +183,10 @@ export class Game {
     this.crashWorld.reset();
     this.car.root.position.set(0, 0, 0);
     this.car.root.quaternion.identity();
-    this.car.body.rotation.set(0, 0, 0);
+    // 模型 spec 坐标系车头朝 +Z（preview 审查页口径），游戏前进方向为 -Z：
+    // body 恒定偏航 π（见 V800Adapter 构建处）。复位只清俯仰/横滚——
+    // 清成 0 会整车调头 180°（车尾朝前跑，即用户主诉的「正反面颠倒」）。
+    this.car.body.rotation.set(0, MODEL_BASE_YAW, 0);
     this.car.setBrakeHeat(0);
     this.car.setBrakeLights(1.6);
     this.prevDistance = 0;
@@ -355,7 +364,7 @@ export class Game {
         this.hud.setActiveView('crash');
         this.settleTimer = 0;
         this.hud.setRedundancyActive(false);
-        this.car.body.rotation.set(0, 0, 0);
+        this.car.body.rotation.set(0, MODEL_BASE_YAW, 0); // 保留基准偏航 π，只清俯仰/横滚
         this.crashWorld.begin(this.car.root, speedMs, this.road.barrierBlocks);
         this.crashElapsed = 0;
         this.sfx.impact(1);
