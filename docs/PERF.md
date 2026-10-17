@@ -258,3 +258,18 @@ tumblehome/收窄/腰鼓是逐顶点函数（依赖 wy/wz），轮廓点天然�
 | 预算 | **55,576 tri / 93.9%**（+1,112 恰为 body-lower bevel）；71 mesh；#uvassert 0 越界+密度 0 超阈 |
 | 回归 | strict-quality PASS / tsc 0 / vitest 58/58 / build ✓ / Edge 实机 6 机位（尾灯金 9034、红 657） |
 | 遗留（R7） | 封闭格栅面板（前脸 tan 面未黑化）、风挡反光白块形状、后视镜悬浮盒、尾门面无细节、全局 smooth normals（UV 安全焊法） |
+
+## 附录 F · R7「黑版+座舱」波实测记录（2026-10-17）
+
+用户指令：外观对齐黑色版本参考图（B1/A6，忽略糅合的多色版本）、补齐内饰。实机截图须与参考图基本一致。
+
+| 项 | 结果 |
+|---|---|
+| 黑色版本 | paint-upper → 曜石黑 #0F0F12（rough0.28/metal0.7）、paint-lower → #0A0A0C；mirror-l/r→黑、roof-rails→哑黑、roof-panel/spoiler→亮黑（消尾视灰板）；wheel-alloy → #DADDDF 亮银（D1 轮毂参考） |
+| 座舱可视化根因 | **47 件内饰挂在 cabin-interior（scale 1.72/1.5/4.2, pos z−2.1）下被放大平移飞出车外**（座椅世界 z≈9.5）——「内饰缺失」是字面事实。容器归恒等后子件世界设计值直接生效 |
+| 前排重排 | 30 件 z 重排（cowl z1.63 锚）：dash 1.55-1.60 / tri-screen 1.42 / steering 1.30 / 一排座椅 0.92 / 门板 z 0.45-1.6（前）与 −1.0-0.12（滑门）/ headliner-front 0.1（原 1.825 伸出车顶前缘 0.6m 悬空）/ starlight 0.30 |
+| 定位语义修复 | 工厂优先用非退化 attachment.localStart（世界系平铺）定位：tweeter attachment z 3.34→1.5；speaker 4 件重写门板局部坐标；ambient-strip tubePath 绝对坐标但节点 pos 多加 [0,0.115,2.1] → 归零；vent-grille z 3.21→1.56；cabin-floor 无旋转挤出锚 −0.15→−1.95 |
+| 玻璃 | trans 0.10→0.38（B1 黑版侧窗为深烟灰，需透出座舱；窗帘已压暗）；非 high 档 fallback opacity 0.85→0.68 |
+| 内饰压暗 | leather-warm #C08A5E→#7A5236、wood→#4A2410（H4 暗棕舱基准，消透过玻璃的杂色带） |
+| 验证 | 全组件 bbox 包络扫描 0 越界（自建 r7_all_probe/r7_maxz）；内饰 68 件全部落位；整车 bbox 恢复 5.603；strict PASS / #uvassert 0 越界 / tsc 0 / vitest 58/58 / build ✓ / Edge 6 机位 |
+| 遗留（R8） | 轮圈贴图斑点（黑车下显脏）、tri-screen 背面白屏、尾灯金像素判据在黑环境下失效（红 657 稳定）、前脸中网镀铬条与盾标细节、cabin 相机取景优化 |

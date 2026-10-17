@@ -2964,9 +2964,9 @@
           "debrisMaterial": "base"
         }
       },
-      "material": "matte-black",
+      "material": "paint-upper",
       "materialLayers": [
-        "matte-black"
+        "paint-upper"
       ],
       "deformations": [],
       "joints": [],
@@ -9502,9 +9502,9 @@
           "debrisMaterial": "base"
         }
       },
-      "material": "dpillar-silver",
+      "material": "paint-upper",
       "materialLayers": [
-        "dpillar-silver"
+        "paint-upper"
       ],
       "deformations": [],
       "joints": [],
@@ -11235,9 +11235,9 @@
           "debrisMaterial": "base"
         }
       },
-      "material": "dpillar-silver",
+      "material": "paint-upper",
       "materialLayers": [
-        "dpillar-silver"
+        "paint-upper"
       ],
       "deformations": [],
       "joints": [],
@@ -12090,9 +12090,9 @@
           "debrisMaterial": "base"
         }
       },
-      "material": "dpillar-silver",
+      "material": "matte-black",
       "materialLayers": [
-        "dpillar-silver"
+        "matte-black"
       ],
       "deformations": [],
       "joints": [],
@@ -16256,7 +16256,7 @@
         "position": [
           0.0,
           0.0,
-          -2.1
+          0.0
         ],
         "rotation": [
           0,
@@ -16264,9 +16264,9 @@
           0
         ],
         "scale": [
-          1.72,
-          1.5,
-          4.2
+          1,
+          1,
+          1
         ]
       },
       "actionProfile": {
@@ -16477,7 +16477,7 @@
         "position": [
           0.0,
           0.3,
-          -0.15
+          -1.95
         ],
         "rotation": [
           0,
@@ -16694,7 +16694,7 @@
         "position": [
           0.0,
           0.986208,
-          3.170414
+          1.55
         ],
         "rotation": [
           -0.06,
@@ -16909,7 +16909,7 @@
         "position": [
           0.0,
           0.8,
-          3.35
+          1.6
         ],
         "rotation": [
           0,
@@ -17123,7 +17123,7 @@
         "position": [
           0.0,
           0.905,
-          3.207
+          1.62
         ],
         "rotation": [
           0,
@@ -17253,7 +17253,7 @@
         "position": [
           0.0,
           1.12,
-          3.24
+          1.42
         ],
         "rotation": [
           -0.1,
@@ -17391,7 +17391,7 @@
         "position": [
           0.72,
           1.14,
-          3.16
+          1.36
         ],
         "rotation": [
           -0.14,
@@ -17614,7 +17614,7 @@
         "position": [
           0.0,
           0.86,
-          3.2125
+          1.58
         ],
         "rotation": [
           0,
@@ -17736,12 +17736,12 @@
         "localStart": [
           0.8825,
           1.1,
-          3.34
+          1.5
         ],
         "localEnd": [
           0.8825,
           1.145,
-          3.34
+          1.5
         ],
         "contactType": "flush",
         "embedDepth": 0.01,
@@ -17758,7 +17758,7 @@
         "position": [
           0.86,
           1.1,
-          3.34
+          1.5
         ],
         "rotation": [
           0,
@@ -17887,12 +17887,12 @@
         "localStart": [
           -0.8825,
           1.1,
-          3.34
+          1.5
         ],
         "localEnd": [
           -0.8825,
           1.145,
-          3.34
+          1.5
         ],
         "contactType": "flush",
         "embedDepth": 0.01,
@@ -17909,7 +17909,7 @@
         "position": [
           -0.86,
           1.1,
-          3.34
+          1.5
         ],
         "rotation": [
           0,
@@ -18031,7 +18031,7 @@
         "position": [
           0.54,
           0.96,
-          3.06
+          1.3
         ],
         "rotation": [
           1.15,
@@ -18457,7 +18457,7 @@
         "position": [
           0.0,
           0.62,
-          2.72
+          1.35
         ],
         "rotation": [
           0,
@@ -18604,7 +18604,7 @@
         "position": [
           0.0,
           0.845,
-          3.22
+          1.28
         ],
         "rotation": [
           0,
@@ -18756,7 +18756,7 @@
         "position": [
           0.095,
           0.7965,
-          2.96
+          1.12
         ],
         "rotation": [
           -1.5708,
@@ -18900,7 +18900,7 @@
         "position": [
           0.115,
           0.8,
-          2.9
+          1.05
         ],
         "rotation": [
           1.5708,
@@ -19038,7 +19038,7 @@
         "position": [
           -0.115,
           0.8,
-          2.9
+          1.05
         ],
         "rotation": [
           1.5708,
@@ -19644,7 +19644,7 @@
         "position": [
           0.52,
           0.6325,
-          2.766
+          0.92
         ],
         "rotation": [
           0,
@@ -20388,7 +20388,7 @@
         "position": [
           -0.52,
           0.6325,
-          2.766
+          0.92
         ],
         "rotation": [
           0,
@@ -23498,7 +23498,7 @@
         "position": [
           0.0,
           1.7,
-          1.825
+          0.1
         ],
         "rotation": [
           0,
@@ -24082,14 +24082,14 @@
       "attachment": {
         "parentSocket": "headliner-front.edge",
         "localStart": [
-          -0.74,
           0.0,
-          2.1
+          0.0,
+          0.0
         ],
         "localEnd": [
-          -0.74,
           0.0,
-          2.1
+          0.0,
+          0.0
         ],
         "contactType": "embed",
         "embedDepth": 0.008,
@@ -24105,8 +24105,8 @@
       "transform": {
         "position": [
           0.0,
-          0.115,
-          2.1
+          0.0,
+          0.0
         ],
         "rotation": [
           0,
@@ -24262,14 +24262,14 @@
       "attachment": {
         "parentSocket": "headliner-front.edge",
         "localStart": [
-          0.74,
           0.0,
-          2.1
+          0.0,
+          0.0
         ],
         "localEnd": [
-          0.74,
           0.0,
-          2.1
+          0.0,
+          0.0
         ],
         "contactType": "embed",
         "embedDepth": 0.008,
@@ -24285,8 +24285,8 @@
       "transform": {
         "position": [
           0.0,
-          0.115,
-          2.1
+          0.0,
+          0.0
         ],
         "rotation": [
           0,
@@ -24502,8 +24502,8 @@
       "transform": {
         "position": [
           0.94,
-          0.86,
-          2.375
+          0.8,
+          1.02
         ],
         "rotation": [
           0,
@@ -24686,14 +24686,14 @@
       "attachment": {
         "parentSocket": "door-panel-fl.inner",
         "localStart": [
-          0.0,
-          0.0,
-          0.575
+          -0.04,
+          0.1,
+          0.28
         ],
         "localEnd": [
-          0.0,
-          0.0,
-          0.575
+          -0.04,
+          0.1,
+          0.28
         ],
         "contactType": "flush",
         "embedDepth": 0.004,
@@ -24708,9 +24708,9 @@
       },
       "transform": {
         "position": [
-          -0.0423,
-          -0.12,
-          0.475
+          -0.04,
+          0.1,
+          0.28
         ],
         "rotation": [
           0,
@@ -24923,8 +24923,8 @@
       "transform": {
         "position": [
           -0.94,
-          0.86,
-          2.375
+          0.8,
+          1.02
         ],
         "rotation": [
           0,
@@ -25107,14 +25107,14 @@
       "attachment": {
         "parentSocket": "door-panel-fr.inner",
         "localStart": [
-          0.0,
-          0.0,
-          0.575
+          0.04,
+          0.1,
+          0.28
         ],
         "localEnd": [
-          0.0,
-          0.0,
-          0.575
+          0.04,
+          0.1,
+          0.28
         ],
         "contactType": "flush",
         "embedDepth": 0.004,
@@ -25129,9 +25129,9 @@
       },
       "transform": {
         "position": [
-          0.0423,
-          -0.12,
-          0.475
+          0.04,
+          0.1,
+          0.28
         ],
         "rotation": [
           0,
@@ -25344,8 +25344,8 @@
       "transform": {
         "position": [
           0.94,
-          0.86,
-          0.575
+          0.8,
+          -0.45
         ],
         "rotation": [
           0,
@@ -25528,14 +25528,14 @@
       "attachment": {
         "parentSocket": "door-panel-rl.inner",
         "localStart": [
-          0.0,
-          0.0,
-          0.575
+          -0.04,
+          0.1,
+          0.0
         ],
         "localEnd": [
-          0.0,
-          0.0,
-          0.575
+          -0.04,
+          0.1,
+          0.0
         ],
         "contactType": "flush",
         "embedDepth": 0.004,
@@ -25550,9 +25550,9 @@
       },
       "transform": {
         "position": [
-          -0.0423,
-          -0.12,
-          0.475
+          -0.04,
+          0.1,
+          0.0
         ],
         "rotation": [
           0,
@@ -25765,8 +25765,8 @@
       "transform": {
         "position": [
           -0.94,
-          0.86,
-          0.575
+          0.8,
+          -0.45
         ],
         "rotation": [
           0,
@@ -25949,14 +25949,14 @@
       "attachment": {
         "parentSocket": "door-panel-rr.inner",
         "localStart": [
-          0.0,
-          0.0,
-          0.575
+          0.04,
+          0.1,
+          0.0
         ],
         "localEnd": [
-          0.0,
-          0.0,
-          0.575
+          0.04,
+          0.1,
+          0.0
         ],
         "contactType": "flush",
         "embedDepth": 0.004,
@@ -25971,9 +25971,9 @@
       },
       "transform": {
         "position": [
-          0.0423,
-          -0.12,
-          0.475
+          0.04,
+          0.1,
+          0.0
         ],
         "rotation": [
           0,
@@ -26455,7 +26455,7 @@
         "position": [
           0.0,
           1.801,
-          1.82
+          0.3
         ],
         "rotation": [
           0,
@@ -26679,7 +26679,7 @@
         "position": [
           0.0,
           0.86,
-          3.206
+          1.56
         ],
         "rotation": [
           0,
@@ -31204,9 +31204,9 @@
           "debrisMaterial": "base"
         }
       },
-      "material": "matte-black",
+      "material": "paint-upper",
       "materialLayers": [
-        "matte-black"
+        "paint-upper"
       ],
       "deformations": [],
       "joints": [],
@@ -32701,7 +32701,7 @@
         "position": [
           0.0,
           0.79,
-          2.83
+          1.12
         ],
         "rotation": [
           0,
@@ -32856,7 +32856,7 @@
         "position": [
           -0.095,
           0.7965,
-          2.96
+          1.12
         ],
         "rotation": [
           -1.5708,
@@ -33062,7 +33062,7 @@
         "position": [
           0.0,
           0.806,
-          3.22
+          1.28
         ],
         "rotation": [
           0,
@@ -33209,7 +33209,7 @@
         "position": [
           0.0,
           0.818,
-          3.22
+          1.28
         ],
         "rotation": [
           1.5708,
@@ -40780,11 +40780,11 @@
   "materials": [
     {
       "id": "paint-upper",
-      "name": "车漆·香槟金(上半/金版)",
+      "name": "车漆·曜石黑(车身)",
       "type": "standard",
       "shaderModel": "MeshPhysicalMaterial",
-      "baseColor": "#C9A86B",
-      "color": "#C9A86B",
+      "baseColor": "#0F0F12",
+      "color": "#0F0F12",
       "albedo": {
         "base": "#C9A86B",
         "secondary": "#0E0E12",
@@ -40797,8 +40797,8 @@
       "textureResolution": null,
       "textureProjection": null,
       "surfaceFrequencyBands": null,
-      "roughness": 0.32,
-      "metalness": 0.65,
+      "roughness": 0.28,
+      "metalness": 0.7,
       "normal": null,
       "bump": null,
       "displacement": null,
@@ -40838,11 +40838,11 @@
     },
     {
       "id": "paint-lower",
-      "name": "车漆·深黑棕(下半)",
+      "name": "车漆·曜石黑(下围)",
       "type": "standard",
       "shaderModel": "MeshPhysicalMaterial",
-      "baseColor": "#221A14",
-      "color": "#221A14",
+      "baseColor": "#0A0A0C",
+      "color": "#0A0A0C",
       "albedo": {
         "base": "#221A14",
         "secondary": "#0E0E12",
@@ -41032,8 +41032,8 @@
         "2026-10-16 傍晚波决策回写：适配层实测 near-black×transmission 视觉不透明，参数由 0.5/#101418 提至 0.82/#2e3640",
         "隐私玻璃：外部近不透明；车内向前视野由 windshield(glass-clear) 承担；2026-10-17 第四轮审查 S1 决议"
       ],
-      "notes": "隐私玻璃：外部近不透明；车内向前视野由 windshield(glass-clear) 承担；R5 S1 决议 trans 0.18，R6 修订 0.10（侧视内饰透色实证）",
-      "transmission": 0.1,
+      "notes": "隐私玻璃：R7 重校——B1 黑版侧窗为深烟灰非全黑，需透出座舱形体（H4/I5 基准）；窗帘已压暗 ×0.48",
+      "transmission": 0.38,
       "transparent": false,
       "thickness": 0.02,
       "ior": 1.5,
@@ -41151,8 +41151,8 @@
       "name": "轮圈抛光银",
       "type": "standard",
       "shaderModel": "MeshPhysicalMaterial",
-      "baseColor": "#C8CACD",
-      "color": "#C8CACD",
+      "baseColor": "#DADDDF",
+      "color": "#DADDDF",
       "albedo": {
         "base": "#C8CACD",
         "secondary": "#C8CACD",
@@ -41165,7 +41165,7 @@
       "textureResolution": null,
       "textureProjection": null,
       "surfaceFrequencyBands": null,
-      "roughness": 0.2,
+      "roughness": 0.15,
       "metalness": 0.95,
       "normal": null,
       "bump": null,
@@ -41755,11 +41755,11 @@
     },
     {
       "id": "leather-warm",
-      "name": "内饰暖棕橙皮革",
+      "name": "内饰暗棕皮革(H4)",
       "type": "standard",
       "shaderModel": "MeshStandardMaterial",
-      "baseColor": "#C08A5E",
-      "color": "#C08A5E",
+      "baseColor": "#7A5236",
+      "color": "#7A5236",
       "albedo": {
         "base": "#C08A5E",
         "secondary": "#C08A5E",
@@ -41868,8 +41868,8 @@
       "name": "车削红棕木纹",
       "type": "standard",
       "shaderModel": "MeshPhysicalMaterial",
-      "baseColor": "#6B3418",
-      "color": "#6B3418",
+      "baseColor": "#4A2410",
+      "color": "#4A2410",
       "albedo": {
         "base": "#6B3418",
         "secondary": "#6B3418",

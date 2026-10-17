@@ -120,7 +120,7 @@ const GOLD_BRAKE_RATIO = 0.75;
 /** 非 high 档把 transmission 降级为普通半透明时的不透明度（按材质 ID） */
 const GLASS_OPACITY_FALLBACK: Record<string, number> = {
   // 隐私玻璃降级也应偏暗不偏透（与上方 high 档隐私玻璃观感一致）
-  'glass-dark': 0.85,
+  'glass-dark': 0.68,
   'glass-clear': 0.4,
   crystal: 0.6,
 };
@@ -1673,7 +1673,8 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
       mat.opacity = GLASS_OPACITY_FALLBACK[id] ?? DEFAULT_GLASS_OPACITY;
       // 隐私玻璃反射补偿（R6，录屏 14-51 实证）：非金属 Fresnel 在侧视近平角
       // 反射率只有 ~4%，玻璃读作纯黑纸板。掺入少量金属度（F0≈0.22）让环境
-      // 反射在全角度可见，dark smoked 观感；high 档走透射路径不受影响。
+      // 反射在全角度可见，dark smoked 观感；R7 降档 opacity 0.85→0.68 透出座舱形体
+      // （用户主诉「内饰缺失」的根因之一：降级档玻璃近不透明）；high 档走透射路径不受影响。
       if (id === 'glass-dark') {
         mat.metalness = 0.22;
         mat.roughness = 0.08;
