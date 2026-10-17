@@ -95,20 +95,47 @@ function makeSkyMaterial(sunDir: THREE.Vector3): THREE.ShaderMaterial {
   });
 }
 
-/** 从迷你场景烘 PMREM 环境贴图（天空 + 简化山体挡板 + 地面） */
+/**
+ * P0-1 影棚柔光箱布局（替换原 3 块暗灰板 0xb0b0c4）：
+ * PMREM 环境内容决定车漆反射观感。原 3 块暗灰小板反射强度不足，
+ * 车身侧面拉不出连续横向反光带（对标报告 ① 号差距）。
+ * 布局（均为 MeshBasic 匀色板 + DoubleSide 保证从原点可见）：
+ *  - 长条顶置大 softbox：亮白（微暖 0xfff6ee 呼应黄昏），沿车身长度方向（z）
+ *    拉长、抬高 —— 在车漆侧面照出连续横向亮带（判定标准）；
+ *  - 前侧补光板：暖白 0xffe4cc（弱一档），呼应黄昏太阳方位的漫射补光；
+ *  - 后侧弱补板：冷灰紫 0xd8d2e2，防止暗侧完全死黑，同时给暗侧轮廓留反射层次。
+ * 黄昏基调约束：板只提供「 studio 反射内容」，不做主光源（主光仍是方向光 +
+ * 天空球）；板面积/高度克制，整体环境不被拉成白天。
+ */
 function bakeEnvironment(renderer: THREE.WebGLRenderer, sunDir: THREE.Vector3, size: number): THREE.Texture {
   const pmremScene = new THREE.Scene();
   pmremScene.add(new THREE.Mesh(new THREE.SphereGeometry(size, 48, 24), makeSkyMaterial(sunDir)));
-  const boardMat = new THREE.MeshBasicMaterial({ color: 0xb0b0c4, side: THREE.BackSide });
-  for (const [x, y, z, w, h] of [
-    [0, 60, 0, 120, 14],
-    [-70, 30, -20, 50, 8],
-    [70, 30, 20, 50, 8]
-  ] as const) {
-    const board = new THREE.Mesh(new THREE.PlaneGeometry(w, h), boardMat);
-    board.position.set(x, y, z);
-    board.lookAt(0, 0, 0);
-    pmremScene.add(board);
+  const softboxes: Array<{ pos: [number, number, number]; w: number; h: number; color: number; gain: number; alongZ: boolean }> = [
+    // 顶置长条大 softbox：长边沿 z（车身纵向），160 长 × 40 宽 @ y 95。
+    // gain 2.4：车漆 envMapIntensity 已被 R10b 压到 0.55（防大理石漩涡），
+    // 白色 1.0 板反射进黑漆太弱拉不出反光带（游戏页 t9 实拍实证）——
+    // PMREM 走 HalfFloat 保留 HDR，板色 >1 成「过曝柔光箱」才能在暗侧漆面
+    // 照出连续横向亮带（对标报告 ① 判定标准）。
+    { pos: [0, 95, 0], w: 40, h: 160, color: 0xfff6ee, gain: 3.6, alongZ: true },
+    // 前侧补光板（车头方向）：暖白弱一档
+    { pos: [0, 34, 120], w: 95, h: 42, color: 0xffe4cc, gain: 1.35, alongZ: false },
+    // 后侧弱补板：冷灰紫，防暗侧死黑
+    { pos: [0, 30, -130], w: 80, h: 36, color: 0xd8d2e2, gain: 1.15, alongZ: false }
+  ];
+  for (const box of softboxes) {
+    const mat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(box.color).multiplyScalar(box.gain),
+      side: THREE.DoubleSide
+    });
+    const geo = new THREE.PlaneGeometry(box.w, box.h);
+    if (box.alongZ) {
+      // 顶置板：w=40 沿 x、h=160 沿 y；rotateX(-π/2) 后 y 边落到 z（长边沿车身纵向）、法线 +y
+      geo.rotateX(-Math.PI / 2);
+    }
+    const plane = new THREE.Mesh(geo, mat);
+    plane.position.set(...box.pos);
+    if (!box.alongZ) plane.lookAt(0, 0, 0);
+    pmremScene.add(plane);
   }
   const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(2000, 2000),

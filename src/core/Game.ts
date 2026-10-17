@@ -14,6 +14,7 @@ import { Postfx } from '../render/Postfx';
 import { createRenderer } from '../render/Renderer';
 import { createV800CarAdapter, type CarLike } from '../model/V800Adapter';
 import { Environment } from '../render/scene/Environment';
+import { ContactShadow } from '../render/scene/ContactShadow';
 
 import { Lighting } from '../render/scene/Lighting';
 import { Road } from '../render/scene/Road';
@@ -48,6 +49,7 @@ export class Game {
   private readonly postfx: Postfx;
   private readonly env: Environment;
   private readonly lighting: Lighting;
+  private readonly contactShadow: ContactShadow;
   private readonly road: Road;
   private readonly car: CarLike;
   private readonly fx: FxSystems;
@@ -98,6 +100,7 @@ export class Game {
     this.rig = new CameraRig(window.innerWidth / window.innerHeight);
     this.env = new Environment(this.scene, this.renderer, quality.envMapSize);
     this.lighting = new Lighting(this.scene, quality, this.env.sunDirection);
+    this.contactShadow = new ContactShadow(this.scene);
     this.road = new Road(this.scene, this.renderer.capabilities.getMaxAnisotropy());
     new Terrain(this.scene);
     this.car = createV800CarAdapter(quality.tier);
@@ -427,6 +430,7 @@ export class Game {
     // ---- 灯光 / 环境 / 路侧 ----
     const focus = this.sm.phase === 'crashed' ? this.crashWorld.focus : this.car.root.position;
     this.lighting.update(focus);
+    this.contactShadow.update(this.car.body);
     this.env.update(this.rig.camera.position);
     this.road.update(this.time);
 
@@ -565,6 +569,7 @@ export class Game {
     this.fx.dispose();
     this.sliders.dispose();
     this.postfx.dispose();
+    this.contactShadow.dispose();
     this.crashWorld.dispose();
     this.car.dispose();
     this.result.destroy();

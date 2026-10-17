@@ -1,0 +1,569 @@
+{
+ "id": "body-lower",
+ "name": "车身下半壳体",
+ "level": "macro",
+ "role": "body",
+ "importance": 1.0,
+ "confidence": 0.95,
+ "primitive": "extrude",
+ "topologyClass": "conforming-shell",
+ "topologyRationale": "连续车身侧面轮廓挤出体，单壳表达全部纵向型面",
+ "geometryDescriptor": {
+  "profile2D": {
+   "points": [
+    [
+     2.219,
+     0.2
+    ],
+    [
+     2.25,
+     0.2062
+    ],
+    [
+     2.2763,
+     0.2237
+    ],
+    [
+     2.2938,
+     0.25
+    ],
+    [
+     2.3,
+     0.281
+    ],
+    [
+     2.3,
+     0.3411
+    ],
+    [
+     2.302,
+     0.3591
+    ],
+    [
+     2.308,
+     0.3761
+    ],
+    [
+     2.3177,
+     0.3913
+    ],
+    [
+     2.3306,
+     0.404
+    ],
+    [
+     2.5584,
+     0.583
+    ],
+    [
+     2.5684,
+     0.592
+    ],
+    [
+     2.577,
+     0.6022
+    ],
+    [
+     2.5842,
+     0.6135
+    ],
+    [
+     2.5899,
+     0.6256
+    ],
+    [
+     2.6511,
+     0.7841
+    ],
+    [
+     2.6562,
+     0.8018
+    ],
+    [
+     2.6579,
+     0.82
+    ],
+    [
+     2.6562,
+     0.8383
+    ],
+    [
+     2.6513,
+     0.8559
+    ],
+    [
+     2.6174,
+     0.9446
+    ],
+    [
+     2.6069,
+     0.9637
+    ],
+    [
+     2.5917,
+     0.9792
+    ],
+    [
+     2.5728,
+     0.9901
+    ],
+    [
+     2.5517,
+     0.9955
+    ],
+    [
+     2.2521,
+     1.0298
+    ],
+    [
+     2.251,
+     1.0299
+    ],
+    [
+     2.25,
+     1.03
+    ],
+    [
+     2.249,
+     1.0301
+    ],
+    [
+     2.2479,
+     1.0301
+    ],
+    [
+     1.28,
+     1.09
+    ],
+    [
+     1.05,
+     1.09
+    ],
+    [
+     -1.7971,
+     1.09
+    ],
+    [
+     -1.7986,
+     1.09
+    ],
+    [
+     -1.8,
+     1.09
+    ],
+    [
+     -1.8014,
+     1.0899
+    ],
+    [
+     -1.8029,
+     1.0898
+    ],
+    [
+     -2.4906,
+     1.0505
+    ],
+    [
+     -2.4953,
+     1.0502
+    ],
+    [
+     -2.4999,
+     1.0496
+    ],
+    [
+     -2.5046,
+     1.0487
+    ],
+    [
+     -2.5091,
+     1.0477
+    ],
+    [
+     -2.7364,
+     0.9909
+    ],
+    [
+     -2.7554,
+     0.9835
+    ],
+    [
+     -2.7719,
+     0.9715
+    ],
+    [
+     -2.7849,
+     0.9557
+    ],
+    [
+     -2.7934,
+     0.9371
+    ],
+    [
+     -2.8159,
+     0.8652
+    ],
+    [
+     -2.8205,
+     0.8432
+    ],
+    [
+     -2.821,
+     0.8207
+    ],
+    [
+     -2.8173,
+     0.7985
+    ],
+    [
+     -2.8095,
+     0.7773
+    ],
+    [
+     -2.7072,
+     0.565
+    ],
+    [
+     -2.7033,
+     0.5578
+    ],
+    [
+     -2.6986,
+     0.551
+    ],
+    [
+     -2.6933,
+     0.5448
+    ],
+    [
+     -2.6874,
+     0.5391
+    ],
+    [
+     -2.5077,
+     0.3839
+    ],
+    [
+     -2.496,
+     0.3714
+    ],
+    [
+     -2.4873,
+     0.3567
+    ],
+    [
+     -2.4818,
+     0.3404
+    ],
+    [
+     -2.48,
+     0.3234
+    ],
+    [
+     -2.48,
+     0.272
+    ],
+    [
+     -2.4745,
+     0.2444
+    ],
+    [
+     -2.4589,
+     0.2211
+    ],
+    [
+     -2.4356,
+     0.2055
+    ],
+    [
+     -2.408,
+     0.2
+    ],
+    [
+     -2.1287,
+     0.2
+    ],
+    [
+     -2.1654,
+     0.3443
+    ],
+    [
+     -2.1532,
+     0.4927
+    ],
+    [
+     -2.0935,
+     0.629
+    ],
+    [
+     -1.9927,
+     0.7386
+    ],
+    [
+     -1.8618,
+     0.8095
+    ],
+    [
+     -1.715,
+     0.834
+    ],
+    [
+     -1.5682,
+     0.8095
+    ],
+    [
+     -1.4373,
+     0.7386
+    ],
+    [
+     -1.3365,
+     0.629
+    ],
+    [
+     -1.2768,
+     0.4927
+    ],
+    [
+     -1.2646,
+     0.3443
+    ],
+    [
+     -1.3013,
+     0.2
+    ],
+    [
+     1.3013,
+     0.2
+    ],
+    [
+     1.2646,
+     0.3443
+    ],
+    [
+     1.2768,
+     0.4927
+    ],
+    [
+     1.3365,
+     0.629
+    ],
+    [
+     1.4373,
+     0.7386
+    ],
+    [
+     1.5682,
+     0.8095
+    ],
+    [
+     1.715,
+     0.834
+    ],
+    [
+     1.8618,
+     0.8095
+    ],
+    [
+     1.9927,
+     0.7386
+    ],
+    [
+     2.0935,
+     0.629
+    ],
+    [
+     2.1532,
+     0.4927
+    ],
+    [
+     2.1654,
+     0.3443
+    ],
+    [
+     2.1287,
+     0.2
+    ]
+   ],
+   "depth": 2.006,
+   "bevel": {
+    "thickness": 0.015,
+    "size": 0.012,
+    "offset": -0.012,
+    "segments": 3
+   },
+   "shaping": {
+    "space": "side",
+    "planTaperNose": {
+     "zFrom": 1.35,
+     "zTo": 2.658,
+     "amount": 0.035,
+     "yGate": 1.12,
+     "yFade": 0.12
+    },
+    "planTaperTail": {
+     "zFrom": -1.95,
+     "zTo": -2.821,
+     "amount": 0.022,
+     "yGate": 1.12,
+     "yFade": 0.12
+    },
+    "waistBulge": {
+     "yCenter": 0.62,
+     "ySpan": 0.45,
+     "amount": 0.012
+    }
+   }
+  },
+  "topologyIntent": "lofted side-profile shell with large-radius silhouette fillets",
+  "edgeTreatment": {
+   "type": "rounded",
+   "bevelRadius": 0.12,
+   "segments": 4
+  },
+  "deformationStack": [
+   {
+    "type": "fillet",
+    "axis": "profile-z-y",
+    "radius": 0.12,
+    "segments": 4,
+    "notes": "侧视轮廓 11 处倒圆角（前下/前下肩上/翼子板/肩线/尾切断上/尾切断/尾下/后下），MPV 硬表面语言的大半径圆角折线；参考图 B1/BC/BD/U2 均非直角折线"
+   },
+   {
+    "type": "taper",
+    "axis": "y",
+    "factor": 0.94,
+    "notes": "型面下窄上宽：profile 前缘 z=2.665@y0.82 收至 z=2.30@y0.20，腰线以下内收（rotomold draft 观感）"
+   }
+  ],
+  "uvStrategy": "generated procedural coordinates",
+  "normalStrategy": "vertex normals"
+ },
+ "parent": "root",
+ "attachment": null,
+ "dimensions": {
+  "width": 2.006,
+  "height": 0.89,
+  "depth": 5.479,
+  "units": "meters",
+  "confidence": 0.95
+ },
+ "transform": {
+  "position": [
+   1.003,
+   0,
+   0
+  ],
+  "rotation": [
+   0,
+   -1.5708,
+   0
+  ],
+  "scale": [
+   1,
+   1,
+   1
+  ]
+ },
+ "actionProfile": {
+  "animationRole": "static",
+  "pivot": {
+   "mode": "center",
+   "localPosition": [
+    0,
+    0,
+    0
+   ],
+   "axis": [
+    0,
+    1,
+    0
+   ],
+   "confidence": 0.95
+  },
+  "transformChannels": {
+   "translate": false,
+   "rotate": false,
+   "scale": false,
+   "bend": false,
+   "twist": false,
+   "detach": false,
+   "visibility": true,
+   "materialState": true
+  },
+  "sockets": [],
+  "collider": {
+   "type": "box",
+   "offset": [
+    0,
+    0,
+    0
+   ],
+   "scale": [
+    1,
+    1,
+    1
+   ],
+   "isTrigger": false,
+   "notes": ""
+  },
+  "constraints": [],
+  "destruction": {
+   "breakable": false,
+   "fractureGroup": "root",
+   "seamRefs": [],
+   "detachableFragments": [],
+   "breakImpulse": 0,
+   "debrisMaterial": "base"
+  }
+ },
+ "material": "paint-upper",
+ "materialLayers": [
+  "paint-upper"
+ ],
+ "deformations": [],
+ "joints": [],
+ "seams": [],
+ "localFeatures": [
+  {
+   "name": "腰线高直",
+   "kind": "proportion",
+   "note": "y≈1.05-1.09 贯穿"
+  },
+  {
+   "name": "尾部肩线外拱",
+   "kind": "surface",
+   "note": "后翼子板 z-1.9~-2.6 外拱"
+  },
+  {
+   "name": "轮廓圆角化",
+   "kind": "surface",
+   "note": "前/尾/肩线 11 处 r0.08–0.12 圆弧，消除直角折线"
+  }
+ ],
+ "surfaceDetail": {
+  "macroRoughness": 0,
+  "microRoughness": 0,
+  "bumpAmplitude": 0,
+  "normalPattern": "",
+  "displacementPattern": "",
+  "occlusionPattern": "",
+  "edgeWearPattern": "",
+  "notes": ""
+ },
+ "evidenceRefs": [
+  "img-design-black",
+  "img-trunk"
+ ],
+ "details": [
+  "d-chrome-belt",
+  "d-rocker-step"
+ ],
+ "fidelityTier": "hero",
+ "colorMaterialRecipe": {
+  "dominantAlbedo": "rgba(34, 26, 20, 1.0)",
+  "secondaryAlbedo": "rgba(201, 168, 107, 1.0)",
+  "materialClass": "metal",
+  "materialClassConfidence": 0.9
+ },
+ "notes": "治粗糙：侧视轮廓倒圆角（11 处，r 0.08–0.12），替换原 15 点直棱折线。 | 2026-10-17 第四轮几何改造：侧视 profile 在实测轮心 z=±1.715 处开挖轮拱真开口（拱半径 0.452=胎0.382+0.07，拱顶 y0.834，拱脚落底边 y0.2），CCW 绕序保持；配合 wheel 节点 x ±0.875→±0.855 轮芯内收。"
+}

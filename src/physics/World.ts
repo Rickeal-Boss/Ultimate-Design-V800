@@ -22,12 +22,15 @@ interface BarrierPair {
 
 /**
  * 台车碰撞盒半尺寸（x=半宽 / y=半高 / z=半长）。
- * 与车模实测包围盒对齐：车宽 2.006 → 半宽 1.003，车高 1.85 → 半高 0.925，
- * 车长 5.495 → 半长 2.748（z 保守取 2.66，保持撞障点回归数值不变）。
- * 原半宽 1.1 比车宽半值 1.003 宽 9.7%，视觉上车体还没贴到路障就已判定碰撞。
+ * 与车模实测包围盒对齐（R11 终波鼻面压缩后）：车宽 2.006 → 半宽 1.003（取 1.01），
+ * 车高 1.85 → 半高 0.925（取 0.92），车长 5.189 → 半长 2.595（取 2.60）。
+ * 视觉车体 z 范围 −2.821..+2.368（几何中心偏后 −0.2265），台车盒经
+ * addShape 偏移精确对位（CAR_BOX_Z_OFFSET），前后覆盖误差 <1cm——
+ * 原居中近似盒在鼻面压缩后前端悬空 0.29m，会读作"车头未及就撞"。
  */
-const HALF_EXTENTS = new CANNON.Vec3(1.01, 0.92, 2.66);
+const HALF_EXTENTS = new CANNON.Vec3(1.01, 0.92, 2.6);
 const CAR_BODY_Y = 0.95;
+const CAR_BOX_Z_OFFSET = -0.2265;
 
 export class World {
   private scene: THREE.Scene;
@@ -85,14 +88,14 @@ export class World {
       world.addBody(wall);
     }
 
-    // 台车（撞路障时动态路障块一起激活）
+    // 台车（撞路障时动态路障块一起激活）；盒体带 z 偏移精确对位视觉车体中心
     const car = new CANNON.Body({
       mass: VEHICLE.totalMassKg,
-      shape: new CANNON.Box(HALF_EXTENTS),
       position: new CANNON.Vec3(carRoot.position.x, CAR_BODY_Y, carRoot.position.z),
       linearDamping: 0.04,
       angularDamping: 0.08
     });
+    car.addShape(new CANNON.Box(HALF_EXTENTS), new CANNON.Vec3(0, 0, CAR_BOX_Z_OFFSET));
     car.quaternion.set(
       carRoot.quaternion.x,
       carRoot.quaternion.y,

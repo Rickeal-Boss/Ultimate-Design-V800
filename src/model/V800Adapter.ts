@@ -921,6 +921,52 @@ function createNameplateTexture(): THREE.CanvasTexture {
 }
 
 /**
+ * P1-6 尾门镀铬字标「Zunjie V800」（1024×200，透明底）。
+ * 对标报告 ④ 号差距：尾门缺独立 chrome 字母件。与 EX-26 车名牌（黑底铭牌）
+ * 不同：尾门字标直接贴车漆，画布必须透明底（透明贴花），字面复用同一套
+ * 五段铬渐变 + 细暗描边；运行时叠加面片承载（挂 body 下、不进合批）。
+ * 文字性商标引用，同 MAEXTRO / 尊界 V800 nameplate 免责先例。
+ */
+function createTailBadgeTexture(): THREE.CanvasTexture {
+  const W = 1024;
+  const H = 200;
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d')!;
+  ctx.clearRect(0, 0, W, H); // 透明底
+  const text = 'Zunjie V800';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = '600 120px "Segoe UI", Arial, sans-serif';
+  const natural = ctx.measureText(text).width;
+  const scale = Math.min(1, (W * 0.9) / natural);
+  ctx.save();
+  ctx.translate(W / 2, H / 2);
+  ctx.scale(scale, 1);
+  // 铬面：天光白 → 亮银 → 暗银 → 地平反光 → 暗银（同 EX-26 铬渐变）
+  const mid = H * 0.42;
+  const chrome = ctx.createLinearGradient(0, -mid, 0, mid);
+  chrome.addColorStop(0, 'rgb(248, 250, 253)');
+  chrome.addColorStop(0.34, 'rgb(204, 210, 220)');
+  chrome.addColorStop(0.52, 'rgb(110, 118, 130)');
+  chrome.addColorStop(0.56, 'rgb(234, 238, 244)');
+  chrome.addColorStop(1, 'rgb(94, 102, 114)');
+  ctx.fillStyle = chrome;
+  ctx.fillText(text, 0, 0);
+  // 细暗描边把铬字从车漆上收出来
+  ctx.strokeStyle = 'rgba(10, 12, 16, 0.75)';
+  ctx.lineWidth = 2.5;
+  ctx.strokeText(text, 0, 0);
+  ctx.restore();
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/**
  * EX-07 盾徽面板分区贴图（512×512 图集）。
  * lamp-white 是共享材质（shield-emblem-panel + front-light-bar + bumper-light-strip），
  * 三者的盒面 UV 都是全幅 0..1 —— 直接画纹样会把曜日线串到两条贯穿灯带上。
@@ -2521,6 +2567,49 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
     }
   }
 
+  // ---- P1-6 尾门镀铬字标（运行时叠加面片，挂 body 下、不进合批）----
+  // 对标报告 ④ 号差距。位置实测：tailgate 组件世界 bbox（工厂坐标车尾 -Z 面），
+  // 必须在 batchMergeStatic **之前**测 —— 合并会把 tailgate 子树的 leaf mesh 摘掉，
+  // 之后 setFromObject 得到空盒。字牌挂 body（不在 model 子树）→ 合并器遍历不到，
+  // 但 bbox 数据此刻有效。面朝车尾（body 局部 -Z = 世界 +Z），离尾门面外偏
+  // 1.5cm + 匹配尾门 rotation.x 倾角，防 z-fight。透明贴花 depthWrite:false，
+  // MeshBasic + 铬渐变贴图（无光照贴花，同迎宾光毯先例）。+1 draw call。
+  if (typeof document !== 'undefined') {
+    const tgNode = byId.get('tailgate');
+    if (tgNode) {
+      model.updateMatrixWorld(true);
+      const tgBox = new THREE.Box3().setFromObject(tgNode);
+      if (!tgBox.isEmpty()) {
+        const tgCenter = tgBox.getCenter(new THREE.Vector3());
+        const tgSize = tgBox.getSize(new THREE.Vector3());
+        // 世界 → body 局部（body rotY(π)：车尾世界 +Z ↔ body 局部 -Z）
+        const centerLocal = body.worldToLocal(tgCenter.clone());
+        const badgeTex = createTailBadgeTexture();
+        ownedTextures.push(badgeTex);
+        const badgeGeo = new THREE.PlaneGeometry(0.56, 0.11);
+        const badgeMat = new THREE.MeshBasicMaterial({
+          map: badgeTex,
+          transparent: true,
+          depthWrite: false
+        });
+        const badge = new THREE.Mesh(badgeGeo, badgeMat);
+        badge.name = 'tailgate-badge';
+        badge.castShadow = false;
+        badge.receiveShadow = false;
+        // 车尾面外偏 1.5cm（body 局部 -Z 方向），y 取 bbox 中点略上（尾灯带下方高度），
+        // 宽度 0.56 ≈ 尾门宽的 ~52%（细长字牌，与贯穿灯带留间隙）
+        badge.position.set(
+          centerLocal.x,
+          centerLocal.y + tgSize.y * 0.08,
+          centerLocal.z - tgSize.z / 2 - 0.015
+        );
+        badge.rotation.y = Math.PI; // 面朝 body 局部 -Z（车尾）
+        badge.rotation.x = 0.1; // 匹配尾门 pivot 的 rotation.x 倾角
+        body.add(badge);
+      }
+    }
+  }
+
   // ---- P1 内饰织物贴图：皮革 ×3 / 木纹 / 麂皮 / 窗帘 / 地毯 ----
   // 七个材质 spec 声明 textureless（normal/bump 全 null），这里的 Canvas 程序化
   // 贴图是唯一支撑。可平铺纹理全车通用 → 合批照合不误；唯一需要分区的是
@@ -2814,7 +2903,10 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
       { 灯组: '星尘颗粒', 期望: 'lamp-star', 命中: starDustMat ? 'lamp-star' : '(无)' },
       { 灯组: '头灯 LED 点阵', 期望: 'lamp-head', 命中: ledMat ? 'lamp-head' : '(无)' },
       { 灯组: '头灯 3-LED 点阵灯珠(EX-08)', 期望: 'led-dot×6', 命中: ledDotCount > 0 ? `remapped×${ledDotCount}` : '(无)' },
-      { 灯组: '车名牌镀铬字', 期望: 'plate', 命中: plateMat ? 'plate' : '(无)' },
+      // R11b 工厂（22:00 版）front-plate 组件被移除，plate 材质零 mesh 引用 ——
+      // matById 永远收不到，(无) 是 spec 正确状态而非断链；EX-26 名牌贴图逻辑
+      // 因 plateMat null 跳过（尾门另有 P1-6 tailgate-badge 承担镀铬字职责）
+      { 灯组: '车名牌镀铬字', 期望: 'plate（spec 已移除引用）', 命中: plateMat ? 'plate' : '(无·spec 移除)' },
       { 灯组: '盾徽面板分区贴图', 期望: 'lamp-white', 命中: whiteMat ? 'lamp-white' : '(无)' },
       { 灯组: '皮革图集(素面+菱格)', 期望: 'leather-warm', 命中: leatherWarmMat ? 'leather-warm' : '(无)' },
       { 灯组: '皮革色调校准(深Cognac)', 期望: '#7A4034', 命中: leatherWarmMat?.map ? '#7A4034' : '(无)' },
@@ -2823,6 +2915,7 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
       { 灯组: '后保反光条分段(EX-31)', 期望: 'lamp-red 克隆', 命中: reflectorMat ? 'reflector-clone' : '(无)' },
       { 灯组: '轮心黑底盾徽(EX-33)', 期望: 'lamp-mark 克隆', 命中: wheelCapMat ? 'wheel-badge' : '(无)' },
       { 灯组: '迎宾光毯(EX-09)', 期望: 'welcome-carpet', 命中: welcomeMesh ? 'welcome-carpet' : '(无)' },
+      { 灯组: '尾门镀铬字标(P1-6)', 期望: 'tailgate-badge', 命中: body.children.some((c) => c.name === 'tailgate-badge') ? 'tailgate-badge' : '(无)' },
       { 灯组: '屏幕家族UI(三联/后排/扶手)', 期望: 'screen-ui', 命中: matById.has('screen-ui') ? 'screen-ui' : '(无)' },
       { 灯组: '深棕皮革粒面', 期望: 'leather-dark', 命中: leatherDarkMat ? 'leather-dark' : '(无)' },
       { 灯组: '米白皮革粒面', 期望: 'leather-ivory', 命中: leatherIvoryMat ? 'leather-ivory' : '(无)' },
@@ -2839,16 +2932,18 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
   }
 
   /**
-   * 怠速尾灯基线（实测复核后维持 2.0，推导如下）。
-   * 前值 2.0 被报「偏亮、灯带间隙被辉光糊」——但糊的来源是几何时期 12 条灯带 +
-   * 灯芯同强度发光、6mm 视觉间隙在斜视角下被灯芯红晕填满，而非 2.0 超阈：
-   * emissive #E03040（线性 ≈ [0.746, 0.030, 0.052]）× 2.0 的相对亮度 ≈ 0.37，
-   * 低于 UnrealBloom 阈值 0.72（Postfx.ts），怠速本就不触发 bloom。
-   * EX-28 撤几何改贴图（createTailBandAtlasTexture → 暗场内衬）后逐档核算：
-   * 亮带 0.96 / 间隙 0（纯黑零发光）→ 怠速 2.0 下间隙完全熄灭，3+3 灯带清晰可辨；
-   * 满刹 8.0 下亮带 ≈ 1.47 越阈起爆、间隙仍黑，爆发感增强。怠速压低反而削制动反馈（灯带全暗 = 玩家失去参照），故不动。
+   * 怠速尾灯基线（R11 质感波 2.0 → 2.5，对标报告 ③ 号差距复核）。
+   * 历史：几何灯带时期 2.0 曾被报「偏亮」——根因是 12 条几何灯带 + 灯芯同强度
+   * 发光糊住 6mm 间隙，非强度超阈；EX-28 撤几何改贴图后间隙为纯黑零发光，
+   * 强度提升不再糊间隙。R11 复核：怠速 2.0 下 emissive #E03040 × 2.0 相对亮度
+   * ≈ 0.37，低于 UnrealBloom 阈值 0.72 —— 怠速尾灯完全不晕开，缺「贯穿式尾灯
+   * 红光晕」的展厅观感。提到 2.5（≈0.47 线性，过 ACES 后接近阈值边缘）：
+   * 截图目检怠速红晕若仍不 bloom 再微调（保持 < 满刹 8.0 的爆发梯度）。
+   * 联动链不动：brakeLevel 从 TAIL_BASE 出发，housing-dark 红带 / lamp-gold
+   * 金屏（×0.75）/ 灯芯随刹车同源联动，基线抬升后刹车爆发同步增强。
+   * 反光条克隆件 REFLECTOR_EMISSIVE_INTENSITY 0.55 静态弱值不动（EX-31 机制）。
    */
-  const TAIL_BASE = 2.0;
+  const TAIL_BASE = 2.5;
   // 前脸签名增强（S5 朝向线索）：基础 2.5 正面视角辨识度不足，提到 3.2 ——
   // 只动常亮基础值，setHeadlights 开关 / damp 联动映射语义不变（headTarget 同源）
   const HEAD_BASE = 3.2;

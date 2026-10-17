@@ -15,6 +15,9 @@ export class Lighting {
   readonly sunDirection: THREE.Vector3;
   private readonly fill: THREE.DirectionalLight;
   private readonly fillTarget = new THREE.Object3D();
+  /** P0-3 rim 轮廓光：冷白低角掠过车尾暗侧，勾一条轮廓亮线（无阴影，零额外开销） */
+  private readonly rim: THREE.DirectionalLight;
+  private readonly rimTarget = new THREE.Object3D();
   private readonly mapSize: number;
   private readonly ortho: number;
   private readonly basisX = new THREE.Vector3();
@@ -52,6 +55,16 @@ export class Lighting {
     scene.add(this.fillTarget);
     this.fill.target = this.fillTarget;
 
+    // P0-3 rim 轮廓光：冷白 0xcfe0ff，从车后侧低角入射（太阳反方位的侧面），
+    // 掠过车身暗侧边缘形成一条冷光轮廓线（展厅感关键）。无阴影、强度 0.8 ——
+    // 黑漆漫反射弱（roughness 0.42），0.6 实拍轮廓线不可读（t9 实证），提到 0.8。
+    // 只勾轮廓不抢黄昏主光的暖调。
+    this.rim = new THREE.DirectionalLight(0xcfe0ff, 0.8);
+    this.rim.castShadow = false;
+    scene.add(this.rim);
+    scene.add(this.rimTarget);
+    this.rim.target = this.rimTarget;
+
     // 阴影 texel 对齐的两个基向量（垂直于太阳方向）
     this.basisX.crossVectors(new THREE.Vector3(0, 1, 0), sunDirection).normalize();
     this.basisY.crossVectors(sunDirection, this.basisX).normalize();
@@ -76,5 +89,12 @@ export class Lighting {
       this.aligned.z - this.sunDirection.z * 50
     );
     this.fillTarget.position.copy(this.aligned);
+    // rim 轮廓光：车后侧低角（+Z = 车尾方向，+X = 太阳反方位侧面），低高度掠射
+    this.rim.position.set(
+      this.aligned.x + 18,
+      this.aligned.y + 3.5,
+      this.aligned.z + 26
+    );
+    this.rimTarget.position.copy(this.aligned);
   }
 }

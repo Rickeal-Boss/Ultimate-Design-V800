@@ -16,11 +16,14 @@ import {
   configureZunjieV800LuxuryMPVRenderer,
 } from './createV800Model';
 import { createV800CarAdapter } from './V800Adapter';
+import { ContactShadow } from '../render/scene/ContactShadow';
 
 declare global {
   interface Window {
     __v800Capture: (name: string, azimuthDeg?: number, pitchDeg?: number, distance?: number, targetYOffset?: number) => string;
     __v800Info: () => { tris: number; calls: number; box: number[] };
+    /** QA 调试：主相机（camera 未 add 进 scene，scene.traverse 找不到；near 恢复等用） */
+    __v800Camera: THREE.PerspectiveCamera;
   }
 }
 
@@ -81,9 +84,16 @@ const ground = new THREE.Mesh(
 );
 ground.rotation.x = -Math.PI / 2;
 ground.position.y = center.y - box.getSize(new THREE.Vector3()).y / 2 + 0.001;
-// 地面盘移除：避免污染轮廓分割（审查用纯背景）
+// P0-2 车下软接触阴影（R11 质感波 QA 验证）：#assembled 模式挂载 + 一次性对位。
+// 地面盘同步恢复（纯背景约定只服务裸模型轮廓分割，assembled 模式要验「落地感」）。
+if (ASSEMBLED) {
+  scene.add(ground);
+  const contactShadow = new ContactShadow(scene);
+  contactShadow.update(model);
+}
 
 frameZunjieV800LuxuryMPVCamera(camera, model);
+window.__v800Camera = camera; // QA：暴露主相机（见 global 声明注释）
 renderer.render(scene, camera);
 status.textContent = 'ready';
 
