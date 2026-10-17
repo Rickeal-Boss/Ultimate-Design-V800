@@ -2576,7 +2576,7 @@
               1.1395
             ]
           ],
-          "depth": 2.006,
+          "depth": 1.86,
           "shaping": {
             "space": "side",
             "tumblehome": {
@@ -2615,7 +2615,7 @@
       },
       "transform": {
         "position": [
-          1.003,
+          0.93,
           0,
           0
         ],
@@ -23935,7 +23935,7 @@
         "position": [
           0.0,
           1.835,
-          1.41
+          0.55
         ],
         "rotation": [
           0,
@@ -41032,7 +41032,7 @@
         "2026-10-16 傍晚波决策回写：适配层实测 near-black×transmission 视觉不透明，参数由 0.5/#101418 提至 0.82/#2e3640",
         "隐私玻璃：外部近不透明；车内向前视野由 windshield(glass-clear) 承担；2026-10-17 第四轮审查 S1 决议"
       ],
-      "notes": "隐私玻璃：R7 重校——B1 黑版侧窗为深烟灰非全黑，需透出座舱形体（H4/I5 基准）；窗帘已压暗 ×0.48",
+      "notes": "隐私玻璃：R8 玻璃带内缩 1.86 露柱骨架；trans 0.38 维持（B1 深烟灰）",
       "transmission": 0.38,
       "transparent": false,
       "thickness": 0.02,
@@ -41165,7 +41165,7 @@
       "textureResolution": null,
       "textureProjection": null,
       "surfaceFrequencyBands": null,
-      "roughness": 0.15,
+      "roughness": 0.28,
       "metalness": 0.95,
       "normal": null,
       "bump": null,
@@ -41187,8 +41187,8 @@
       "shaderNotes": [
         "密辐大饼式亮面"
       ],
-      "notes": "",
-      "envMapIntensity": 1.15,
+      "notes": "R8: rough 0.28/envInt 0.55 —— 0.15/1.15 时轮圈镜面反射 RoomEnvironment 暖光读作锈斑（实机 r7-side 橙色大理石纹真因）",
+      "envMapIntensity": 0.55,
       "textureless": {
         "declared": true,
         "evidence": [

@@ -1220,7 +1220,7 @@ const QUILT_CELL_WORLD_M = 0.06;
  * 参考 U1 半剖内饰（酒红）与 I5/I6 二排零重力（深 Cognac）的交集方向；
  * spec 材质颜色 #C08A5E 不动（spec 所有权），校准只落在贴图像素侧。
  */
-const LEATHER_WARM_BASE: [number, number, number] = [122, 64, 52];
+const LEATHER_WARM_BASE: [number, number, number] = [88, 48, 40];
 
 /**
  * 胎侧字环 + 模压环线（画在 W×H 画布上，随后被逐像素采样进颜色/高度场）。
@@ -1763,7 +1763,44 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
   const wheels: WheelPivot[] = [];
   for (const tag of ['wheel-fl', 'wheel-fr', 'wheel-rl', 'wheel-rr']) {
     const pivot = byId.get(tag);
-    if (pivot) wheels.push({ spin: pivot });
+    if (!pivot) continue;
+    // ---- R8 轮心对轴（修「轮子反着乱晃」根因）----
+    // 工厂 spin 节点原点 ≠ 轮心：wheel-fl 节点在 z1.333，而 tire 子件挂在
+    // local z+0.382（×节点 scale0.764 ≈ 世界 +0.29）——直接绕节点转 rotation.x
+    // 等于让整个轮体绕轴「公转」，视觉上就是乱晃 + 倒转感。
+    // 修法：包一层 hub 组（原点=轮心），把轮子子树整体 attach 进去（保持世界
+    // 位姿不变），spin 改转 hub。合批保护清单按 /^wheel-/ 命名匹配，hub 命名
+    // 沿用 wheel-* 前缀天然受保护。
+    const hub = new THREE.Group();
+    hub.name = `${tag}-hub`;
+    // 轮心实测：取 pivot 子树里第一个 tire-* mesh 的世界 bbox 中心，反算 pivot 局部坐标
+    // （工厂在 mesh 与 spec 节点间包了中间组，position 不可直读；bbox 才是真值）。
+    // 必须先落位 hub 再 attach 子件——attach 按当时 hub 世界矩阵重算子件局部坐标。
+    pivot.updateMatrixWorld(true);
+    let centerLocal: THREE.Vector3 | null = null;
+    pivot.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh || centerLocal) return;
+      const comp = (m.userData as { sculptComponent?: { id?: string } }).sculptComponent;
+      const isTire = comp?.id?.startsWith('tire-') || (m.name || '').includes('tire');
+      if (!isTire) return;
+      const b = new THREE.Box3().setFromObject(m);
+      centerLocal = pivot.worldToLocal(b.getCenter(new THREE.Vector3()));
+    });
+    if (!centerLocal) {
+      pivot.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (!m.isMesh || centerLocal) return;
+        const b = new THREE.Box3().setFromObject(m);
+        centerLocal = pivot.worldToLocal(b.getCenter(new THREE.Vector3()));
+      });
+    }
+    if (centerLocal) hub.position.copy(centerLocal);
+    pivot.add(hub);
+    const moved = [...pivot.children].filter((c) => c !== hub);
+    for (const c of moved) hub.attach(c);
+    pivot.updateMatrixWorld(true);
+    wheels.push({ spin: hub });
   }
 
   // 注：辐条 InstancedMesh 已从 spec 整体删除（原 4 个系统 80 实例 = 15,360 面，

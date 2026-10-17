@@ -273,3 +273,15 @@ tumblehome/收窄/腰鼓是逐顶点函数（依赖 wy/wz），轮廓点天然�
 | 内饰压暗 | leather-warm #C08A5E→#7A5236、wood→#4A2410（H4 暗棕舱基准，消透过玻璃的杂色带） |
 | 验证 | 全组件 bbox 包络扫描 0 越界（自建 r7_all_probe/r7_maxz）；内饰 68 件全部落位；整车 bbox 恢复 5.603；strict PASS / #uvassert 0 越界 / tsc 0 / vitest 58/58 / build ✓ / Edge 6 机位 |
 | 遗留（R8） | 轮圈贴图斑点（黑车下显脏）、tri-screen 背面白屏、尾灯金像素判据在黑环境下失效（红 657 稳定）、前脸中网镀铬条与盾标细节、cabin 相机取景优化 |
+
+## 附录 G · R8「轮轴+柱骨架」波实测记录（2026-10-17）
+
+| 项 | 结果 |
+|---|---|
+| 轮子乱晃根因 | **spin 轴心≠轮心**：工厂 wheel-fl 节点原点 z1.333，tire/rim 子件经中间组偏移至轮心 z1.715（+0.382 世界）——绕节点转=轮体绕轴公转（乱晃+倒转感）。修法：适配层包 hub 组（bbox 实测轮心反算 pivot 局部坐标后落位，再 attach 子件保持世界位姿），spin 改转 hub。探针实证 spin@=meshcenter@=±1.715 |
+| 玻璃带柱骨架 | greenhouse depth 2.006→1.86（半边0.93），B/C/D 柱外缘(±0.95) proud 2cm——侧窗从整条黑板恢复「分窗+亮柱」图形 |
+| 轮圈锈斑真因 | wheel-alloy rough0.15/envInt1.15 镜面反射 RoomEnvironment 暖光 → rough0.28/envInt0.55 |
+| 顶棚白板 | overhead-console z1.41 超出车顶前缘1.14 → 0.55 |
+| 内饰透色 | LEATHER_WARM_BASE [122,64,52]→[88,48,40]（透过玻璃的红棕更暗沉） |
+| 回归 | strict PASS / tsc 0 / vitest 58/58 / build ✓ / Edge 6机位（尾灯红657稳定） |
+| 遗留（R9） | 前挡内仪表台白板材质、玻璃带柱分段微缝、rim 残余暖反射、前脸中网镀铬条+盾标、车头俯视收窄加强 |
