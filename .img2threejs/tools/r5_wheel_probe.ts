@@ -8,7 +8,7 @@ import * as THREE from 'three';
 
 const model = createZunjieV800LuxuryMPVModel({ textureSize: 256 });
 model.updateMatrixWorld(true);
-const ids = ['wheel-fl','tire-fl','rim-fl','arch-fr','arch-rr','greenhouse-glass','apillar-l','apillar-r','cowl-panel','windshield','roof-panel','hood-panel','body-lower','rocker-l','chrome-belt-l','taillamp-l','lantern-bezel-l','tail-chrome-strip','tailgate','emblem-shield'];
+const ids = ['body-lower','greenhouse-glass','roof-panel','front-end','tailgate','chrome-belt-l','chrome-belt-r','dpillar-l','dpillar-r','tire-fl','tire-rl','wheel-fl'];
 const box = new THREE.Box3();
 model.traverse((o) => {
   const m = o as THREE.Mesh;

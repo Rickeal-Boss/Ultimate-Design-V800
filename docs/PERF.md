@@ -237,3 +237,24 @@ Input 接线、HUD/Result 三档结算文案与样式、踏板几何（无新依
 | 游戏层 | Game.ts 复位保留 MODEL_BASE_YAW=π（修整车调头）；CameraRig orbit 相位 3π/4（t=0 前脸 45°）；Vehicle.ts 摩擦圆机械优先总钳制（mech+regen ≤ μg，fade 曲线删除，总减速单调性保持） |
 | 回归 | tsc 0 错误 / vitest **58/58**（新增摩擦圆扫掠+回收退让 2 项）/ vite build 通过 |
 | 遗留（R6 候选） | 封闭格栅面板（185 满需腾位）、玻璃带柱分段微凹槽、鼻面下缘白条亮度、前唇镀铬条观感 |
+
+## 附录 E · R6「骨架」波实测记录（2026-10-17）
+
+外部《车辆模型细粒度失效根因审查》定罪（全部代码级实锤）：① 工厂注释自述管线为刀刃/叉齿/尖刺设计
+（createV800Model 147–150 行），bevelEnabled 全局 false；② steps:1 + 全等宽挤出 → 车身无侧向造型；
+③ `.add()` 372 处、8266 行、适配层 0 顶点级造型。修法采其第 1/2 步（放样范式顶点整形）但**不换骨架**：
+tumblehome/收窄/腰鼓是逐顶点函数（依赖 wy/wz），轮廓点天然沿长度分布 → steps:1 即可表达，零面数成本；
+唯一需要增面的 bevel 圆角仅 +1,112 tri。
+
+| 项 | 结果 |
+|---|---|
+| 生成器升级 | profile2D 新增 `bevel{thickness,size,offset,segments}` + `shaping{space,tumblehome,planTaperNose/Tail,waistBulge,nodeOffset}`；keepWidth：depth 内缩 2×bt 并 translate 回 [0,depth]，节点定位约定不变；整形后 computeVertexNormals |
+| body-lower | bevel（cap 内缩 1.2cm、棱边圆角）+ 鼻收窄 3.5%/尾 2.2%（yGate 1.12）+ 腰鼓 1.2% → bbox 宽 2.030=2.006+0.024 ✓ |
+| greenhouse-glass | **居中 bug 修复**（pos.x 0.915→1.003，R5 改 depth 2.006 未同步；一侧凸出 8.8cm/另一侧凹进 8.8cm）+ tumblehome topScale 0.92（顶点级实测 bottom 1.0030 → top 0.9228，≈7° 内倾） |
+| roof-panel | 1.6→1.94 加宽（消「悬浮窄帽」）+ U5 黑顶（matte-black）；roof-spoiler 跟随 |
+| front-end/tailgate | planTaper 随动（front 空间+nodeOffset）+ scale.x 1.0409 贴齐收窄后车身端面 |
+| chrome-belt/dpillar | belt ±1.006→±0.993（抵消 cap 内缩后保持 proud 1.2cm）；dpillar 缩宽 0.2→0.13 贴 tumblehome |
+| 玻璃材质 | trans 0.18→**0.10**（R5 决议修订：窗帘红金图案侧视透色实证）+ 非 high 档 metalness 0.22 补偿非金属 Fresnel（侧视近平角反射率仅 ~4% 的物理根因）+ 窗帘基色 ×0.48 |
+| 预算 | **55,576 tri / 93.9%**（+1,112 恰为 body-lower bevel）；71 mesh；#uvassert 0 越界+密度 0 超阈 |
+| 回归 | strict-quality PASS / tsc 0 / vitest 58/58 / build ✓ / Edge 实机 6 机位（尾灯金 9034、红 657） |
+| 遗留（R7） | 封闭格栅面板（前脸 tan 面未黑化）、风挡反光白块形状、后视镜悬浮盒、尾门面无细节、全局 smooth normals（UV 安全焊法） |

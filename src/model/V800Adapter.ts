@@ -1647,13 +1647,15 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
 
   // ---- P1-5 greenhouse 玻璃一致性（适配层覆盖；spec 数值不动，决策回写 spec 留给主理人）----
   // 根因：高透射（0.82）+ 中灰色调下侧窗整条读作「天空色空带」，顶棚视觉悬空
-  // （第四轮审查 S1）。改走「隐私玻璃」观感：透射压到 0.18、色调近黑，
+  // （第四轮审查 S1）。改走「隐私玻璃」观感：透射压到 0.10（R6 修订）、色调近黑，
   // 靠环境反射（envMapIntensity 1.35）给镜面层次替代透射 —— 玻璃读作深色实体，
   // 座舱轮廓由反射勾勒，不再透出天空色。透射 pass 本就因 glass-clear/crystal
   // 存在，此处零新增 pass、零 DC 增量；transparent 关闭（透射材质不再叠加混合）。
   const greenhouseMat = matById.get('glass-dark') ?? null;
   if (greenhouseMat) {
-    greenhouseMat.transmission = 0.18;
+    // trans 0.18→0.10（R6 修订，证据=用户录屏 14-51 与 R6 侧截图）：0.18 下窗帘/
+    // 仪表台顶的红金图案在侧视透出成排色块；0.10 保持「隐约可辨」的隐私玻璃语义。
+    greenhouseMat.transmission = 0.1;
     greenhouseMat.color.set(0x10151b);
     greenhouseMat.roughness = 0.06;
     greenhouseMat.envMapIntensity = 1.35;
@@ -1669,6 +1671,14 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
       mat.transmission = 0;
       mat.transparent = true;
       mat.opacity = GLASS_OPACITY_FALLBACK[id] ?? DEFAULT_GLASS_OPACITY;
+      // 隐私玻璃反射补偿（R6，录屏 14-51 实证）：非金属 Fresnel 在侧视近平角
+      // 反射率只有 ~4%，玻璃读作纯黑纸板。掺入少量金属度（F0≈0.22）让环境
+      // 反射在全角度可见，dark smoked 观感；high 档走透射路径不受影响。
+      if (id === 'glass-dark') {
+        mat.metalness = 0.22;
+        mat.roughness = 0.08;
+        mat.envMapIntensity = 1.6;
+      }
       mat.needsUpdate = true;
     }
   }
@@ -2696,9 +2706,11 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
   }
   const curtainMat = matById.get('curtain') ?? null;
   if (curtainMat && !curtainMat.map) {
+    // R6 压暗（基色 ×0.48）：窗帘原亮度在 trans 0.10 隐私玻璃后仍透出一排扎眼
+    // 红白图案（R6 侧视截图实证）；压到暗米色后隐约可辨、不再抢戏。
     applySurface(
       curtainMat,
-      createProceduralSurface(fabricSize, 0.5, curtainSampler([216, 207, 192], 53)),
+      createProceduralSurface(fabricSize, 0.5, curtainSampler([104, 99, 92], 53)),
       0.6
     );
   }

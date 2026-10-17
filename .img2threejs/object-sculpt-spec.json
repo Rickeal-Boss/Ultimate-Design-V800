@@ -2098,7 +2098,35 @@
               0.2
             ]
           ],
-          "depth": 2.006
+          "depth": 2.006,
+          "bevel": {
+            "thickness": 0.015,
+            "size": 0.012,
+            "offset": -0.012,
+            "segments": 3
+          },
+          "shaping": {
+            "space": "side",
+            "planTaperNose": {
+              "zFrom": 1.35,
+              "zTo": 2.658,
+              "amount": 0.035,
+              "yGate": 1.12,
+              "yFade": 0.12
+            },
+            "planTaperTail": {
+              "zFrom": -1.95,
+              "zTo": -2.821,
+              "amount": 0.022,
+              "yGate": 1.12,
+              "yFade": 0.12
+            },
+            "waistBulge": {
+              "yCenter": 0.62,
+              "ySpan": 0.45,
+              "amount": 0.012
+            }
+          }
         },
         "topologyIntent": "lofted side-profile shell with large-radius silhouette fillets",
         "edgeTreatment": {
@@ -2548,7 +2576,15 @@
               1.1395
             ]
           ],
-          "depth": 2.006
+          "depth": 2.006,
+          "shaping": {
+            "space": "side",
+            "tumblehome": {
+              "yBase": 1.101,
+              "yTop": 1.761,
+              "topScale": 0.92
+            }
+          }
         },
         "topologyIntent": "continuous dark DLO band, A/D-pillar roots filleted",
         "edgeTreatment": {
@@ -2579,7 +2615,7 @@
       },
       "transform": {
         "position": [
-          0.915,
+          1.003,
           0,
           0
         ],
@@ -2824,7 +2860,7 @@
               1.76
             ]
           ],
-          "depth": 1.6
+          "depth": 1.94
         },
         "topologyIntent": "roof shell with raised rear tier (EX-15) and filleted nose/rear-step",
         "edgeTreatment": {
@@ -2861,7 +2897,7 @@
       },
       "transform": {
         "position": [
-          0.8,
+          0.97,
           0,
           0
         ],
@@ -2873,7 +2909,7 @@
         "scale": [
           1,
           1,
-          1
+          1.0
         ]
       },
       "actionProfile": {
@@ -2928,9 +2964,9 @@
           "debrisMaterial": "base"
         }
       },
-      "material": "paint-lower",
+      "material": "matte-black",
       "materialLayers": [
-        "paint-lower"
+        "matte-black"
       ],
       "deformations": [],
       "joints": [],
@@ -3309,7 +3345,7 @@
       },
       "transform": {
         "position": [
-          0.9,
+          0.885,
           1.4375,
           -2.45
         ],
@@ -3319,7 +3355,7 @@
           -0.12
         ],
         "scale": [
-          0.2,
+          0.13,
           0.675,
           0.34
         ]
@@ -3953,7 +3989,7 @@
       },
       "transform": {
         "position": [
-          -0.9,
+          -0.885,
           1.4375,
           -2.45
         ],
@@ -3963,7 +3999,7 @@
           0.12
         ],
         "scale": [
-          0.2,
+          0.13,
           0.675,
           0.34
         ]
@@ -4559,7 +4595,22 @@
               0.345
             ]
           ],
-          "depth": 0.08
+          "depth": 0.08,
+          "shaping": {
+            "space": "front",
+            "nodeOffset": [
+              0,
+              0.9,
+              2.58
+            ],
+            "planTaperNose": {
+              "zFrom": 1.35,
+              "zTo": 2.66,
+              "amount": 0.035,
+              "yGate": 1.25,
+              "yFade": 0.15
+            }
+          }
         }
       },
       "parent": "root",
@@ -4583,7 +4634,7 @@
           0
         ],
         "scale": [
-          1.0,
+          1.0409,
           1.0,
           1.0
         ]
@@ -6981,7 +7032,22 @@
               0.42
             ]
           ],
-          "depth": 0.07
+          "depth": 0.07,
+          "shaping": {
+            "space": "front",
+            "nodeOffset": [
+              0,
+              1.02,
+              -2.835
+            ],
+            "planTaperTail": {
+              "zFrom": -1.95,
+              "zTo": -2.835,
+              "amount": 0.022,
+              "yGate": 1.45,
+              "yFade": 0.15
+            }
+          }
         }
       },
       "parent": "root",
@@ -7005,7 +7071,7 @@
           0
         ],
         "scale": [
-          1.0,
+          1.0409,
           1.0,
           1.0
         ]
@@ -8072,7 +8138,7 @@
       },
       "transform": {
         "position": [
-          1.006,
+          0.993,
           1.005,
           -2.45
         ],
@@ -9805,7 +9871,7 @@
       },
       "transform": {
         "position": [
-          -1.006,
+          -0.993,
           1.005,
           -2.45
         ],
@@ -31138,9 +31204,9 @@
           "debrisMaterial": "base"
         }
       },
-      "material": "paint-lower",
+      "material": "matte-black",
       "materialLayers": [
-        "paint-lower"
+        "matte-black"
       ],
       "deformations": [],
       "joints": [],
@@ -40966,8 +41032,8 @@
         "2026-10-16 傍晚波决策回写：适配层实测 near-black×transmission 视觉不透明，参数由 0.5/#101418 提至 0.82/#2e3640",
         "隐私玻璃：外部近不透明；车内向前视野由 windshield(glass-clear) 承担；2026-10-17 第四轮审查 S1 决议"
       ],
-      "notes": "隐私玻璃：外部近不透明；车内向前视野由 windshield(glass-clear) 承担；2026-10-17 第四轮审查 S1 决议",
-      "transmission": 0.18,
+      "notes": "隐私玻璃：外部近不透明；车内向前视野由 windshield(glass-clear) 承担；R5 S1 决议 trans 0.18，R6 修订 0.10（侧视内饰透色实证）",
+      "transmission": 0.1,
       "transparent": false,
       "thickness": 0.02,
       "ior": 1.5,
