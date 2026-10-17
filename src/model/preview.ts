@@ -204,6 +204,11 @@ declare global {
       row: CabinRow,
       opts?: { zoom?: number; yawDeg?: number; pitchDeg?: number },
     ) => string;
+    __v800CabinShot: (
+      name: string,
+      x: number, y: number, z: number,
+      tx: number, ty: number, tz: number,
+    ) => string;
   }
 }
 
@@ -313,6 +318,25 @@ const applyCabinCamera = (row: CabinRow, opts?: { zoom?: number; yawDeg?: number
   camera.position.copy(eye);
   camera.lookAt(eye.clone().addScaledVector(dir, 3.5));
   camera.updateProjectionMatrix();
+};
+
+/**
+ * R12b 舱内自由机位（装配态可用）：直接摆相机 + 渲染一帧，不依赖工厂组件索引
+ * （#assembled 合批后 __v800CaptureCabin 降级）。参数：眼点 xyz + 注视点 xyz。
+ */
+window.__v800CabinShot = (
+  _name: string,
+  x: number, y: number, z: number,
+  tx: number, ty: number, tz: number,
+): string => {
+  camera.fov = 58;
+  camera.near = 0.05;
+  camera.far = 60;
+  camera.position.set(x, y, z);
+  camera.lookAt(tx, ty, tz);
+  camera.updateProjectionMatrix();
+  renderer.render(scene, camera);
+  return renderer.domElement.toDataURL('image/png');
 };
 
 window.__v800CaptureCabin = (

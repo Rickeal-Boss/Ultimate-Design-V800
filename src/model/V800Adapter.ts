@@ -921,10 +921,13 @@ function createNameplateTexture(): THREE.CanvasTexture {
 }
 
 /**
- * P1-6 尾门镀铬字标「Zunjie V800」（1024×200，透明底）。
+ * P1-6 尾门镀铬字标「尊界 V800」（1024×200，透明底）。
  * 对标报告 ④ 号差距：尾门缺独立 chrome 字母件。与 EX-26 车名牌（黑底铭牌）
  * 不同：尾门字标直接贴车漆，画布必须透明底（透明贴花），字面复用同一套
  * 五段铬渐变 + 细暗描边；运行时叠加面片承载（挂 body 下、不进合批）。
+ * R12-T1 修正：原拼音「Zunjie V800」与参考图 C3（尾部-纵向尾灯.jpg）实锤的
+ * 尾门铭牌「尊界 V800」不符 —— 改中文，字体栈/挤压侧壁/铬渐变/描边全部
+ * 对齐 EX-26 车名牌既有实现（createNameplateTexture 同款五段铬）。
  * 文字性商标引用，同 MAEXTRO / 尊界 V800 nameplate 免责先例。
  */
 function createTailBadgeTexture(): THREE.CanvasTexture {
@@ -935,28 +938,70 @@ function createTailBadgeTexture(): THREE.CanvasTexture {
   canvas.height = H;
   const ctx = canvas.getContext('2d')!;
   ctx.clearRect(0, 0, W, H); // 透明底
-  const text = 'Zunjie V800';
+  const text = '尊界 V800';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = '600 120px "Segoe UI", Arial, sans-serif';
+  // 中文字体栈与 EX-26 车名牌一致（拼音 Segoe UI 栈渲染不了「尊界」）
+  ctx.font = '700 124px "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", "Source Han Sans SC", sans-serif';
+  const natural = ctx.measureText(text).width;
+  const scale = Math.min(1, (W * 0.86) / natural);
+  ctx.save();
+  ctx.translate(W / 2, H / 2);
+  ctx.scale(scale, 1);
+  // ① 挤压侧壁：向下偏移的两层暗字，模拟字厚（同 EX-26 立体手法，透明贴花上用低透明度防脏底）
+  ctx.fillStyle = 'rgba(28, 31, 36, 0.85)';
+  ctx.fillText(text, 2.5, 6);
+  ctx.fillStyle = 'rgba(40, 44, 50, 0.6)';
+  ctx.fillText(text, 1.5, 3.5);
+  // ② 铬面：天光白 → 亮银 → 暗银 → 地平反光 → 暗银（同 EX-26 铬渐变）
+  const mid = H * 0.42;
+  const chrome = ctx.createLinearGradient(0, -mid, 0, mid);
+  chrome.addColorStop(0, 'rgb(250, 252, 255)');
+  chrome.addColorStop(0.34, 'rgb(206, 212, 222)');
+  chrome.addColorStop(0.52, 'rgb(112, 120, 132)');
+  chrome.addColorStop(0.56, 'rgb(236, 240, 246)');
+  chrome.addColorStop(1, 'rgb(96, 104, 116)');
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/**
+ * R12-T1 尾门顶部 MAEXTRO 贯通小字（1024×80，透明底）。
+ * 参考图 C3：真车尾门顶沿一行宽字距 MAEXTRO 细铬字。同尾标贴花先例：
+ * 五段铬渐变 + 细暗描边，字距用 canvas letterSpacing 拉宽（细体大写字）。
+ */
+function createTailMaextroTexture(): THREE.CanvasTexture {
+  const W = 1024;
+  const H = 80;
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d')!;
+  ctx.clearRect(0, 0, W, H);
+  const text = 'MAEXTRO';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = '300 46px "Segoe UI", Arial, sans-serif';
+  ctx.letterSpacing = '26px'; // 宽字距（真车贯通小字构图）
   const natural = ctx.measureText(text).width;
   const scale = Math.min(1, (W * 0.9) / natural);
   ctx.save();
   ctx.translate(W / 2, H / 2);
   ctx.scale(scale, 1);
-  // 铬面：天光白 → 亮银 → 暗银 → 地平反光 → 暗银（同 EX-26 铬渐变）
-  const mid = H * 0.42;
+  const mid = 20;
   const chrome = ctx.createLinearGradient(0, -mid, 0, mid);
-  chrome.addColorStop(0, 'rgb(248, 250, 253)');
-  chrome.addColorStop(0.34, 'rgb(204, 210, 220)');
-  chrome.addColorStop(0.52, 'rgb(110, 118, 130)');
-  chrome.addColorStop(0.56, 'rgb(234, 238, 244)');
-  chrome.addColorStop(1, 'rgb(94, 102, 114)');
+  chrome.addColorStop(0, 'rgb(246, 248, 251)');
+  chrome.addColorStop(0.34, 'rgb(202, 208, 218)');
+  chrome.addColorStop(0.52, 'rgb(108, 116, 128)');
+  chrome.addColorStop(0.56, 'rgb(232, 236, 242)');
+  chrome.addColorStop(1, 'rgb(92, 100, 112)');
   ctx.fillStyle = chrome;
   ctx.fillText(text, 0, 0);
-  // 细暗描边把铬字从车漆上收出来
-  ctx.strokeStyle = 'rgba(10, 12, 16, 0.75)';
-  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = 'rgba(10, 12, 16, 0.7)';
+  ctx.lineWidth = 1.6;
   ctx.strokeText(text, 0, 0);
   ctx.restore();
   const tex = new THREE.CanvasTexture(canvas);
@@ -1677,6 +1722,28 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
   // let 而不是 const：合批之后要重建一次（见下方 §静态合批）
   let byId = indexComponents(model);
 
+  // ---- R12-T2 车轮正下方「皮带状」异物根治（消去法实锤）----
+  // 用户游戏截图：每个车轮正下方一条黑色皮带状物从轮底伸向地面。低机位消去法
+  // （r12_mat/lowfront45_norims/nospokes/norings/noliner 逐个隐藏对照）定罪：
+  // 工厂组件 arch-fr（前轮拱护缘）/ arch-rr（后轮拱护缘）几何退化 ——
+  //   世界 bbox x ∈ [-0.001, 0.001]（塌缩进车身中心平面，厚度仅 2mm）、
+  //   y ∈ [-0.096, 0.896]（下缘穿地 9.6cm）、z 跨度 ≈0.99m（半径 ≈0.5 的整圆环），
+  //   1152 tris，位于前后轴正中。即：两枚完整圆环竖立在车身中剖面，下弧从车底
+  //   露出 → 低机位读作「轮底皮带」。几何本体（整圆而非半圆拱、半径超胎廓、
+  //   错放在中剖面）属 spec/工厂侧问题，本层无法在不动面数的前提下摆正
+  //   （平移到轮侧仍是穿地整圆环）。处置：隐藏退化件 —— 轮拱深度感由
+  //   wheel-arch-liner（R2 落地的拱衬半筒）承担，视觉零损失；并汇报主理人
+  //   转 spec 线重雕（半圆拱护缘、贴轮拱口、左右各一）。
+  // 注意：必须在此处（batchMergeStatic 之前）置 visible=false —— 合并器按
+  // 「可见性」跳过隐藏件，避免退化几何被烘进 batch/matte-black 后无法单独处理。
+  for (const brokenArchId of ['arch-fr', 'arch-rr']) {
+    const node = byId.get(brokenArchId);
+    if (!node) continue;
+    node.traverse((o) => {
+      o.visible = false;
+    });
+  }
+
   // ---- 材质索引（按材质 ID：userData.sculptMaterial.id）----
   const matById = new Map<string, THREE.MeshPhysicalMaterial>();
   model.traverse((o) => {
@@ -1723,12 +1790,14 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
   }
   const chromeMatSolid = matById.get('chrome');
   if (chromeMatSolid) {
-    chromeMatSolid.metalness = 0.6;
-    chromeMatSolid.roughness = 0.35;
-    chromeMatSolid.envMapIntensity = 0.5;
+    chromeMatSolid.metalness = 0.42;
+    chromeMatSolid.roughness = 0.42;
+    chromeMatSolid.envMapIntensity = 0.26; // R12b：软光箱下眉线/徽框过曝成白板，压反射读作缎面银
     chromeMatSolid.needsUpdate = true;
   }
 
+  // R12b 内饰材质纯化在文件末「终局覆盖」执行（必须在程序化皮革/菱格贴图接线之后，
+  // 否则会被 applySurface 的 !mat.map 判据重新挂回图集）。
   // ---- P1-5 greenhouse 玻璃一致性（适配层覆盖；spec 数值不动，决策回写 spec 留给主理人）----
   // 根因：高透射（0.82）+ 中灰色调下侧窗整条读作「天空色空带」，顶棚视觉悬空
   // （第四轮审查 S1）。改走「隐私玻璃」观感：透射压到 0.10（R6 修订）、色调近黑，
@@ -1748,21 +1817,33 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
     greenhouseMat.needsUpdate = true;
   }
 
-  // ---- 非 high 档：transmission 降级为普通半透明（构造期一次，避免每帧透射 pass）----
-  if (tier !== 'high') {
+  // ---- R12b 透射路径整体下线（R11 P0：整帧 DC 244 > 红线 150）----
+  // 根因：transmission 透射 pass 每帧把整个场景（车模 + 场景 + 阴影）重复渲染一遍，
+  // 深烟灰隐私玻璃在平板件上并无可见折射差异。改为 transparent alpha + 金属度
+  // Fresnel 补偿（F0≈0.22）后：侧视反射层次保留、座舱轮廓仍可见，每帧少一整趟
+  // 场景绘制。质量档只差透明度（high 更透，low 更暗）。
+  {
+    const opacityFor = tier === 'high' ? 0.7 : tier === 'medium' ? 0.66 : 0.62;
     for (const [id, mat] of matById) {
       if (!(mat.transmission > 0)) continue;
       mat.transmission = 0;
       mat.transparent = true;
-      mat.opacity = GLASS_OPACITY_FALLBACK[id] ?? DEFAULT_GLASS_OPACITY;
-      // 隐私玻璃反射补偿（R6，录屏 14-51 实证）：非金属 Fresnel 在侧视近平角
-      // 反射率只有 ~4%，玻璃读作纯黑纸板。掺入少量金属度（F0≈0.22）让环境
-      // 反射在全角度可见，dark smoked 观感；R7 降档 opacity 0.85→0.68 透出座舱形体
-      // （用户主诉「内饰缺失」的根因之一：降级档玻璃近不透明）；high 档走透射路径不受影响。
+      mat.depthWrite = false;
+      // 复用既有降级不透明度表（玻璃/crystal 语义），质量档只在 high 上再放开一档
+      const fallback = GLASS_OPACITY_FALLBACK[id] ?? DEFAULT_GLASS_OPACITY;
+      mat.opacity = Math.min(1, Math.max(fallback * 0.94, opacityFor * 0.9));
       if (id === 'glass-dark') {
         mat.metalness = 0.22;
-        mat.roughness = 0.08;
-        mat.envMapIntensity = 1.6;
+        mat.roughness = 0.07;
+        mat.envMapIntensity = 1.55;
+      }
+      if (id === 'glass-clear') {
+        // 前挡用低反射：软光箱下 1.6 会把整块玻璃读成白板（r12e 实证），
+        // 0.7 + 低不透明度才能既透出座舱又不糊成墙。
+        mat.metalness = 0.02;
+        mat.roughness = 0.03;
+        mat.envMapIntensity = 0.7;
+        mat.opacity = Math.min(mat.opacity, 0.34);
       }
       mat.needsUpdate = true;
     }
@@ -2005,6 +2086,12 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
   const tailMat = tailLamp?.mat ?? null;
   const headMat = headLamp?.mat ?? null;
   const markMat = markLamp?.mat ?? null;
+  // R12b：头灯 LED 白条在装配态整条过曝成白柱（正视 r12c_nose 实证），
+  // 压到 0.62 保留日行灯亮度层次、仍高于 bloom 阈值。
+  if (headMat) {
+    headMat.emissiveIntensity = Math.min(headMat.emissiveIntensity, 0.62);
+    headMat.needsUpdate = true;
+  }
 
   // ---- 集成层贴图：星空顶 / 字标 / 金色签名屏 ----
   // 这三个材质由 spec 声明为 textureless，贴图在集成层现画；
@@ -2604,8 +2691,33 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
           centerLocal.z - tgSize.z / 2 - 0.015
         );
         badge.rotation.y = Math.PI; // 面朝 body 局部 -Z（车尾）
-        badge.rotation.x = 0.1; // 匹配尾门 pivot 的 rotation.x 倾角
+        badge.rotation.x = 0; // R12b：尾门已直立（rotX 0），字标同步回正
         body.add(badge);
+
+        // R12-T1：尾门上部 MAEXTRO 贯通小字（参考图 C3 实锤：真车尾门顶沿有一行
+        // 宽字距 MAEXTRO 铬字）。承载面实证：尾门上部贯穿红带（y≈1.12 世界）与
+        // 顶沿饰条之间有一整段干净漆面（r12_mat/tail_view.png）。同 badge 先例：
+        // 透明贴花、同倾角、同外偏面；+1 draw call。
+        const maextroTex = createTailMaextroTexture();
+        ownedTextures.push(maextroTex);
+        const maextroGeo = new THREE.PlaneGeometry(0.46, 0.036);
+        const maextroMat = new THREE.MeshBasicMaterial({
+          map: maextroTex,
+          transparent: true,
+          depthWrite: false
+        });
+        const maextro = new THREE.Mesh(maextroGeo, maextroMat);
+        maextro.name = 'tailgate-maextro';
+        maextro.castShadow = false;
+        maextro.receiveShadow = false;
+        maextro.position.set(
+          centerLocal.x,
+          centerLocal.y + tgSize.y * 0.36, // 尾门上部：贯穿灯带之上、顶沿之下的干净区
+          centerLocal.z - tgSize.z / 2 - 0.015
+        );
+        maextro.rotation.y = Math.PI;
+        maextro.rotation.x = 0; // R12b：同尾门直立
+        body.add(maextro);
       }
     }
   }
@@ -3068,6 +3180,56 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
   // 一旦将来 spec 把它们拆成多实例或逐件换图，合批会让"换一张图"连带影响同组其他 mesh。
   // 当前每组只有 1 个成员（crystal 有 2 个，但已被「透明 + counter-rotate」拦下），排除代价 0 DC。
   // ---------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // R12b 内饰材质纯化（终局覆盖）
+  // 病根：P1 程序化皮革/菱格/木纹贴图按小件 UV 设计，贴到座椅/中岛/门板后被拉伸，
+  // 屏幕里读作「碎砖/锈斑」，透过深烟灰玻璃看即用户所述的破碎团块。内饰语义是
+  // 纯色真皮/木饰 —— 这里在全部贴图接线之后统一撤 map/normal/roughness，回退
+  // 策展色 + 粗糙度/清漆语义。必须在 batchMergeStatic 之前执行，材质实例才一致。
+  // ---------------------------------------------------------------------------
+  {
+    const INTERIOR_SOLID: Record<
+      string,
+      { color: string; rough: number; metal: number; env: number; clearcoat?: number }
+    > = {
+      'leather-warm': { color: '#6B4437', rough: 0.62, metal: 0.0, env: 0.32, clearcoat: 0.14 },
+      'leather-dark': { color: '#2A211D', rough: 0.56, metal: 0.0, env: 0.36, clearcoat: 0.2 },
+      'leather-ivory': { color: '#D6D0C4', rough: 0.58, metal: 0.0, env: 0.3, clearcoat: 0.12 },
+      wood: { color: '#3B2418', rough: 0.24, metal: 0.05, env: 0.5, clearcoat: 0.65 },
+      curtain: { color: '#4A2C28', rough: 0.88, metal: 0.0, env: 0.16 },
+      'headliner-suede': { color: '#6F6862', rough: 0.94, metal: 0.0, env: 0.12 },
+      carpet: { color: '#26221F', rough: 0.96, metal: 0.0, env: 0.08 },
+      plate: { color: '#141519', rough: 0.46, metal: 0.15, env: 0.35 }
+    };
+    const done = new Set<THREE.Material>();
+    model.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      const arr = Array.isArray(m.material) ? m.material : [m.material];
+      for (const mt of arr) {
+        const mat = mt as THREE.MeshPhysicalMaterial;
+        if (!mat || done.has(mat)) continue;
+        const id = (mat.userData?.sculptMaterial as { id?: string } | undefined)?.id;
+        const tune = id ? INTERIOR_SOLID[id] : undefined;
+        if (!tune) continue;
+        done.add(mat);
+        if (mat.map) mat.map = null;
+        if (mat.normalMap) mat.normalMap = null;
+        if (mat.roughnessMap) mat.roughnessMap = null;
+        if (mat.aoMap) mat.aoMap = null;
+        mat.color.set(tune.color);
+        mat.roughness = tune.rough;
+        mat.metalness = tune.metal;
+        mat.envMapIntensity = tune.env;
+        if (tune.clearcoat !== undefined) {
+          mat.clearcoat = tune.clearcoat;
+          mat.clearcoatRoughness = 0.18;
+        }
+        mat.needsUpdate = true;
+      }
+    });
+  }
+
   const batchStats = batchMergeStatic(model, {
     excludeObjects: [...wheels.map((w) => w.spin), ...caps, ...(gaugeMesh ? [gaugeMesh] : []), pedal],
     excludeMaterialIds: UV_CONTENT_MATERIAL_IDS

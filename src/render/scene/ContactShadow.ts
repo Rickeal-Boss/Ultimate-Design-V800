@@ -55,8 +55,10 @@ export class ContactShadow {
 
   constructor(scene: THREE.Scene, options: ContactShadowOptions = {}) {
     const {
-      width = 5.6, // 车投影略大：车长 5.66 × 车宽 2.0 量级 → 5.6 × 2.6
-      depth = 2.6,
+      // R12b 修正长宽转置（外部审查 P1）：PlaneGeometry(width→x, depth→z)。
+      // 原 5.6×2.6 让阴影左右各溢 1.8m、车头车尾各缺 1.3m。
+      width = 2.4, // x：车宽 2.03 + 余量
+      depth = 5.75, // z：车长 5.61 + 余量
       opacity = 0.55,
       y = 0.02,
       textureSize = 256

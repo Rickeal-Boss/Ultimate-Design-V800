@@ -432,10 +432,10 @@
      "kind": "stitch",
      "description": "三辐双色方向盘：红棕车削木外圈 + 米白真皮内圈 + 银色盾标",
      "region": {
-      "x": 0.0,
-      "y": 0.0,
-      "width": 0.0,
-      "height": 0.0,
+      "x": 0,
+      "y": 0,
+      "width": 0,
+      "height": 0,
       "units": "normalized"
      },
      "scale": "identity",
@@ -452,10 +452,10 @@
      "kind": "stitch",
      "description": "贯穿三联屏（仪表-中控-副驾，暗色 HarmonyOS UI）",
      "region": {
-      "x": 0.0,
-      "y": 0.0,
-      "width": 0.0,
-      "height": 0.0,
+      "x": 0,
+      "y": 0,
+      "width": 0,
+      "height": 0,
       "units": "normalized"
      },
      "scale": "identity",
@@ -472,10 +472,10 @@
      "kind": "stitch",
      "description": "星空顶：深棕麂皮穿孔 + 数百星点白灯（大小不一）",
      "region": {
-      "x": 0.0,
-      "y": 0.0,
-      "width": 0.0,
-      "height": 0.0,
+      "x": 0,
+      "y": 0,
+      "width": 0,
+      "height": 0,
       "units": "normalized"
      },
      "scale": "identity",
@@ -492,10 +492,10 @@
      "kind": "stitch",
      "description": "后排菱格绗缝航空座椅×2（打孔中央 + 独立头枕压标 + 腿托）",
      "region": {
-      "x": 0.0,
-      "y": 0.0,
-      "width": 0.0,
-      "height": 0.0,
+      "x": 0,
+      "y": 0,
+      "width": 0,
+      "height": 0,
       "units": "normalized"
      },
      "scale": "identity",
@@ -512,10 +512,10 @@
      "kind": "stitch",
      "description": "后窗帘米白竖褶（可收拢垂坠）",
      "region": {
-      "x": 0.0,
-      "y": 0.0,
-      "width": 0.0,
-      "height": 0.0,
+      "x": 0,
+      "y": 0,
+      "width": 0,
+      "height": 0,
       "units": "normalized"
      },
      "scale": "identity",
@@ -532,10 +532,10 @@
      "kind": "stitch",
      "description": "顶棚两侧纵向暖橙氛围灯带 + 门板圆形金属点阵音响罩",
      "region": {
-      "x": 0.0,
-      "y": 0.0,
-      "width": 0.0,
-      "height": 0.0,
+      "x": 0,
+      "y": 0,
+      "width": 0,
+      "height": 0,
       "units": "normalized"
      },
      "scale": "meso",
@@ -552,10 +552,10 @@
      "kind": "stitch",
      "description": "水晶换挡旋钮 + P 键 + 双镀铬圈杯架（木纹底座）",
      "region": {
-      "x": 0.0,
-      "y": 0.0,
-      "width": 0.0,
-      "height": 0.0,
+      "x": 0,
+      "y": 0,
+      "width": 0,
+      "height": 0,
       "units": "normalized"
      },
      "scale": "identity",
@@ -571,27 +571,27 @@
   },
   "anatomy": {
    "applies": false,
-   "styleHeads": 0.0,
+   "styleHeads": 0,
    "proportions": {
-    "headUnit": 0.0,
-    "torso": 0.0,
-    "legs": 0.0,
-    "shoulderWidth": 0.0,
-    "hipWidth": 0.0
+    "headUnit": 0,
+    "torso": 0,
+    "legs": 0,
+    "shoulderWidth": 0,
+    "hipWidth": 0
    },
    "pose": {
     "type": "unassessed",
     "jointAngles": {}
    },
    "faceLandmarks": {
-    "eyeLine": 0.0,
-    "eyeSpacing": 0.0,
-    "noseBase": 0.0,
-    "mouthLine": 0.0,
-    "hairline": 0.0
+    "eyeLine": 0,
+    "eyeSpacing": 0,
+    "noseBase": 0,
+    "mouthLine": 0,
+    "hairline": 0
    },
    "features": [],
-   "confidence": 0.0,
+   "confidence": 0,
    "note": "Only meaningful when objectClass.primaryDomain is character or hybrid. Set applies=true and fill from forge/stage1_intake/extract_landmarks.py. See grimoire/character/reconstruction.md and grimoire/character/likeness_maximization.md."
   },
   "sourceImage": "<local-reference>/huawei-zunjie-v800-design-black-2x.jpg"
@@ -1506,10 +1506,10 @@
    "id": "img-side-roof",
    "view": "side profile full",
    "imageRegion": {
-    "x": 0.0,
-    "y": 0.0,
-    "width": 1.0,
-    "height": 1.0
+    "x": 0,
+    "y": 0,
+    "width": 1,
+    "height": 1
    },
    "observations": [
     "车顶后段（三排头顶）微微抬高的台阶",
@@ -1536,10 +1536,10 @@
    "id": "img-wheel-center",
    "view": "wheel center close-up",
    "imageRegion": {
-    "x": 0.0,
-    "y": 0.0,
-    "width": 1.0,
-    "height": 1.0
+    "x": 0,
+    "y": 0,
+    "width": 1,
+    "height": 1
    },
    "observations": [
     "封闭大饼轮圈盘面",
@@ -1552,10 +1552,10 @@
    "id": "img-seat-screen",
    "view": "rear armrest screen close",
    "imageRegion": {
-    "x": 0.0,
-    "y": 0.0,
-    "width": 1.0,
-    "height": 1.0
+    "x": 0,
+    "y": 0,
+    "width": 1,
+    "height": 1
    },
    "observations": [
     "4 英寸翻转屏自扶手前端升起",
@@ -1568,10 +1568,10 @@
    "id": "img-seat-trim",
    "view": "rear seats close",
    "imageRegion": {
-    "x": 0.0,
-    "y": 0.0,
-    "width": 1.0,
-    "height": 1.0
+    "x": 0,
+    "y": 0,
+    "width": 1,
+    "height": 1
    },
    "observations": [
     "扶手前端端盖镀铬",
@@ -1587,8 +1587,8 @@
    "name": "Zunjie V800 整车",
    "level": "macro",
    "role": "body",
-   "importance": 1.0,
-   "confidence": 1.0,
+   "importance": 1,
+   "confidence": 1,
    "primitive": "box",
    "topologyClass": "assembled-solid",
    "topologyRationale": "整车为组装体根节点",
@@ -1610,7 +1610,7 @@
     "height": 1.85,
     "depth": 5.44,
     "units": "meters",
-    "confidence": 1.0,
+    "confidence": 1,
     "length": 5.495
    },
    "transform": {
@@ -1644,7 +1644,7 @@
       1,
       0
      ],
-     "confidence": 1.0
+     "confidence": 1
     },
     "transformChannels": {
      "translate": false,
@@ -1717,7 +1717,7 @@
    "name": "车身下半壳体",
    "level": "macro",
    "role": "body",
-   "importance": 1.0,
+   "importance": 1,
    "confidence": 0.95,
    "primitive": "extrude",
    "topologyClass": "conforming-shell",
@@ -2385,7 +2385,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "root",
@@ -2399,14 +2399,14 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      1.079,
      1.292
     ],
     "rotation": [
      0.083,
-     0.0,
-     0.0
+     0,
+     0
     ],
     "scale": [
      1.3,
@@ -2553,36 +2553,52 @@
        1.76
       ],
       [
-       -2.5,
-       1.73
+       -1.45,
+       1.762
       ],
       [
        -1.8,
-       1.76
+       1.762
       ],
       [
-       -2.5,
-       1.73
+       -2.6,
+       1.758
       ],
       [
-       -2.3,
-       1.675
+       -2.715,
+       1.75
       ],
       [
-       -2.7192,
-       1.1778
+       -2.762,
+       1.733
       ],
       [
-       -2.7187,
-       1.1597
+       -2.77,
+       1.71
       ],
       [
-       -2.3979,
-       1.1452
+       -2.77,
+       1.205
       ],
       [
-       -2.3807,
-       1.1395
+       -2.762,
+       1.183
+      ],
+      [
+       -2.73,
+       1.165
+      ],
+      [
+       -2.6,
+       1.152
+      ],
+      [
+       -2.398,
+       1.145
+      ],
+      [
+       -2.381,
+       1.139
       ]
      ],
      "depth": 1.86,
@@ -2809,44 +2825,44 @@
        1.848
       ],
       [
-       -2.26,
+       -2.7,
        1.848
       ],
       [
-       -2.3379,
-       1.7185
+       -2.7342,
+       1.8402
       ],
       [
-       -2.3392,
-       1.7161
+       -2.7587,
+       1.8235
       ],
       [
-       -2.3404,
-       1.7137
+       -2.7725,
+       1.7998
       ],
       [
-       -2.3415,
-       1.7113
+       -2.778,
+       1.7725
       ],
       [
-       -2.38,
-       1.615
+       -2.778,
+       1.64
       ],
       [
-       -2.3043,
-       1.615
+       -2.7705,
+       1.6245
       ],
       [
-       -2.3014,
-       1.6151
-      ],
-      [
-       -2.2987,
+       -2.75,
        1.6155
       ],
       [
-       -2.2959,
-       1.6162
+       -2.7,
+       1.611
+      ],
+      [
+       -2.445,
+       1.6095
       ],
       [
        -1.8041,
@@ -2871,7 +2887,7 @@
      ],
      "depth": 1.94
     },
-    "topologyIntent": "roof shell with raised rear tier (EX-15) and filleted nose/rear-step",
+    "topologyIntent": "roof shell with raised rear tier (EX-15); rear edge now runs back to z=-2.778 (flush with tailgate) with a 4-facet r0.038 corner instead of the 0.45m forward-stepped shelf",
     "edgeTreatment": {
      "type": "rounded",
      "bevelRadius": 0.05,
@@ -2918,7 +2934,7 @@
     "scale": [
      1,
      1,
-     1.0
+     1
     ]
    },
    "actionProfile": {
@@ -3118,7 +3134,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "root",
@@ -3132,14 +3148,14 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      1.8195,
      1.127
     ],
     "rotation": [
      0.9599,
-     0.0,
-     0.0
+     0,
+     0
     ],
     "scale": [
      1.5,
@@ -3340,7 +3356,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "root",
@@ -3556,7 +3572,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "root",
@@ -3770,7 +3786,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "root",
@@ -3984,7 +4000,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "root",
@@ -4200,7 +4216,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "root",
@@ -4414,7 +4430,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "root",
@@ -4633,19 +4649,19 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      0.86,
      2.33
     ],
     "rotation": [
      -0.12,
-     0.0,
-     0.0
+     0,
+     0
     ],
     "scale": [
      1.062,
      0.46,
-     1.0
+     1
     ]
    },
    "actionProfile": {
@@ -4834,7 +4850,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "front-end",
@@ -4848,9 +4864,9 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      0.2175,
-     0.117
+     0.085
     ],
     "rotation": [
      0,
@@ -4859,7 +4875,7 @@
     ],
     "scale": [
      1.84,
-     0.09,
+     0.82,
      0.06
     ]
    },
@@ -5164,9 +5180,9 @@
      0
     ],
     "scale": [
-     1.0,
-     1.0,
-     1.0
+     1,
+     1,
+     1
     ]
    },
    "actionProfile": {
@@ -5278,7 +5294,7 @@
        -0.3
       ],
       [
-       0.0,
+       0,
        -0.325
       ],
       [
@@ -5334,8 +5350,8 @@
    "transform": {
     "position": [
      0.8,
-     0.06,
-     -0.02
+     -0.017,
+     0.03
     ],
     "rotation": [
      0,
@@ -5344,7 +5360,7 @@
     ],
     "scale": [
      1,
-     1,
+     0.68,
      1
     ]
    },
@@ -5536,7 +5552,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "headlamp-l",
@@ -5551,7 +5567,7 @@
    "transform": {
     "position": [
      0.082,
-     0.0,
+     0,
      -0.03
     ],
     "rotation": [
@@ -5561,7 +5577,7 @@
     ],
     "scale": [
      0.022,
-     0.4,
+     0.272,
      0.02
     ]
    },
@@ -5687,7 +5703,7 @@
    "transform": {
     "position": [
      -0.02,
-     0.0,
+     0,
      0.071
     ],
     "rotation": [
@@ -5697,7 +5713,7 @@
     ],
     "scale": [
      0.13,
-     0.52,
+     0.3536,
      0.004
     ]
    },
@@ -5808,7 +5824,7 @@
        -0.3
       ],
       [
-       0.0,
+       0,
        -0.325
       ],
       [
@@ -5864,8 +5880,8 @@
    "transform": {
     "position": [
      -0.8,
-     0.06,
-     -0.02
+     -0.017,
+     0.03
     ],
     "rotation": [
      0,
@@ -5874,7 +5890,7 @@
     ],
     "scale": [
      1,
-     1,
+     0.68,
      1
     ]
    },
@@ -6066,7 +6082,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "headlamp-r",
@@ -6081,7 +6097,7 @@
    "transform": {
     "position": [
      -0.082,
-     0.0,
+     0,
      -0.03
     ],
     "rotation": [
@@ -6091,7 +6107,7 @@
     ],
     "scale": [
      0.022,
-     0.4,
+     0.272,
      0.02
     ]
    },
@@ -6217,7 +6233,7 @@
    "transform": {
     "position": [
      0.02,
-     0.0,
+     0,
      0.071
     ],
     "rotation": [
@@ -6227,7 +6243,7 @@
     ],
     "scale": [
      0.13,
-     0.52,
+     0.3536,
      0.004
     ]
    },
@@ -6423,7 +6439,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "front-end",
@@ -6437,7 +6453,7 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      -0.44,
      -0.165
     ],
@@ -6637,7 +6653,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "bumper-lower",
@@ -6651,7 +6667,7 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      0.1,
      0.0975
     ],
@@ -6851,7 +6867,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "bumper-lower",
@@ -6865,7 +6881,7 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      -0.12,
      0.075
     ],
@@ -6973,7 +6989,7 @@
    "topologyClass": "assembled-solid",
    "topologyRationale": "box 适合该部件的可展拓扑",
    "geometryDescriptor": {
-    "topologyIntent": "tailgate panel with rounded corners",
+    "topologyIntent": "flat vertical tailgate panel with rounded corners (MPV straight tail)",
     "edgeTreatment": {
      "type": "rounded",
      "bevelRadius": 0.14,
@@ -7047,7 +7063,7 @@
       "nodeOffset": [
        0,
        1.02,
-       -2.835
+       -2.848
       ],
       "planTaperTail": {
        "zFrom": -1.95,
@@ -7070,19 +7086,19 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      1.02,
-     -2.835
+     -2.848
     ],
     "rotation": [
-     0.1,
-     0.0,
-     0.0
+     0,
+     0,
+     0
     ],
     "scale": [
      1.067,
-     1.0,
-     1.0
+     1,
+     1
     ]
    },
    "actionProfile": {
@@ -7249,7 +7265,7 @@
      {
       "type": "taper",
       "axis": "y",
-      "factor": 1.0,
+      "factor": 1,
       "notes": "灯体等宽；原 0.18×0.69（69% 尾门高）超比例，按参考图 C1–C4 压到 49%"
      }
     ],
@@ -7269,12 +7285,12 @@
     "position": [
      0.84,
      -0.12,
-     0.0
+     0
     ],
     "rotation": [
-     0.0,
+     0,
      3.141592653589793,
-     0.0
+     0
     ],
     "scale": [
      1,
@@ -7481,7 +7497,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "taillamp-l",
@@ -7495,8 +7511,8 @@
    },
    "transform": {
     "position": [
-     -0.0,
-     0.0,
+     0,
+     0,
      0.031
     ],
     "rotation": [
@@ -7680,7 +7696,7 @@
      {
       "type": "taper",
       "axis": "y",
-      "factor": 1.0,
+      "factor": 1,
       "notes": "灯体等宽；原 0.18×0.69（69% 尾门高）超比例，按参考图 C1–C4 压到 49%"
      }
     ],
@@ -7700,12 +7716,12 @@
     "position": [
      -0.84,
      -0.12,
-     0.0
+     0
     ],
     "rotation": [
-     0.0,
+     0,
      3.141592653589793,
-     0.0
+     0
     ],
     "scale": [
      1,
@@ -7912,7 +7928,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "taillamp-r",
@@ -7926,8 +7942,8 @@
    },
    "transform": {
     "position": [
-     -0.0,
-     0.0,
+     0,
+     0,
      0.031
     ],
     "rotation": [
@@ -8133,7 +8149,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "root",
@@ -8350,7 +8366,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "root",
@@ -8564,7 +8580,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "root",
@@ -8781,7 +8797,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "root",
@@ -8998,7 +9014,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "root",
@@ -9214,7 +9230,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "root",
@@ -9430,7 +9446,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "root",
@@ -9652,7 +9668,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "mirror-l",
@@ -9666,7 +9682,7 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      0.045,
      -0.0025
     ],
@@ -9866,7 +9882,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "root",
@@ -10083,7 +10099,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "root",
@@ -10297,7 +10313,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "root",
@@ -10514,7 +10530,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "root",
@@ -10731,7 +10747,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "root",
@@ -10947,7 +10963,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "root",
@@ -11163,7 +11179,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "root",
@@ -11385,7 +11401,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "mirror-r",
@@ -11399,7 +11415,7 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      0.045,
      -0.0025
     ],
@@ -11599,7 +11615,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "root",
@@ -11709,248 +11725,6 @@
     "dominantAlbedo": "rgba(34, 26, 20, 1.0)",
     "secondaryAlbedo": "rgba(201, 168, 107, 1.0)",
     "materialClass": "metal",
-    "materialClassConfidence": 0.9
-   }
-  },
-  {
-   "id": "arch-fr",
-   "name": "前轮拱护缘",
-   "level": "micro",
-   "role": "detail",
-   "importance": 0.6,
-   "confidence": 0.8,
-   "primitive": "torus",
-   "topologyClass": "assembled-solid",
-   "topologyRationale": "torus 适合该部件的可展拓扑",
-   "geometryDescriptor": {
-    "torusTubeRatio": 0.06
-   },
-   "parent": "root",
-   "attachment": null,
-   "dimensions": {
-    "width": 1.04,
-    "height": 1.04,
-    "depth": 0.05,
-    "units": "meters",
-    "confidence": 0.8
-   },
-   "transform": {
-    "position": [
-     0,
-     0.4,
-     1.715
-    ],
-    "rotation": [
-     0,
-     1.5708,
-     0
-    ],
-    "scale": [
-     1.04,
-     1.04,
-     0.05
-    ]
-   },
-   "actionProfile": {
-    "animationRole": "static",
-    "pivot": {
-     "mode": "center",
-     "localPosition": [
-      0,
-      0,
-      0
-     ],
-     "axis": [
-      0,
-      1,
-      0
-     ],
-     "confidence": 0.8
-    },
-    "transformChannels": {
-     "translate": false,
-     "rotate": false,
-     "scale": false,
-     "bend": false,
-     "twist": false,
-     "detach": false,
-     "visibility": true,
-     "materialState": true
-    },
-    "sockets": [],
-    "collider": {
-     "type": "box",
-     "offset": [
-      0,
-      0,
-      0
-     ],
-     "scale": [
-      1,
-      1,
-      1
-     ],
-     "isTrigger": false,
-     "notes": ""
-    },
-    "constraints": [],
-    "destruction": {
-     "breakable": false,
-     "fractureGroup": "root",
-     "seamRefs": [],
-     "detachableFragments": [],
-     "breakImpulse": 0,
-     "debrisMaterial": "base"
-    }
-   },
-   "material": "matte-black",
-   "materialLayers": [
-    "matte-black"
-   ],
-   "deformations": [],
-   "joints": [],
-   "seams": [],
-   "localFeatures": [],
-   "surfaceDetail": {
-    "macroRoughness": 0,
-    "microRoughness": 0,
-    "bumpAmplitude": 0,
-    "normalPattern": "",
-    "displacementPattern": "",
-    "occlusionPattern": "",
-    "edgeWearPattern": "",
-    "notes": ""
-   },
-   "evidenceRefs": [
-    "img-design-black"
-   ],
-   "details": [],
-   "fidelityTier": "hero",
-   "colorMaterialRecipe": {
-    "dominantAlbedo": "rgba(18, 18, 20, 1.0)",
-    "secondaryAlbedo": "rgba(18, 18, 20, 1.0)",
-    "materialClass": "plastic",
-    "materialClassConfidence": 0.9
-   }
-  },
-  {
-   "id": "arch-rr",
-   "name": "后轮拱护缘",
-   "level": "micro",
-   "role": "detail",
-   "importance": 0.6,
-   "confidence": 0.8,
-   "primitive": "torus",
-   "topologyClass": "assembled-solid",
-   "topologyRationale": "torus 适合该部件的可展拓扑",
-   "geometryDescriptor": {
-    "torusTubeRatio": 0.06
-   },
-   "parent": "root",
-   "attachment": null,
-   "dimensions": {
-    "width": 1.04,
-    "height": 1.04,
-    "depth": 0.05,
-    "units": "meters",
-    "confidence": 0.8
-   },
-   "transform": {
-    "position": [
-     0,
-     0.4,
-     -1.715
-    ],
-    "rotation": [
-     0,
-     1.5708,
-     0
-    ],
-    "scale": [
-     1.04,
-     1.04,
-     0.05
-    ]
-   },
-   "actionProfile": {
-    "animationRole": "static",
-    "pivot": {
-     "mode": "center",
-     "localPosition": [
-      0,
-      0,
-      0
-     ],
-     "axis": [
-      0,
-      1,
-      0
-     ],
-     "confidence": 0.8
-    },
-    "transformChannels": {
-     "translate": false,
-     "rotate": false,
-     "scale": false,
-     "bend": false,
-     "twist": false,
-     "detach": false,
-     "visibility": true,
-     "materialState": true
-    },
-    "sockets": [],
-    "collider": {
-     "type": "box",
-     "offset": [
-      0,
-      0,
-      0
-     ],
-     "scale": [
-      1,
-      1,
-      1
-     ],
-     "isTrigger": false,
-     "notes": ""
-    },
-    "constraints": [],
-    "destruction": {
-     "breakable": false,
-     "fractureGroup": "root",
-     "seamRefs": [],
-     "detachableFragments": [],
-     "breakImpulse": 0,
-     "debrisMaterial": "base"
-    }
-   },
-   "material": "matte-black",
-   "materialLayers": [
-    "matte-black"
-   ],
-   "deformations": [],
-   "joints": [],
-   "seams": [],
-   "localFeatures": [],
-   "surfaceDetail": {
-    "macroRoughness": 0,
-    "microRoughness": 0,
-    "bumpAmplitude": 0,
-    "normalPattern": "",
-    "displacementPattern": "",
-    "occlusionPattern": "",
-    "edgeWearPattern": "",
-    "notes": ""
-   },
-   "evidenceRefs": [
-    "img-design-black"
-   ],
-   "details": [],
-   "fidelityTier": "hero",
-   "colorMaterialRecipe": {
-    "dominantAlbedo": "rgba(18, 18, 20, 1.0)",
-    "secondaryAlbedo": "rgba(18, 18, 20, 1.0)",
-    "materialClass": "plastic",
     "materialClassConfidence": 0.9
    }
   },
@@ -12251,7 +12025,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "root",
@@ -12265,14 +12039,14 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      1.78,
      0.35
     ],
     "rotation": [
      0.1,
-     0.0,
-     0.0
+     0,
+     0
     ],
     "scale": [
      0.14,
@@ -12394,7 +12168,7 @@
      "points": [
       [
        0.5,
-       0.0
+       0
       ],
       [
        0.482963,
@@ -12417,7 +12191,7 @@
        0.482963
       ],
       [
-       0.0,
+       0,
        0.5
       ],
       [
@@ -12442,7 +12216,7 @@
       ],
       [
        -0.5,
-       0.0
+       0
       ],
       [
        -0.482963,
@@ -12465,7 +12239,7 @@
        -0.482963
       ],
       [
-       -0.0,
+       0,
        -0.5
       ],
       [
@@ -12489,7 +12263,7 @@
        -0.12941
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "root",
@@ -12682,13 +12456,13 @@
    "attachment": {
     "parentSocket": "wheel-fl.hub",
     "localStart": [
-     0.0,
-     0.0,
+     0,
+     0,
      0.382
     ],
     "localEnd": [
-     0.0,
-     0.0,
+     0,
+     0,
      0.382
     ],
     "contactType": "socket",
@@ -12704,8 +12478,8 @@
    },
    "transform": {
     "position": [
-     0.0,
-     0.0,
+     0,
+     0,
      0.382
     ],
     "rotation": [
@@ -12879,13 +12653,13 @@
    "attachment": {
     "parentSocket": "wheel-fl.hub",
     "localStart": [
-     0.0,
-     0.0,
+     0,
+     0,
      0.382
     ],
     "localEnd": [
-     0.0,
-     0.0,
+     0,
+     0,
      0.382
     ],
     "contactType": "flush",
@@ -12901,8 +12675,8 @@
    },
    "transform": {
     "position": [
-     0.0,
-     0.0,
+     0,
+     0,
      0.394
     ],
     "rotation": [
@@ -13019,7 +12793,7 @@
     "topologyIntent": "knurled ring around wheel center badge",
     "edgeTreatment": {
      "type": "none",
-     "bevelRadius": 0.0,
+     "bevelRadius": 0,
      "segments": 0
     },
     "deformationStack": [],
@@ -13029,7 +12803,7 @@
      "points": [
       [
        0.148,
-       0.0
+       0
       ],
       [
        0.12346,
@@ -13068,7 +12842,7 @@
        0.12346
       ],
       [
-       0.0,
+       0,
        0.148
       ],
       [
@@ -13109,7 +12883,7 @@
       ],
       [
        -0.148,
-       0.0
+       0
       ],
       [
        -0.12346,
@@ -13148,7 +12922,7 @@
        -0.12346
       ],
       [
-       -0.0,
+       0,
        -0.148
       ],
       [
@@ -13191,8 +12965,8 @@
      "depth": 0.008,
      "ovalHoles": [
       {
-       "cx": 0.0,
-       "cy": 0.0,
+       "cx": 0,
+       "cy": 0,
        "rx": 0.095,
        "ry": 0.095
       }
@@ -13203,13 +12977,13 @@
    "attachment": {
     "parentSocket": "wheel-fl.hub-front",
     "localStart": [
-     0.0,
-     0.0,
+     0,
+     0,
      0.382
     ],
     "localEnd": [
-     0.0,
-     0.0,
+     0,
+     0,
      0.382
     ],
     "contactType": "flush",
@@ -13226,7 +13000,7 @@
    "transform": {
     "position": [
      0.131,
-     0.0,
+     0,
      0.382
     ],
     "rotation": [
@@ -13355,7 +13129,7 @@
      "points": [
       [
        0.5,
-       0.0
+       0
       ],
       [
        0.482963,
@@ -13378,7 +13152,7 @@
        0.482963
       ],
       [
-       0.0,
+       0,
        0.5
       ],
       [
@@ -13403,7 +13177,7 @@
       ],
       [
        -0.5,
-       0.0
+       0
       ],
       [
        -0.482963,
@@ -13426,7 +13200,7 @@
        -0.482963
       ],
       [
-       -0.0,
+       0,
        -0.5
       ],
       [
@@ -13450,7 +13224,7 @@
        -0.12941
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "root",
@@ -13643,13 +13417,13 @@
    "attachment": {
     "parentSocket": "wheel-fr.hub",
     "localStart": [
-     0.0,
-     0.0,
+     0,
+     0,
      0.382
     ],
     "localEnd": [
-     0.0,
-     0.0,
+     0,
+     0,
      0.382
     ],
     "contactType": "socket",
@@ -13665,8 +13439,8 @@
    },
    "transform": {
     "position": [
-     0.0,
-     0.0,
+     0,
+     0,
      0.382
     ],
     "rotation": [
@@ -13840,13 +13614,13 @@
    "attachment": {
     "parentSocket": "wheel-fr.hub",
     "localStart": [
-     0.0,
-     0.0,
+     0,
+     0,
      0.382
     ],
     "localEnd": [
-     0.0,
-     0.0,
+     0,
+     0,
      0.382
     ],
     "contactType": "flush",
@@ -13862,8 +13636,8 @@
    },
    "transform": {
     "position": [
-     0.0,
-     0.0,
+     0,
+     0,
      0.394
     ],
     "rotation": [
@@ -13980,7 +13754,7 @@
     "topologyIntent": "knurled ring around wheel center badge",
     "edgeTreatment": {
      "type": "none",
-     "bevelRadius": 0.0,
+     "bevelRadius": 0,
      "segments": 0
     },
     "deformationStack": [],
@@ -13990,7 +13764,7 @@
      "points": [
       [
        0.148,
-       0.0
+       0
       ],
       [
        0.12346,
@@ -14029,7 +13803,7 @@
        0.12346
       ],
       [
-       0.0,
+       0,
        0.148
       ],
       [
@@ -14070,7 +13844,7 @@
       ],
       [
        -0.148,
-       0.0
+       0
       ],
       [
        -0.12346,
@@ -14109,7 +13883,7 @@
        -0.12346
       ],
       [
-       -0.0,
+       0,
        -0.148
       ],
       [
@@ -14152,8 +13926,8 @@
      "depth": 0.008,
      "ovalHoles": [
       {
-       "cx": 0.0,
-       "cy": 0.0,
+       "cx": 0,
+       "cy": 0,
        "rx": 0.095,
        "ry": 0.095
       }
@@ -14164,13 +13938,13 @@
    "attachment": {
     "parentSocket": "wheel-fr.hub-front",
     "localStart": [
-     0.0,
-     0.0,
+     0,
+     0,
      0.382
     ],
     "localEnd": [
-     0.0,
-     0.0,
+     0,
+     0,
      0.382
     ],
     "contactType": "flush",
@@ -14187,7 +13961,7 @@
    "transform": {
     "position": [
      -0.131,
-     0.0,
+     0,
      0.382
     ],
     "rotation": [
@@ -14316,7 +14090,7 @@
      "points": [
       [
        0.5,
-       0.0
+       0
       ],
       [
        0.482963,
@@ -14339,7 +14113,7 @@
        0.482963
       ],
       [
-       0.0,
+       0,
        0.5
       ],
       [
@@ -14364,7 +14138,7 @@
       ],
       [
        -0.5,
-       0.0
+       0
       ],
       [
        -0.482963,
@@ -14387,7 +14161,7 @@
        -0.482963
       ],
       [
-       -0.0,
+       0,
        -0.5
       ],
       [
@@ -14411,7 +14185,7 @@
        -0.12941
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "root",
@@ -14604,13 +14378,13 @@
    "attachment": {
     "parentSocket": "wheel-rl.hub",
     "localStart": [
-     0.0,
-     0.0,
+     0,
+     0,
      0.382
     ],
     "localEnd": [
-     0.0,
-     0.0,
+     0,
+     0,
      0.382
     ],
     "contactType": "socket",
@@ -14626,8 +14400,8 @@
    },
    "transform": {
     "position": [
-     0.0,
-     0.0,
+     0,
+     0,
      0.382
     ],
     "rotation": [
@@ -14801,13 +14575,13 @@
    "attachment": {
     "parentSocket": "wheel-rl.hub",
     "localStart": [
-     0.0,
-     0.0,
+     0,
+     0,
      0.382
     ],
     "localEnd": [
-     0.0,
-     0.0,
+     0,
+     0,
      0.382
     ],
     "contactType": "flush",
@@ -14823,8 +14597,8 @@
    },
    "transform": {
     "position": [
-     0.0,
-     0.0,
+     0,
+     0,
      0.394
     ],
     "rotation": [
@@ -14941,7 +14715,7 @@
     "topologyIntent": "knurled ring around wheel center badge",
     "edgeTreatment": {
      "type": "none",
-     "bevelRadius": 0.0,
+     "bevelRadius": 0,
      "segments": 0
     },
     "deformationStack": [],
@@ -14951,7 +14725,7 @@
      "points": [
       [
        0.148,
-       0.0
+       0
       ],
       [
        0.12346,
@@ -14990,7 +14764,7 @@
        0.12346
       ],
       [
-       0.0,
+       0,
        0.148
       ],
       [
@@ -15031,7 +14805,7 @@
       ],
       [
        -0.148,
-       0.0
+       0
       ],
       [
        -0.12346,
@@ -15070,7 +14844,7 @@
        -0.12346
       ],
       [
-       -0.0,
+       0,
        -0.148
       ],
       [
@@ -15113,8 +14887,8 @@
      "depth": 0.008,
      "ovalHoles": [
       {
-       "cx": 0.0,
-       "cy": 0.0,
+       "cx": 0,
+       "cy": 0,
        "rx": 0.095,
        "ry": 0.095
       }
@@ -15125,13 +14899,13 @@
    "attachment": {
     "parentSocket": "wheel-rl.hub-front",
     "localStart": [
-     0.0,
-     0.0,
+     0,
+     0,
      0.382
     ],
     "localEnd": [
-     0.0,
-     0.0,
+     0,
+     0,
      0.382
     ],
     "contactType": "flush",
@@ -15148,7 +14922,7 @@
    "transform": {
     "position": [
      0.131,
-     0.0,
+     0,
      0.382
     ],
     "rotation": [
@@ -15277,7 +15051,7 @@
      "points": [
       [
        0.5,
-       0.0
+       0
       ],
       [
        0.482963,
@@ -15300,7 +15074,7 @@
        0.482963
       ],
       [
-       0.0,
+       0,
        0.5
       ],
       [
@@ -15325,7 +15099,7 @@
       ],
       [
        -0.5,
-       0.0
+       0
       ],
       [
        -0.482963,
@@ -15348,7 +15122,7 @@
        -0.482963
       ],
       [
-       -0.0,
+       0,
        -0.5
       ],
       [
@@ -15372,7 +15146,7 @@
        -0.12941
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "root",
@@ -15565,13 +15339,13 @@
    "attachment": {
     "parentSocket": "wheel-rr.hub",
     "localStart": [
-     0.0,
-     0.0,
+     0,
+     0,
      0.382
     ],
     "localEnd": [
-     0.0,
-     0.0,
+     0,
+     0,
      0.382
     ],
     "contactType": "socket",
@@ -15587,8 +15361,8 @@
    },
    "transform": {
     "position": [
-     0.0,
-     0.0,
+     0,
+     0,
      0.382
     ],
     "rotation": [
@@ -15762,13 +15536,13 @@
    "attachment": {
     "parentSocket": "wheel-rr.hub",
     "localStart": [
-     0.0,
-     0.0,
+     0,
+     0,
      0.382
     ],
     "localEnd": [
-     0.0,
-     0.0,
+     0,
+     0,
      0.382
     ],
     "contactType": "flush",
@@ -15784,8 +15558,8 @@
    },
    "transform": {
     "position": [
-     0.0,
-     0.0,
+     0,
+     0,
      0.394
     ],
     "rotation": [
@@ -15902,7 +15676,7 @@
     "topologyIntent": "knurled ring around wheel center badge",
     "edgeTreatment": {
      "type": "none",
-     "bevelRadius": 0.0,
+     "bevelRadius": 0,
      "segments": 0
     },
     "deformationStack": [],
@@ -15912,7 +15686,7 @@
      "points": [
       [
        0.148,
-       0.0
+       0
       ],
       [
        0.12346,
@@ -15951,7 +15725,7 @@
        0.12346
       ],
       [
-       0.0,
+       0,
        0.148
       ],
       [
@@ -15992,7 +15766,7 @@
       ],
       [
        -0.148,
-       0.0
+       0
       ],
       [
        -0.12346,
@@ -16031,7 +15805,7 @@
        -0.12346
       ],
       [
-       -0.0,
+       0,
        -0.148
       ],
       [
@@ -16074,8 +15848,8 @@
      "depth": 0.008,
      "ovalHoles": [
       {
-       "cx": 0.0,
-       "cy": 0.0,
+       "cx": 0,
+       "cy": 0,
        "rx": 0.095,
        "ry": 0.095
       }
@@ -16086,13 +15860,13 @@
    "attachment": {
     "parentSocket": "wheel-rr.hub-front",
     "localStart": [
-     0.0,
-     0.0,
+     0,
+     0,
      0.382
     ],
     "localEnd": [
-     0.0,
-     0.0,
+     0,
+     0,
      0.382
     ],
     "contactType": "flush",
@@ -16109,7 +15883,7 @@
    "transform": {
     "position": [
      -0.131,
-     0.0,
+     0,
      0.382
     ],
     "rotation": [
@@ -16317,7 +16091,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "root",
@@ -16331,9 +16105,9 @@
    },
    "transform": {
     "position": [
-     0.0,
-     0.0,
-     0.0
+     0,
+     0,
+     0
     ],
     "rotation": [
      0,
@@ -16433,6 +16207,436 @@
     "secondaryAlbedo": "rgba(232, 224, 208, 1.0)",
     "materialClass": "fabric",
     "materialClassConfidence": 0.9
+   }
+  },
+  {
+   "id": "pedal-brake-pad",
+   "name": "刹车踏板胶垫",
+   "level": "meso",
+   "role": "detail",
+   "importance": 0.55,
+   "confidence": 0.9,
+   "primitive": "extrude",
+   "topologyClass": "assembled-solid",
+   "topologyRationale": "踏板总成：臂 + 胶垫两件，舱内驾驶位脚坑",
+   "geometryDescriptor": {
+    "topologyIntent": "rounded-rectangle extrusion (superellipse section)",
+    "edgeTreatment": {
+     "type": "rounded",
+     "bevelRadius": 0.006,
+     "segments": 3
+    },
+    "deformationStack": [],
+    "uvStrategy": "generated procedural coordinates",
+    "normalStrategy": "vertex normals from generated geometry",
+    "profile2D": {
+     "points": [
+      [
+       0.5,
+       0
+      ],
+      [
+       0.493114,
+       0.291185
+      ],
+      [
+       0.472044,
+       0.378929
+      ],
+      [
+       0.435275,
+       0.435275
+      ],
+      [
+       0.378929,
+       0.472044
+      ],
+      [
+       0.291185,
+       0.493114
+      ],
+      [
+       0,
+       0.5
+      ],
+      [
+       -0.291185,
+       0.493114
+      ],
+      [
+       -0.378929,
+       0.472044
+      ],
+      [
+       -0.435275,
+       0.435275
+      ],
+      [
+       -0.472044,
+       0.378929
+      ],
+      [
+       -0.493114,
+       0.291185
+      ],
+      [
+       -0.5,
+       0
+      ],
+      [
+       -0.493114,
+       -0.291185
+      ],
+      [
+       -0.472044,
+       -0.378929
+      ],
+      [
+       -0.435275,
+       -0.435275
+      ],
+      [
+       -0.378929,
+       -0.472044
+      ],
+      [
+       -0.291185,
+       -0.493114
+      ],
+      [
+       0,
+       -0.5
+      ],
+      [
+       0.291185,
+       -0.493114
+      ],
+      [
+       0.378929,
+       -0.472044
+      ],
+      [
+       0.435275,
+       -0.435275
+      ],
+      [
+       0.472044,
+       -0.378929
+      ],
+      [
+       0.493114,
+       -0.291185
+      ]
+     ],
+     "depth": 1
+    }
+   },
+   "parent": "cabin-interior",
+   "attachment": null,
+   "dimensions": {
+    "width": 0.118,
+    "height": 0.088,
+    "depth": 0.02,
+    "units": "meters",
+    "confidence": 0.9
+   },
+   "transform": {
+    "position": [
+     0.52,
+     0.398,
+     1.69
+    ],
+    "rotation": [
+     -0.3,
+     0,
+     0
+    ],
+    "scale": [
+     0.118,
+     0.088,
+     0.02
+    ]
+   },
+   "material": "matte-black",
+   "materialLayers": [
+    "matte-black"
+   ],
+   "deformations": [],
+   "joints": [],
+   "seams": [],
+   "localFeatures": [],
+   "surfaceDetail": {
+    "macroRoughness": 0,
+    "microRoughness": 0,
+    "bumpAmplitude": 0,
+    "normalPattern": "",
+    "displacementPattern": "",
+    "occlusionPattern": "",
+    "edgeWearPattern": "",
+    "notes": ""
+   },
+   "evidenceRefs": [
+    "img-design-black"
+   ],
+   "details": [],
+   "fidelityTier": "micro",
+   "notes": "驾驶位刹车踏板橡胶垫：世界 x0.52 / y0.363~0.438 / z1.68~1.70，仰角 17° 贴脚掌",
+   "actionProfile": {
+    "animationRole": "static",
+    "pivot": {
+     "mode": "center",
+     "localPosition": [
+      0,
+      0,
+      0
+     ],
+     "axis": [
+      0,
+      1,
+      0
+     ],
+     "confidence": 0.9
+    },
+    "transformChannels": {
+     "translate": false,
+     "rotate": false,
+     "scale": false,
+     "bend": false,
+     "twist": false,
+     "detach": false,
+     "visibility": true,
+     "materialState": true
+    },
+    "sockets": [],
+    "collider": {
+     "type": "box",
+     "offset": [
+      0,
+      0,
+      0
+     ],
+     "scale": [
+      1,
+      1,
+      1
+     ],
+     "isTrigger": false,
+     "notes": ""
+    },
+    "constraints": [],
+    "destruction": {
+     "breakable": false,
+     "fractureGroup": "root",
+     "seamRefs": [],
+     "detachableFragments": [],
+     "breakImpulse": 0,
+     "debrisMaterial": "base"
+    }
+   },
+   "colorMaterialRecipe": {
+    "dominantAlbedo": "rgba(18, 18, 20, 1.0)",
+    "secondaryAlbedo": "rgba(40, 40, 44, 1.0)",
+    "materialClass": "rubber",
+    "materialClassConfidence": 0.9
+   }
+  },
+  {
+   "id": "pedal-brake-arm",
+   "name": "刹车踏板臂",
+   "level": "meso",
+   "role": "detail",
+   "importance": 0.55,
+   "confidence": 0.9,
+   "primitive": "extrude",
+   "topologyClass": "assembled-solid",
+   "topologyRationale": "踏板总成：臂 + 胶垫两件，舱内驾驶位脚坑",
+   "geometryDescriptor": {
+    "topologyIntent": "rounded-rectangle extrusion (superellipse section)",
+    "edgeTreatment": {
+     "type": "rounded",
+     "bevelRadius": 0.006,
+     "segments": 3
+    },
+    "deformationStack": [],
+    "uvStrategy": "generated procedural coordinates",
+    "normalStrategy": "vertex normals from generated geometry",
+    "profile2D": {
+     "points": [
+      [
+       0.5,
+       0
+      ],
+      [
+       0.4815,
+       0.316462
+      ],
+      [
+       0.423932,
+       0.423932
+      ],
+      [
+       0.316462,
+       0.4815
+      ],
+      [
+       0,
+       0.5
+      ],
+      [
+       -0.316462,
+       0.4815
+      ],
+      [
+       -0.423932,
+       0.423932
+      ],
+      [
+       -0.4815,
+       0.316462
+      ],
+      [
+       -0.5,
+       0
+      ],
+      [
+       -0.4815,
+       -0.316462
+      ],
+      [
+       -0.423932,
+       -0.423932
+      ],
+      [
+       -0.316462,
+       -0.4815
+      ],
+      [
+       0,
+       -0.5
+      ],
+      [
+       0.316462,
+       -0.4815
+      ],
+      [
+       0.423932,
+       -0.423932
+      ],
+      [
+       0.4815,
+       -0.316462
+      ]
+     ],
+     "depth": 1
+    }
+   },
+   "parent": "cabin-interior",
+   "attachment": null,
+   "dimensions": {
+    "width": 0.055,
+    "height": 0.245,
+    "depth": 0.016,
+    "units": "meters",
+    "confidence": 0.9
+   },
+   "transform": {
+    "position": [
+     0.52,
+     0.545,
+     1.664
+    ],
+    "rotation": [
+     -0.1,
+     0,
+     0
+    ],
+    "scale": [
+     0.055,
+     0.245,
+     0.016
+    ]
+   },
+   "material": "plate",
+   "materialLayers": [
+    "plate"
+   ],
+   "deformations": [],
+   "joints": [],
+   "seams": [],
+   "localFeatures": [],
+   "surfaceDetail": {
+    "macroRoughness": 0,
+    "microRoughness": 0,
+    "bumpAmplitude": 0,
+    "normalPattern": "",
+    "displacementPattern": "",
+    "occlusionPattern": "",
+    "edgeWearPattern": "",
+    "notes": ""
+   },
+   "evidenceRefs": [
+    "img-design-black"
+   ],
+   "details": [],
+   "fidelityTier": "micro",
+   "notes": "刹车踏板支撑臂：上端 y0.665 接 dash-lower 下沿(y0.67)，下端 y0.425 接胶垫",
+   "actionProfile": {
+    "animationRole": "static",
+    "pivot": {
+     "mode": "center",
+     "localPosition": [
+      0,
+      0,
+      0
+     ],
+     "axis": [
+      0,
+      1,
+      0
+     ],
+     "confidence": 0.9
+    },
+    "transformChannels": {
+     "translate": false,
+     "rotate": false,
+     "scale": false,
+     "bend": false,
+     "twist": false,
+     "detach": false,
+     "visibility": true,
+     "materialState": true
+    },
+    "sockets": [],
+    "collider": {
+     "type": "box",
+     "offset": [
+      0,
+      0,
+      0
+     ],
+     "scale": [
+      1,
+      1,
+      1
+     ],
+     "isTrigger": false,
+     "notes": ""
+    },
+    "constraints": [],
+    "destruction": {
+     "breakable": false,
+     "fractureGroup": "root",
+     "seamRefs": [],
+     "detachableFragments": [],
+     "breakImpulse": 0,
+     "debrisMaterial": "base"
+    }
+   },
+   "colorMaterialRecipe": {
+    "dominantAlbedo": "rgba(12, 12, 14, 1.0)",
+    "secondaryAlbedo": "rgba(58, 58, 62, 1.0)",
+    "materialClass": "metal",
+    "materialClassConfidence": 0.85
    }
   },
   {
@@ -16538,7 +16742,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "cabin-interior",
@@ -16552,7 +16756,7 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      0.3,
      -1.95
     ],
@@ -16755,7 +16959,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "cabin-interior",
@@ -16769,7 +16973,7 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      0.9,
      1.55
     ],
@@ -16970,7 +17174,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "cabin-interior",
@@ -16984,7 +17188,7 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      0.8,
      1.6
     ],
@@ -17184,7 +17388,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "cabin-interior",
@@ -17198,7 +17402,7 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      0.905,
      1.62
     ],
@@ -17328,7 +17532,7 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      1.13,
      1.42
     ],
@@ -17675,7 +17879,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "cabin-interior",
@@ -17689,7 +17893,7 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      0.86,
      1.58
     ],
@@ -18093,7 +18297,7 @@
    "topologyClass": "assembled-solid",
    "topologyRationale": "torus 适合该部件的可展拓扑",
    "geometryDescriptor": {
-    "torusTubeRatio": 0.09
+    "torusTubeRatio": 0.115
    },
    "parent": "cabin-interior",
    "attachment": null,
@@ -18284,7 +18488,8 @@
       ]
      ],
      "segments": 36
-    }
+    },
+    "notes": "R12: 圆盘绕 X 转 90° 使盘面法线与方向盘法线一致（原轴沿 Y → 圆盘像“躺倒的硬币”，正视只见窄边）"
    },
    "parent": "steering",
    "attachment": {
@@ -18317,14 +18522,14 @@
      0
     ],
     "rotation": [
-     0,
+     1.5708,
      0,
      0
     ],
     "scale": [
-     0.19,
-     0.05,
-     0.19
+     0.2,
+     0.045,
+     0.2
     ]
    },
    "actionProfile": {
@@ -18518,7 +18723,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "cabin-interior",
@@ -18532,7 +18737,7 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      0.62,
      1.35
     ],
@@ -18657,12 +18862,12 @@
    "attachment": {
     "parentSocket": "tunnel-front.top",
     "localStart": [
-     0.0,
-     0.0,
+     0,
+     0,
      2.1
     ],
     "localEnd": [
-     0.0,
+     0,
      0.045,
      2.1
     ],
@@ -18679,7 +18884,7 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      0.845,
      1.28
     ],
@@ -18809,12 +19014,12 @@
    "attachment": {
     "parentSocket": "tunnel-front.top",
     "localStart": [
-     0.0,
-     0.0,
+     0,
+     0,
      2.1
     ],
     "localEnd": [
-     0.0,
+     0,
      0.001,
      2.1
     ],
@@ -18953,13 +19158,13 @@
    "attachment": {
     "parentSocket": "tunnel-front.top",
     "localStart": [
-     0.0,
-     0.0,
+     0,
+     0,
      2.1
     ],
     "localEnd": [
-     0.0,
-     0.0,
+     0,
+     0,
      2.1
     ],
     "contactType": "flush",
@@ -19091,13 +19296,13 @@
    "attachment": {
     "parentSocket": "tunnel-front.top",
     "localStart": [
-     0.0,
-     0.0,
+     0,
+     0,
      2.1
     ],
     "localEnd": [
-     0.0,
-     0.0,
+     0,
+     0,
      2.1
     ],
     "contactType": "flush",
@@ -19315,7 +19520,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "cabin-interior",
@@ -19329,7 +19534,7 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      0.62,
      0.9
     ],
@@ -19460,12 +19665,12 @@
    "attachment": {
     "parentSocket": "tunnel-rear.top",
     "localStart": [
-     0.0,
-     0.0,
+     0,
+     0,
      2.1
     ],
     "localEnd": [
-     0.0,
+     0,
      0.001,
      2.1
     ],
@@ -19482,7 +19687,7 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      0.83,
      1.15
     ],
@@ -19610,84 +19815,84 @@
     "profile2D": {
      "points": [
       [
-       0.2339,
-       -0.0725
-      ],
-      [
-       0.243888,
-       -0.070513
-      ],
-      [
-       0.252355,
-       -0.064855
-      ],
-      [
-       0.258013,
-       -0.056388
-      ],
-      [
        0.26,
-       -0.0464
+       0
       ],
       [
-       0.26,
-       0.0464
+       0.254833,
+       0.054389
       ],
       [
-       0.258013,
-       0.056388
+       0.238867,
+       0.070341
       ],
       [
-       0.252355,
-       0.064855
+       0.210214,
+       0.079929
       ],
       [
-       0.243888,
-       0.070513
+       0.162542,
+       0.085271
       ],
       [
-       0.2339,
-       0.0725
+       0,
+       0.087
       ],
       [
-       -0.2339,
-       0.0725
+       -0.162542,
+       0.085271
       ],
       [
-       -0.243888,
-       0.070513
+       -0.210214,
+       0.079929
       ],
       [
-       -0.252355,
-       0.064855
+       -0.238867,
+       0.070341
       ],
       [
-       -0.258013,
-       0.056388
+       -0.254833,
+       0.054389
       ],
       [
        -0.26,
-       0.0464
+       0
       ],
       [
-       -0.26,
-       -0.0464
+       -0.254833,
+       -0.054389
       ],
       [
-       -0.258013,
-       -0.056388
+       -0.238867,
+       -0.070341
       ],
       [
-       -0.252355,
-       -0.064855
+       -0.210214,
+       -0.079929
       ],
       [
-       -0.243888,
-       -0.070513
+       -0.162542,
+       -0.085271
       ],
       [
-       -0.2339,
-       -0.0725
+       0,
+       -0.087
+      ],
+      [
+       0.162542,
+       -0.085271
+      ],
+      [
+       0.210214,
+       -0.079929
+      ],
+      [
+       0.238867,
+       -0.070341
+      ],
+      [
+       0.254833,
+       -0.054389
       ]
      ],
      "depth": 0.508
@@ -19697,13 +19902,13 @@
    "attachment": {
     "parentSocket": "cabin-interior.floor",
     "localStart": [
-     0.0,
-     0.0,
+     0,
+     0,
      2.1
     ],
     "localEnd": [
-     0.0,
-     0.0,
+     0,
+     0,
      2.1
     ],
     "contactType": "butt",
@@ -19725,13 +19930,13 @@
     ],
     "rotation": [
      0,
-     0,
+     3.141592653589793,
      0
     ],
     "scale": [
-     1.0,
-     1.0,
-     1.0
+     1,
+     1,
+     1
     ]
    },
    "actionProfile": {
@@ -19963,12 +20168,12 @@
    "attachment": {
     "parentSocket": "seat-driver.seat-base",
     "localStart": [
-     0.0,
+     0,
      -0.3425,
      0.244
     ],
     "localEnd": [
-     0.0,
+     0,
      -0.3425,
      0.244
     ],
@@ -19985,7 +20190,7 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      0.3475,
      0.474
     ],
@@ -19995,9 +20200,9 @@
      0
     ],
     "scale": [
-     1.0,
-     1.0,
-     1.0
+     1,
+     1,
+     1
     ]
    },
    "actionProfile": {
@@ -20192,19 +20397,19 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "seat-driver",
    "attachment": {
     "parentSocket": "seat-driver-back.top",
     "localStart": [
-     0.0,
+     0,
      -0.0125,
      0.254
     ],
     "localEnd": [
-     0.0,
+     0,
      0.0675,
      0.254
     ],
@@ -20221,7 +20426,7 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      0.7275,
      0.464
     ],
@@ -20354,84 +20559,84 @@
     "profile2D": {
      "points": [
       [
-       0.2339,
-       -0.0725
-      ],
-      [
-       0.243888,
-       -0.070513
-      ],
-      [
-       0.252355,
-       -0.064855
-      ],
-      [
-       0.258013,
-       -0.056388
-      ],
-      [
        0.26,
-       -0.0464
+       0
       ],
       [
-       0.26,
-       0.0464
+       0.254833,
+       0.054389
       ],
       [
-       0.258013,
-       0.056388
+       0.238867,
+       0.070341
       ],
       [
-       0.252355,
-       0.064855
+       0.210214,
+       0.079929
       ],
       [
-       0.243888,
-       0.070513
+       0.162542,
+       0.085271
       ],
       [
-       0.2339,
-       0.0725
+       0,
+       0.087
       ],
       [
-       -0.2339,
-       0.0725
+       -0.162542,
+       0.085271
       ],
       [
-       -0.243888,
-       0.070513
+       -0.210214,
+       0.079929
       ],
       [
-       -0.252355,
-       0.064855
+       -0.238867,
+       0.070341
       ],
       [
-       -0.258013,
-       0.056388
+       -0.254833,
+       0.054389
       ],
       [
        -0.26,
-       0.0464
+       0
       ],
       [
-       -0.26,
-       -0.0464
+       -0.254833,
+       -0.054389
       ],
       [
-       -0.258013,
-       -0.056388
+       -0.238867,
+       -0.070341
       ],
       [
-       -0.252355,
-       -0.064855
+       -0.210214,
+       -0.079929
       ],
       [
-       -0.243888,
-       -0.070513
+       -0.162542,
+       -0.085271
       ],
       [
-       -0.2339,
-       -0.0725
+       0,
+       -0.087
+      ],
+      [
+       0.162542,
+       -0.085271
+      ],
+      [
+       0.210214,
+       -0.079929
+      ],
+      [
+       0.238867,
+       -0.070341
+      ],
+      [
+       0.254833,
+       -0.054389
       ]
      ],
      "depth": 0.508
@@ -20441,13 +20646,13 @@
    "attachment": {
     "parentSocket": "cabin-interior.floor",
     "localStart": [
-     0.0,
-     0.0,
+     0,
+     0,
      2.1
     ],
     "localEnd": [
-     0.0,
-     0.0,
+     0,
+     0,
      2.1
     ],
     "contactType": "butt",
@@ -20469,13 +20674,13 @@
     ],
     "rotation": [
      0,
-     0,
+     3.141592653589793,
      0
     ],
     "scale": [
-     1.0,
-     1.0,
-     1.0
+     1,
+     1,
+     1
     ]
    },
    "actionProfile": {
@@ -20707,12 +20912,12 @@
    "attachment": {
     "parentSocket": "seat-passenger.seat-base",
     "localStart": [
-     0.0,
+     0,
      -0.3425,
      0.244
     ],
     "localEnd": [
-     0.0,
+     0,
      -0.3425,
      0.244
     ],
@@ -20729,7 +20934,7 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      0.3475,
      0.474
     ],
@@ -20739,9 +20944,9 @@
      0
     ],
     "scale": [
-     1.0,
-     1.0,
-     1.0
+     1,
+     1,
+     1
     ]
    },
    "actionProfile": {
@@ -20936,19 +21141,19 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "seat-passenger",
    "attachment": {
     "parentSocket": "seat-passenger-back.top",
     "localStart": [
-     0.0,
+     0,
      -0.0125,
      0.254
     ],
     "localEnd": [
-     0.0,
+     0,
      0.0675,
      0.254
     ],
@@ -20965,7 +21170,7 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      0.7275,
      0.464
     ],
@@ -21098,84 +21303,84 @@
     "profile2D": {
      "points": [
       [
-       0.2539,
-       -0.0725
-      ],
-      [
-       0.263888,
-       -0.070513
-      ],
-      [
-       0.272355,
-       -0.064855
-      ],
-      [
-       0.278013,
-       -0.056388
-      ],
-      [
        0.28,
-       -0.0464
+       0
       ],
       [
-       0.28,
-       0.0464
+       0.274436,
+       0.054389
       ],
       [
-       0.278013,
-       0.056388
+       0.257242,
+       0.070341
       ],
       [
-       0.272355,
-       0.064855
+       0.226384,
+       0.079929
       ],
       [
-       0.263888,
-       0.070513
+       0.175046,
+       0.085271
       ],
       [
-       0.2539,
-       0.0725
+       0,
+       0.087
       ],
       [
-       -0.2539,
-       0.0725
+       -0.175046,
+       0.085271
       ],
       [
-       -0.263888,
-       0.070513
+       -0.226384,
+       0.079929
       ],
       [
-       -0.272355,
-       0.064855
+       -0.257242,
+       0.070341
       ],
       [
-       -0.278013,
-       0.056388
+       -0.274436,
+       0.054389
       ],
       [
        -0.28,
-       0.0464
+       0
       ],
       [
-       -0.28,
-       -0.0464
+       -0.274436,
+       -0.054389
       ],
       [
-       -0.278013,
-       -0.056388
+       -0.257242,
+       -0.070341
       ],
       [
-       -0.272355,
-       -0.064855
+       -0.226384,
+       -0.079929
       ],
       [
-       -0.263888,
-       -0.070513
+       -0.175046,
+       -0.085271
       ],
       [
-       -0.2539,
-       -0.0725
+       0,
+       -0.087
+      ],
+      [
+       0.175046,
+       -0.085271
+      ],
+      [
+       0.226384,
+       -0.079929
+      ],
+      [
+       0.257242,
+       -0.070341
+      ],
+      [
+       0.274436,
+       -0.054389
       ]
      ],
      "depth": 0.52832
@@ -21185,13 +21390,13 @@
    "attachment": {
     "parentSocket": "cabin-interior.floor",
     "localStart": [
-     0.0,
-     0.0,
+     0,
+     0,
      2.1
     ],
     "localEnd": [
-     0.0,
-     0.0,
+     0,
+     0,
      2.1
     ],
     "contactType": "butt",
@@ -21209,17 +21414,17 @@
     "position": [
      0.5,
      0.6325,
-     0.53584
+     0.3
     ],
     "rotation": [
      0,
-     0,
+     3.141592653589793,
      0
     ],
     "scale": [
-     1.0,
-     1.0,
-     1.0
+     1,
+     1,
+     1
     ]
    },
    "actionProfile": {
@@ -21435,12 +21640,12 @@
    "attachment": {
     "parentSocket": "seat-rear-l.seat-base",
     "localStart": [
-     0.0,
+     0,
      -0.3425,
      0.25416
     ],
     "localEnd": [
-     0.0,
+     0,
      -0.3425,
      0.25416
     ],
@@ -21457,7 +21662,7 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      0.3475,
      0.50416
     ],
@@ -21467,9 +21672,9 @@
      0
     ],
     "scale": [
-     1.0,
-     1.0,
-     1.0
+     1,
+     1,
+     1
     ]
    },
    "actionProfile": {
@@ -21664,19 +21869,19 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "seat-rear-l",
    "attachment": {
     "parentSocket": "seat-rear-l-back.top",
     "localStart": [
-     0.0,
+     0,
      -0.0125,
      0.26416
     ],
     "localEnd": [
-     0.0,
+     0,
      0.0675,
      0.26416
     ],
@@ -21693,7 +21898,7 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      0.7275,
      0.51416
     ],
@@ -21899,19 +22104,19 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "seat-rear-l",
    "attachment": {
     "parentSocket": "seat-rear-l.seat-front",
     "localStart": [
-     0.0,
+     0,
      -0.0125,
      0.46416
     ],
     "localEnd": [
-     0.0,
+     0,
      -0.0125,
      0.76416
     ],
@@ -21928,7 +22133,7 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      0.575893,
      0.556293
     ],
@@ -22129,19 +22334,19 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "seat-rear-l",
    "attachment": {
     "parentSocket": "seat-rear-l-back.side",
     "localStart": [
-     0.0,
+     0,
      0.0875,
      0.26416
     ],
     "localEnd": [
-     0.0,
+     0,
      -0.0125,
      0.36416
     ],
@@ -22158,7 +22363,7 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      0.2675,
      0.14416
     ],
@@ -22292,84 +22497,84 @@
     "profile2D": {
      "points": [
       [
-       0.2539,
-       -0.0725
-      ],
-      [
-       0.263888,
-       -0.070513
-      ],
-      [
-       0.272355,
-       -0.064855
-      ],
-      [
-       0.278013,
-       -0.056388
-      ],
-      [
        0.28,
-       -0.0464
+       0
       ],
       [
-       0.28,
-       0.0464
+       0.274436,
+       0.054389
       ],
       [
-       0.278013,
-       0.056388
+       0.257242,
+       0.070341
       ],
       [
-       0.272355,
-       0.064855
+       0.226384,
+       0.079929
       ],
       [
-       0.263888,
-       0.070513
+       0.175046,
+       0.085271
       ],
       [
-       0.2539,
-       0.0725
+       0,
+       0.087
       ],
       [
-       -0.2539,
-       0.0725
+       -0.175046,
+       0.085271
       ],
       [
-       -0.263888,
-       0.070513
+       -0.226384,
+       0.079929
       ],
       [
-       -0.272355,
-       0.064855
+       -0.257242,
+       0.070341
       ],
       [
-       -0.278013,
-       0.056388
+       -0.274436,
+       0.054389
       ],
       [
        -0.28,
-       0.0464
+       0
       ],
       [
-       -0.28,
-       -0.0464
+       -0.274436,
+       -0.054389
       ],
       [
-       -0.278013,
-       -0.056388
+       -0.257242,
+       -0.070341
       ],
       [
-       -0.272355,
-       -0.064855
+       -0.226384,
+       -0.079929
       ],
       [
-       -0.263888,
-       -0.070513
+       -0.175046,
+       -0.085271
       ],
       [
-       -0.2539,
-       -0.0725
+       0,
+       -0.087
+      ],
+      [
+       0.175046,
+       -0.085271
+      ],
+      [
+       0.226384,
+       -0.079929
+      ],
+      [
+       0.257242,
+       -0.070341
+      ],
+      [
+       0.274436,
+       -0.054389
       ]
      ],
      "depth": 0.52832
@@ -22379,13 +22584,13 @@
    "attachment": {
     "parentSocket": "cabin-interior.floor",
     "localStart": [
-     0.0,
-     0.0,
+     0,
+     0,
      2.1
     ],
     "localEnd": [
-     0.0,
-     0.0,
+     0,
+     0,
      2.1
     ],
     "contactType": "butt",
@@ -22403,17 +22608,17 @@
     "position": [
      -0.5,
      0.6325,
-     0.53584
+     0.3
     ],
     "rotation": [
      0,
-     0,
+     3.141592653589793,
      0
     ],
     "scale": [
-     1.0,
-     1.0,
-     1.0
+     1,
+     1,
+     1
     ]
    },
    "actionProfile": {
@@ -22629,12 +22834,12 @@
    "attachment": {
     "parentSocket": "seat-rear-r.seat-base",
     "localStart": [
-     0.0,
+     0,
      -0.3425,
      0.25416
     ],
     "localEnd": [
-     0.0,
+     0,
      -0.3425,
      0.25416
     ],
@@ -22651,7 +22856,7 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      0.3475,
      0.50416
     ],
@@ -22661,9 +22866,9 @@
      0
     ],
     "scale": [
-     1.0,
-     1.0,
-     1.0
+     1,
+     1,
+     1
     ]
    },
    "actionProfile": {
@@ -22858,19 +23063,19 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "seat-rear-r",
    "attachment": {
     "parentSocket": "seat-rear-r-back.top",
     "localStart": [
-     0.0,
+     0,
      -0.0125,
      0.26416
     ],
     "localEnd": [
-     0.0,
+     0,
      0.0675,
      0.26416
     ],
@@ -22887,7 +23092,7 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      0.7275,
      0.51416
     ],
@@ -23093,19 +23298,19 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "seat-rear-r",
    "attachment": {
     "parentSocket": "seat-rear-r.seat-front",
     "localStart": [
-     0.0,
+     0,
      -0.0125,
      0.46416
     ],
     "localEnd": [
-     0.0,
+     0,
      -0.0125,
      0.76416
     ],
@@ -23122,7 +23327,7 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      0.575893,
      0.556293
     ],
@@ -23323,19 +23528,19 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "seat-rear-r",
    "attachment": {
     "parentSocket": "seat-rear-r-back.side",
     "localStart": [
-     0.0,
+     0,
      0.0875,
      0.26416
     ],
     "localEnd": [
-     0.0,
+     0,
      -0.0125,
      0.36416
     ],
@@ -23352,7 +23557,7 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      0.2675,
      0.14416
     ],
@@ -23559,7 +23764,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "cabin-interior",
@@ -23573,7 +23778,7 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      1.7,
      0.1
     ],
@@ -23782,7 +23987,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "cabin-interior",
@@ -23796,7 +24001,7 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      1.79,
      -0.025
     ],
@@ -23996,7 +24201,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "cabin-interior",
@@ -24010,7 +24215,7 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      1.835,
      0.55
     ],
@@ -24159,14 +24364,14 @@
    "attachment": {
     "parentSocket": "headliner-front.edge",
     "localStart": [
-     0.0,
-     0.0,
-     0.0
+     0,
+     0,
+     0
     ],
     "localEnd": [
-     0.0,
-     0.0,
-     0.0
+     0,
+     0,
+     0
     ],
     "contactType": "embed",
     "embedDepth": 0.008,
@@ -24181,9 +24386,9 @@
    },
    "transform": {
     "position": [
-     0.0,
-     0.0,
-     0.0
+     0,
+     0,
+     0
     ],
     "rotation": [
      0,
@@ -24339,14 +24544,14 @@
    "attachment": {
     "parentSocket": "headliner-front.edge",
     "localStart": [
-     0.0,
-     0.0,
-     0.0
+     0,
+     0,
+     0
     ],
     "localEnd": [
-     0.0,
-     0.0,
-     0.0
+     0,
+     0,
+     0
     ],
     "contactType": "embed",
     "embedDepth": 0.008,
@@ -24361,9 +24566,9 @@
    },
    "transform": {
     "position": [
-     0.0,
-     0.0,
-     0.0
+     0,
+     0,
+     0
     ],
     "rotation": [
      0,
@@ -24564,7 +24769,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "cabin-interior",
@@ -24985,7 +25190,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "cabin-interior",
@@ -25406,7 +25611,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "cabin-interior",
@@ -25607,12 +25812,12 @@
     "localStart": [
      -0.04,
      0.1,
-     0.0
+     0
     ],
     "localEnd": [
      -0.04,
      0.1,
-     0.0
+     0
     ],
     "contactType": "flush",
     "embedDepth": 0.004,
@@ -25629,7 +25834,7 @@
     "position": [
      -0.04,
      0.1,
-     0.0
+     0
     ],
     "rotation": [
      0,
@@ -25827,7 +26032,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "cabin-interior",
@@ -26028,12 +26233,12 @@
     "localStart": [
      0.04,
      0.1,
-     0.0
+     0
     ],
     "localEnd": [
      0.04,
      0.1,
-     0.0
+     0
     ],
     "contactType": "flush",
     "embedDepth": 0.004,
@@ -26050,7 +26255,7 @@
     "position": [
      0.04,
      0.1,
-     0.0
+     0
     ],
     "rotation": [
      0,
@@ -26516,7 +26721,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "cabin-interior",
@@ -26530,7 +26735,7 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      1.801,
      0.3
     ],
@@ -26740,7 +26945,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "cabin-interior",
@@ -26754,7 +26959,7 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      0.86,
      1.56
     ],
@@ -27795,8 +28000,8 @@
    },
    "transform": {
     "position": [
-     -0.0,
-     0.0,
+     0,
+     0,
      0.036
     ],
     "rotation": [
@@ -27805,9 +28010,9 @@
      0
     ],
     "scale": [
-     1.0,
-     1.0,
-     1.0
+     1,
+     1,
+     1
     ]
    },
    "actionProfile": {
@@ -28002,7 +28207,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "taillamp-l",
@@ -28016,8 +28221,8 @@
    },
    "transform": {
     "position": [
-     -0.0,
-     0.0,
+     0,
+     0,
      0.03425
     ],
     "rotation": [
@@ -28223,7 +28428,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "taillamp-l",
@@ -28237,8 +28442,8 @@
    },
    "transform": {
     "position": [
-     -0.0,
-     0.0,
+     0,
+     0,
      0.0375
     ],
     "rotation": [
@@ -28454,8 +28659,8 @@
    },
    "transform": {
     "position": [
-     -0.0,
-     0.0,
+     0,
+     0,
      0.036
     ],
     "rotation": [
@@ -28464,9 +28669,9 @@
      0
     ],
     "scale": [
-     1.0,
-     1.0,
-     1.0
+     1,
+     1,
+     1
     ]
    },
    "actionProfile": {
@@ -28661,7 +28866,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "taillamp-r",
@@ -28675,8 +28880,8 @@
    },
    "transform": {
     "position": [
-     -0.0,
-     0.0,
+     0,
+     0,
      0.03425
     ],
     "rotation": [
@@ -28882,7 +29087,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "taillamp-r",
@@ -28896,8 +29101,8 @@
    },
    "transform": {
     "position": [
-     -0.0,
-     0.0,
+     0,
+     0,
      0.0375
     ],
     "rotation": [
@@ -29001,174 +29206,6 @@
    "notes": "EX-29：金色点阵屏 0.09×0.135（2:3，匹配 16×24 点阵），世界 z[-2.8745,-2.8725]，与红带同层居中（铬框之后 1mm）。"
   },
   {
-   "id": "emblem-shield",
-   "name": "曜日纹车标六边盾形底座",
-   "level": "meso",
-   "role": "detail",
-   "importance": 0.9,
-   "confidence": 0.86,
-   "primitive": "extrude",
-   "topologyClass": "assembled-solid",
-   "topologyRationale": "薄板/回转体，硬表面可展拓扑",
-   "geometryDescriptor": {
-    "profile2D": {
-     "points": [
-      [
-       -0.55,
-       0.03
-      ],
-      [
-       -0.42,
-       -0.12
-      ],
-      [
-       0.42,
-       -0.12
-      ],
-      [
-       0.55,
-       0.03
-      ],
-      [
-       0.42,
-       0.12
-      ],
-      [
-       -0.42,
-       0.12
-      ]
-     ],
-     "depth": 0.01
-    },
-    "topologyIntent": "flat hexagonal shield shell",
-    "edgeTreatment": {
-     "type": "bevel",
-     "bevelRadius": 0.006,
-     "segments": 2
-    },
-    "deformationStack": [],
-    "uvStrategy": "generated procedural coordinates",
-    "normalStrategy": "vertex normals"
-   },
-   "parent": "front-end",
-   "attachment": null,
-   "dimensions": {
-    "width": 1,
-    "height": 1,
-    "depth": 1,
-    "units": "meters",
-    "confidence": 0.86
-   },
-   "transform": {
-    "position": [
-     0,
-     -0.093,
-     0.105
-    ],
-    "rotation": [
-     0,
-     0,
-     0
-    ],
-    "scale": [
-     1,
-     1,
-     1
-    ]
-   },
-   "actionProfile": {
-    "animationRole": "static",
-    "pivot": {
-     "mode": "center",
-     "localPosition": [
-      0,
-      0,
-      0
-     ],
-     "axis": [
-      0,
-      1,
-      0
-     ],
-     "confidence": 0.95
-    },
-    "transformChannels": {
-     "translate": false,
-     "rotate": false,
-     "scale": false,
-     "bend": false,
-     "twist": false,
-     "detach": false,
-     "visibility": true,
-     "materialState": true
-    },
-    "sockets": [],
-    "collider": {
-     "type": "box",
-     "offset": [
-      0,
-      0,
-      0
-     ],
-     "scale": [
-      1,
-      1,
-      1
-     ],
-     "isTrigger": false,
-     "notes": ""
-    },
-    "constraints": [],
-    "destruction": {
-     "breakable": false,
-     "fractureGroup": "root",
-     "seamRefs": [],
-     "detachableFragments": [],
-     "breakImpulse": 0,
-     "debrisMaterial": "base"
-    }
-   },
-   "material": "bronze-dark",
-   "materialLayers": [
-    "bronze-dark"
-   ],
-   "deformations": [],
-   "joints": [],
-   "seams": [],
-   "localFeatures": [
-    {
-     "name": "曜日纹车标六边盾形底座",
-     "kind": "emissive-face",
-     "note": "EX-07：细长六边盾形底座 + 暗铜色边框（G2 采样 #6A5240），世界 z[2.656,2.666]；放射曜日纹与上下三角线稿由集成层 Canvas 贴图绘制。"
-    }
-   ],
-   "surfaceDetail": {
-    "macroRoughness": 0,
-    "microRoughness": 0,
-    "bumpAmplitude": 0,
-    "normalPattern": "",
-    "displacementPattern": "",
-    "occlusionPattern": "",
-    "edgeWearPattern": "",
-    "notes": ""
-   },
-   "evidenceRefs": [
-    "img-intelligence",
-    "img-design-black"
-   ],
-   "details": [
-    "d-headlamp-star"
-   ],
-   "fidelityTier": "hero",
-   "colorMaterialRecipe": {
-    "dominantAlbedo": "rgba(106, 82, 64, 1.0)",
-    "secondaryAlbedo": "rgba(106, 82, 64, 1.0)",
-    "materialClass": "metal",
-    "materialClassConfidence": 0.86
-   },
-   "notes": "EX-07：R11b 落位修正——T1 鼻面回收后原世界位(z2.656)悬空；现贴 front-end 面板中央（y_w0.90/z_w2.445），盾标居中其上，放射曜日纹仍由集成层 Canvas 绘制。"
-  },
-  {
    "id": "crystal-sconce-l",
    "name": "B柱水晶壁灯柱 L",
    "level": "meso",
@@ -29246,13 +29283,13 @@
    "attachment": {
     "parentSocket": "wheel-fl.hub-front",
     "localStart": [
-     0.0,
-     0.0,
+     0,
+     0,
      2.1
     ],
     "localEnd": [
-     0.0,
-     0.0,
+     0,
+     0,
      2.1
     ],
     "contactType": "flush",
@@ -29452,13 +29489,13 @@
    "attachment": {
     "parentSocket": "wheel-fl.hub-front",
     "localStart": [
-     0.0,
-     0.0,
+     0,
+     0,
      2.1
     ],
     "localEnd": [
-     0.0,
-     0.0,
+     0,
+     0,
      2.1
     ],
     "contactType": "flush",
@@ -29658,13 +29695,13 @@
    "attachment": {
     "parentSocket": "wheel-fl.hub-front",
     "localStart": [
-     0.0,
-     0.0,
+     0,
+     0,
      2.1
     ],
     "localEnd": [
-     0.0,
-     0.0,
+     0,
+     0,
      2.1
     ],
     "contactType": "flush",
@@ -29864,13 +29901,13 @@
    "attachment": {
     "parentSocket": "wheel-fl.hub-front",
     "localStart": [
-     0.0,
-     0.0,
+     0,
+     0,
      2.1
     ],
     "localEnd": [
-     0.0,
-     0.0,
+     0,
+     0,
      2.1
     ],
     "contactType": "flush",
@@ -30095,7 +30132,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "root",
@@ -30316,7 +30353,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "root",
@@ -30537,7 +30574,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "root",
@@ -30758,7 +30795,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "root",
@@ -30979,7 +31016,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "front-end",
@@ -30993,9 +31030,9 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      0.055,
-     0.128
+     0.112
     ],
     "rotation": [
      0,
@@ -31200,7 +31237,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "root",
@@ -31214,19 +31251,19 @@
    },
    "transform": {
     "position": [
-     0.0,
-     1.562987,
-     -2.4996
+     0,
+     1.848,
+     -2.8
     ],
     "rotation": [
-     0.1,
+     0,
      0,
      0
     ],
     "scale": [
      1.4,
-     0.025,
-     0.16
+     0.018,
+     0.14
     ]
    },
    "actionProfile": {
@@ -31421,7 +31458,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "root",
@@ -31440,9 +31477,9 @@
      -2.48
     ],
     "rotation": [
-     0.0,
+     0,
      3.141592653589793,
-     0.0
+     0
     ],
     "scale": [
      0.34,
@@ -31642,7 +31679,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "root",
@@ -31661,9 +31698,9 @@
      -2.48
     ],
     "rotation": [
-     0.0,
+     0,
      3.141592653589793,
-     0.0
+     0
     ],
     "scale": [
      0.34,
@@ -31863,7 +31900,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "root",
@@ -31877,14 +31914,14 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      1.32,
      -2.835
     ],
     "rotation": [
-     0.0,
+     0,
      3.141592653589793,
-     0.0
+     0
     ],
     "scale": [
      1.5,
@@ -32084,7 +32121,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "root",
@@ -32305,7 +32342,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "root",
@@ -32526,7 +32563,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "front-end",
@@ -32540,7 +32577,7 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      0.02,
      0.104
     ],
@@ -32747,20 +32784,20 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "cabin-interior",
    "attachment": {
     "parentSocket": "tunnel-front.top",
     "localStart": [
-     0.0,
-     0.0,
+     0,
+     0,
      2.1
     ],
     "localEnd": [
-     0.0,
-     0.0,
+     0,
+     0,
      2.1
     ],
     "contactType": "flush",
@@ -32776,7 +32813,7 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      0.79,
      1.12
     ],
@@ -32909,13 +32946,13 @@
    "attachment": {
     "parentSocket": "tunnel-front.top",
     "localStart": [
-     0.0,
-     0.0,
+     0,
+     0,
      2.1
     ],
     "localEnd": [
-     0.0,
-     0.0,
+     0,
+     0,
      2.1
     ],
     "contactType": "flush",
@@ -33115,13 +33152,13 @@
    "attachment": {
     "parentSocket": "tunnel-front.top",
     "localStart": [
-     0.0,
-     0.0,
+     0,
+     0,
      2.1
     ],
     "localEnd": [
-     0.0,
-     0.0,
+     0,
+     0,
      2.1
     ],
     "contactType": "flush",
@@ -33137,7 +33174,7 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      0.806,
      1.28
     ],
@@ -33262,13 +33299,13 @@
    "attachment": {
     "parentSocket": "tunnel-front.top",
     "localStart": [
-     0.0,
-     0.0,
+     0,
+     0,
      2.1
     ],
     "localEnd": [
-     0.0,
-     0.0,
+     0,
+     0,
      2.1
     ],
     "contactType": "flush",
@@ -33284,7 +33321,7 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      0.818,
      1.28
     ],
@@ -33415,12 +33452,12 @@
    "attachment": {
     "parentSocket": "seat-rear-l-armrest.top",
     "localStart": [
-     0.0,
+     0,
      -0.0125,
      0.26416
     ],
     "localEnd": [
-     0.0,
+     0,
      -0.0125,
      0.26416
     ],
@@ -33437,7 +33474,7 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      0.3255,
      0.43416
     ],
@@ -33646,19 +33683,19 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "seat-rear-l",
    "attachment": {
     "parentSocket": "seat-rear-l-headrest.front",
     "localStart": [
-     0.0,
+     0,
      -0.0125,
      0.26416
     ],
     "localEnd": [
-     0.0,
+     0,
      -0.0125,
      0.26416
     ],
@@ -33675,7 +33712,7 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      0.7475,
      0.61466
     ],
@@ -33807,12 +33844,12 @@
    "attachment": {
     "parentSocket": "seat-rear-r-armrest.top",
     "localStart": [
-     0.0,
+     0,
      -0.0125,
      0.26416
     ],
     "localEnd": [
-     0.0,
+     0,
      -0.0125,
      0.26416
     ],
@@ -33829,7 +33866,7 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      0.3255,
      0.43416
     ],
@@ -34038,19 +34075,19 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "seat-rear-r",
    "attachment": {
     "parentSocket": "seat-rear-r-headrest.front",
     "localStart": [
-     0.0,
+     0,
      -0.0125,
      0.26416
     ],
     "localEnd": [
-     0.0,
+     0,
      -0.0125,
      0.26416
     ],
@@ -34067,7 +34104,7 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      0.7475,
      0.61466
     ],
@@ -34277,20 +34314,20 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "cabin-interior",
    "attachment": {
     "parentSocket": "cabin-interior.floor",
     "localStart": [
-     0.0,
-     0.0,
+     0,
+     0,
      2.1
     ],
     "localEnd": [
-     0.0,
-     0.0,
+     0,
+     0,
      2.1
     ],
     "contactType": "butt",
@@ -34306,9 +34343,9 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      0.6,
-     -0.13
+     -1.2999999999999998
     ],
     "rotation": [
      0,
@@ -34517,20 +34554,20 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "cabin-interior",
    "attachment": {
     "parentSocket": "seat-third-row.rear-top",
     "localStart": [
-     0.0,
-     0.0,
+     0,
+     0,
      2.1
     ],
     "localEnd": [
-     0.0,
-     0.0,
+     0,
+     0,
      2.1
     ],
     "contactType": "butt",
@@ -34546,9 +34583,9 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      0.851034,
-     -0.149326
+     -1.319326
     ],
     "rotation": [
      -0.15,
@@ -34757,20 +34794,20 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "cabin-interior",
    "attachment": {
     "parentSocket": "seat-third-row-back.front-top",
     "localStart": [
-     0.0,
-     0.0,
+     0,
+     0,
      2.1
     ],
     "localEnd": [
-     0.0,
-     0.0,
+     0,
+     0,
      2.1
     ],
     "contactType": "butt",
@@ -34778,7 +34815,7 @@
     "gapTolerance": 0.003
    },
    "dimensions": {
-    "width": 1.0,
+    "width": 1,
     "height": 0.15,
     "depth": 0.1,
     "units": "meters",
@@ -34786,9 +34823,9 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      1.197528,
-     -0.209439
+     -1.3794389999999999
     ],
     "rotation": [
      -0.15,
@@ -34796,7 +34833,7 @@
      0
     ],
     "scale": [
-     1.0,
+     1,
      0.15,
      0.1
     ]
@@ -34997,20 +35034,20 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "cabin-interior",
    "attachment": {
     "parentSocket": "cabin-interior.floor",
     "localStart": [
-     0.0,
-     0.0,
+     0,
+     0,
      2.1
     ],
     "localEnd": [
-     0.0,
-     0.0,
+     0,
+     0,
      2.1
     ],
     "contactType": "flush",
@@ -35026,7 +35063,7 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      0.3,
      -0.34
     ],
@@ -35236,20 +35273,20 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "cabin-interior",
    "attachment": {
     "parentSocket": "cabin-interior.floor",
     "localStart": [
-     0.0,
-     0.0,
+     0,
+     0,
      2.1
     ],
     "localEnd": [
-     0.0,
-     0.0,
+     0,
+     0,
      2.1
     ],
     "contactType": "flush",
@@ -35265,7 +35302,7 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      0.345,
      -0.34
     ],
@@ -35450,13 +35487,13 @@
    "attachment": {
     "parentSocket": "door-panel-fl.inner",
     "localStart": [
-     0.0,
-     0.0,
+     0,
+     0,
      0.575
     ],
     "localEnd": [
-     0.0,
-     0.0,
+     0,
+     0,
      0.575
     ],
     "contactType": "flush",
@@ -35657,13 +35694,13 @@
    "attachment": {
     "parentSocket": "door-panel-fr.inner",
     "localStart": [
-     0.0,
-     0.0,
+     0,
+     0,
      0.575
     ],
     "localEnd": [
-     0.0,
-     0.0,
+     0,
+     0,
      0.575
     ],
     "contactType": "flush",
@@ -35864,13 +35901,13 @@
    "attachment": {
     "parentSocket": "door-panel-rl.inner",
     "localStart": [
-     0.0,
-     0.0,
+     0,
+     0,
      0.575
     ],
     "localEnd": [
-     0.0,
-     0.0,
+     0,
+     0,
      0.575
     ],
     "contactType": "flush",
@@ -36071,13 +36108,13 @@
    "attachment": {
     "parentSocket": "door-panel-rr.inner",
     "localStart": [
-     0.0,
-     0.0,
+     0,
+     0,
      0.575
     ],
     "localEnd": [
-     0.0,
-     0.0,
+     0,
+     0,
      0.575
     ],
     "contactType": "flush",
@@ -36303,7 +36340,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "taillamp-l",
@@ -36332,7 +36369,7 @@
    },
    "transform": {
     "position": [
-     -0.0,
+     0,
      0.185,
      0.038
     ],
@@ -36542,7 +36579,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "taillamp-l",
@@ -36571,7 +36608,7 @@
    },
    "transform": {
     "position": [
-     -0.0,
+     0,
      -0.185,
      0.038
     ],
@@ -36781,7 +36818,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "taillamp-r",
@@ -36810,7 +36847,7 @@
    },
    "transform": {
     "position": [
-     -0.0,
+     0,
      0.185,
      0.038
     ],
@@ -37020,7 +37057,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "taillamp-r",
@@ -37049,7 +37086,7 @@
    },
    "transform": {
     "position": [
-     -0.0,
+     0,
      -0.185,
      0.038
     ],
@@ -37171,7 +37208,7 @@
      "points": [
       [
        0.017,
-       0.0
+       0
       ],
       [
        0.01571,
@@ -37186,7 +37223,7 @@
        0.01571
       ],
       [
-       0.0,
+       0,
        0.017
       ],
       [
@@ -37203,7 +37240,7 @@
       ],
       [
        -0.017,
-       0.0
+       0
       ],
       [
        -0.01571,
@@ -37218,7 +37255,7 @@
        -0.01571
       ],
       [
-       -0.0,
+       0,
        -0.017
       ],
       [
@@ -37239,7 +37276,7 @@
     "topologyIntent": "rounded disc with radial knurl contour",
     "edgeTreatment": {
      "type": "none",
-     "bevelRadius": 0.0,
+     "bevelRadius": 0,
      "segments": 0
     },
     "deformationStack": [],
@@ -37258,7 +37295,7 @@
    "transform": {
     "position": [
      0.005,
-     0.056,
+     0.03808,
      0.064
     ],
     "rotation": [
@@ -37378,7 +37415,7 @@
      "points": [
       [
        0.017,
-       0.0
+       0
       ],
       [
        0.01571,
@@ -37393,7 +37430,7 @@
        0.01571
       ],
       [
-       0.0,
+       0,
        0.017
       ],
       [
@@ -37410,7 +37447,7 @@
       ],
       [
        -0.017,
-       0.0
+       0
       ],
       [
        -0.01571,
@@ -37425,7 +37462,7 @@
        -0.01571
       ],
       [
-       -0.0,
+       0,
        -0.017
       ],
       [
@@ -37446,7 +37483,7 @@
     "topologyIntent": "rounded disc with radial knurl contour",
     "edgeTreatment": {
      "type": "none",
-     "bevelRadius": 0.0,
+     "bevelRadius": 0,
      "segments": 0
     },
     "deformationStack": [],
@@ -37465,7 +37502,7 @@
    "transform": {
     "position": [
      -0.055,
-     0.056,
+     0.03808,
      0.064
     ],
     "rotation": [
@@ -37585,7 +37622,7 @@
      "points": [
       [
        0.017,
-       0.0
+       0
       ],
       [
        0.01571,
@@ -37600,7 +37637,7 @@
        0.01571
       ],
       [
-       0.0,
+       0,
        0.017
       ],
       [
@@ -37617,7 +37654,7 @@
       ],
       [
        -0.017,
-       0.0
+       0
       ],
       [
        -0.01571,
@@ -37632,7 +37669,7 @@
        -0.01571
       ],
       [
-       -0.0,
+       0,
        -0.017
       ],
       [
@@ -37653,7 +37690,7 @@
     "topologyIntent": "rounded disc with radial knurl contour",
     "edgeTreatment": {
      "type": "none",
-     "bevelRadius": 0.0,
+     "bevelRadius": 0,
      "segments": 0
     },
     "deformationStack": [],
@@ -37672,7 +37709,7 @@
    "transform": {
     "position": [
      -0.025,
-     -0.026,
+     -0.01768,
      0.064
     ],
     "rotation": [
@@ -37792,7 +37829,7 @@
      "points": [
       [
        0.017,
-       0.0
+       0
       ],
       [
        0.01571,
@@ -37807,7 +37844,7 @@
        0.01571
       ],
       [
-       0.0,
+       0,
        0.017
       ],
       [
@@ -37824,7 +37861,7 @@
       ],
       [
        -0.017,
-       0.0
+       0
       ],
       [
        -0.01571,
@@ -37839,7 +37876,7 @@
        -0.01571
       ],
       [
-       -0.0,
+       0,
        -0.017
       ],
       [
@@ -37860,7 +37897,7 @@
     "topologyIntent": "rounded disc with radial knurl contour",
     "edgeTreatment": {
      "type": "none",
-     "bevelRadius": 0.0,
+     "bevelRadius": 0,
      "segments": 0
     },
     "deformationStack": [],
@@ -37879,7 +37916,7 @@
    "transform": {
     "position": [
      -0.005,
-     0.056,
+     0.03808,
      0.064
     ],
     "rotation": [
@@ -37999,7 +38036,7 @@
      "points": [
       [
        0.017,
-       0.0
+       0
       ],
       [
        0.01571,
@@ -38014,7 +38051,7 @@
        0.01571
       ],
       [
-       0.0,
+       0,
        0.017
       ],
       [
@@ -38031,7 +38068,7 @@
       ],
       [
        -0.017,
-       0.0
+       0
       ],
       [
        -0.01571,
@@ -38046,7 +38083,7 @@
        -0.01571
       ],
       [
-       -0.0,
+       0,
        -0.017
       ],
       [
@@ -38067,7 +38104,7 @@
     "topologyIntent": "rounded disc with radial knurl contour",
     "edgeTreatment": {
      "type": "none",
-     "bevelRadius": 0.0,
+     "bevelRadius": 0,
      "segments": 0
     },
     "deformationStack": [],
@@ -38086,7 +38123,7 @@
    "transform": {
     "position": [
      0.055,
-     0.056,
+     0.03808,
      0.064
     ],
     "rotation": [
@@ -38206,7 +38243,7 @@
      "points": [
       [
        0.017,
-       0.0
+       0
       ],
       [
        0.01571,
@@ -38221,7 +38258,7 @@
        0.01571
       ],
       [
-       0.0,
+       0,
        0.017
       ],
       [
@@ -38238,7 +38275,7 @@
       ],
       [
        -0.017,
-       0.0
+       0
       ],
       [
        -0.01571,
@@ -38253,7 +38290,7 @@
        -0.01571
       ],
       [
-       -0.0,
+       0,
        -0.017
       ],
       [
@@ -38274,7 +38311,7 @@
     "topologyIntent": "rounded disc with radial knurl contour",
     "edgeTreatment": {
      "type": "none",
-     "bevelRadius": 0.0,
+     "bevelRadius": 0,
      "segments": 0
     },
     "deformationStack": [],
@@ -38293,7 +38330,7 @@
    "transform": {
     "position": [
      0.025,
-     -0.026,
+     -0.01768,
      0.064
     ],
     "rotation": [
@@ -38399,454 +38436,6 @@
    }
   },
   {
-   "id": "rear-reflector-strip-l",
-   "name": "后保红色反光条下条（l）",
-   "level": "micro",
-   "role": "detail",
-   "importance": 0.85,
-   "confidence": 0.86,
-   "primitive": "extrude",
-   "topologyClass": "assembled-solid",
-   "topologyRationale": "薄板/回转体，硬表面可展拓扑",
-   "geometryDescriptor": {
-    "topologyIntent": "rounded-rectangle extrusion: perimeter corners radiused with 4-facet arcs (22.5deg per facet) instead of hard 90deg box edges",
-    "edgeTreatment": {
-     "type": "rounded",
-     "bevelRadius": 0.0036,
-     "segments": 4
-    },
-    "deformationStack": [],
-    "uvStrategy": "generated procedural coordinates",
-    "normalStrategy": "vertex normals from generated geometry",
-    "profile2D": {
-     "points": [
-      [
-       0.489412,
-       -0.5
-      ],
-      [
-       0.493464,
-       -0.484776
-      ],
-      [
-       0.496899,
-       -0.441421
-      ],
-      [
-       0.499194,
-       -0.376537
-      ],
-      [
-       0.5,
-       -0.3
-      ],
-      [
-       0.5,
-       0.3
-      ],
-      [
-       0.499194,
-       0.376537
-      ],
-      [
-       0.496899,
-       0.441421
-      ],
-      [
-       0.493464,
-       0.484776
-      ],
-      [
-       0.489412,
-       0.5
-      ],
-      [
-       -0.489412,
-       0.5
-      ],
-      [
-       -0.493464,
-       0.484776
-      ],
-      [
-       -0.496899,
-       0.441421
-      ],
-      [
-       -0.499194,
-       0.376537
-      ],
-      [
-       -0.5,
-       0.3
-      ],
-      [
-       -0.5,
-       -0.3
-      ],
-      [
-       -0.499194,
-       -0.376537
-      ],
-      [
-       -0.496899,
-       -0.441421
-      ],
-      [
-       -0.493464,
-       -0.484776
-      ],
-      [
-       -0.489412,
-       -0.5
-      ]
-     ],
-     "depth": 1.0
-    }
-   },
-   "parent": "root",
-   "attachment": null,
-   "dimensions": {
-    "width": 0.34,
-    "height": 0.018,
-    "depth": 0.02,
-    "units": "meters",
-    "confidence": 0.9
-   },
-   "transform": {
-    "position": [
-     0.72,
-     0.2875,
-     -2.48
-    ],
-    "rotation": [
-     0.0,
-     3.141592653589793,
-     0.0
-    ],
-    "scale": [
-     0.34,
-     0.018,
-     0.02
-    ]
-   },
-   "actionProfile": {
-    "animationRole": "static",
-    "pivot": {
-     "mode": "center",
-     "localPosition": [
-      0,
-      0,
-      0
-     ],
-     "axis": [
-      0,
-      1,
-      0
-     ],
-     "confidence": 0.9
-    },
-    "transformChannels": {
-     "translate": false,
-     "rotate": false,
-     "scale": false,
-     "bend": false,
-     "twist": false,
-     "detach": false,
-     "visibility": true,
-     "materialState": true
-    },
-    "sockets": [],
-    "collider": {
-     "type": "box",
-     "offset": [
-      0,
-      0,
-      0
-     ],
-     "scale": [
-      1,
-      1,
-      1
-     ],
-     "isTrigger": false,
-     "notes": ""
-    },
-    "constraints": [],
-    "destruction": {
-     "breakable": false,
-     "fractureGroup": "root",
-     "seamRefs": [],
-     "detachableFragments": [],
-     "breakImpulse": 0,
-     "debrisMaterial": "base"
-    }
-   },
-   "material": "lamp-red",
-   "materialLayers": [
-    "lamp-red"
-   ],
-   "deformations": [],
-   "joints": [],
-   "seams": [],
-   "localFeatures": [
-    {
-     "name": "后保红色反光条（下条）",
-     "kind": "emissive-face",
-     "note": "EX-31/B5 右上格：后保下部每侧两条横向红色反光条，本条为下条；与上条 rear-reflector-l 平行相距 4mm。"
-    }
-   ],
-   "surfaceDetail": {
-    "macroRoughness": 0,
-    "microRoughness": 0,
-    "bumpAmplitude": 0,
-    "normalPattern": "",
-    "displacementPattern": "",
-    "occlusionPattern": "",
-    "edgeWearPattern": "",
-    "notes": "EX-31 后保红色反光条下条（l）：世界 [0.72,0.2875,-2.49]，0.34×0.018×0.02；lamp-red 与尾灯合批 +0 DC。"
-   },
-   "evidenceRefs": [
-    "img-rear-bumper"
-   ],
-   "details": [
-    "d-taillamp"
-   ],
-   "fidelityTier": "hero",
-   "colorMaterialRecipe": {
-    "dominantAlbedo": "rgba(181, 31, 44, 1.0)",
-    "secondaryAlbedo": "rgba(181, 31, 44, 1.0)",
-    "materialClass": "plastic",
-    "materialClassConfidence": 0.9,
-    "note": "EX-31 后保红色反光条下条（l）：世界 [0.72,0.2875,-2.49]，0.34×0.018×0.02；lamp-red 与尾灯合批 +0 DC。"
-   },
-   "notes": "EX-25：尾部横向贯穿镀铬饰条 1.50×0.035，贴在尾门后脸；chrome 合批 +0 DC。"
-  },
-  {
-   "id": "rear-reflector-strip-r",
-   "name": "后保红色反光条下条（r）",
-   "level": "micro",
-   "role": "detail",
-   "importance": 0.85,
-   "confidence": 0.86,
-   "primitive": "extrude",
-   "topologyClass": "assembled-solid",
-   "topologyRationale": "薄板/回转体，硬表面可展拓扑",
-   "geometryDescriptor": {
-    "topologyIntent": "rounded-rectangle extrusion: perimeter corners radiused with 4-facet arcs (22.5deg per facet) instead of hard 90deg box edges",
-    "edgeTreatment": {
-     "type": "rounded",
-     "bevelRadius": 0.0036,
-     "segments": 4
-    },
-    "deformationStack": [],
-    "uvStrategy": "generated procedural coordinates",
-    "normalStrategy": "vertex normals from generated geometry",
-    "profile2D": {
-     "points": [
-      [
-       0.489412,
-       -0.5
-      ],
-      [
-       0.493464,
-       -0.484776
-      ],
-      [
-       0.496899,
-       -0.441421
-      ],
-      [
-       0.499194,
-       -0.376537
-      ],
-      [
-       0.5,
-       -0.3
-      ],
-      [
-       0.5,
-       0.3
-      ],
-      [
-       0.499194,
-       0.376537
-      ],
-      [
-       0.496899,
-       0.441421
-      ],
-      [
-       0.493464,
-       0.484776
-      ],
-      [
-       0.489412,
-       0.5
-      ],
-      [
-       -0.489412,
-       0.5
-      ],
-      [
-       -0.493464,
-       0.484776
-      ],
-      [
-       -0.496899,
-       0.441421
-      ],
-      [
-       -0.499194,
-       0.376537
-      ],
-      [
-       -0.5,
-       0.3
-      ],
-      [
-       -0.5,
-       -0.3
-      ],
-      [
-       -0.499194,
-       -0.376537
-      ],
-      [
-       -0.496899,
-       -0.441421
-      ],
-      [
-       -0.493464,
-       -0.484776
-      ],
-      [
-       -0.489412,
-       -0.5
-      ]
-     ],
-     "depth": 1.0
-    }
-   },
-   "parent": "root",
-   "attachment": null,
-   "dimensions": {
-    "width": 0.34,
-    "height": 0.018,
-    "depth": 0.02,
-    "units": "meters",
-    "confidence": 0.9
-   },
-   "transform": {
-    "position": [
-     -0.72,
-     0.2875,
-     -2.48
-    ],
-    "rotation": [
-     0.0,
-     3.141592653589793,
-     0.0
-    ],
-    "scale": [
-     0.34,
-     0.018,
-     0.02
-    ]
-   },
-   "actionProfile": {
-    "animationRole": "static",
-    "pivot": {
-     "mode": "center",
-     "localPosition": [
-      0,
-      0,
-      0
-     ],
-     "axis": [
-      0,
-      1,
-      0
-     ],
-     "confidence": 0.9
-    },
-    "transformChannels": {
-     "translate": false,
-     "rotate": false,
-     "scale": false,
-     "bend": false,
-     "twist": false,
-     "detach": false,
-     "visibility": true,
-     "materialState": true
-    },
-    "sockets": [],
-    "collider": {
-     "type": "box",
-     "offset": [
-      0,
-      0,
-      0
-     ],
-     "scale": [
-      1,
-      1,
-      1
-     ],
-     "isTrigger": false,
-     "notes": ""
-    },
-    "constraints": [],
-    "destruction": {
-     "breakable": false,
-     "fractureGroup": "root",
-     "seamRefs": [],
-     "detachableFragments": [],
-     "breakImpulse": 0,
-     "debrisMaterial": "base"
-    }
-   },
-   "material": "lamp-red",
-   "materialLayers": [
-    "lamp-red"
-   ],
-   "deformations": [],
-   "joints": [],
-   "seams": [],
-   "localFeatures": [
-    {
-     "name": "后保红色反光条（下条）",
-     "kind": "emissive-face",
-     "note": "EX-31/B5 右上格：后保下部每侧两条横向红色反光条，本条为下条；与上条 rear-reflector-r 平行相距 4mm。"
-    }
-   ],
-   "surfaceDetail": {
-    "macroRoughness": 0,
-    "microRoughness": 0,
-    "bumpAmplitude": 0,
-    "normalPattern": "",
-    "displacementPattern": "",
-    "occlusionPattern": "",
-    "edgeWearPattern": "",
-    "notes": "EX-31 后保红色反光条下条（r）：世界 [-0.72,0.2875,-2.49]，0.34×0.018×0.02；lamp-red 与尾灯合批 +0 DC。"
-   },
-   "evidenceRefs": [
-    "img-rear-bumper"
-   ],
-   "details": [
-    "d-taillamp"
-   ],
-   "fidelityTier": "hero",
-   "colorMaterialRecipe": {
-    "dominantAlbedo": "rgba(181, 31, 44, 1.0)",
-    "secondaryAlbedo": "rgba(181, 31, 44, 1.0)",
-    "materialClass": "plastic",
-    "materialClassConfidence": 0.9,
-    "note": "EX-31 后保红色反光条下条（r）：世界 [-0.72,0.2875,-2.49]，0.34×0.018×0.02；lamp-red 与尾灯合批 +0 DC。"
-   },
-   "notes": "EX-25：尾部横向贯穿镀铬饰条 1.50×0.035，贴在尾门后脸；chrome 合批 +0 DC。"
-  },
-  {
    "id": "seat-rear-l-screen-arm",
    "name": "扶手屏镀铬支臂（l）",
    "level": "micro",
@@ -38949,7 +38538,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "seat-rear-l",
@@ -38963,7 +38552,7 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      0.31816,
      0.459442
     ],
@@ -39173,7 +38762,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "seat-rear-r",
@@ -39187,7 +38776,7 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      0.31816,
      0.459442
     ],
@@ -39397,7 +38986,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "seat-rear-l",
@@ -39411,7 +39000,7 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      0.2675,
      0.46916
     ],
@@ -39621,7 +39210,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "seat-rear-l",
@@ -39845,7 +39434,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "seat-rear-r",
@@ -39859,7 +39448,7 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      0.2675,
      0.46916
     ],
@@ -40069,7 +39658,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "seat-rear-r",
@@ -40293,7 +39882,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "root",
@@ -40313,8 +39902,8 @@
     ],
     "rotation": [
      0.953,
-     0.0,
-     0.0
+     0,
+     0
     ],
     "scale": [
      0.075,
@@ -40514,7 +40103,7 @@
        -0.5
       ]
      ],
-     "depth": 1.0
+     "depth": 1
     }
    },
    "parent": "root",
@@ -40534,8 +40123,8 @@
     ],
     "rotation": [
      0.953,
-     0.0,
-     0.0
+     0,
+     0
     ],
     "scale": [
      0.075,
@@ -40749,14 +40338,14 @@
    },
    "transform": {
     "position": [
-     0.0,
+     0,
      1.105,
      1.54
     ],
     "rotation": [
      0.09,
-     0.0,
-     0.0
+     0,
+     0
     ],
     "scale": [
      1.45,
@@ -40852,6 +40441,266 @@
     "materialClassConfidence": 0.86
    },
    "notes": "2026-10-17 第四轮几何改造：新增前围 cowl 黑色饰板，位于机盖后缘(z1.62)与风挡底(z1.6203)交接处，宽1.45×深0.16×厚0.03，rotX 0.09 随腰线微倾，上缘 y1.12 衔接风挡底 y1.115。"
+  },
+  {
+   "id": "footwell-arch-cover-l",
+   "name": "前轮罩内饰板(l)",
+   "level": "micro",
+   "role": "detail",
+   "importance": 0.35,
+   "confidence": 0.88,
+   "primitive": "plane-card",
+   "topologyClass": "assembled-solid",
+   "topologyRationale": "plane-card 适合该部件的可展拓扑",
+   "geometryDescriptor": {
+    "topologyIntent": "hard-surface precise",
+    "edgeTreatment": {
+     "type": "bevel",
+     "bevelRadius": 0.004,
+     "segments": 2
+    },
+    "deformationStack": [],
+    "uvStrategy": "generated procedural coordinates",
+    "normalStrategy": "vertex normals from generated geometry"
+   },
+   "parent": "root",
+   "attachment": null,
+   "dimensions": {
+    "width": 0.74,
+    "height": 0.6,
+    "depth": 0.006,
+    "units": "meters",
+    "confidence": 0.6
+   },
+   "transform": {
+    "position": [
+     0.735,
+     0.58,
+     1.62
+    ],
+    "rotation": [
+     0,
+     -1.5708,
+     0
+    ],
+    "scale": [
+     0.74,
+     0.6,
+     0.006
+    ]
+   },
+   "actionProfile": {
+    "animationRole": "static",
+    "pivot": {
+     "mode": "center",
+     "localPosition": [
+      0,
+      0,
+      0
+     ],
+     "axis": [
+      0,
+      1,
+      0
+     ],
+     "confidence": 0.88
+    },
+    "transformChannels": {
+     "translate": false,
+     "rotate": false,
+     "scale": false,
+     "bend": false,
+     "twist": false,
+     "detach": false,
+     "visibility": true,
+     "materialState": true
+    },
+    "sockets": [],
+    "collider": {
+     "type": "box",
+     "offset": [
+      0,
+      0,
+      0
+     ],
+     "scale": [
+      1,
+      1,
+      1
+     ],
+     "isTrigger": false,
+     "notes": ""
+    },
+    "constraints": [],
+    "destruction": {
+     "breakable": false,
+     "fractureGroup": "root",
+     "seamRefs": [],
+     "detachableFragments": [],
+     "breakImpulse": 0,
+     "debrisMaterial": "base"
+    }
+   },
+   "material": "matte-black",
+   "materialLayers": [
+    "matte-black"
+   ],
+   "deformations": [],
+   "joints": [],
+   "seams": [],
+   "localFeatures": [],
+   "surfaceDetail": {
+    "macroRoughness": 0,
+    "microRoughness": 0,
+    "bumpAmplitude": 0,
+    "normalPattern": "",
+    "displacementPattern": "",
+    "occlusionPattern": "",
+    "edgeWearPattern": "",
+    "notes": ""
+   },
+   "evidenceRefs": [
+    "img-design-black"
+   ],
+   "details": [],
+   "fidelityTier": "hero",
+   "colorMaterialRecipe": {
+    "dominantAlbedo": "rgba(18, 18, 20, 1.0)",
+    "secondaryAlbedo": "rgba(18, 18, 20, 1.0)",
+    "materialClass": "plastic",
+    "materialClassConfidence": 0.9
+   },
+   "notes": "R12b：前脚坑内侧轮罩内饰板，遮挡经脚坑可见的轮辐/轮辋几何（用户实锤）。"
+  },
+  {
+   "id": "footwell-arch-cover-r",
+   "name": "前轮罩内饰板(r)",
+   "level": "micro",
+   "role": "detail",
+   "importance": 0.35,
+   "confidence": 0.88,
+   "primitive": "plane-card",
+   "topologyClass": "assembled-solid",
+   "topologyRationale": "plane-card 适合该部件的可展拓扑",
+   "geometryDescriptor": {
+    "topologyIntent": "hard-surface precise",
+    "edgeTreatment": {
+     "type": "bevel",
+     "bevelRadius": 0.004,
+     "segments": 2
+    },
+    "deformationStack": [],
+    "uvStrategy": "generated procedural coordinates",
+    "normalStrategy": "vertex normals from generated geometry"
+   },
+   "parent": "root",
+   "attachment": null,
+   "dimensions": {
+    "width": 0.74,
+    "height": 0.6,
+    "depth": 0.006,
+    "units": "meters",
+    "confidence": 0.6
+   },
+   "transform": {
+    "position": [
+     -0.735,
+     0.58,
+     1.62
+    ],
+    "rotation": [
+     0,
+     1.5708,
+     0
+    ],
+    "scale": [
+     0.74,
+     0.6,
+     0.006
+    ]
+   },
+   "actionProfile": {
+    "animationRole": "static",
+    "pivot": {
+     "mode": "center",
+     "localPosition": [
+      0,
+      0,
+      0
+     ],
+     "axis": [
+      0,
+      1,
+      0
+     ],
+     "confidence": 0.88
+    },
+    "transformChannels": {
+     "translate": false,
+     "rotate": false,
+     "scale": false,
+     "bend": false,
+     "twist": false,
+     "detach": false,
+     "visibility": true,
+     "materialState": true
+    },
+    "sockets": [],
+    "collider": {
+     "type": "box",
+     "offset": [
+      0,
+      0,
+      0
+     ],
+     "scale": [
+      1,
+      1,
+      1
+     ],
+     "isTrigger": false,
+     "notes": ""
+    },
+    "constraints": [],
+    "destruction": {
+     "breakable": false,
+     "fractureGroup": "root",
+     "seamRefs": [],
+     "detachableFragments": [],
+     "breakImpulse": 0,
+     "debrisMaterial": "base"
+    }
+   },
+   "material": "matte-black",
+   "materialLayers": [
+    "matte-black"
+   ],
+   "deformations": [],
+   "joints": [],
+   "seams": [],
+   "localFeatures": [],
+   "surfaceDetail": {
+    "macroRoughness": 0,
+    "microRoughness": 0,
+    "bumpAmplitude": 0,
+    "normalPattern": "",
+    "displacementPattern": "",
+    "occlusionPattern": "",
+    "edgeWearPattern": "",
+    "notes": ""
+   },
+   "evidenceRefs": [
+    "img-design-black"
+   ],
+   "details": [],
+   "fidelityTier": "hero",
+   "colorMaterialRecipe": {
+    "dominantAlbedo": "rgba(18, 18, 20, 1.0)",
+    "secondaryAlbedo": "rgba(18, 18, 20, 1.0)",
+    "materialClass": "plastic",
+    "materialClassConfidence": 0.9
+   },
+   "notes": "R12b：前脚坑内侧轮罩内饰板，遮挡经脚坑可见的轮辐/轮辋几何（用户实锤）。"
   }
  ],
  "materials": [
@@ -40903,9 +40752,9 @@
     "MeshPhysicalMaterial clearcoat 1.0 / clearcoatRoughness 0.06；黑版变体 #0E0E12 由集成层切换（localOverrides）"
    ],
    "notes": "",
-   "clearcoat": 1.0,
+   "clearcoat": 1,
    "clearcoatRoughness": 0.06,
-   "envMapIntensity": 1.0,
+   "envMapIntensity": 1,
    "textureless": {
     "declared": true,
     "evidence": [
@@ -40955,7 +40804,7 @@
     "同 paint-upper 工艺；黑版车与 upper 同色"
    ],
    "notes": "",
-   "clearcoat": 1.0,
+   "clearcoat": 1,
    "clearcoatRoughness": 0.08,
    "envMapIntensity": 0.9,
    "textureless": {
@@ -40985,7 +40834,7 @@
    "textureProjection": null,
    "surfaceFrequencyBands": null,
    "roughness": 0.12,
-   "metalness": 1.0,
+   "metalness": 1,
    "normal": null,
    "bump": null,
    "displacement": null,
@@ -41086,7 +40935,7 @@
    "surfaceFrequencyBands": null,
    "roughness": 0.06,
    "envMapIntensity": 1.35,
-   "metalness": 0.0,
+   "metalness": 0,
    "normal": null,
    "bump": null,
    "displacement": null,
@@ -41141,7 +40990,7 @@
    "textureProjection": null,
    "surfaceFrequencyBands": null,
    "roughness": 0.04,
-   "metalness": 0.0,
+   "metalness": 0,
    "normal": null,
    "bump": null,
    "displacement": null,
@@ -41193,7 +41042,7 @@
    "textureProjection": null,
    "surfaceFrequencyBands": null,
    "roughness": 0.9,
-   "metalness": 0.0,
+   "metalness": 0,
    "normal": null,
    "bump": null,
    "displacement": null,
@@ -41391,7 +41240,7 @@
    "textureProjection": null,
    "surfaceFrequencyBands": null,
    "roughness": 0.12,
-   "metalness": 0.0,
+   "metalness": 0,
    "normal": null,
    "bump": null,
    "displacement": null,
@@ -41442,7 +41291,7 @@
    "textureProjection": null,
    "surfaceFrequencyBands": null,
    "roughness": 0.12,
-   "metalness": 0.0,
+   "metalness": 0,
    "normal": null,
    "bump": null,
    "displacement": null,
@@ -41493,7 +41342,7 @@
    "textureProjection": null,
    "surfaceFrequencyBands": null,
    "roughness": 0.3,
-   "metalness": 0.0,
+   "metalness": 0,
    "normal": null,
    "bump": null,
    "displacement": null,
@@ -41595,7 +41444,7 @@
    "textureProjection": null,
    "surfaceFrequencyBands": null,
    "roughness": 0.25,
-   "metalness": 0.0,
+   "metalness": 0,
    "normal": null,
    "bump": null,
    "displacement": null,
@@ -41618,7 +41467,7 @@
    ],
    "notes": "",
    "emissive": "#E03040",
-   "emissiveIntensity": 2.0,
+   "emissiveIntensity": 2,
    "textureless": {
     "declared": true,
     "evidence": [
@@ -41646,7 +41495,7 @@
    "textureProjection": null,
    "surfaceFrequencyBands": null,
    "roughness": 0.3,
-   "metalness": 0.0,
+   "metalness": 0,
    "normal": null,
    "bump": null,
    "displacement": null,
@@ -41798,7 +41647,7 @@
    "textureProjection": null,
    "surfaceFrequencyBands": null,
    "roughness": 0.62,
-   "metalness": 0.0,
+   "metalness": 0,
    "normal": null,
    "bump": null,
    "displacement": null,
@@ -41850,7 +41699,7 @@
    "textureProjection": null,
    "surfaceFrequencyBands": null,
    "roughness": 0.58,
-   "metalness": 0.0,
+   "metalness": 0,
    "normal": null,
    "bump": null,
    "displacement": null,
@@ -41908,7 +41757,7 @@
    "textureProjection": null,
    "surfaceFrequencyBands": null,
    "roughness": 0.5,
-   "metalness": 0.0,
+   "metalness": 0,
    "normal": null,
    "bump": null,
    "displacement": null,
@@ -41960,7 +41809,7 @@
    "textureProjection": null,
    "surfaceFrequencyBands": null,
    "roughness": 0.25,
-   "metalness": 0.0,
+   "metalness": 0,
    "normal": null,
    "bump": null,
    "displacement": null,
@@ -42014,7 +41863,7 @@
    "textureProjection": null,
    "surfaceFrequencyBands": null,
    "roughness": 0.88,
-   "metalness": 0.0,
+   "metalness": 0,
    "normal": null,
    "bump": null,
    "displacement": null,
@@ -42066,7 +41915,7 @@
    "textureProjection": null,
    "surfaceFrequencyBands": null,
    "roughness": 0.85,
-   "metalness": 0.0,
+   "metalness": 0,
    "normal": null,
    "bump": null,
    "displacement": null,
@@ -42118,7 +41967,7 @@
    "textureProjection": null,
    "surfaceFrequencyBands": null,
    "roughness": 0.95,
-   "metalness": 0.0,
+   "metalness": 0,
    "normal": null,
    "bump": null,
    "displacement": null,
@@ -42170,7 +42019,7 @@
    "textureProjection": null,
    "surfaceFrequencyBands": null,
    "roughness": 0.05,
-   "metalness": 0.0,
+   "metalness": 0,
    "normal": null,
    "bump": null,
    "displacement": null,
@@ -42195,7 +42044,7 @@
    "transmission": 0.9,
    "thickness": 0.08,
    "ior": 1.45,
-   "clearcoat": 1.0,
+   "clearcoat": 1,
    "textureless": {
     "declared": true,
     "evidence": [
@@ -42223,7 +42072,7 @@
    "textureProjection": null,
    "surfaceFrequencyBands": null,
    "roughness": 0.2,
-   "metalness": 0.0,
+   "metalness": 0,
    "normal": null,
    "bump": null,
    "displacement": null,
@@ -42246,7 +42095,7 @@
    ],
    "notes": "",
    "emissive": "#F2F8FF",
-   "emissiveIntensity": 3.0,
+   "emissiveIntensity": 3,
    "textureless": {
     "declared": true,
     "evidence": [
@@ -42274,7 +42123,7 @@
    "textureProjection": null,
    "surfaceFrequencyBands": null,
    "roughness": 0.3,
-   "metalness": 0.0,
+   "metalness": 0,
    "normal": null,
    "bump": null,
    "displacement": null,
@@ -42325,7 +42174,7 @@
    "textureProjection": null,
    "surfaceFrequencyBands": null,
    "roughness": 0.9,
-   "metalness": 0.0,
+   "metalness": 0,
    "normal": null,
    "bump": null,
    "displacement": null,
@@ -42348,7 +42197,7 @@
    ],
    "notes": "",
    "emissive": "#FFE9C8",
-   "emissiveIntensity": 1.0,
+   "emissiveIntensity": 1,
    "textureless": {
     "declared": true,
     "evidence": [
@@ -42400,7 +42249,7 @@
    "notes": "",
    "envMapIntensity": 1.1,
    "emissive": "#000000",
-   "emissiveIntensity": 0.0,
+   "emissiveIntensity": 0,
    "textureless": {
     "declared": true,
     "evidence": [
@@ -42515,9 +42364,9 @@
    "primitive": "box",
    "material": "leather-ivory",
    "instanceScale": [
-    0.11,
-    0.04,
-    0.02
+    0.165,
+    0.055,
+    0.022
    ],
    "placement": {
     "mode": "radial",
@@ -42526,10 +42375,10 @@
      0,
      1
     ],
-    "radius": 0.29,
-    "startAngleDeg": 0
+    "radius": 0.21,
+    "startAngleDeg": 90
    },
-   "notes": "R11-T5: O3 双辐横条（米白）"
+   "notes": "R12: 双辐横条（3/9 点位）：半径 0.21→实例中心距 0.105，长 0.165 → 内端 0.0225（埋入轮毂 Ø0.175）、外端 0.1875（咬进轮缘内缘 0.167）——原 radius0.29/len0.11 时两辐落在 12/6 点且内端悬空 6cm"
   }
  ],
  "buildPasses": [
@@ -42688,7 +42537,7 @@
     "lightingCamera": 0.82,
     "componentStructure": 0.9,
     "attachmentIntegrity": 0.88,
-    "microReadiness": 0.0
+    "microReadiness": 0
    },
    "featureReviews": [
     {
@@ -42913,7 +42762,7 @@
     "lightingCamera": 0.82,
     "componentStructure": 0.9,
     "attachmentIntegrity": 0.88,
-    "microReadiness": 0.0
+    "microReadiness": 0
    },
    "featureReviews": [
     {
@@ -43208,7 +43057,7 @@
    "role": "environment",
    "type": "PMREM from procedural dusk sky sphere",
    "color": "#E0836A",
-   "intensity": 1.0,
+   "intensity": 1,
    "note": "drives chrome/clearcoat reflections"
   },
   {
@@ -43865,7 +43714,7 @@
       },
       {
        "componentId": null,
-       "deltaE": 29.0
+       "deltaE": 29
       },
       {
        "componentId": null,
@@ -44390,7 +44239,7 @@
       },
       {
        "componentId": null,
-       "deltaE": 29.0
+       "deltaE": 29
       },
       {
        "componentId": null,
@@ -44915,7 +44764,7 @@
       },
       {
        "componentId": null,
-       "deltaE": 29.0
+       "deltaE": 29
       },
       {
        "componentId": null,
