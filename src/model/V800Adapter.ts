@@ -84,6 +84,29 @@ const WHEEL_FACE_SIZE: Record<QualityTier, number> = {
 };
 /** 盘缘开窗数：参考图清单第七章目测 18–20 个，取 20 */
 const WHEEL_WINDOWS = 20;
+/**
+ * EX-34 轮胎图集宽度（px）：胎面/胎侧各半幅。high 1024（胎侧字环字高 ≈ 19px），
+ * 中低 512（字环 ≈ 10px，轮胎在屏上占比小，低档只保留身份读感）。
+ */
+const TIRE_ATLAS_W: Record<QualityTier, number> = { high: 1024, medium: 512, low: 512 };
+/** EX-33 轮心盾徽贴图边长（px） */
+const WHEEL_BADGE_SIZE: Record<QualityTier, number> = { high: 512, medium: 256, low: 256 };
+/** EX-09 迎宾光毯贴图宽度（px，画布 4:3 与投影面同纵横比） */
+const CARPET_TEX_SIZE: Record<QualityTier, number> = { high: 512, medium: 384, low: 256 };
+/** EX-09 投影面尺寸（m）：宽（X）× 长（Z）——4:3 与贴图同纵横比 */
+const WELCOME_CARPET_W = 0.72;
+const WELCOME_CARPET_L = 0.54;
+/** 投影面离地高度（m）：避开车轮/路面 z-fight，又低于踏板视差 */
+const WELCOME_CARPET_Y = 0.018;
+/** 四车门下方的投影面落点（工厂坐标，X=±1.13 半嵌车身；Z 取门板中心） */
+const WELCOME_CARPET_SPOTS: ReadonlyArray<readonly [number, number]> = [
+  [1.13, 0.85],
+  [-1.13, 0.85],
+  [1.13, -0.95],
+  [-1.13, -0.95]
+];
+/** 迎宾态速度门限（km/h）：低于它光毯淡入，高于它淡出（行驶中无迎宾态） */
+const WELCOME_CARPET_SPEED_GATE = 5;
 /** 星空呼吸基准强度 / 周期（s） / 幅度 */
 const STARLIGHT_BASE_INTENSITY = 0.9;
 const STARLIGHT_BREATH_PERIOD = 4;
@@ -652,31 +675,35 @@ interface SurfaceMapSet {
  * （h ∈ 0..1 高度场供法线派生；rgb 为 0..255 颜色通道）。
  * 法线由高度场 wrap 边缘的有限差分求出 —— 与颜色同源，凹凸必然对位。
  * map = SRGBColorSpace（颜色内容）；normalMap = NoColorSpace（数据贴图，绝不设 sRGB）。
+ * height 参数允许非正方形画布（EX-34 胎面/胎侧图集 1024×512 走这条）。
  */
 function createProceduralSurface(
   size: number,
   normalStrength: number,
-  sample: (u: number, v: number) => [number, number, number, number]
+  sample: (u: number, v: number) => [number, number, number, number],
+  height: number = size
 ): SurfaceMapSet {
+  const w = size;
+  const h = height;
   const colorCanvas = document.createElement('canvas');
-  colorCanvas.width = size;
-  colorCanvas.height = size;
+  colorCanvas.width = w;
+  colorCanvas.height = h;
   const colorCtx = colorCanvas.getContext('2d')!;
-  const colorImage = colorCtx.createImageData(size, size);
+  const colorImage = colorCtx.createImageData(w, h);
   const normalCanvas = document.createElement('canvas');
-  normalCanvas.width = size;
-  normalCanvas.height = size;
+  normalCanvas.width = w;
+  normalCanvas.height = h;
   const normalCtx = normalCanvas.getContext('2d')!;
-  const normalImage = normalCtx.createImageData(size, size);
-  const height = new Float32Array(size * size);
+  const normalImage = normalCtx.createImageData(w, h);
+  const heights = new Float32Array(w * h);
 
-  for (let y = 0; y < size; y++) {
-    const v = y / size;
-    for (let x = 0; x < size; x++) {
-      const u = x / size;
-      const [h, r, g, b] = sample(u, v);
-      height[y * size + x] = h;
-      const off = (y * size + x) * 4;
+  for (let y = 0; y < h; y++) {
+    const v = y / h;
+    for (let x = 0; x < w; x++) {
+      const u = x / w;
+      const [hh, r, g, b] = sample(u, v);
+      heights[y * w + x] = hh;
+      const off = (y * w + x) * 4;
       colorImage.data[off] = r;
       colorImage.data[off + 1] = g;
       colorImage.data[off + 2] = b;
@@ -685,17 +712,17 @@ function createProceduralSurface(
   }
 
   // wrap 有限差分 → 法线（[-1,1] 映射到 [0,255]）
-  const s = normalStrength * size;
-  for (let y = 0; y < size; y++) {
-    const yUp = (y - 1 + size) % size;
-    const yDn = (y + 1) % size;
-    for (let x = 0; x < size; x++) {
-      const xL = (x - 1 + size) % size;
-      const xR = (x + 1) % size;
-      const dx = (height[y * size + xR] - height[y * size + xL]) * s;
-      const dy = (height[yDn * size + x] - height[yUp * size + x]) * s;
+  const s = normalStrength * Math.min(w, h);
+  for (let y = 0; y < h; y++) {
+    const yUp = (y - 1 + h) % h;
+    const yDn = (y + 1) % h;
+    for (let x = 0; x < w; x++) {
+      const xL = (x - 1 + w) % w;
+      const xR = (x + 1) % w;
+      const dx = (heights[y * w + xR] - heights[y * w + xL]) * s;
+      const dy = (heights[yDn * w + x] - heights[yUp * w + x]) * s;
       const invLen = 1 / Math.sqrt(dx * dx + dy * dy + 1);
-      const off = (y * size + x) * 4;
+      const off = (y * w + x) * 4;
       normalImage.data[off] = Math.round((-dx * invLen * 0.5 + 0.5) * 255);
       normalImage.data[off + 1] = Math.round((-dy * invLen * 0.5 + 0.5) * 255);
       normalImage.data[off + 2] = Math.round((invLen * 0.5 + 0.5) * 255);
@@ -945,9 +972,17 @@ function createEmblemAtlasTexture(): THREE.CanvasTexture {
 }
 
 /**
- * EX-08 头灯 3 枚圆形 LED 点阵（128×512），lamp-head 材质（两条竖向灯芯独占）。
- * 基底 0.33 亮度：setHeadlights(false)（intensity 0.15）时灯体仍读得出轮廓，
- * 点阵亮芯在常亮/熄灯两态都保持圆形可辨。
+ * EX-08 头灯竖向光导（128×512），lamp-head 材质（两条竖向灯带 + 6 枚几何点阵共用）。
+ *
+ * R3 裁决（依据搭景 spec 注 + A1/A8/E1/E2 参考）：headlamp-led-l/r 是「竖向细白
+ * LED 线（灯罩外缘光导）」，3 枚圆形点阵由 headlamp-led-dot-* 几何件承担 ——
+ * 旧版「3 圆点贴图」会让光导表面再浮现一轮点阵（与几何点阵双重图案），且连续
+ * 光导被切成三截，与参考图不符。故简化为纯竖向光导：
+ *   暗基底（熄灯 intensity 0.15 时仍读得出灯体轮廓）+ 中央全高亮带（柔边 + 白热芯）。
+ * 6 枚几何点阵的 remapUVToRegion 落点 [0.328,0.672]×[0.457,0.543]（画布
+ * x[42,86]）正落在亮带 x[40,88] 内 → 点阵仍是白心柔边圆面，重映射无需改动。
+ * lamp-head 不进 UV_ATLAS_REGIONS：全幅同质（暗底 + 光导），点阵采亮带是刻意
+ * 行为，无分区冲突（无串味概念）。
  */
 function createHeadlampLedTexture(): THREE.CanvasTexture {
   const W = 128;
@@ -956,34 +991,20 @@ function createHeadlampLedTexture(): THREE.CanvasTexture {
   canvas.width = W;
   canvas.height = H;
   const ctx = canvas.getContext('2d')!;
+  // 暗基底：熄灯时灯体轮廓可读
   ctx.fillStyle = 'rgb(80, 88, 100)';
   ctx.fillRect(0, 0, W, H);
-  // 灯腔棱面：几道极淡竖向亮线
-  ctx.strokeStyle = 'rgba(220, 228, 240, 0.1)';
-  ctx.lineWidth = 6;
-  for (let i = 0; i < 4; i++) {
-    const x = 18 + i * 28 + (i % 2) * 6;
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, H);
-    ctx.stroke();
-  }
-  // 3 枚圆形 LED（v = 0.25 / 0.5 / 0.75）：柔光晕 + 实心亮芯
-  for (const vy of [0.25, 0.5, 0.75]) {
-    const y = (1 - vy) * H;
-    const halo = ctx.createRadialGradient(W / 2, y, 0, W / 2, y, 52);
-    halo.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
-    halo.addColorStop(0.35, 'rgba(226, 234, 248, 0.55)');
-    halo.addColorStop(1, 'rgba(226, 234, 248, 0)');
-    ctx.fillStyle = halo;
-    ctx.beginPath();
-    ctx.arc(W / 2, y, 52, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = 'rgb(255, 255, 255)';
-    ctx.beginPath();
-    ctx.arc(W / 2, y, 22, 0, Math.PI * 2);
-    ctx.fill();
-  }
+  // 竖向光导亮带：x[40,88] 全高连续；横向柔边渐变 → 白热芯（点亮时过 bloom 阈值起辉光）
+  const band = ctx.createLinearGradient(40, 0, 88, 0);
+  band.addColorStop(0, 'rgba(80, 88, 100, 0)');
+  band.addColorStop(0.14, 'rgba(196, 204, 218, 0.85)');
+  band.addColorStop(0.32, 'rgba(242, 246, 252, 0.97)');
+  band.addColorStop(0.5, 'rgb(255, 255, 255)');
+  band.addColorStop(0.68, 'rgba(242, 246, 252, 0.97)');
+  band.addColorStop(0.86, 'rgba(196, 204, 218, 0.85)');
+  band.addColorStop(1, 'rgba(80, 88, 100, 0)');
+  ctx.fillStyle = band;
+  ctx.fillRect(0, 0, W, H);
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.needsUpdate = true;
@@ -1153,6 +1174,430 @@ function createGoldAlbedoAtlasTexture(): THREE.CanvasTexture {
   return tex;
 }
 
+// ---------------------------------------------------------------------------
+// EX-34 轮胎图集：胎面沟槽（左半）+ 胎侧字环（右半），1024×512 @ high / 512×256 @ 中低。
+//
+// 为什么是图集：tire 是 cylinder（side=胎面 + 两枚帽面=胎侧）共用同一材质实例
+// （spec material 'tire'，用户 = 4 条真胎 + 4 个隐藏占位盒）。胎面采样整幅
+// [0,1]²，直接把字环画满画布会把字裹到胎面上 —— 必须图集 + 按 group 分区。
+// 帽面 UV 是 [0,1]² 内切圆（a2 探针实证 discR2max=0.25），右半幅内切圆即整张侧壁。
+//
+// 合规口径（EX-34）：参考图 D3/D4/U3 的胎侧是第三方轮胎商标（MICHELIN /
+// Pilot Sport 有商标风险）—— 不写真机商标实体，只取「大字号品牌名绕侧壁
+// 一周」的排版构图，字样用品牌中性的「V800 + MAESTRO + 星形图案」。
+// 此口径差异登记在集成层（本注释为证）；spec evidence 归 spec 侧，本层不改 spec。
+//
+// 底帽 v 翻转补偿：three CylinderGeometry.generateCap 的 uv.y = sinθ·0.5·sign+0.5，
+// 底帽 sign=−1（v 相对顶帽翻转）—— 朝外侧的那张侧壁字会是倒的。适配层把底帽
+// UV 的 v 取 1−v（见 remapTireUV）补偿后，两枚帽面在世界空间同向，字环在
+// 左右两侧车轮上都正立（side 与 cap 顶点集实测零相交，逐 group 重映射安全）。
+// ---------------------------------------------------------------------------
+
+/**
+ * 胎面（torso）分区：u 压进左半；v **只占 0.23**（R4 收窄，原为全幅 0..1）。
+ *
+ * 为什么收窄 —— #uvassert 密度判据实测（1014×512 图集，1 UV-u = 1024px、
+ * 1 UV-v = 512px）：
+ *   胎面世界尺寸 = 周向 2.40 m × 母线 0.282 m（含两侧 1cm 圆角肩）。
+ *   旧分区 [0,0.5]×[0,1] = 512×512px → 纹素 4.69mm(u) × 0.55mm(v)，
+ *   纵横比 8.5:1，判据报 17x（UV 口径，等于像素口径 ×H/W 的倒数… 见下）。
+ *   收窄到 Δv=0.23 = 512×118px → 纹素 4.69mm × 2.39mm，纵横比 ≈2:1。
+ * 判据口径提示：本判据的「各向异性」= d_u/d_v（m per UV 单位），对非正方形
+ * 图集（1024×512）会把真实像素纵横比放大 W/H = 2×。旧值 17x ≈ 真实 8.5:1，
+ * 新值 ≈4x（判据口径）≈ 真实 2:1。
+ * 代价：胎面竖向像素 512 → 118。但配合下方「母线按**世界弧长**参数化」后，
+ * 真正可见的胎面（占母线 69.5%）反而从 57px 升到 82px —— 因为旧参数化是
+ * 按母线点序均分（肩部 4 条 1cm 圆角带各吃掉 11% v，胎面只剩 11%）。
+ */
+const TIRE_TREAD_REGION = Object.freeze([0.004, 0.496, 0.385, 0.615]);
+/** 胎侧字环（两枚帽面）分区：u 平移进右半，v 全幅（512×512px 内切圆，不变） */
+const TIRE_SIDEWALL_REGION = Object.freeze([0.5, 1, 0, 1]);
+/** 菱格细胞的世界边长（m）—— 与适配层 QUILT_CELL_WORLD 同源，供打孔孔径换算 */
+const QUILT_CELL_WORLD_M = 0.06;
+/**
+ * leather-warm 贴图基色（R2 色调校准后）：#C08A5E（浅焦糖）→ #7A4034（深 Cognac 偏酒红）。
+ * 参考 U1 半剖内饰（酒红）与 I5/I6 二排零重力（深 Cognac）的交集方向；
+ * spec 材质颜色 #C08A5E 不动（spec 所有权），校准只落在贴图像素侧。
+ */
+const LEATHER_WARM_BASE: [number, number, number] = [122, 64, 52];
+
+/**
+ * 胎侧字环 + 模压环线（画在 W×H 画布上，随后被逐像素采样进颜色/高度场）。
+ * 读法：字顶朝外（真实胎侧读法）—— 环顶正常读、环底倒置，四对角缀星形。
+ * 逐字符按弧长放置：自左向右 θ 递减（顶朝外读法的统一方向，见推导注释）。
+ */
+function drawTireSidewallLettering(ctx: CanvasRenderingContext2D, W: number, H: number): void {
+  const cx = W * 0.75;
+  const cy = H * 0.5;
+  // 字环半径：世界 0.335m ÷ 轮胎半径 0.382m × 帽面半径 0.5 UV
+  // （胎侧可见环带 = 轮圈外缘 0.30 .. 胎面肩 0.382，字环取中段）
+  const R = (H * 0.5) * (0.335 / 0.382);
+  const ink = 'rgb(232, 224, 202)'; //  raised 白字（乘在黑色橡胶上）
+  // 模压环线：字环外侧一道（近胎面肩）、内侧一道（刚出轮圈缘）
+  ctx.strokeStyle = 'rgb(120, 118, 112)';
+  ctx.lineWidth = Math.max(1, H * 0.005);
+  for (const rr of [R + H * 0.035, R - H * 0.03]) {
+    ctx.beginPath();
+    ctx.arc(cx, cy, rr, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  const placeText = (s: string, thetaC: number, px: number): void => {
+    ctx.save();
+    ctx.font = `bold ${px}px "Segoe UI", Arial, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = ink;
+    const widths = [...s].map((ch) => ctx.measureText(ch).width);
+    const total = widths.reduce((a, b) => a + b, 0);
+    // 自左向右 θ 递减：字符 k 的中心角 = thetaC + Δ/2 − Σ(前 k 字符宽)/R − 半宽/R
+    let theta = thetaC + total / R / 2;
+    for (let i = 0; i < s.length; i++) {
+      const cw = widths[i];
+      theta -= cw / R / 2;
+      ctx.save();
+      ctx.translate(cx + R * Math.cos(theta), cy - R * Math.sin(theta));
+      // 字符局部 +X → 读向 (sinθ, cosθ)，字顶朝外 (cosθ, −sinθ) ⇒ 旋转 π/2−θ
+      ctx.rotate(Math.PI / 2 - theta);
+      ctx.fillText(s[i], 0, 0);
+      ctx.restore();
+      theta -= cw / R / 2;
+    }
+    ctx.restore();
+  };
+  placeText('V800', Math.PI / 2, Math.round(H * 0.05));
+  placeText('MAEXTRO', Math.PI * 1.5, Math.round(H * 0.045));
+  // 四对角星形（避开 u=0/1 的帽面接缝点 θ=0/2π）
+  ctx.fillStyle = ink;
+  for (const theta of [Math.PI / 4, (Math.PI * 3) / 4, (Math.PI * 5) / 4, (Math.PI * 7) / 4]) {
+    const sx = cx + R * Math.cos(theta);
+    const sy = cy - R * Math.sin(theta);
+    const len = H * 0.032;
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.rotate(Math.PI / 2 - theta);
+    ctx.beginPath();
+    ctx.moveTo(0, -len);
+    ctx.lineTo(len * 0.22, -len * 0.22);
+    ctx.lineTo(len, 0);
+    ctx.lineTo(len * 0.22, len * 0.22);
+    ctx.lineTo(0, len);
+    ctx.lineTo(-len * 0.22, len * 0.22);
+    ctx.lineTo(-len, 0);
+    ctx.lineTo(-len * 0.22, -len * 0.22);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+  // 星形两侧各一小段星点（读作胎侧点缀）
+  for (const theta of [Math.PI / 4, (Math.PI * 3) / 4, (Math.PI * 5) / 4, (Math.PI * 7) / 4]) {
+    for (const d of [-0.09, 0.09]) {
+      const t = theta + d;
+      ctx.beginPath();
+      ctx.arc(cx + R * Math.cos(t), cy - R * Math.sin(t), Math.max(1, H * 0.008), 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
+/**
+ * EX-34 轮胎图集（map + normalMap 同源派生）。
+ * 左半 = 胎面：4 道周向沟槽（v 向 9mm，smoothstep 柔边）+ 肩筋 + 横向刀槽
+ *   （80 等分 ≈ 3mm 宽，胎面在追尾/侧视角下只占几十像素，刀槽是纹素级细节）；
+ *   噪声频率取 2×period —— 环绕发生在 region 边 u=0.5，必须保证 region 内 tileable。
+ * 右半 = 胎侧：黑橡胶底 + drawTireSidewallLettering 预栅格化的字环/模压线，
+ *   同一 alpha 同时驱动颜色混合与高度场凸起 → 法线免费获得字环浮雕。
+ */
+function createTireAtlasTexture(size: number): SurfaceMapSet {
+  const W = size;
+  const H = size / 2;
+  // 字环先 rasterize 到 scratch（Node shim 下 getImageData 返回全零 = 无字，
+  // 探针只核几何/UV，像素由 QA 实机截图负责）
+  const scratch = document.createElement('canvas');
+  scratch.width = W;
+  scratch.height = H;
+  drawTireSidewallLettering(scratch.getContext('2d')!, W, H);
+  const letter = scratch.getContext('2d')!.getImageData(0, 0, W, H).data;
+
+  const sample = (u: number, v: number): [number, number, number, number] => {
+    const x = Math.min(W - 1, Math.floor(u * W));
+    const y = Math.min(H - 1, Math.floor(v * H));
+    const off = (y * W + x) * 4;
+    const la = letter[off + 3] / 255;
+    if (u >= 0.5) {
+      // ---- 胎侧（右半）：橡胶底 + 字环 ----
+      const grain = pnoise(u * 60, v * 60, 60, 0x5eed1);
+      const base = 17 + grain * 7;
+      let r = base;
+      let g = base + 1;
+      let b = base + 4; // 微冷黑橡胶
+      let h = 0.5 + grain * 0.12;
+      if (la > 0) {
+        r = r * (1 - la) + letter[off] * la;
+        g = g * (1 - la) + letter[off + 1] * la;
+        b = b * (1 - la) + letter[off + 2] * la;
+        h = h * (1 - la) + 0.92 * la; // 字环凸起
+      }
+      return [h, r, g, b];
+    }
+    // ---- 胎面（左半）：周向沟槽 + 肩筋 + 横向刀槽 ----
+    // R4：胎面分区收窄为 v∈[tv0,tv1]（Δv=0.23≈118px，见 TIRE_TREAD_REGION）。
+    // 图案坐标一律在「分区内归一化」vb 上算：4 道沟槽按设计横跨胎面宽度，
+    // 肩筋落在 vb 两端（= 世界上的两条圆角肩）。分区外取 vb 端值 —— 双线性 /
+    // 各向异性过滤在分区边界的溢出落到同色橡胶，不会出现亮暗边。
+    const tv0 = TIRE_TREAD_REGION[2];
+    const tv1 = TIRE_TREAD_REGION[3];
+    const vb = Math.min(1, Math.max(0, (v - tv0) / (tv1 - tv0)));
+    const P = 12;
+    const grain = pnoise(u * 2 * P, vb * P, P, 0x71de);
+    const fine = pnoise(u * 2 * 48, vb * 48, 48, 0x9a2c);
+    let groove = 0;
+    for (const gv of [0.13, 0.38, 0.62, 0.87]) {
+      const m = clamp01(1 - Math.abs(vb - gv) / 0.035);
+      groove = Math.max(groove, m * m * (3 - 2 * m)); // smoothstep 柔边
+    }
+    const shoulder = clamp01(1 - Math.min(vb, 1 - vb) / 0.06);
+    const sp = (u * 80) % 1;
+    const sipe = clamp01(1 - Math.min(sp, 1 - sp) / 0.33) * (1 - shoulder);
+    let hh = 0.56 + grain * 0.14 + fine * 0.06;
+    hh = hh * (1 - groove) + 0.08 * groove;
+    hh = hh * (1 - sipe) + 0.2 * sipe;
+    const shade = 0.5 + 0.55 * hh;
+    const tint = 0.98 + fine * 0.06;
+    return [hh, 21 * shade * tint, 21 * shade, 23 * shade * (2 - tint)];
+  };
+  return createProceduralSurface(size, 0.15, sample, H);
+}
+
+/**
+ * EX-31 后保反光条分段图集（256×256，emissiveMap）。
+ * lamp-red 是共享材质（尾灯芯 ×2 + 反光条 ×4 + 尾灯横带 ×4）—— 适配层克隆一份
+ * 专供反光条（ID 不变），本图集只服务克隆：左半 = 5 段红反光条（暗红缘 →
+ * 亮芯 → 暗红缘，乘在克隆继承的红色 emissive 上），右半纯黑零发光（防御性）。
+ * 反光条不是刹车灯：克隆的 emissiveIntensity 设静态弱值，不随 brakeLevel 联动。
+ * R2 兼容搭景新件：rear-reflector-strip-l/r（EX-31 下条）同材质同尺寸，
+ * 一并进克隆与分段区（上下两条读感一致，否则下条会随刹车联动、亮度跳变）。
+ */
+const REFLECTOR_PATTERN_REGION = Object.freeze([0.004, 0.496, 0.004, 0.996]);
+const REFLECTOR_EMISSIVE_INTENSITY = 0.55;
+
+function createReflectorAtlasTexture(): THREE.CanvasTexture {
+  const S = 256;
+  const canvas = document.createElement('canvas');
+  canvas.width = S;
+  canvas.height = S;
+  const ctx = canvas.getContext('2d')!;
+  // 全幅黑底：未覆盖区 = 零发光
+  ctx.fillStyle = 'rgb(0, 0, 0)';
+  ctx.fillRect(0, 0, S, S);
+  const x0 = REFLECTOR_PATTERN_REGION[0] * S;
+  const x1 = REFLECTOR_PATTERN_REGION[1] * S;
+  const y0 = (1 - REFLECTOR_PATTERN_REGION[3]) * S;
+  const y1 = (1 - REFLECTOR_PATTERN_REGION[2]) * S;
+  const SEGS = 5; // 横向 5 段（段间隔为纯黑零发光 → 分段读感）
+  const pitch = (x1 - x0) / SEGS;
+  const bandW = pitch * 0.66;
+  for (let i = 0; i < SEGS; i++) {
+    const bx = x0 + i * pitch + (pitch - bandW) / 2;
+    const grad = ctx.createLinearGradient(0, y0, 0, y1);
+    grad.addColorStop(0, 'rgb(96, 20, 26)');
+    grad.addColorStop(0.18, 'rgb(226, 96, 88)');
+    grad.addColorStop(0.5, 'rgb(255, 236, 228)');
+    grad.addColorStop(0.82, 'rgb(226, 96, 88)');
+    grad.addColorStop(1, 'rgb(96, 20, 26)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(bx, y0, bandW, y1 - y0);
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/**
+ * EX-33 轮心黑底盾徽（512×512 @ high / 256 @ 中低，emissiveMap）。
+ * lamp-mark 是共享材质（车尾 MAEXTRO 字标 plane-card 13:1 横条 + 4 枚悬浮轮标
+ * cylinder）—— 克隆一份专供轮标。帽面 UV 是 [0,1]² 内切圆（探针实证），
+ * 盾徽画满整幅画布即自然落在帽面上：无需 UV 重映射、无图集分区 → 无串味概念。
+ * 设计：黑底 + 外圈细金环（与搭景 EX-33 滚花齿环几何同心过渡）+ 六边盾形
+ * 金描边 + 盾内上星形 / 中 MAEXTRO 字标。
+ */
+function createWheelBadgeTexture(size: number): THREE.CanvasTexture {
+  const S = size;
+  const canvas = document.createElement('canvas');
+  canvas.width = S;
+  canvas.height = S;
+  const ctx = canvas.getContext('2d')!;
+  const cx = S / 2;
+  const cy = S / 2;
+  // 黑底（悬浮轮标的身份色）
+  ctx.fillStyle = '#04050a';
+  ctx.fillRect(0, 0, S, S);
+  // 外圈细金环
+  ctx.strokeStyle = 'rgba(216, 179, 106, 0.6)';
+  ctx.lineWidth = Math.max(1.5, S * 0.01);
+  ctx.beginPath();
+  ctx.arc(cx, cy, S * 0.465, 0, Math.PI * 2);
+  ctx.stroke();
+  // 六边盾形：上宽下尖
+  const sw = S * 0.33;
+  const top = cy - S * 0.3;
+  const bot = cy + S * 0.335;
+  ctx.beginPath();
+  ctx.moveTo(cx - sw, top);
+  ctx.lineTo(cx + sw, top);
+  ctx.lineTo(cx + sw, cy + S * 0.05);
+  ctx.quadraticCurveTo(cx + sw * 0.62, bot - S * 0.11, cx, bot);
+  ctx.quadraticCurveTo(cx - sw * 0.62, bot - S * 0.11, cx - sw, cy + S * 0.05);
+  ctx.closePath();
+  const fill = ctx.createLinearGradient(0, top, 0, bot);
+  fill.addColorStop(0, 'rgb(17, 15, 12)');
+  fill.addColorStop(0.55, 'rgb(28, 24, 17)');
+  fill.addColorStop(1, 'rgb(11, 10, 8)');
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.strokeStyle = 'rgb(216, 179, 106)';
+  ctx.lineWidth = Math.max(2, S * 0.014);
+  ctx.stroke();
+  // 盾内：上星形
+  const star = (sx: number, sy: number, len: number): void => {
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.beginPath();
+    ctx.moveTo(0, -len);
+    ctx.lineTo(len * 0.22, -len * 0.22);
+    ctx.lineTo(len, 0);
+    ctx.lineTo(len * 0.22, len * 0.22);
+    ctx.lineTo(0, len);
+    ctx.lineTo(-len * 0.22, len * 0.22);
+    ctx.lineTo(-len, 0);
+    ctx.lineTo(-len * 0.22, -len * 0.22);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  };
+  ctx.fillStyle = 'rgb(233, 198, 128)';
+  star(cx, cy - S * 0.155, S * 0.05);
+  // 盾内：MAEXTRO 字标（横向压缩到盾宽 86%）
+  ctx.fillStyle = 'rgb(242, 244, 247)';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const px = Math.round(S * 0.062);
+  ctx.font = `bold ${px}px "Segoe UI", Arial, sans-serif`;
+  const natural = ctx.measureText('MAEXTRO').width;
+  const scale = Math.min(1, (sw * 2 * 0.86) / natural);
+  ctx.save();
+  ctx.translate(cx, cy + S * 0.06);
+  ctx.scale(scale, 1);
+  ctx.fillText('MAEXTRO', 0, 0);
+  ctx.restore();
+  // 盾内：字标下细金线
+  ctx.strokeStyle = 'rgba(216, 179, 106, 0.85)';
+  ctx.lineWidth = Math.max(1, S * 0.006);
+  ctx.beginPath();
+  ctx.moveTo(cx - sw * 0.5, cy + S * 0.145);
+  ctx.lineTo(cx + sw * 0.5, cy + S * 0.145);
+  ctx.stroke();
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/**
+ * EX-09 迎宾光毯贴图（4:3，与投影面 0.72×0.54 同纵横比 → 鹰形不被拉伸）。
+ * 内容：径向渐隐地面光池 + 金色展翅鹰形（复用尾灯签名屏同源 bitmap
+ * GOLD_MATRIX_PATTERN，逐格径向金斑连成剪影 —— 几何化程序绘制，零照片像素）
+ * + 星点点缀 + 椭圆外缘溶入（destination-out）。emissive 观感由贴图亮度 +
+ * 适配层呼吸动画承担（材质是无光照 MeshBasicMaterial 的投影贴花）。
+ */
+function createWelcomeCarpetTexture(size: number): THREE.CanvasTexture {
+  const W = size;
+  const H = (size * 3) / 4;
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d')!;
+  const cx = W / 2;
+  const cy = H / 2;
+  // 椭圆空间（与画布同纵横比）画两处径向渐变，避免圆形光池在 4:3 画布上过早收边
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(1, H / W);
+  // ① 地面光池
+  const pool = ctx.createRadialGradient(0, 0, 0, 0, 0, W * 0.46);
+  pool.addColorStop(0, 'rgba(255, 216, 150, 0.30)');
+  pool.addColorStop(0.55, 'rgba(240, 190, 120, 0.13)');
+  pool.addColorStop(1, 'rgba(230, 180, 110, 0)');
+  ctx.fillStyle = pool;
+  ctx.fillRect(-W, -H, W * 2, H * 2);
+  ctx.restore();
+  // ② 展翅鹰形 + 盾徽（GOLD_MATRIX_PATTERN 16×24，格边长 = H/24）
+  const cell = H / GOLD_MATRIX_PATTERN.length;
+  const ox = cx - (GOLD_MATRIX_PATTERN[0].length * cell) / 2;
+  for (let r = 0; r < GOLD_MATRIX_PATTERN.length; r++) {
+    const line = GOLD_MATRIX_PATTERN[r];
+    for (let c = 0; c < line.length; c++) {
+      if (line[c] !== '#') continue;
+      const px = ox + (c + 0.5) * cell;
+      const py = (r + 0.5) * cell;
+      const grad = ctx.createRadialGradient(px, py, 0, px, py, cell * 0.62);
+      grad.addColorStop(0, 'rgba(255, 241, 205, 0.96)');
+      grad.addColorStop(0.5, 'rgba(233, 190, 110, 0.88)');
+      grad.addColorStop(1, 'rgba(212, 158, 70, 0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(px, py, cell * 0.62, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  // ③ 星点点缀：两侧留白带 + 3 档大小 + 5 颗四角星芒（确定性 LCG）
+  const rnd = makeLcg(0x09e17a);
+  const inBody = (x: number, y: number): boolean =>
+    Math.abs(x - cx) < W * 0.21 && Math.abs(y - cy) < H * 0.3;
+  for (let i = 0; i < 34; i++) {
+    const x = rnd() * W;
+    const y = rnd() * H;
+    if (inBody(x, y)) continue;
+    const roll = rnd();
+    const rad = roll > 0.9 ? 2.6 : roll > 0.6 ? 1.6 : 1;
+    ctx.fillStyle = `rgba(255, 240, 200, ${(0.4 + rnd() * 0.5).toFixed(3)})`;
+    ctx.beginPath();
+    ctx.arc(x, y, rad, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  for (let i = 0; i < 5; i++) {
+    const x = W * (0.1 + rnd() * 0.8);
+    const y = H * (0.08 + rnd() * 0.84);
+    if (inBody(x, y)) continue;
+    const len = 5 + rnd() * 5;
+    ctx.strokeStyle = `rgba(255, 244, 210, ${(0.5 + rnd() * 0.35).toFixed(3)})`;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x - len, y);
+    ctx.lineTo(x + len, y);
+    ctx.moveTo(x, y - len);
+    ctx.lineTo(x, y + len);
+    ctx.stroke();
+  }
+  // ④ 椭圆外缘渐隐：光毯外沿溶入地面，不出硬边
+  ctx.save();
+  ctx.globalCompositeOperation = 'destination-out';
+  ctx.translate(cx, cy);
+  ctx.scale(1, H / W);
+  const fade = ctx.createRadialGradient(0, 0, W * 0.3, 0, 0, W * 0.52);
+  fade.addColorStop(0, 'rgba(0, 0, 0, 0)');
+  fade.addColorStop(1, 'rgba(0, 0, 0, 1)');
+  ctx.fillStyle = fade;
+  ctx.fillRect(-W, -H, W * 2, H * 2);
+  ctx.restore();
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  tex.needsUpdate = true;
+  return tex;
+}
+
 /**
  * 菱格专用平铺贴图（整幅菱形缝格，无图集分区）。
  * N2 终解：菱格件若沿用共享图集，三平面/盒投影的连续 UV 必然越出分区、
@@ -1161,12 +1606,22 @@ function createGoldAlbedoAtlasTexture(): THREE.CanvasTexture {
  * 无缝环绕，UV 可沿世界坐标无限延展。配合逐三角形三平面投影（见适配器），
  * 任意朝向的面都得到 6cm 等密度菱格。材质用 leather-warm 的克隆（ID 不变，
  * 合批按实例分组 → 菱格件独立成组，+1 draw call）。
+ * perforated = true 时在每格中心加 3×3 微孔阵（IN-08 打孔通风区）：
+ * 孔半径按贴图尺寸换算（1024 → 世界 1.5mm；低档放大孔径保可读），
+ * 颜色压暗 + 高度场下沉 → 法线同源派生，孔沿有真实凹陷。
  */
-function createQuiltTileTexture(size: number, seed: number, baseHex: [number, number, number]): SurfaceMapSet {
+function createQuiltTileTexture(
+  size: number,
+  seed: number,
+  baseHex: [number, number, number],
+  perforated = false
+): SurfaceMapSet {
   const cells = 16; // 每贴图边 16 个细胞（周期整数 → 无缝）
   const [br, bg, bb] = baseHex;
   const plain = leatherSampler(baseHex, seed);
   const stitchPitch = 0.25; // 缝珠间距（细胞单位的 1/4，同图集版）
+  // 打孔半径（细胞单位）：世界 1.5mm @1024²；中低档放大孔径避免亚像素
+  const holeR = (size >= 1024 ? 0.0015 : size >= 512 ? 0.003 : 0.006) / QUILT_CELL_WORLD_M;
   const sample = (u: number, v: number): [number, number, number, number] => {
     const cx = u * cells;
     const cy = v * cells;
@@ -1184,9 +1639,35 @@ function createQuiltTileTexture(size: number, seed: number, baseHex: [number, nu
       return [h, Math.min(255, br * shade), Math.min(255, bg * shade), Math.min(255, bb * shade)];
     }
     const puff = clamp01(dist / 0.5);
-    const h = clamp01(h0 * 0.55 + 0.45 * puff);
+    let h = clamp01(h0 * 0.55 + 0.45 * puff);
+    let r = r0;
+    let g = g0;
+    let b = b0;
     const shade = 0.86 + 0.3 * h;
-    return [h, r0 * shade, g0 * shade, b0 * shade];
+    r *= shade;
+    g *= shade;
+    b *= shade;
+    if (perforated) {
+      // 格心 3×3 微孔阵（孔心距格心 ±0.08 细胞 ≈ ±4.8mm）
+      const fx = cx - Math.floor(cx) - 0.5;
+      const fy = cy - Math.floor(cy) - 0.5;
+      let bd = Infinity;
+      for (let i = -1; i <= 1; i++) {
+        for (let j = -1; j <= 1; j++) {
+          const d = Math.hypot(fx - i * 0.08, fy - j * 0.08);
+          if (d < bd) bd = d;
+        }
+      }
+      if (bd < holeR) {
+        const k = clamp01(bd / holeR); // 孔沿柔边（1px 量级）
+        h = h * k + 0.05 * (1 - k);
+        const dark = 0.45 + 0.55 * k;
+        r *= dark;
+        g *= dark;
+        b *= dark;
+      }
+    }
+    return [h, r, g, b];
   };
   return createProceduralSurface(size, 0.55, sample);
 }
@@ -1268,21 +1749,44 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
       m.visible = false;
       return;
     }
-    // 车轮占位盒：0.764×0.764 方块的角部比同直径圆胎外扩 15.8cm 且 castShadow。
-    // 只隐藏方块自身（父节点仍是轮心 pivot，子级 cylinder 真轮胎/轮圈保留）。
-    // 判据是 primitive === 'box'，**不能用体积**：实测 8 个 tire 材质 mesh
-    // （4 个占位盒 + 4 个真轮胎）包围盒同为 0.764×0.764×0.255 ≈ 0.149 m³，
-    // 任何体积阈值都会同时命中或同时漏掉，实测不可分。
-    const mats = Array.isArray(m.material) ? m.material : [m.material];
-    const isTire = mats.some(
-      (mt) => (mt as THREE.MeshPhysicalMaterial | undefined)?.userData?.sculptMaterial?.id === 'tire'
-    );
-    if (!isTire) return;
-    if (comp?.primitive === 'box') {
-      m.visible = false;
-      m.castShadow = false;
-    }
+    // 车轮占位件的隐藏判据已单独下移（见紧随其后的「R4 修订」块）。
   });
+
+  // 车轮占位件隐藏 —— ⚠️ R4 修订（R3 引入的显形回归）：
+  // 占位件是 0.764×0.764 的方块，角部比同直径圆胎外扩 15.8cm 且 castShadow，
+  // 必须隐藏；只隐藏方块自身（父节点仍是轮心 pivot，子级真轮胎/轮圈/齿环保留）。
+  // 旧判据 primitive === 'box' 在搭景 R3 失效 —— R3 把 wheel-fl..rr 由 box 改为
+  // 圆角 extrude，条件不再命中，**4 个占位方块重新可见**：每个轮子外挂一块
+  // 0.764 见方的圆角板并投阴影（a2 探针实测：184 mesh 里只有 2 个不可见，
+  // 4 个占位件全在可见集合里）。
+  // 新判据：真胎是 lathe 回转体，占位件不是（box / 圆角 extrude 都是方块）。
+  // **不能用体积**：实测 8 个 tire 材质 mesh（4 占位 + 4 真胎）包围盒同为
+  // 0.764×0.764×0.255 ≈ 0.149 m³，任何体积阈值都会同时命中或同时漏掉。
+  // 双重保险：若本批一个 lathe 真胎都找不到（spec 又换了基元），就不隐藏任何
+  // tire 材质件 —— 宁可多画一个方块，也不能把真胎藏掉。
+  {
+    const tireMeshes: THREE.Mesh[] = [];
+    model.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      const mats = Array.isArray(m.material) ? m.material : [m.material];
+      if (
+        mats.some(
+          (mt) =>
+            (mt as THREE.MeshPhysicalMaterial | undefined)?.userData?.sculptMaterial?.id === 'tire'
+        )
+      ) {
+        tireMeshes.push(m);
+      }
+    });
+    if (tireMeshes.some((m) => m.geometry.type === 'LatheGeometry')) {
+      for (const m of tireMeshes) {
+        if (m.geometry.type === 'LatheGeometry') continue; // 真胎，保留
+        m.visible = false;
+        m.castShadow = false;
+      }
+    }
+  }
 
   // ---- N1：屏幕家族脱离隐藏的 cabin-interior 占位盒 ----
   // spec 里 tri-screen / gauge-screen / rear-control-screen 的 parent 是 cabin-interior
@@ -1358,6 +1862,45 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
   let pedalBounce = 0;
   let pedalRotX = 0;
 
+  /**
+   * 集成层自产贴图登记表：所有运行时生成的 CanvasTexture 都压在这里，
+   * dispose 时统一释放（已挂到材质上的会随材质槽级联释放，重复 dispose 无副作用；
+   * 材质缺失时的孤儿贴图在这里兜底）。声明在踏板/光毯之前 —— 两者都要登记。
+   */
+  const ownedTextures: THREE.Texture[] = [];
+
+  // ---- EX-09 迎宾光毯（集成层运行时资产，同踏板先例：不进 spec/工厂）----
+  // 四车门下方各一张投影面（工厂坐标，X=±1.13 半嵌车身宽度，Z 取门板中心
+  // ±0.85/∓0.95，实测前后轮接地质心 z=±1.715±0.382 均不重叠），合并为单 mesh
+  // → +1 draw call。挂在 body 下（工厂坐标系），不进 batchMergeStatic 的遍历范围。
+  // 观感：无光照 MeshBasicMaterial 贴花（投影光不随场景明暗变化）+ 透明混合 +
+  // 深度不写（贴在地面上不与路面 z-fight）。emissive 弱发光由贴图金芯亮度 +
+  // 缓慢呼吸 + bloom 阈值以下的保守亮度承担；行驶中（>5km/h）淡出（无迎宾态）。
+  const welcomeGeo = mergeSafe(
+    WELCOME_CARPET_SPOTS.map(([sx, sz]) =>
+      new THREE.PlaneGeometry(WELCOME_CARPET_W, WELCOME_CARPET_L)
+        .rotateX(-Math.PI / 2) // 面朝上（法线 +Y）
+        .translate(sx, WELCOME_CARPET_Y, sz)
+    )
+  );  const welcomeTex = createWelcomeCarpetTexture(CARPET_TEX_SIZE[tier]);
+  ownedTextures.push(welcomeTex);
+  const welcomeMat = new THREE.MeshBasicMaterial({
+    map: welcomeTex,
+    transparent: true,
+    depthWrite: false,
+    opacity: 0.85,
+    color: 0xffffff
+  });
+  const welcomeMesh = new THREE.Mesh(welcomeGeo, welcomeMat);
+  welcomeMesh.name = 'welcome-carpet';
+  welcomeMesh.castShadow = false;
+  welcomeMesh.receiveShadow = false;
+  body.add(welcomeMesh);
+  /** 迎宾态增益（速度门控 + damp 平滑），1 = 完全可见 */
+  let welcomeGain = 1;
+  /** 最近一次 updateCluster 的车速（km/h）—— 迎宾态判定用 */
+  let lastSpeedKmh = 0;
+
   // ---- 灯光材质（按 ID 查表 + 回退链，缺失只 warn 一次）----
   const warnedLamps = new Set<string>();
   /**
@@ -1393,7 +1936,6 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
   // ---- 集成层贴图：星空顶 / 字标 / 金色签名屏 ----
   // 这三个材质由 spec 声明为 textureless，贴图在集成层现画；
   // 星空顶与签名屏走独立分支、不参与上面的认领，缺失时静默跳过（spec 未落地时不应刷屏）。
-  const ownedTextures: THREE.Texture[] = [];
   const starMat = matById.get('starlight') ?? null;
   const goldMat = matById.get('lamp-gold') ?? null;
   if (starMat) {
@@ -1452,26 +1994,18 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
     });
     return found;
   };
-  /** 把 mesh 全部 UV 从全幅 0..1 线性压进 [u0,u1]×[v0,v1]（图集分区用） */
-  const remapUV = (
-    mesh: THREE.Mesh,
-    u0: number,
-    u1: number,
-    v0: number,
-    v1: number
-  ): void => {
-    const uv = mesh.geometry.getAttribute('uv');
-    if (!uv) return;
-    for (let i = 0; i < uv.count; i++) {
-      uv.setXY(i, u0 + uv.getX(i) * (u1 - u0), v0 + uv.getY(i) * (v1 - v0));
-    }
-    uv.needsUpdate = true;
-  };
   /**
    * 归一化重映射：先测 mesh 自身 UV 包围盒，再线性压进目标区。
+   * —— 图集分区重映射**唯一**入口。
+   *
    * extrude / curve-sweep 基元的 UV 是坐标值（实测 leather-warm 合批后
-   * u∈[-0.33,1.0]），不是 0..1 —— 直接用 remapUV 会错位，必须走这里。
-   * box/cylinder 等 0..1 基元经此函数与 remapUV 结果一致（bbox 即全幅）。
+   * u∈[-0.33,1.0]，R3 圆角化的反光条/签名屏/灯壳 u∈[-0.5,0.5]、v∈[-0.5,1.0]），
+   * 不是 0..1 —— 只有先归一才不会把负值带出分区。box/cylinder/lathe 等
+   * 0..1 基元下 bbox 即全幅，与线性压进等价。
+   *
+   * ⚠️ R4：已删除旧的线性版 remapUV（"把 UV 从全幅 0..1 线性压进目标区"）。
+   * 它暗含「输入 ⊆ [0,1]」前提，而该前提在 R2/R3 圆角化中被静默打破两次
+   * （R3 一次 814 个三角形串味）。留着这个"看起来更省事"的入口只会再犯。
    */
   const remapUVToRegion = (
     mesh: THREE.Mesh,
@@ -1514,6 +2048,201 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
     uv.needsUpdate = true;
   };
 
+  /**
+   * R4 新增 · LatheGeometry 的「平帽面 / 筒身」分区重映射。
+   *
+   * 为什么必须单写一条：搭景 R3 把 tire-fl..rr 与 wheel-cap-fl..rr 由 cylinder
+   * 改为 lathe（a2_uvraw 实测：tire-fl / wheel-cap-fl 现为 LatheGeometry，
+   * groups=0）。LatheGeometry 的 UV 是 (i/segments, j/(points−1))：
+   *   · u = 回转角、v = 沿母线序号，**整条母线连两端平帽面一起被压进 v∈[0,1]**；
+   *   · 平帽面上这个 UV 是**极坐标**（u=角度、v=半径），而胎侧字环（EX-34）与
+   *     轮心盾徽（EX-33）都是按**平面内切圆** UV 画的 —— 承 CylinderGeometry
+   *     generateCap 约定（three r186 源码：顶点 x=R·sinθ、z=R·cosθ，
+   *     uv.x=cosθ·0.5+0.5、uv.y=sinθ·0.5·sign+0.5）。极坐标喂给平面图案会把
+   *     字环/盾徽拉成同心弧带：R3 前正常，R3 后失效。
+   *
+   * 做法（与旧 cylinder 分组重映射等价，且**不产生跨区三角形**）：
+   *   1. 按母线点序切三角带：首带与末带 = 平帽面，其余 = 筒身；
+   *   2. 帽面顶点改赋平面内切圆 UV（R = 母线最大回转半径）
+   *        su = 0.5 + 0.5·(z/R)，sv = 0.5 + 0.5·(x/R)
+   *      —— 与 generateCap 同约定；两枚帽面同式，等价于已做底帽 v 翻转补偿
+   *      （旧 remapTireUV 的 1−v、旧 remapWheelCapCapUV 的底帽补偿）；
+   *   3. 筒身顶点 u 保持回转角，v 按自身段 [1/(N−1), (N−2)/(N−1)] 归一；
+   *   4. **复制交界环**：交界母线点同时属于两条带，不复制就会出现「一个三角形
+   *      两区」（bbox 跨区 → #uvassert 判串味）。复制后两条带顶点集零相交。
+   * 非 lathe 或结构不符预期 → 返回 false，由调用方回退到 bbox 归一。
+   */
+  const remapLatheCapAndBandUV = (
+    mesh: THREE.Mesh,
+    capRegion: readonly number[],
+    bandRegion: readonly number[]
+  ): boolean => {
+    const geo = mesh.geometry;
+    if (geo.type !== 'LatheGeometry') return false;
+    const pos = geo.getAttribute('position');
+    const uv = geo.getAttribute('uv');
+    const nor = geo.getAttribute('normal');
+    const index = geo.getIndex();
+    if (!pos || !uv || !index) return false;
+    const params = (geo as unknown as { parameters?: { points?: unknown[]; segments?: number } })
+      .parameters;
+    const N = params?.points?.length ?? 0; // 母线点数（轮胎 / 轮标 = 12）
+    const seg = params?.segments ?? 0; // 回转段数（轮胎 = 48，轮标 = 36）
+    if (N < 4 || seg < 3) return false;
+    const bandCount = N - 1; // 三角带数（= 11）
+    if (pos.count !== (seg + 1) * N) return false;
+    // 帽面内切圆半径：母线最大回转半径
+    let rMax = 0;
+    for (let i = 0; i < pos.count; i++) {
+      const r = Math.hypot(pos.getX(i), pos.getZ(i));
+      if (r > rMax) rMax = r;
+    }
+    if (rMax < 1e-6) return false;
+    // 母线按**世界弧长**参数化：LatheGeometry 的 v 默认是「母线点序号 / (N−1)」，
+    // 而 R3 的轮胎母线点疏密极不均匀 —— 胎面中段一条带占几何长度 0.765，
+    // 两侧 8 条 1cm 圆角带各只占 0.011~0.045。按序号均分会给每条圆角带 1/9 的
+    // v：#uvassert 实测各向异性 6.9x~45.7x（最差 45.5x @ 轮胎 fl#461），且
+    // 4 道周向沟槽有 3 道落进 1cm 圆角带、胎面一条不剩。改按世界弧长分配后
+    // v 段与各带实际尺寸成正比，密度均匀、沟槽回到胎面上。
+    mesh.updateWorldMatrix(true, false);
+    const wm = mesh.matrixWorld;
+    const pa = new THREE.Vector3();
+    const pb = new THREE.Vector3();
+    const arcLen = new Float64Array(N); // 沿母线累计世界弧长（回转对称，取 i=0 环）
+    for (let j = 1; j < N; j++) {
+      pa.set(pos.getX(j - 1), pos.getY(j - 1), pos.getZ(j - 1)).applyMatrix4(wm);
+      pb.set(pos.getX(j), pos.getY(j), pos.getZ(j)).applyMatrix4(wm);
+      arcLen[j] = arcLen[j - 1] + pa.distanceTo(pb);
+    }
+    const aLo = arcLen[1]; // 筒身首点（母线 j=1）
+    const aHi = arcLen[N - 2]; // 筒身末点（母线 j=N−2）
+    if (aHi - aLo < 1e-6) return false;
+
+    const outPos: number[] = [];
+    const outNor: number[] = [];
+    const outUv: number[] = [];
+    const outIdx: number[] = [];
+    const copyOf = new Map<number, number>(); // key = vi*2 + kind（0=帽面 1=筒身）
+    const emit = (vi: number, cap: boolean): number => {
+      const key = vi * 2 + (cap ? 0 : 1);
+      const hit = copyOf.get(key);
+      if (hit !== undefined) return hit;
+      const id = outPos.length / 3;
+      outPos.push(pos.getX(vi), pos.getY(vi), pos.getZ(vi));
+      if (nor) outNor.push(nor.getX(vi), nor.getY(vi), nor.getZ(vi));
+      if (cap) {
+        const su = 0.5 + 0.5 * (pos.getZ(vi) / rMax);
+        const sv = 0.5 + 0.5 * (pos.getX(vi) / rMax);
+        outUv.push(
+          capRegion[0] + su * (capRegion[1] - capRegion[0]),
+          capRegion[2] + sv * (capRegion[3] - capRegion[2])
+        );
+      } else {
+        const t = (arcLen[vi % N] - aLo) / (aHi - aLo); // 世界弧长参数化
+        outUv.push(
+          bandRegion[0] + uv.getX(vi) * (bandRegion[1] - bandRegion[0]),
+          bandRegion[2] + t * (bandRegion[3] - bandRegion[2])
+        );
+      }
+      copyOf.set(key, id);
+      return id;
+    };
+    for (let b = 0; b < bandCount; b++) {
+      const cap = b === 0 || b === bandCount - 1;
+      for (let i = 0; i < seg; i++) {
+        // 绕序同 LatheGeometry：push(a,b',d) + push(c,d,b')
+        const a = emit(i * N + b, cap);
+        const b2 = emit((i + 1) * N + b, cap);
+        const c = emit((i + 1) * N + b + 1, cap);
+        const d = emit(i * N + b + 1, cap);
+        outIdx.push(a, b2, d, c, d, b2);
+      }
+    }
+    if (outIdx.length !== index.count) return false; // 兜底：三角形数必须守恒
+    const out = new THREE.BufferGeometry();
+    out.setAttribute('position', new THREE.Float32BufferAttribute(outPos, 3));
+    out.setAttribute('uv', new THREE.Float32BufferAttribute(outUv, 2));
+    if (nor) out.setAttribute('normal', new THREE.Float32BufferAttribute(outNor, 3));
+    out.setIndex(outIdx);
+    mesh.geometry = out; // 旧几何尚未上传 GPU，无显存可泄漏
+    return true;
+  };
+
+  /**
+   * EX-34 轮胎 UV 分区：胎面 → TIRE_TREAD_REGION（左半），胎侧字环 →
+   * TIRE_SIDEWALL_REGION（右半）。
+   *
+   * 历史（R3 之前 tire-* 为 CylinderGeometry，按 3 个 group 分）：
+   *   group0 = 胎面（side）→ u 压进左半 [0, 0.5]（v 不变，保留环绕语义）；
+   *   group1 = 顶帽 → u 平移进右半 [0.5, 1]；
+   *   group2 = 底帽 → 进右半且 v 取 1−v（generateCap sign=−1 的翻转补偿）；
+   *   补偿后两枚帽面同向：u = 0.75 + 0.25·(z/R)，v = 0.5 + 0.5·(x/R)。
+   *
+   * ⚠️ R3 之后 tire-* 变 LatheGeometry（groups=0），「按 CylinderGeometry
+   * 分组」判据失效 → 落到非圆柱分支，那一支又假设「UV 恒 0..1」，而隐藏
+   * 占位件 wheel-fl..rr 在 R3 也由 box 变圆角 extrude（a2_uvraw 实测
+   * u∈[-0.5,0.5]、v∈[-0.5,1.0]）→ #uvassert 实测 232/4528 串味。
+   * 现在：lathe 走 remapLatheCapAndBandUV（帽面平面内切圆 → 字环区；筒身 →
+   * 胎面区）；其余基元一律 bbox 归一压进胎面区（占位件不可见，只为 #uvassert
+   * 全绿，占位件随 spec 保留不删）。
+   */
+  const remapTireUV = (mesh: THREE.Mesh): void => {
+    if (remapLatheCapAndBandUV(mesh, TIRE_SIDEWALL_REGION, TIRE_TREAD_REGION)) return;
+    // 隐藏占位件（wheel-fl..rr，适配器已 visible=false）：观感上无任何意义，
+    // 钉死到胎面区中心一个纹素即可 —— 只为 #uvassert 全绿。不钉死的话它们仍会
+    // 进密度判据（实测 24/3536 超阈、最差 9.6x），把一个不可见件的映射缺陷
+    // 记到胎面分区头上，反而掩盖真胎的数字。
+    if (mesh.visible === false) {
+      const uvAttr = mesh.geometry.getAttribute('uv');
+      if (uvAttr) {
+        const uc = (TIRE_TREAD_REGION[0] + TIRE_TREAD_REGION[1]) / 2;
+        const vc = (TIRE_TREAD_REGION[2] + TIRE_TREAD_REGION[3]) / 2;
+        for (let i = 0; i < uvAttr.count; i++) uvAttr.setXY(i, uc, vc);
+        uvAttr.needsUpdate = true;
+      }
+      return;
+    }
+    remapUVToRegion(
+      mesh,
+      TIRE_TREAD_REGION[0],
+      TIRE_TREAD_REGION[1],
+      TIRE_TREAD_REGION[2],
+      TIRE_TREAD_REGION[3]
+    );
+  };
+
+  /**
+   * EX-33 轮标帽面补偿。
+   * 历史：wheel-cap-* 与轮胎同族（CylinderGeometry），底帽 UV 自带 v 翻转
+   * （generateCap sign=−1）。自平衡 billboard 下盘面法线（局部 +Y）水平指向
+   * 相机，不补偿则盾徽上下颠倒；底帽 v 取 1−v 后两枚帽面同向（徽标上沿都在
+   * 局部 +X），左右两侧车轮、任意机位都正立。
+   * ⚠️ R3 之后 wheel-cap-* 变 LatheGeometry（groups=0），旧函数直接 return ——
+   * 补偿失效；且 lathe 帽面拿到的是极坐标 UV，而盾徽是画满整幅画布的平面
+   * 图案（金环半径 0.465·S）→ 会被拉成同心弧带。改走 remapLatheCapAndBandUV：
+   * 帽面平面内切圆 UV、筒身（薄 rim + 倒角）保留回转角并把 v 按自身段归一。
+   * 整幅即盾徽、无图集分区（无串味概念）→ cap / band 都落在 [0,1]²。
+   */
+  const remapWheelCapCapUV = (mesh: THREE.Mesh): void => {
+    const FULL: readonly number[] = [0, 1, 0, 1];
+    if (remapLatheCapAndBandUV(mesh, FULL, FULL)) return;
+    // 回退：仍是 CylinderGeometry 3 组（旧 spec）→ 底帽 v 翻转
+    const geo = mesh.geometry;
+    const uv = geo.getAttribute('uv');
+    const index = geo.getIndex();
+    const groups = geo.groups;
+    if (!uv || !index || groups.length !== 3) return;
+    const seen = new Set<number>();
+    const g = groups[2]; // 底帽
+    for (let t = g.start; t < g.start + g.count; t++) {
+      const vi = index.getX(t);
+      if (seen.has(vi)) continue;
+      seen.add(vi);
+      uv.setXY(vi, uv.getX(vi), 1 - uv.getY(vi));
+    }
+    uv.needsUpdate = true;
+  };
+
   // EX-28 尾灯 3+3 横带：12 条几何灯带撤除后，图案落在暗场内衬（lantern-emitter，
   // housing-dark）上 —— 红光核心在最深层只露红晕环，见 createTailBandAtlasTexture 注释。
   // housing-dark spec 无 emissive：适配层设同尾灯红色，并在 update() 与 brakeLevel 联动。
@@ -1525,10 +2254,16 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
     tailFieldMat.emissive.set(0xe03040); // 与 lamp-red 同色，间隙为纯黑零发光
     tailFieldMat.needsUpdate = true; // 初值不重要：update() 每帧按 brakeLevel 覆盖
     // UV 分区：暗场内衬采样红带区（左半）；尾灯壳/头灯壳重映射到纯黑区（右半），
-    // 壳体外观零变化；线性映射对任意输入 UV 都收敛到目标区，extrude 也安全
+    // 壳体外观零变化。
+    // ⚠️ R4 修订（#uvassert 实测 116/304 串味）：上一版注释写的「线性映射对任意
+    // 输入 UV 都收敛到目标区」是错的 —— 只有输入 ⊆ [0,1] 才收敛。搭景 R3 把
+    // lantern-emitter-* 由 box 改为圆角 extrude，UV 变成坐标值（a2_uvraw 实测
+    // u∈[-0.5,0.5]、v∈[-0.5,1.0]），线性 remapUV 直接把负值带出分区。
+    // 一律改走 remapUVToRegion（按 mesh 自身 UV bbox 归一）：0..1 基元下与线性
+    // 等价，坐标值基元下才正确。
     for (const fieldId of ['lantern-emitter-l', 'lantern-emitter-r']) {
       const fieldMesh = meshOf(fieldId);
-      if (fieldMesh) remapUV(fieldMesh, 0.004, 0.496, 0.004, 0.996);
+      if (fieldMesh) remapUVToRegion(fieldMesh, 0.004, 0.496, 0.004, 0.996);
     }
     // 壳体是 extrude 基元（UV 为坐标值非 0..1）—— 必须走归一化重映射。
     // #uvassert 实测：旧写法线性 remapUV 有 104/536 三角形越出合法分区
@@ -1546,7 +2281,8 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
     starDustMat.emissiveMap = tex;
     starDustMat.needsUpdate = true;
   }
-  // EX-08 头灯 3 枚圆形 LED 点阵：lamp-head 两条竖向灯芯独占
+  // EX-08 头灯竖向光导：lamp-head 两条竖向灯带 + 6 枚几何点阵共用（R3 裁决：
+  // 光导表面去点阵图案、点阵由几何件独撑，详见 createHeadlampLedTexture 注释）
   const ledMat = matById.get('lamp-head') ?? null;
   if (ledMat && !ledMat.emissiveMap) {
     const tex = createHeadlampLedTexture();
@@ -1573,24 +2309,29 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
     ownedTextures.push(tex);
     whiteMat.emissiveMap = tex;
     whiteMat.needsUpdate = true;
+    // R4：三件在搭景 R3 全由 box 改为圆角 extrude（a2_uvraw 实测 u∈[-0.5,0.5]、
+    // v∈[-0.5,1.0]），线性 remapUV 越界 118/228 → 改 bbox 归一重映射。
     const panelMesh = meshOf('shield-emblem-panel');
-    if (panelMesh) remapUV(panelMesh, 0.004, 0.496, 0.004, 0.996);
+    if (panelMesh) remapUVToRegion(panelMesh, 0.004, 0.496, 0.004, 0.996);
     for (const barId of ['front-light-bar', 'bumper-light-strip']) {
       const barMesh = meshOf(barId);
-      if (barMesh) remapUV(barMesh, 0.55, 0.95, 0.3, 0.7);
+      if (barMesh) remapUVToRegion(barMesh, 0.55, 0.95, 0.3, 0.7);
     }
   }
   // P1-1 lamp-gold 图集 UV 分区：签名屏 → 点阵图案区；4 扬声器 + 2 高音罩 →
-  // 素面拉丝金区（点阵串味修复）。线性 remapUV 对 box/cylinder/capsule（UV 恒 0..1）
-  // 与归一化重映射等价；UV 改动必须在 batchMergeStatic 之前烘进源几何。
+  // 素面拉丝金区（点阵串味修复）。UV 改动必须在 batchMergeStatic 之前烘进源几何。
+  // ⚠️ R4 修订：签名屏 lantern-signature-* 在搭景 R3 由 box 改为圆角 extrude
+  // （a2_uvraw 实测 u∈[-0.5,0.5]、v∈[-0.5,1.0]）→ 线性 remapUV 越界 116/3768。
+  // 全部改 bbox 归一：box/cylinder/capsule/lathe（UV 恒 0..1）下与线性等价，
+  // 圆角 extrude（坐标值 UV）下才正确。
   if (goldMat) {
     for (const id of ['lantern-signature-l', 'lantern-signature-r']) {
       const mesh = meshOf(id);
-      if (mesh) remapUV(mesh, GOLD_PATTERN_REGION[0], GOLD_PATTERN_REGION[1], GOLD_PATTERN_REGION[2], GOLD_PATTERN_REGION[3]);
+      if (mesh) remapUVToRegion(mesh, GOLD_PATTERN_REGION[0], GOLD_PATTERN_REGION[1], GOLD_PATTERN_REGION[2], GOLD_PATTERN_REGION[3]);
     }
     for (const id of ['speaker-fl', 'speaker-fr', 'speaker-rl', 'speaker-rr', 'tweeter-l', 'tweeter-r']) {
       const mesh = meshOf(id);
-      if (mesh) remapUV(mesh, GOLD_BRUSHED_REGION[0], GOLD_BRUSHED_REGION[1], GOLD_BRUSHED_REGION[2], GOLD_BRUSHED_REGION[3]);
+      if (mesh) remapUVToRegion(mesh, GOLD_BRUSHED_REGION[0], GOLD_BRUSHED_REGION[1], GOLD_BRUSHED_REGION[2], GOLD_BRUSHED_REGION[3]);
     }
   }
 
@@ -1608,16 +2349,134 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
     screenMat.color.set(0xffffff);
     screenMat.emissiveIntensity = 1.25;
     screenMat.needsUpdate = true;
-    // plane-card 基元 UV 恒 0..1 → 线性 remapUV 足够
+    // R4：plane-card 基元 UV 恒 0..1，线性与 bbox 归一等价；统一走 bbox 归一，
+    // 将来若换成坐标值 UV 的基元（如圆角 extrude）不至于再出串味。
     const triScreen = meshOf('tri-screen');
-    if (triScreen) remapUV(triScreen, TRI_SCREEN_UI_REGION[0], TRI_SCREEN_UI_REGION[1], TRI_SCREEN_UI_REGION[2], TRI_SCREEN_UI_REGION[3]);
+    if (triScreen) remapUVToRegion(triScreen, TRI_SCREEN_UI_REGION[0], TRI_SCREEN_UI_REGION[1], TRI_SCREEN_UI_REGION[2], TRI_SCREEN_UI_REGION[3]);
     const rearCtrl = meshOf('rear-control-screen');
-    if (rearCtrl) remapUV(rearCtrl, REAR_CTRL_UI_REGION[0], REAR_CTRL_UI_REGION[1], REAR_CTRL_UI_REGION[2], REAR_CTRL_UI_REGION[3]);
+    if (rearCtrl) remapUVToRegion(rearCtrl, REAR_CTRL_UI_REGION[0], REAR_CTRL_UI_REGION[1], REAR_CTRL_UI_REGION[2], REAR_CTRL_UI_REGION[3]);
     for (const id of ['seat-rear-l-screen', 'seat-rear-r-screen']) {
       const mesh = meshOf(id);
       if (!mesh) continue;
       // 扶手屏 rotation.x = −1.75（上仰朝车尾）→ 图集方向旋转 180°（u/v 反向映射）
-      remapUV(mesh, SEAT_CTRL_UI_REGION[1], SEAT_CTRL_UI_REGION[0], SEAT_CTRL_UI_REGION[3], SEAT_CTRL_UI_REGION[2]);
+      remapUVToRegion(mesh, SEAT_CTRL_UI_REGION[1], SEAT_CTRL_UI_REGION[0], SEAT_CTRL_UI_REGION[3], SEAT_CTRL_UI_REGION[2]);
+    }
+  }
+
+  // EX-34 胎面沟槽 + 胎侧字环：tire 材质（4 真胎 + 4 隐藏占位盒）全部同图集。
+  // 必须在合批前烘进源几何（合批保留逐顶点 UV，但分区重映射要在合并前做完）。
+  const tireMat = matById.get('tire') ?? null;
+  if (tireMat && !tireMat.map) {
+    const set = createTireAtlasTexture(TIRE_ATLAS_W[tier]);
+    ownedTextures.push(set.map, set.normalMap);
+    tireMat.map = set.map;
+    tireMat.normalMap = set.normalMap;
+    tireMat.normalScale.setScalar(0.8);
+    tireMat.color.set(0xffffff); // 底色交给贴图（同 plate/lamp-gold 先例）
+    tireMat.needsUpdate = true;
+    model.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      const mats = Array.isArray(m.material) ? m.material : [m.material];
+      if (!mats.includes(tireMat)) return;
+      remapTireUV(m);
+    });
+  }
+
+  // EX-31 后保反光条分段：lamp-red 共享（尾灯芯×2 + 反光条×4 + 尾灯横带×4）——
+  // 直接给 lamp-red 挂图会把分段图案串到尾灯上，故克隆一份专供反光条
+  // （ID 不变，合批按材质实例分组 → 反光条独立成组，尾灯组不变）。
+  const lampRedMat = matById.get('lamp-red') ?? null;
+  const reflectorMat = lampRedMat ? lampRedMat.clone() : null;
+  if (reflectorMat && !reflectorMat.emissiveMap) {
+    const tex = createReflectorAtlasTexture();
+    ownedTextures.push(tex);
+    reflectorMat.emissiveMap = tex;
+    // 反光条不是刹车灯：静态弱发光（不接 brakeLevel；0.55 × #E03040 ≈ 0.20 亮度，
+    // 低于 UnrealBloom 阈值 0.72，怠速/满刹都不起爆）
+    reflectorMat.emissiveIntensity = REFLECTOR_EMISSIVE_INTENSITY;
+    reflectorMat.needsUpdate = true;
+    // ⚠️ R4 修订（#uvassert 实测 232/304 串味，本波最严重一组）：四件在搭景
+    // R2/R3 全由 box 改为圆角 extrude（a2_uvraw 实测 u∈[-0.5,0.5]、v∈[-0.5,1.0]），
+    // 「盒基元 UV 恒 0..1 → 线性 remapUV 足够」的前提已失效 → 改 bbox 归一。
+    // 上下两排反光条采样同一分段区，读感一致。
+    for (const id of [
+      'rear-reflector-l',
+      'rear-reflector-r',
+      'rear-reflector-strip-l',
+      'rear-reflector-strip-r'
+    ]) {
+      const mesh = meshOf(id);
+      if (mesh) {
+        mesh.material = reflectorMat;
+        remapUVToRegion(
+          mesh,
+          REFLECTOR_PATTERN_REGION[0],
+          REFLECTOR_PATTERN_REGION[1],
+          REFLECTOR_PATTERN_REGION[2],
+          REFLECTOR_PATTERN_REGION[3]
+        );
+      }
+    }
+  }
+
+  // EX-08 大灯 3-LED 点阵（架构组 R2 新件 headlamp-led-dot-1/2/3-l/r，extrude）：
+  // lamp-head 的 emissiveMap 是「暗底 + 3 圆 LED」贴图，extrude 的 UV 是坐标值
+  // （实测 ≈±0.02）—— 不重映射会采到画布角的暗蓝灰底，灯珠呈灰蓝（架构组已通告）。
+  // 解法：归一化重映射到中枚 LED 的实心白芯区（createHeadlampLedTexture 画布
+  // x[42,86] y[234,278] → UV [0.328,0.672]×[0.457,0.543]），灯珠读作纯白发光点。
+  // lamp-head 不进 UV_ATLAS_REGIONS：全幅同质（暗底 + LED 点），点阵采中芯白区
+  // 是刻意行为，无分区冲突（无串味概念）；两条竖向灯芯保持全幅采样不变。
+  const LED_DOT_REGION = Object.freeze([0.328, 0.672, 0.457, 0.543]);
+  let ledDotCount = 0;
+  for (const id of [
+    'headlamp-led-dot-1-l',
+    'headlamp-led-dot-2-l',
+    'headlamp-led-dot-3-l',
+    'headlamp-led-dot-1-r',
+    'headlamp-led-dot-2-r',
+    'headlamp-led-dot-3-r'
+  ]) {
+    const mesh = meshOf(id);
+    if (mesh) {
+      remapUVToRegion(
+        mesh,
+        LED_DOT_REGION[0],
+        LED_DOT_REGION[1],
+        LED_DOT_REGION[2],
+        LED_DOT_REGION[3]
+      );
+      ledDotCount++;
+    }
+  }
+
+  // EX-33 轮心黑底盾徽：lamp-mark 共享（车尾 MAEXTRO 字标 13:1 横条 + 4 枚悬浮
+  // 轮标 cylinder）—— 克隆专供轮标。帽面 UV 内切圆约定下盾徽画满整幅画布即自然
+  // 落在帽面，无需重映射（无图集分区 → 无串味概念，探针已实证 discR2max=0.25）。
+  // 搭景 R2 已落地的滚花齿环（cap-*，extrude 20 齿环，内径 0.19 让位本盾徽
+  // r0.07、齿尖外径 0.296、chrome 材质避免采样盘面贴图）与本盾徽同心：
+  // 齿环随轮旋转，盾徽自平衡朝向观察者 —— 参考图 D1-D4 的轮心构图成立。
+  const markMatForBadge = matById.get('lamp-mark') ?? null;
+  const wheelCapMat = markMatForBadge ? markMatForBadge.clone() : null;
+  // ⚠️ R4：原守卫 `!wheelCapMat.emissiveMap` 恒为 false —— THREE.Material.clone()
+  // 会把 emissiveMap 一起复制，而 lamp-mark 自 EX-07 波起就挂着 MAEXTRO 字标条，
+  // 于是克隆体上永远「已挂图」→ 整个块被跳过：4 枚悬浮轮标一直显示的是字标条
+  // （512×128）而不是盾徽（256×256），块内的 remapWheelCapCapUV 也从未执行。
+  // a2 探针实测（对比 emissiveMap uuid）：wheel-cap-fl..rr 与 maextro-mark 用的是
+  // 同一张 512×128 贴图。改为「盾徽未挂则挂」的显式判据。
+  if (wheelCapMat && wheelCapMat.userData.wheelBadgeApplied !== true) {
+    const tex = createWheelBadgeTexture(WHEEL_BADGE_SIZE[tier]);
+    ownedTextures.push(tex);
+    wheelCapMat.emissiveMap = tex;
+    wheelCapMat.emissive.set(0xffffff);
+    wheelCapMat.needsUpdate = true;
+    wheelCapMat.userData.wheelBadgeApplied = true;
+    for (const id of ['wheel-cap-fl', 'wheel-cap-fr', 'wheel-cap-rl', 'wheel-cap-rr']) {
+      const mesh = meshOf(id);
+      if (mesh) {
+        mesh.material = wheelCapMat;
+        remapWheelCapCapUV(mesh); // 底帽 v 翻转补偿（自平衡 billboard 下两侧都正立）
+      }
     }
   }
 
@@ -1664,7 +2523,7 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
    * 子区原点 (u0,v0)、每细胞 UV 跨度 cellUV（= 图集菱格周期），子区必须在
    * 菱格分区内（u0 + nx·cellUV ≤ 0.992）。
    */
-  const QUILT_CELL_WORLD = 0.06; // I5/I6 钻石菱格参考边长 ≈6cm
+  const QUILT_CELL_WORLD = QUILT_CELL_WORLD_M; // I5/I6 钻石菱格参考边长 ≈6cm（与打孔孔径换算同源）
   /**
    * N2 菱格 UV 重建（逐三角形三平面投影 + 世界锚定连续 UV）：
    * 单平面盒投影对「接近投影方向的面」（头枕顶面、座面沿 Mes）必然压扁 —— 实测
@@ -1784,30 +2643,48 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
     uv.needsUpdate = true;
   }
   const leatherWarmMat = matById.get('leather-warm') ?? null;
+  /** IN-08 打孔通风区专用克隆（null = 未接线，#lightassert 可见） */
+  let quiltPerfMat: THREE.MeshPhysicalMaterial | null = null;
   if (leatherWarmMat && !leatherWarmMat.map) {
+    // R2 色调校准：基色 #C08A5E（浅焦糖）→ #7A4034（深 Cognac 偏酒红）。
+    // 依据 U1_半剖内饰（酒红）+ I5/I6 二排零重力（深 Cognac）取交集方向压深；
+    // 挂在 map 上后 color 放白，故校准必须落在贴图像素侧（spec 颜色不动）。
+    // 与 leather-dark（#4A342A，仅 dash-upper）仍可区分：R/B 比 2.35 vs 1.76，
+    // 亮度中位 ≈1.4×。
     // 共享图集：素面粒面承载门板/前排/三排等通用件（左上素面区）
-    const warm = createLeatherAtlasTexture(atlasSize, 0x51c9d4, [192, 138, 94], atlasSize / 32);
+    const warm = createLeatherAtlasTexture(atlasSize, 0x51c9d4, LEATHER_WARM_BASE, atlasSize / 32);
     applySurface(leatherWarmMat, warm, 0.7);
     // N2：菱格件改用专用平铺贴图 + 材质克隆（ID 不变）——
     // 共享图集的分区约束与「任意朝向面都要 6cm 等密度菱格」不可兼得（三平面
     // 投影的连续 UV 必然越出分区）；整幅可平铺的菱格贴图让 UV 沿世界坐标无限
-    // 延展、RepeatWrapping 无缝环绕。克隆材质令合批把菱格件独立成组：+1 draw call。
+    // 延展，RepeatWrapping 无缝环绕。克隆材质令合批把菱格件独立成组：+1 draw call。
     const quiltMat = leatherWarmMat.clone();
-    const quiltSet = createQuiltTileTexture(atlasSize / 2, 0x51c9d5, [192, 138, 94]);
+    const quiltSet = createQuiltTileTexture(atlasSize / 2, 0x51c9d5, LEATHER_WARM_BASE);
     ownedTextures.push(quiltSet.map, quiltSet.normalMap);
     quiltMat.map = quiltSet.map;
     quiltMat.normalMap = quiltSet.normalMap;
     quiltMat.userData.quiltTiled = true; // #uvassert 跳过分区判据（整幅菱格，无串味概念）
     quiltMat.needsUpdate = true;
-    // 菱格区：后排座椅座面/靠背/头枕可见面 —— 逐三角形三平面投影
-    for (const id of [
-      'seat-rear-l',
-      'seat-rear-l-back',
-      'seat-rear-l-headrest',
-      'seat-rear-r',
-      'seat-rear-r-back',
-      'seat-rear-r-headrest'
-    ]) {
+    // IN-08 打孔通风区：后排座垫/靠背（不含头枕）用第二份克隆 —— 菱格平铺 +
+    // 格心 3×3 微孔阵。头枕保持素菱格（真车通风区不含头枕）。
+    // 打孔孔径世界 1.5mm，需要 ≥1024² 才不亚像素 → 贴图用 atlasSize（非 /2）。
+    const quiltPerf = leatherWarmMat.clone();
+    const perfSet = createQuiltTileTexture(atlasSize, 0x51c9d5, LEATHER_WARM_BASE, true);
+    ownedTextures.push(perfSet.map, perfSet.normalMap);
+    quiltPerf.map = perfSet.map;
+    quiltPerf.normalMap = perfSet.normalMap;
+    quiltPerf.userData.quiltTiled = true;
+    quiltPerf.needsUpdate = true;
+    quiltPerfMat = quiltPerf;
+    // 菱格区：后排座椅座面/靠背（打孔）与头枕（素面）—— 逐三角形三平面投影
+    for (const id of ['seat-rear-l', 'seat-rear-l-back', 'seat-rear-r', 'seat-rear-r-back']) {
+      const mesh = meshOf(id);
+      if (mesh) {
+        mesh.material = quiltPerf;
+        remapUVQuiltTriplanar(mesh);
+      }
+    }
+    for (const id of ['seat-rear-l-headrest', 'seat-rear-r-headrest']) {
       const mesh = meshOf(id);
       if (mesh) {
         mesh.material = quiltMat;
@@ -1893,9 +2770,16 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
       { 灯组: '尾灯 3+3 灯带贴图', 期望: 'housing-dark', 命中: tailFieldMat ? 'housing-dark' : '(无)' },
       { 灯组: '星尘颗粒', 期望: 'lamp-star', 命中: starDustMat ? 'lamp-star' : '(无)' },
       { 灯组: '头灯 LED 点阵', 期望: 'lamp-head', 命中: ledMat ? 'lamp-head' : '(无)' },
+      { 灯组: '头灯 3-LED 点阵灯珠(EX-08)', 期望: 'led-dot×6', 命中: ledDotCount > 0 ? `remapped×${ledDotCount}` : '(无)' },
       { 灯组: '车名牌镀铬字', 期望: 'plate', 命中: plateMat ? 'plate' : '(无)' },
       { 灯组: '盾徽面板分区贴图', 期望: 'lamp-white', 命中: whiteMat ? 'lamp-white' : '(无)' },
       { 灯组: '皮革图集(素面+菱格)', 期望: 'leather-warm', 命中: leatherWarmMat ? 'leather-warm' : '(无)' },
+      { 灯组: '皮革色调校准(深Cognac)', 期望: '#7A4034', 命中: leatherWarmMat?.map ? '#7A4034' : '(无)' },
+      { 灯组: '座椅打孔区(IN-08)', 期望: 'leather-warm 打孔克隆', 命中: quiltPerfMat ? 'quilt-perf' : '(无)' },
+      { 灯组: '胎面沟槽+胎侧字环(EX-34)', 期望: 'tire', 命中: tireMat ? 'tire' : '(无)' },
+      { 灯组: '后保反光条分段(EX-31)', 期望: 'lamp-red 克隆', 命中: reflectorMat ? 'reflector-clone' : '(无)' },
+      { 灯组: '轮心黑底盾徽(EX-33)', 期望: 'lamp-mark 克隆', 命中: wheelCapMat ? 'wheel-badge' : '(无)' },
+      { 灯组: '迎宾光毯(EX-09)', 期望: 'welcome-carpet', 命中: welcomeMesh ? 'welcome-carpet' : '(无)' },
       { 灯组: '屏幕家族UI(三联/后排/扶手)', 期望: 'screen-ui', 命中: matById.has('screen-ui') ? 'screen-ui' : '(无)' },
       { 灯组: '深棕皮革粒面', 期望: 'leather-dark', 命中: leatherDarkMat ? 'leather-dark' : '(无)' },
       { 灯组: '米白皮革粒面', 期望: 'leather-ivory', 命中: leatherIvoryMat ? 'leather-ivory' : '(无)' },
@@ -2018,6 +2902,13 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
   const tmpVec = new THREE.Vector3();
   /** billboard 折算用：cap 父节点的世界朝向 */
   const tmpParentQuat = new THREE.Quaternion();
+  /** 自平衡 billboard 用：相机世界位置 / 水平指向 / up×dir / basis 矩阵 */
+  const tmpCamVec = new THREE.Vector3();
+  const tmpDir = new THREE.Vector3();
+  const tmpCross = new THREE.Vector3();
+  const tmpBasis = new THREE.Matrix4();
+  /** billboard 的局部 +X 目标方向（世界竖直向上）—— 徽标"上" */
+  const BILLBOARD_UP = new THREE.Vector3(0, 1, 0);
 
   // ---------------------------------------------------------------------------
   // 静态合批：静止的同材质小件压成单 draw call（DC 是本项目唯一贴红线的指标）
@@ -2102,6 +2993,16 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
         [TRI_SCREEN_UI_REGION[0], TRI_SCREEN_UI_REGION[1], TRI_SCREEN_UI_REGION[2], TRI_SCREEN_UI_REGION[3]],
         [REAR_CTRL_UI_REGION[0], REAR_CTRL_UI_REGION[1], REAR_CTRL_UI_REGION[2], REAR_CTRL_UI_REGION[3]],
         [SEAT_CTRL_UI_REGION[0], SEAT_CTRL_UI_REGION[1], SEAT_CTRL_UI_REGION[2], SEAT_CTRL_UI_REGION[3]]
+      ],
+      // tire：胎面沟槽区（左半）+ 胎侧字环区（右半）（EX-34）
+      'tire': [
+        [TIRE_TREAD_REGION[0], TIRE_TREAD_REGION[1], TIRE_TREAD_REGION[2], TIRE_TREAD_REGION[3]],
+        [TIRE_SIDEWALL_REGION[0], TIRE_SIDEWALL_REGION[1], TIRE_SIDEWALL_REGION[2], TIRE_SIDEWALL_REGION[3]]
+      ],
+      // lamp-red：反光条分段图集（EX-31）—— 只对克隆（挂了 emissiveMap）生效，
+      // 原例（尾灯芯/尾灯横带，无图集）被下方「未挂图集材质跳过」守卫挡住
+      'lamp-red': [
+        [REFLECTOR_PATTERN_REGION[0], REFLECTOR_PATTERN_REGION[1], REFLECTOR_PATTERN_REGION[2], REFLECTOR_PATTERN_REGION[3]]
       ]
     };
     const EPS = 0.0015;
@@ -2115,6 +3016,10 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
         | undefined;
       const regions = mid ? UV_ATLAS_REGIONS[mid] : undefined;
       if (!regions) return;
+      // 守卫：同 ID 的材质实例可能一个挂图集一个没挂（lamp-red 反光条克隆 vs
+      // 尾灯原例）—— 没挂图集的实例不采样分区，无串味概念，直接跳过。
+      const matRec = mat as THREE.MeshPhysicalMaterial | undefined;
+      if (!matRec?.map && !matRec?.emissiveMap) return;
       const uv = m.geometry.getAttribute('uv');
       const index = m.geometry.getIndex();
       const pos = m.geometry.getAttribute('position');
@@ -2358,10 +3263,12 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
       };
     });
     console.table(densRows);
-    // ERROR 门只看「图案内容」分区（菱格 / 红带 / 点阵 / 盾徽 / 屏幕 UI）——
-    // 方向性纹理（木纹/窗帘/拉丝）与匀色区（灯带白场）的设计各向异性不算缺陷，
+    // ERROR 门只看「图案内容」分区（菱格 / 红带 / 点阵 / 盾徽 / 屏幕 UI / 胎侧字环）——
+    // 方向性纹理（木纹/窗帘/拉丝/胎面沟槽）与匀色区（灯带白场）的设计各向异性不算缺陷，
     // 全量数据在上表供人工复核（QA 密度判据的可见化）。
-    const PATTERN_REGION_KEYS = /^(leather-warm\/R1|housing-dark\/R0|lamp-gold\/R0|lamp-white\/R0|screen-ui\/R\d)$/;
+    // 注：tire/R0（胎面）周向 4.8m/UV vs 轴向 0.255m/UV ≈ 19× 是圆柱 UV 的固有压缩
+    // （周向沟槽本就无周向细节），R1（胎侧字环）帽面 UV 各向同性才是图案分区。
+    const PATTERN_REGION_KEYS = /^(leather-warm\/R1|housing-dark\/R0|lamp-gold\/R0|lamp-white\/R0|screen-ui\/R\d|tire\/R1)$/;
     const totalOver = densRows
       .filter((r) => PATTERN_REGION_KEYS.test(r['材质/分区']))
       .reduce((s2, r) => s2 + r['超阈8x'], 0);
@@ -2404,6 +3311,7 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
       heat = t;
     },
     updateCluster(speedKmh: number, forceN: number, g: number, gear: string): void {
+      lastSpeedKmh = speedKmh;
       drawGauge(speedKmh, forceN, g, gear);
     },
     setSteer(_angle: number): void {
@@ -2443,20 +3351,42 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
       if (headMat) headMat.emissiveIntensity = headLevel;
       // 字标：呼吸强度乘在基准上（不覆盖 spec 自有的 emissiveIntensity）
       if (markMat) markMat.emissiveIntensity = markBase * (1 + MARK_BREATH_AMPLITUDE * Math.sin(now * 1.6));
+      // EX-33 轮心盾徽（lamp-mark 克隆）：与车尾字标同相位呼吸（原本同材质同呼吸）
+      if (wheelCapMat) {
+        wheelCapMat.emissiveIntensity = markBase * (1 + MARK_BREATH_AMPLITUDE * Math.sin(now * 1.6));
+      }
       // 星空顶：常亮呼吸，不随头灯、不随刹车
       if (starMat) {
         const phase = (now / STARLIGHT_BREATH_PERIOD) * Math.PI * 2;
         starMat.emissiveIntensity =
           STARLIGHT_BASE_INTENSITY * (1 + STARLIGHT_BREATH_AMPLITUDE * Math.sin(phase));
       }
-      // ---- 悬浮轮标朝向相机（billboard）----
-      // 坑（已修）：这里曾经直接把相机的**世界**四元数赋给 cap 的**局部** quaternion。
-      // cap 在 model 子树下，而 body 带 rotation.y = π（工厂车头 +Z → 游戏 -Z），
-      // 于是 cap 的世界朝向 = 父链旋转 × 相机朝向，实际差 180° —— 字标是背对相机的。
-      // 正确做法是先把目标世界朝向折算到父节点局部空间：local = parentWorldQ⁻¹ × cameraWorldQ。
+      // ---- 悬浮轮标：自平衡 billboard（EX-33）----
+      // 口径（spec + 参考图 D1-D4 + checklist 七）：自平衡悬浮式 —— 行驶中保持
+      // **正立**，盘面朝向观察者。盘面法线是节点局部 +Y（CylinderGeometry 轴向），
+      // 徽标"上"是局部 +X（帽面 UV 约定，a2 探针实证）—— 即绕世界 Y 轴的圆柱
+      // billboard：R(x̂)=世界上, R(ŷ)=水平指向相机, R(ẑ)=up×dir。
+      // 历史坑（两次）：
+      //  ① 直接赋相机世界四元数 → 父链 rotation.y=π 叠加后差 180°，字标背对相机；
+      //  ② 折算到局部（local = parentQ⁻¹ × cameraQ）后世界朝向 = 相机朝向 —— 但
+      //     盘面法线被带到世界 +Y（朝上平躺！），侧视/追逐/环绕全是近水平机位，
+      //     盘面侧对相机只剩 1.2cm 一条边，徽标不可见（PERF.md #19 只验了"朝向
+      //     等于相机"，没验"盘面朝向观察者"，对称盘面也看不出）。
+      // 本实现按 basis 重建：徽标在左右两侧车轮、任意机位都正立且朝向观察者。
+      // ⚠️ PERF.md #19 的旧验收口径（世界朝向 == 相机朝向）与本需求不等价，
+      // 已按 spec「保持正立」口径改写，QA 复核时需同步更新该判据。
       if (camera) {
-        camera.getWorldQuaternion(tmpQuat);
+        camera.getWorldPosition(tmpCamVec);
         for (const c of caps) {
+          c.getWorldPosition(tmpVec);
+          const dx = tmpCamVec.x - tmpVec.x;
+          const dz = tmpCamVec.z - tmpVec.z;
+          const len = Math.hypot(dx, dz);
+          if (len <= 1e-4) continue; // 相机在盘面正上/正下：保持上一帧朝向
+          tmpDir.set(dx / len, 0, dz / len);
+          tmpCross.set(tmpDir.z, 0, -tmpDir.x); // up × dir
+          tmpBasis.makeBasis(BILLBOARD_UP, tmpDir, tmpCross);
+          tmpQuat.setFromRotationMatrix(tmpBasis);
           if (c.parent) {
             c.parent.getWorldQuaternion(tmpParentQuat);
             c.quaternion.copy(tmpParentQuat).invert().multiply(tmpQuat);
@@ -2465,6 +3395,15 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
           }
         }
       }
+
+      // ---- EX-09 迎宾光毯：速度门控 + 缓慢呼吸 ----
+      // 静止（<5km/h）= 迎宾态淡入；行驶中淡出（damp 帧率无关）。
+      // 呼吸幅度 ±16%（0.80..0.96 × 增益）：弱发光观感，不进 bloom。
+      const carpetTarget = lastSpeedKmh < WELCOME_CARPET_SPEED_GATE ? 1 : 0;
+      welcomeGain = damp(welcomeGain, carpetTarget, 3, dt);
+      welcomeMat.opacity = (0.8 + 0.16 * Math.sin(now * 1.35)) * welcomeGain;
+      const welcomeVisible = welcomeGain > 0.02;
+      if (welcomeMesh.visible !== welcomeVisible) welcomeMesh.visible = welcomeVisible;
 
       // ---- 踏板：脱落动画 + 可见性门控 ----
       // 可见性按「相机到踏板的世界距离」判定：只有车内视角（≈1.1m）会进入，
@@ -2511,6 +3450,9 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
       });
       pedalGeo.dispose();
       pedalMat.dispose();
+      // EX-09 迎宾光毯（挂在 body 下，不在 model 遍历范围，显式释放）
+      welcomeGeo.dispose();
+      welcomeMat.dispose();
       gaugeTex.dispose();
       // 集成层贴图：已挂到材质上的会被 disposeMaterial 的 emissiveMap 槽释放，
       // 剩下的（材质缺失时的孤儿）在这里兜底，重复 dispose 无副作用

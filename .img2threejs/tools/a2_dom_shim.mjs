@@ -3,13 +3,12 @@
  * 只提供几何/材质探针需要的能力：canvas 2D 上下文全部方法为空操作，
  * 纹理内容不在 Node 侧核验（由 QA 实机截图负责），这里只数几何与读参数。
  * 用法：被 a2_probe_entry.ts 首行 import，side-effect 安装全局。
+ * 注意：本文件是 .mjs —— 必须是纯 JS（曾因混入 TS 类型注解导致 esbuild 解析失败）。
  */
 
-type GradStub = { addColorStop: (_offset: number, _color: string) => void };
-
-function make2DContext(canvas: { width: number; height: number }): CanvasRenderingContext2D {
-  const noop = (): void => {};
-  const ctx: Record<string, unknown> = {
+function make2DContext(canvas) {
+  const noop = () => {};
+  const ctx = {
     canvas,
     fillStyle: '#000',
     strokeStyle: '#000',
@@ -30,6 +29,7 @@ function make2DContext(canvas: { width: number; height: number }): CanvasRenderi
     roundRect: noop,
     quadraticCurveTo: noop,
     bezierCurveTo: noop,
+    arcTo: noop,
     clip: noop,
     // 绘制
     fill: noop,
@@ -50,36 +50,36 @@ function make2DContext(canvas: { width: number; height: number }): CanvasRenderi
     setTransform: noop,
     resetTransform: noop,
     // 像素
-    createImageData: (w: number, h: number) => ({ width: w, height: h, data: new Uint8ClampedArray(w * h * 4) }),
-    getImageData: (x: number, y: number, w: number, h: number) => ({ width: w, height: h, data: new Uint8ClampedArray(w * h * 4) }),
+    createImageData: (w, h) => ({ width: w, height: h, data: new Uint8ClampedArray(w * h * 4) }),
+    getImageData: (x, y, w, h) => ({ width: w, height: h, data: new Uint8ClampedArray(w * h * 4) }),
     putImageData: noop,
-    createLinearGradient: (): GradStub => ({ addColorStop: noop }),
-    createRadialGradient: (): GradStub => ({ addColorStop: noop }),
-    createConicGradient: (): GradStub => ({ addColorStop: noop }),
+    createLinearGradient: () => ({ addColorStop: noop }),
+    createRadialGradient: () => ({ addColorStop: noop }),
+    createConicGradient: () => ({ addColorStop: noop }),
     createPattern: () => null,
-    measureText: (text: string) => ({ width: text.length * 8, actualBoundingBoxAscent: 8, actualBoundingBoxDescent: 2 }),
+    measureText: (text) => ({ width: text.length * 8, actualBoundingBoxAscent: 8, actualBoundingBoxDescent: 2 }),
     isPointInPath: () => false,
   };
-  return ctx as unknown as CanvasRenderingContext2D;
+  return ctx;
 }
 
 const shimDocument = {
-  createElement: (tag: string) => {
+  createElement: (tag) => {
     if (tag === 'canvas') {
       const canvas = {
         width: 300,
         height: 150,
-        style: {} as Record<string, string>,
-        getContext: (kind: string) => (kind === '2d' ? make2DContext(canvas) : null),
+        style: {},
+        getContext: (kind) => (kind === '2d' ? make2DContext(canvas) : null),
         addEventListener: () => {},
         removeEventListener: () => {},
         toDataURL: () => 'data:,',
       };
-      return canvas as unknown as HTMLCanvasElement;
+      return canvas;
     }
-    return { style: {}, addEventListener: () => {}, removeEventListener: () => {} } as unknown as HTMLElement;
+    return { style: {}, addEventListener: () => {}, removeEventListener: () => {} };
   },
-  createElementNS: (_ns: string, tag: string) => shimDocument.createElement(tag),
+  createElementNS: (_ns, tag) => shimDocument.createElement(tag),
   getElementById: () => null,
   addEventListener: () => {},
   removeEventListener: () => {},
@@ -87,7 +87,7 @@ const shimDocument = {
   documentElement: { style: {} },
 };
 
-const g = globalThis as unknown as Record<string, unknown>;
+const g = globalThis;
 if (typeof g.document === 'undefined') g.document = shimDocument;
 if (typeof g.window === 'undefined') {
   g.window = {

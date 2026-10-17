@@ -1,0 +1,1008 @@
+{
+  "captureTime": "2026-10-16T16:47:01.221Z",
+  "env": {
+    "edge": "Edg/155.0.4283.45 headless=new --disable-gpu (SwiftShader)",
+    "dpr": 1,
+    "vite": 5202,
+    "cdp": 9344
+  },
+  "D_diag": {},
+  "R_ex08": {
+    "dots": [
+      {
+        "id": "headlamp-led-dot-1-l",
+        "center": [
+          -0.805,
+          1.016,
+          -2.72
+        ],
+        "screen": [
+          680,
+          319
+        ],
+        "behind": false,
+        "sample": {
+          "rgb": [
+            243,
+            244,
+            246
+          ],
+          "px": 100
+        }
+      },
+      {
+        "id": "headlamp-led-dot-2-l",
+        "center": [
+          -0.745,
+          1.016,
+          -2.72
+        ],
+        "screen": [
+          603,
+          312
+        ],
+        "behind": false,
+        "sample": {
+          "rgb": [
+            242,
+            243,
+            244
+          ],
+          "px": 100
+        }
+      },
+      {
+        "id": "headlamp-led-dot-3-l",
+        "center": [
+          -0.775,
+          0.934,
+          -2.72
+        ],
+        "screen": [
+          640,
+          508
+        ],
+        "behind": false,
+        "sample": {
+          "rgb": [
+            243,
+            244,
+            245
+          ],
+          "px": 100
+        }
+      },
+      {
+        "id": "headlamp-led-dot-1-r",
+        "center": [
+          0.805,
+          1.016,
+          -2.72
+        ],
+        "screen": [
+          600,
+          319
+        ],
+        "behind": false,
+        "sample": {
+          "rgb": [
+            243,
+            244,
+            246
+          ],
+          "px": 100
+        }
+      },
+      {
+        "id": "headlamp-led-dot-2-r",
+        "center": [
+          0.745,
+          1.016,
+          -2.72
+        ],
+        "screen": [
+          677,
+          312
+        ],
+        "behind": false,
+        "sample": {
+          "rgb": [
+            242,
+            243,
+            244
+          ],
+          "px": 100
+        }
+      },
+      {
+        "id": "headlamp-led-dot-3-r",
+        "center": [
+          0.775,
+          0.934,
+          -2.72
+        ],
+        "screen": [
+          640,
+          508
+        ],
+        "behind": false,
+        "sample": {
+          "rgb": [
+            243,
+            244,
+            245
+          ],
+          "px": 100
+        }
+      }
+    ],
+    "triangle": null,
+    "shell": null,
+    "tex": {
+      "info": {
+        "label": "lamp-head",
+        "size": [
+          128,
+          512
+        ],
+        "avg": {
+          "rgb": [
+            123,
+            null,
+            140
+          ],
+          "px": 4096
+        },
+        "center": {
+          "rgb": [
+            247,
+            null,
+            251
+          ],
+          "px": 256
+        }
+      },
+      "midLed": {
+        "rgb": [
+          149,
+          null,
+          165
+        ],
+        "px": 1920
+      }
+    },
+    "dotsFound": [
+      "headlamp-led-dot-1-l",
+      "headlamp-led-dot-2-l",
+      "headlamp-led-dot-3-l",
+      "headlamp-led-dot-1-r",
+      "headlamp-led-dot-2-r",
+      "headlamp-led-dot-3-r"
+    ],
+    "shell-l": {
+      "screen": [
+        640,
+        590
+      ],
+      "sample": {
+        "rgb": [
+          219,
+          221,
+          225
+        ],
+        "px": 144
+      }
+    },
+    "triangle-l": {
+      "pairDistances": [
+        0.06,
+        0.0873,
+        0.0873
+      ],
+      "ys": [
+        1.016,
+        1.016,
+        0.934
+      ],
+      "equilateral": false,
+      "twoAboveOneBelow": true
+    },
+    "shell-r": {
+      "screen": [
+        640,
+        590
+      ],
+      "sample": {
+        "rgb": [
+          219,
+          221,
+          225
+        ],
+        "px": 144
+      }
+    },
+    "triangle-r": {
+      "pairDistances": [
+        0.06,
+        0.0873,
+        0.0873
+      ],
+      "ys": [
+        1.016,
+        1.016,
+        0.934
+      ],
+      "equilateral": false,
+      "twoAboveOneBelow": true
+    }
+  },
+  "R_ex31": {
+    "parts": [
+      {
+        "id": "rear-reflector-l",
+        "screen": [
+          640,
+          380
+        ],
+        "behind": false,
+        "idle": {
+          "rgb": [
+            155,
+            127,
+            75
+          ],
+          "px": 144
+        },
+        "full": {
+          "rgb": [
+            155,
+            127,
+            75
+          ],
+          "px": 144
+        }
+      },
+      {
+        "id": "rear-reflector-r",
+        "screen": [
+          934,
+          529
+        ],
+        "behind": false,
+        "idle": {
+          "rgb": [
+            236,
+            101,
+            101
+          ],
+          "px": 144
+        },
+        "full": {
+          "rgb": [
+            236,
+            101,
+            101
+          ],
+          "px": 144
+        }
+      },
+      {
+        "id": "rear-reflector-strip-l",
+        "screen": [
+          347,
+          537
+        ],
+        "behind": false,
+        "idle": {
+          "rgb": [
+            239,
+            80,
+            81
+          ],
+          "px": 144
+        },
+        "full": {
+          "rgb": [
+            239,
+            80,
+            81
+          ],
+          "px": 144
+        }
+      },
+      {
+        "id": "rear-reflector-strip-r",
+        "screen": [
+          933,
+          537
+        ],
+        "behind": false,
+        "idle": {
+          "rgb": [
+            239,
+            86,
+            87
+          ],
+          "px": 144
+        },
+        "full": {
+          "rgb": [
+            239,
+            86,
+            87
+          ],
+          "px": 144
+        }
+      }
+    ],
+    "tail": null,
+    "tail-taillamp-l": {
+      "screen": [
+        191,
+        305
+      ],
+      "behind": false,
+      "idle": {
+        "rgb": [
+          69,
+          58,
+          36
+        ],
+        "px": 144
+      },
+      "full": {
+        "rgb": [
+          125,
+          112,
+          85
+        ],
+        "px": 144
+      }
+    },
+    "tail-taillamp-r": {
+      "screen": [
+        1089,
+        305
+      ],
+      "behind": false,
+      "idle": {
+        "rgb": [
+          68,
+          57,
+          36
+        ],
+        "px": 144
+      },
+      "full": {
+        "rgb": [
+          125,
+          112,
+          85
+        ],
+        "px": 144
+      }
+    },
+    "tex": {
+      "label": "reflector",
+      "size": [
+        256,
+        256
+      ],
+      "avg": {
+        "rgb": [
+          70,
+          null,
+          40
+        ],
+        "px": 4096
+      },
+      "center": {
+        "rgb": [
+          43,
+          null,
+          37
+        ],
+        "px": 256
+      }
+    }
+  },
+  "R_ex34": {
+    "fl": {
+      "center": [
+        -0.875,
+        0.382,
+        -1.715
+      ],
+      "box": [
+        -1.003,
+        0,
+        -2.097,
+        -0.747,
+        0.764,
+        -1.333
+      ]
+    },
+    "fr": {
+      "center": [
+        0.875,
+        0.382,
+        -1.715
+      ],
+      "box": [
+        0.747,
+        0,
+        -2.097,
+        1.003,
+        0.764,
+        -1.333
+      ]
+    },
+    "rl": {
+      "center": [
+        -0.875,
+        0.382,
+        1.715
+      ],
+      "box": [
+        -1.003,
+        0,
+        1.333,
+        -0.747,
+        0.764,
+        2.097
+      ]
+    },
+    "rr": {
+      "center": [
+        0.875,
+        0.382,
+        1.715
+      ],
+      "box": [
+        0.747,
+        0,
+        1.333,
+        1.003,
+        0.764,
+        2.097
+      ]
+    },
+    "tex": {
+      "info": {
+        "label": "tire",
+        "size": [
+          1024,
+          512
+        ],
+        "avg": {
+          "rgb": [
+            20,
+            null,
+            23
+          ],
+          "px": 4096
+        },
+        "center": {
+          "rgb": [
+            19,
+            null,
+            21
+          ],
+          "px": 256
+        }
+      },
+      "sidewallUpper": {
+        "rgb": [
+          21,
+          null,
+          25
+        ],
+        "px": 960
+      },
+      "sidewallLower": {
+        "rgb": [
+          20,
+          null,
+          24
+        ],
+        "px": 960
+      }
+    }
+  },
+  "R_in08": {
+    "cushion": {
+      "center": [
+        -0.5,
+        0.633,
+        1.3
+      ],
+      "screen": [
+        640,
+        380
+      ],
+      "sample": {
+        "rgb": [
+          159,
+          98,
+          85
+        ],
+        "px": 1872
+      }
+    },
+    "backrest": {
+      "center": [
+        -0.5,
+        0.978,
+        1.08
+      ],
+      "screen": [
+        640,
+        380
+      ],
+      "sample": {
+        "rgb": [
+          127,
+          78,
+          70
+        ],
+        "px": 1408
+      }
+    },
+    "leather": {
+      "warm": {
+        "info": {
+          "label": "leather-warm",
+          "size": [
+            1024,
+            1024
+          ],
+          "avg": {
+            "rgb": [
+              117,
+              null,
+              50
+            ],
+            "px": 4096
+          },
+          "center": {
+            "rgb": [
+              118,
+              null,
+              50
+            ],
+            "px": 256
+          }
+        },
+        "plain": {
+          "rgb": [
+            123,
+            null,
+            52
+          ],
+          "px": 3600
+        }
+      },
+      "perf": {
+        "info": {
+          "label": "quilt-perf",
+          "size": [
+            1024,
+            1024
+          ],
+          "avg": {
+            "rgb": [
+              109,
+              null,
+              47
+            ],
+            "px": 4096
+          },
+          "center": {
+            "rgb": [
+              96,
+              null,
+              41
+            ],
+            "px": 256
+          }
+        },
+        "avg": {
+          "rgb": [
+            109,
+            null,
+            47
+          ],
+          "px": 4096
+        }
+      }
+    }
+  },
+  "R_in09": {
+    "boxes": {
+      "screen-arm": [
+        -0.539,
+        0.949,
+        1.094,
+        -0.461,
+        0.972,
+        1.119
+      ],
+      "armrest-cap": [
+        -0.81,
+        0.853,
+        1.075,
+        -0.19,
+        0.947,
+        1.095
+      ],
+      "side-trim": [
+        -0.231,
+        0.58,
+        1.06,
+        -0.213,
+        1.1,
+        1.52
+      ]
+    }
+  },
+  "X_ex33": {},
+  "A_img": {
+    "spinDiff": 12.56,
+    "spinDiffCenter": 2.24,
+    "flVsFr": {
+      "direct": 37.39,
+      "flipX": 33.65,
+      "flipY": 136.7,
+      "rot180": 144.73
+    }
+  },
+  "shots": [
+    "fix-EX33-fl-side.png",
+    "fix-EX33-fr-side.png",
+    "fix-EX33-rl-side.png",
+    "fix-EX33-rr-side.png",
+    "fix-EX08-headlamp-l.png",
+    "fix-EX08-headlamp-r.png",
+    "fix-EX31-idle.png",
+    "fix-EX31-fullbrake.png",
+    "fix-EX34-tire-fl-side.png",
+    "fix-EX34-tire-fr-side.png",
+    "fix-EX34-tire-rl-side.png",
+    "fix-EX34-tire-rr-side.png",
+    "fix-IN08-cushion.png",
+    "fix-IN08-backrest.png",
+    "fix-IN09-rear-seat-side.png",
+    "fix-IN09-screen-arm.png",
+    "fix-IN06-armrest-cap.png",
+    "fix-IN07-side-trim.png",
+    "fix-badge-texture.png",
+    "fix-lamphead-texture.png",
+    "fix-reflector-texture.png",
+    "fix-tire-texture.png",
+    "fix-leather-warm-texture.png",
+    "fix-quilt-perf-texture.png"
+  ],
+  "textures": [],
+  "errors": {
+    "page": []
+  },
+  "D": {
+    "rootM": [
+      1,
+      0,
+      0,
+      0
+    ],
+    "bodyM": [
+      -1,
+      0,
+      0,
+      0
+    ],
+    "bodyPos": [
+      0,
+      0,
+      0
+    ],
+    "capFlWorld": [
+      -1.012,
+      0.382,
+      -1.715
+    ],
+    "capFlProbeXBody": [
+      -1.012,
+      0.382,
+      -1.715
+    ],
+    "capFlMeshLocalQuat": [
+      0,
+      0,
+      0,
+      1
+    ],
+    "capFlNodeLocalQuatAfterUpdate": [
+      -0.399,
+      -0.399,
+      0.5837,
+      0.5837
+    ],
+    "pedalWorld": [
+      -0.5,
+      0.62,
+      -1.42
+    ],
+    "dot1lWorld": [
+      -0.805,
+      1.016,
+      -2.714
+    ],
+    "dot1lProbeXBody": [
+      -0.805,
+      1.016,
+      -2.72
+    ],
+    "reflLWorld": [
+      -0.72,
+      0.309,
+      2.49
+    ],
+    "reflLProbeXBody": [
+      -0.72,
+      0.309,
+      2.49
+    ],
+    "tireFlWorld": [
+      -0.875,
+      0.382,
+      -1.715
+    ],
+    "tireFlProbeXBody": [
+      -0.875,
+      0.382,
+      -1.715
+    ]
+  },
+  "X": {
+    "caps": {
+      "fl": {
+        "world": [
+          -1.012,
+          0.382,
+          -1.715
+        ]
+      },
+      "fr": {
+        "world": [
+          1.012,
+          0.382,
+          -1.715
+        ]
+      },
+      "rl": {
+        "world": [
+          -1.012,
+          0.382,
+          1.715
+        ]
+      },
+      "rr": {
+        "world": [
+          1.012,
+          0.382,
+          1.715
+        ]
+      }
+    },
+    "deform": {
+      "fr": {
+        "direct": 16.15,
+        "flipX": 36.52,
+        "flipY": 67.57,
+        "rot180": 81.74
+      },
+      "rl": {
+        "direct": 1.29,
+        "flipX": 49.42,
+        "flipY": 66.1,
+        "rot180": 80.45
+      },
+      "rr": {
+        "direct": 16.47,
+        "flipX": 36.53,
+        "flipY": 67.56,
+        "rot180": 81.58
+      }
+    },
+    "disc": {
+      "grid": {
+        "0,0": {
+          "rgb": [
+            236,
+            235,
+            234
+          ],
+          "px": 144
+        },
+        "70,0": {
+          "rgb": [
+            224,
+            222,
+            220
+          ],
+          "px": 144
+        },
+        "-70,0": {
+          "rgb": [
+            229,
+            227,
+            225
+          ],
+          "px": 144
+        },
+        "0,70": {
+          "rgb": [
+            243,
+            243,
+            243
+          ],
+          "px": 144
+        },
+        "0,-70": {
+          "rgb": [
+            242,
+            242,
+            241
+          ],
+          "px": 144
+        },
+        "110,0": {
+          "rgb": [
+            245,
+            245,
+            245
+          ],
+          "px": 144
+        },
+        "-110,0": {
+          "rgb": [
+            226,
+            224,
+            222
+          ],
+          "px": 144
+        },
+        "0,110": {
+          "rgb": [
+            233,
+            232,
+            231
+          ],
+          "px": 144
+        },
+        "0,-110": {
+          "rgb": [
+            233,
+            232,
+            230
+          ],
+          "px": 144
+        },
+        "150,0": {
+          "rgb": [
+            232,
+            230,
+            229
+          ],
+          "px": 144
+        },
+        "-150,0": {
+          "rgb": [
+            234,
+            233,
+            232
+          ],
+          "px": 144
+        }
+      },
+      "leftEdgeX": 420,
+      "centerX": 640,
+      "radiusPx": 220
+    },
+    "badge": {
+      "material": {
+        "type": "MeshPhysicalMaterial",
+        "color": "#e8e4dc",
+        "emissive": "#ffffff",
+        "emissiveIntensity": 2.1194427879844384,
+        "hasMap": false,
+        "hasEmissiveMap": true,
+        "emissiveMapSize": [
+          512,
+          128
+        ],
+        "metalness": 0,
+        "roughness": 0.3
+      },
+      "tex": {
+        "label": "wheel-badge",
+        "size": [
+          512,
+          128
+        ],
+        "avg": {
+          "rgb": [
+            63,
+            null,
+            68
+          ],
+          "px": 4096
+        },
+        "center": {
+          "rgb": [
+            184,
+            null,
+            189
+          ],
+          "px": 256
+        }
+      },
+      "samples": {
+        "cornerBg": {
+          "rgb": [
+            5,
+            null,
+            10
+          ],
+          "px": 64
+        },
+        "upperRing": {
+          "rgb": [
+            5,
+            null,
+            10
+          ],
+          "px": 96
+        },
+        "center": {
+          "rgb": [
+            165,
+            null,
+            170
+          ],
+          "px": 400
+        },
+        "textBand": {
+          "rgb": [
+            104,
+            null,
+            109
+          ],
+          "px": 2880
+        },
+        "hexEdge": {
+          "rgb": [
+            59,
+            null,
+            64
+          ],
+          "px": 144
+        }
+      }
+    },
+    "quat": {},
+    "oldImpl": {
+      "camPitchDeg": 7.93,
+      "angleCapVsCamDeg": 128.478,
+      "areaRatio_current": 0.9896,
+      "areaRatio_oldDirect": 0.2785,
+      "areaRatio_midSpherical": 0.0071,
+      "upright_current": 1,
+      "upright_midSpherical": 0,
+      "viewDir": [
+        0.359,
+        0.144,
+        0.922
+      ]
+    }
+  }
+}

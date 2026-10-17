@@ -23,6 +23,7 @@ function make2DContext(canvas) {
     roundRect: noop,
     quadraticCurveTo: noop,
     bezierCurveTo: noop,
+    arcTo: noop,
     clip: noop,
     // 绘制
     fill: noop,
@@ -16498,6 +16499,301 @@ var TextureLoader = class extends Loader {
     return texture;
   }
 };
+var _position$2 = /* @__PURE__ */ new Vector3();
+var _quaternion$2 = /* @__PURE__ */ new Quaternion();
+var _scale$2 = /* @__PURE__ */ new Vector3();
+var Camera = class extends Object3D {
+  /**
+   * Constructs a new camera.
+   */
+  constructor() {
+    super();
+    this.isCamera = true;
+    this.type = "Camera";
+    this.matrixWorldInverse = new Matrix4();
+    this.projectionMatrix = new Matrix4();
+    this.projectionMatrixInverse = new Matrix4();
+    this.coordinateSystem = WebGLCoordinateSystem;
+    this._reversedDepth = false;
+  }
+  /**
+   * The flag that indicates whether the camera uses a reversed depth buffer.
+   *
+   * @type {boolean}
+   * @default false
+   */
+  get reversedDepth() {
+    return this._reversedDepth;
+  }
+  copy(source, recursive) {
+    super.copy(source, recursive);
+    this.matrixWorldInverse.copy(source.matrixWorldInverse);
+    this.projectionMatrix.copy(source.projectionMatrix);
+    this.projectionMatrixInverse.copy(source.projectionMatrixInverse);
+    this.coordinateSystem = source.coordinateSystem;
+    return this;
+  }
+  /**
+   * Returns a vector representing the ("look") direction of the 3D object in world space.
+   *
+   * This method is overwritten since cameras have a different forward vector compared to other
+   * 3D objects. A camera looks down its local, negative z-axis by default.
+   *
+   * @param {Vector3} target - The target vector the result is stored to.
+   * @return {Vector3} The 3D object's direction in world space.
+   */
+  getWorldDirection(target) {
+    return super.getWorldDirection(target).negate();
+  }
+  updateMatrixWorld(force) {
+    super.updateMatrixWorld(force);
+    this.matrixWorld.decompose(_position$2, _quaternion$2, _scale$2);
+    if (_scale$2.x === 1 && _scale$2.y === 1 && _scale$2.z === 1) {
+      this.matrixWorldInverse.copy(this.matrixWorld).invert();
+    } else {
+      this.matrixWorldInverse.compose(_position$2, _quaternion$2, _scale$2.set(1, 1, 1)).invert();
+    }
+  }
+  updateWorldMatrix(updateParents, updateChildren, force = false) {
+    super.updateWorldMatrix(updateParents, updateChildren, force);
+    this.matrixWorld.decompose(_position$2, _quaternion$2, _scale$2);
+    if (_scale$2.x === 1 && _scale$2.y === 1 && _scale$2.z === 1) {
+      this.matrixWorldInverse.copy(this.matrixWorld).invert();
+    } else {
+      this.matrixWorldInverse.compose(_position$2, _quaternion$2, _scale$2.set(1, 1, 1)).invert();
+    }
+  }
+  clone() {
+    return new this.constructor().copy(this);
+  }
+};
+var _v3$1 = /* @__PURE__ */ new Vector3();
+var _minTarget = /* @__PURE__ */ new Vector2();
+var _maxTarget = /* @__PURE__ */ new Vector2();
+var PerspectiveCamera = class extends Camera {
+  /**
+   * Constructs a new perspective camera.
+   *
+   * @param {number} [fov=50] - The vertical field of view.
+   * @param {number} [aspect=1] - The aspect ratio.
+   * @param {number} [near=0.1] - The camera's near plane.
+   * @param {number} [far=2000] - The camera's far plane.
+   */
+  constructor(fov = 50, aspect = 1, near = 0.1, far = 2e3) {
+    super();
+    this.isPerspectiveCamera = true;
+    this.type = "PerspectiveCamera";
+    this.fov = fov;
+    this.zoom = 1;
+    this.near = near;
+    this.far = far;
+    this.focus = 10;
+    this.aspect = aspect;
+    this.view = null;
+    this.filmGauge = 35;
+    this.filmOffset = 0;
+    this.updateProjectionMatrix();
+  }
+  copy(source, recursive) {
+    super.copy(source, recursive);
+    this.fov = source.fov;
+    this.zoom = source.zoom;
+    this.near = source.near;
+    this.far = source.far;
+    this.focus = source.focus;
+    this.aspect = source.aspect;
+    this.view = source.view === null ? null : Object.assign({}, source.view);
+    this.filmGauge = source.filmGauge;
+    this.filmOffset = source.filmOffset;
+    return this;
+  }
+  /**
+   * Sets the FOV by focal length in respect to the current {@link PerspectiveCamera#filmGauge}.
+   *
+   * The default film gauge is 35, so that the focal length can be specified for
+   * a 35mm (full frame) camera.
+   *
+   * @param {number} focalLength - Values for focal length and film gauge must have the same unit.
+   */
+  setFocalLength(focalLength) {
+    const vExtentSlope = 0.5 * this.getFilmHeight() / focalLength;
+    this.fov = RAD2DEG * 2 * Math.atan(vExtentSlope);
+    this.updateProjectionMatrix();
+  }
+  /**
+   * Returns the focal length from the current {@link PerspectiveCamera#fov} and
+   * {@link PerspectiveCamera#filmGauge}.
+   *
+   * @return {number} The computed focal length.
+   */
+  getFocalLength() {
+    const vExtentSlope = Math.tan(DEG2RAD * 0.5 * this.fov);
+    return 0.5 * this.getFilmHeight() / vExtentSlope;
+  }
+  /**
+   * Returns the current vertical field of view angle in degrees considering {@link PerspectiveCamera#zoom}.
+   *
+   * @return {number} The effective FOV.
+   */
+  getEffectiveFOV() {
+    return RAD2DEG * 2 * Math.atan(
+      Math.tan(DEG2RAD * 0.5 * this.fov) / this.zoom
+    );
+  }
+  /**
+   * Returns the width of the image on the film. If {@link PerspectiveCamera#aspect} is greater than or
+   * equal to one (landscape format), the result equals {@link PerspectiveCamera#filmGauge}.
+   *
+   * @return {number} The film width.
+   */
+  getFilmWidth() {
+    return this.filmGauge * Math.min(this.aspect, 1);
+  }
+  /**
+   * Returns the height of the image on the film. If {@link PerspectiveCamera#aspect} is greater than or
+   * equal to one (landscape format), the result equals {@link PerspectiveCamera#filmGauge}.
+   *
+   * @return {number} The film width.
+   */
+  getFilmHeight() {
+    return this.filmGauge / Math.max(this.aspect, 1);
+  }
+  /**
+   * Computes the 2D bounds of the camera's viewable rectangle at a given distance along the viewing direction.
+   * Sets `minTarget` and `maxTarget` to the coordinates of the lower-left and upper-right corners of the view rectangle.
+   *
+   * @param {number} distance - The viewing distance.
+   * @param {Vector2} minTarget - The lower-left corner of the view rectangle is written into this vector.
+   * @param {Vector2} maxTarget - The upper-right corner of the view rectangle is written into this vector.
+   */
+  getViewBounds(distance, minTarget, maxTarget) {
+    _v3$1.set(-1, -1, 0.5).applyMatrix4(this.projectionMatrixInverse);
+    minTarget.set(_v3$1.x, _v3$1.y).multiplyScalar(-distance / _v3$1.z);
+    _v3$1.set(1, 1, 0.5).applyMatrix4(this.projectionMatrixInverse);
+    maxTarget.set(_v3$1.x, _v3$1.y).multiplyScalar(-distance / _v3$1.z);
+  }
+  /**
+   * Computes the width and height of the camera's viewable rectangle at a given distance along the viewing direction.
+   *
+   * @param {number} distance - The viewing distance.
+   * @param {Vector2} target - The target vector that is used to store result where x is width and y is height.
+   * @returns {Vector2} The view size.
+   */
+  getViewSize(distance, target) {
+    this.getViewBounds(distance, _minTarget, _maxTarget);
+    return target.subVectors(_maxTarget, _minTarget);
+  }
+  /**
+   * Sets an offset in a larger frustum. This is useful for multi-window or
+   * multi-monitor/multi-machine setups.
+   *
+   * For example, if you have 3x2 monitors and each monitor is 1920x1080 and
+   * the monitors are in grid like this
+   *```
+   *   +---+---+---+
+   *   | A | B | C |
+   *   +---+---+---+
+   *   | D | E | F |
+   *   +---+---+---+
+   *```
+   * then for each monitor you would call it like this:
+   *```js
+   * const w = 1920;
+   * const h = 1080;
+   * const fullWidth = w * 3;
+   * const fullHeight = h * 2;
+   *
+   * // --A--
+   * camera.setViewOffset( fullWidth, fullHeight, w * 0, h * 0, w, h );
+   * // --B--
+   * camera.setViewOffset( fullWidth, fullHeight, w * 1, h * 0, w, h );
+   * // --C--
+   * camera.setViewOffset( fullWidth, fullHeight, w * 2, h * 0, w, h );
+   * // --D--
+   * camera.setViewOffset( fullWidth, fullHeight, w * 0, h * 1, w, h );
+   * // --E--
+   * camera.setViewOffset( fullWidth, fullHeight, w * 1, h * 1, w, h );
+   * // --F--
+   * camera.setViewOffset( fullWidth, fullHeight, w * 2, h * 1, w, h );
+   * ```
+   *
+   * Note there is no reason monitors have to be the same size or in a grid.
+   *
+   * @param {number} fullWidth - The full width of multiview setup.
+   * @param {number} fullHeight - The full height of multiview setup.
+   * @param {number} x - The horizontal offset of the subcamera.
+   * @param {number} y - The vertical offset of the subcamera.
+   * @param {number} width - The width of subcamera.
+   * @param {number} height - The height of subcamera.
+   */
+  setViewOffset(fullWidth, fullHeight, x, y, width, height) {
+    this.aspect = fullWidth / fullHeight;
+    if (this.view === null) {
+      this.view = {
+        enabled: true,
+        fullWidth: 1,
+        fullHeight: 1,
+        offsetX: 0,
+        offsetY: 0,
+        width: 1,
+        height: 1
+      };
+    }
+    this.view.enabled = true;
+    this.view.fullWidth = fullWidth;
+    this.view.fullHeight = fullHeight;
+    this.view.offsetX = x;
+    this.view.offsetY = y;
+    this.view.width = width;
+    this.view.height = height;
+    this.updateProjectionMatrix();
+  }
+  /**
+   * Removes the view offset from the projection matrix.
+   */
+  clearViewOffset() {
+    if (this.view !== null) {
+      this.view.enabled = false;
+    }
+    this.updateProjectionMatrix();
+  }
+  /**
+   * Updates the camera's projection matrix. Must be called after any change of
+   * camera properties.
+   */
+  updateProjectionMatrix() {
+    const near = this.near;
+    let top = near * Math.tan(DEG2RAD * 0.5 * this.fov) / this.zoom;
+    let height = 2 * top;
+    let width = this.aspect * height;
+    let left = -0.5 * width;
+    const view = this.view;
+    if (this.view !== null && this.view.enabled) {
+      const fullWidth = view.fullWidth, fullHeight = view.fullHeight;
+      left += view.offsetX * width / fullWidth;
+      top -= view.offsetY * height / fullHeight;
+      width *= view.width / fullWidth;
+      height *= view.height / fullHeight;
+    }
+    const skew = this.filmOffset;
+    if (skew !== 0) left += near * skew / this.getFilmWidth();
+    this.projectionMatrix.makePerspective(left, left + width, top, top - height, near, this.far, this.coordinateSystem, this.reversedDepth);
+    this.projectionMatrixInverse.copy(this.projectionMatrix).invert();
+  }
+  toJSON(meta) {
+    const data = super.toJSON(meta);
+    data.object.fov = this.fov;
+    data.object.zoom = this.zoom;
+    data.object.near = this.near;
+    data.object.far = this.far;
+    data.object.focus = this.focus;
+    data.object.aspect = this.aspect;
+    if (this.view !== null) data.object.view = Object.assign({}, this.view);
+    data.object.filmGauge = this.filmGauge;
+    data.object.filmOffset = this.filmOffset;
+    return data;
+  }
+};
 var _RESERVED_CHARS_RE = "\\[\\]\\.:\\/";
 var _reservedRe = new RegExp("[" + _RESERVED_CHARS_RE + "]", "g");
 var _wordChar = "[^" + _RESERVED_CHARS_RE + "]";
@@ -19488,7 +19784,7 @@ function createZunjieV800LuxuryMPVModel(options = {}) {
   );
   materialMap["glass-dark"] = createSculptMaterial(
     "glass-dark",
-    { "id": "glass-dark", "name": "\u6DF1\u8272\u9690\u79C1\u73BB\u7483", "type": "standard", "shaderModel": "MeshPhysicalMaterial", "baseColor": "#101418", "color": "#101418", "albedo": { "base": "#101418", "secondary": "#101418", "note": "reference-derived" }, "colorVariation": { "type": "subtle-panel-variation", "intensity": 0.08 }, "textureResolution": null, "textureProjection": null, "surfaceFrequencyBands": null, "roughness": 0.05, "metalness": 0, "normal": null, "bump": null, "displacement": null, "ambientOcclusion": { "type": "baked-contact", "intensity": 0.5, "note": "contact AO at panel gaps/crevices" }, "wear": { "type": "none", "intensity": 0 }, "dirt": { "type": "none", "intensity": 0 }, "localOverrides": [], "shaderNotes": ["\u8FD1\u4E4E\u4E0D\u900F\u660E\u6DF1\u7070\uFF1Bhigh \u6863 transmission 0.5 \u4F9B cabin \u5185\u89C6\uFF0Cmedium/low opacity 0.55"], "notes": "", "transmission": 0.5, "thickness": 0.03, "ior": 1.5, "textureless": { "declared": true, "evidence": ["\u9690\u79C1\u73BB\u7483\u4E3A\u5747\u5300\u6DF1\u8272\u900F\u5149\u9762\uFF0C\u65E0\u8868\u9762\u7EC6\u8282\u3002"] } },
+    { "id": "glass-dark", "name": "\u6DF1\u8272\u9690\u79C1\u73BB\u7483", "type": "standard", "shaderModel": "MeshPhysicalMaterial", "baseColor": "#2e3640", "color": "#2e3640", "albedo": { "base": "#2e3640", "secondary": "#2e3640", "note": "reference-derived; lifted from #101418 \u2014 near-black multiplied transmission down to ~6% luminance, read as opaque slab" }, "colorVariation": { "type": "subtle-panel-variation", "intensity": 0.08 }, "textureResolution": null, "textureProjection": null, "surfaceFrequencyBands": null, "roughness": 0.05, "metalness": 0, "normal": null, "bump": null, "displacement": null, "ambientOcclusion": { "type": "baked-contact", "intensity": 0.5, "note": "contact AO at panel gaps/crevices" }, "wear": { "type": "none", "intensity": 0 }, "dirt": { "type": "none", "intensity": 0 }, "localOverrides": [], "shaderNotes": ["\u6DF1\u8272\u9690\u79C1\u73BB\u7483\u4F46\u53EF\u900F\u89C6\uFF1Bhigh \u6863 transmission 0.82 + thickness 0.02\uFF08\u9002\u914D\u5C42\u6309\u6750\u8D28 ID \u9A71\u52A8\u540C\u4E00\u53C2\u6570\uFF09\uFF0Cmedium/low \u5F52\u96F6\u5207 opacity 0.55", "2026-10-16 \u508D\u665A\u6CE2\u51B3\u7B56\u56DE\u5199\uFF1A\u9002\u914D\u5C42\u5B9E\u6D4B near-black\xD7transmission \u89C6\u89C9\u4E0D\u900F\u660E\uFF0C\u53C2\u6570\u7531 0.5/#101418 \u63D0\u81F3 0.82/#2e3640"], "notes": "", "transmission": 0.82, "thickness": 0.02, "ior": 1.5, "textureless": { "declared": true, "evidence": ["\u9690\u79C1\u73BB\u7483\u4E3A\u5747\u5300\u6DF1\u8272\u900F\u5149\u9762\uFF0C\u65E0\u8868\u9762\u7EC6\u8282\u3002"] } },
     options
   );
   materialMap["glass-clear"] = createSculptMaterial(
@@ -19498,7 +19794,7 @@ function createZunjieV800LuxuryMPVModel(options = {}) {
   );
   materialMap["tire"] = createSculptMaterial(
     "tire",
-    { "id": "tire", "name": "\u8F6E\u80CE\u6A61\u80F6", "type": "standard", "shaderModel": "MeshStandardMaterial", "baseColor": "#141414", "color": "#141414", "albedo": { "base": "#141414", "secondary": "#141414", "note": "reference-derived" }, "colorVariation": { "type": "subtle-panel-variation", "intensity": 0.08 }, "textureResolution": null, "textureProjection": null, "surfaceFrequencyBands": null, "roughness": 0.9, "metalness": 0, "normal": null, "bump": null, "displacement": null, "ambientOcclusion": { "type": "baked-contact", "intensity": 0.5, "note": "contact AO at panel gaps/crevices" }, "wear": { "type": "none", "intensity": 0 }, "dirt": { "type": "none", "intensity": 0 }, "localOverrides": [], "shaderNotes": ["\u54D1\u5149\u6A61\u80F6\uFF1B\u80CE\u4FA7\u5B57\u7565"], "notes": "", "textureless": { "declared": true, "evidence": ["\u80CE\u9762\u5728\u672C\u89C6\u89D2\u65E0\u53EF\u8FA8\u82B1\u7EB9\u7EC6\u8282\uFF0C\u5747\u5300\u6A61\u80F6 PBR \u6807\u91CF\u5373\u53EF\u3002"] } },
+    { "id": "tire", "name": "\u8F6E\u80CE\u6A61\u80F6", "type": "standard", "shaderModel": "MeshStandardMaterial", "baseColor": "#141414", "color": "#141414", "albedo": { "base": "#141414", "secondary": "#141414", "note": "reference-derived" }, "colorVariation": { "type": "subtle-panel-variation", "intensity": 0.08 }, "textureResolution": null, "textureProjection": null, "surfaceFrequencyBands": null, "roughness": 0.9, "metalness": 0, "normal": null, "bump": null, "displacement": null, "ambientOcclusion": { "type": "baked-contact", "intensity": 0.5, "note": "contact AO at panel gaps/crevices" }, "wear": { "type": "none", "intensity": 0 }, "dirt": { "type": "none", "intensity": 0 }, "localOverrides": [], "shaderNotes": ["\u54D1\u5149\u6A61\u80F6\uFF1B\u80CE\u4FA7\u5B57\u7565"], "notes": "", "textureless": { "declared": true, "evidence": ["\u80CE\u9762\u5728\u672C\u89C6\u89D2\u65E0\u53EF\u8FA8\u82B1\u7EB9\u7EC6\u8282\uFF0C\u5747\u5300\u6A61\u80F6 PBR \u6807\u91CF\u5373\u53EF\u3002", "\u80CE\u4FA7\u5B57\u73AF\u7531\u96C6\u6210\u5C42\u7A0B\u5E8F\u5316 Canvas \u63D0\u4F9B\uFF08\u54C1\u724C\u4E2D\u6027\u53E3\u5F84\uFF1AV800 + MAEXTRO + \u661F\u5F62\uFF0C\u672A\u4F7F\u7528 MICHELIN \u7B49\u7B2C\u4E09\u65B9\u5546\u6807\u5B9E\u4F53\u2014\u2014\u53C2\u8003\u56FE D3/D4/U3 \u4EC5\u53D6\u6392\u7248\u6784\u56FE\uFF1B\u53E3\u5F84\u5DEE\u5F02\u7ECF\u4E3B\u7406\u4EBA 2026-10-16 \u7EC6\u7C92\u5EA6\u6CE2\u88C1\u51B3\uFF09"] } },
     options
   );
   materialMap["wheel-alloy"] = createSculptMaterial(
@@ -19598,7 +19894,7 @@ function createZunjieV800LuxuryMPVModel(options = {}) {
   );
   materialMap["lamp-head"] = createSculptMaterial(
     "lamp-head",
-    { "id": "lamp-head", "name": "\u5934\u706F\u767D\u5149\u5185\u82AF", "type": "standard", "shaderModel": "MeshPhysicalMaterial", "baseColor": "#F2F8FF", "color": "#F2F8FF", "albedo": { "base": "#F2F8FF", "secondary": "#F2F8FF", "note": "reference-derived" }, "colorVariation": { "type": "subtle-panel-variation", "intensity": 0.08 }, "textureResolution": null, "textureProjection": null, "surfaceFrequencyBands": null, "roughness": 0.2, "metalness": 0, "normal": null, "bump": null, "displacement": null, "ambientOcclusion": { "type": "baked-contact", "intensity": 0.5, "note": "contact AO at panel gaps/crevices" }, "wear": { "type": "none", "intensity": 0 }, "dirt": { "type": "none", "intensity": 0 }, "localOverrides": [], "shaderNotes": ["\u5934\u706F\u53D1\u5149\u5185\u82AF\u4E3A\u5747\u5300\u53D1\u5149\u9762\uFF0C\u65E0\u8868\u9762\u7EC6\u8282\uFF1B\u72EC\u7ACB\u6750\u8D28\u907F\u514D\u4E0E\u5B57\u6807\u547C\u5438\u52A8\u753B\u4E32\u6270\u3002"], "notes": "", "emissive": "#F2F8FF", "emissiveIntensity": 3, "textureless": { "declared": true, "evidence": ["\u5934\u706F\u53D1\u5149\u5185\u82AF\u4E3A\u5747\u5300 emissive\uFF1B3 \u679A\u5706\u5F62 LED \u70B9\u9635\uFF08EX-08\uFF09\u7531\u96C6\u6210\u5C42 Canvas emissiveMap \u63D0\u4F9B\u3002"] } },
+    { "id": "lamp-head", "name": "\u5934\u706F\u767D\u5149\u5185\u82AF", "type": "standard", "shaderModel": "MeshPhysicalMaterial", "baseColor": "#F2F8FF", "color": "#F2F8FF", "albedo": { "base": "#F2F8FF", "secondary": "#F2F8FF", "note": "reference-derived" }, "colorVariation": { "type": "subtle-panel-variation", "intensity": 0.08 }, "textureResolution": null, "textureProjection": null, "surfaceFrequencyBands": null, "roughness": 0.2, "metalness": 0, "normal": null, "bump": null, "displacement": null, "ambientOcclusion": { "type": "baked-contact", "intensity": 0.5, "note": "contact AO at panel gaps/crevices" }, "wear": { "type": "none", "intensity": 0 }, "dirt": { "type": "none", "intensity": 0 }, "localOverrides": [], "shaderNotes": ["\u5934\u706F\u53D1\u5149\u5185\u82AF\u4E3A\u5747\u5300\u53D1\u5149\u9762\uFF0C\u65E0\u8868\u9762\u7EC6\u8282\uFF1B\u72EC\u7ACB\u6750\u8D28\u907F\u514D\u4E0E\u5B57\u6807\u547C\u5438\u52A8\u753B\u4E32\u6270\u3002"], "notes": "", "emissive": "#F2F8FF", "emissiveIntensity": 3, "textureless": { "declared": true, "evidence": ["\u5934\u706F\u53D1\u5149\u5185\u82AF\u4E3A\u5747\u5300 emissive\uFF08\u5149\u5BFC\u8868\u9762\uFF09\uFF1BEX-08 3 \u679A\u5706\u5F62 LED \u70B9\u9635\u7531 headlamp-led-dot-{1,2,3}-{l,r} \u51E0\u4F55\u4EF6\u627F\u62C5\uFF0C\u96C6\u6210\u5C42 Canvas\uFF08createHeadlampLedTexture\uFF09\u73B0\u4E3A\u7EAF\u7AD6\u5411\u5149\u5BFC\u8D34\u56FE\uFF08\u6697\u5E95 + \u5168\u9AD8\u4EAE\u5E26\uFF09\u5E76\u5BF9 6 \u679A\u70B9\u9635\u505A UV \u91CD\u6620\u5C04\u843D\u5165\u4EAE\u5E26\u3002"] } },
     options
   );
   materialMap["lamp-mark"] = createSculptMaterial(
@@ -20277,10 +20573,10 @@ function createZunjieV800LuxuryMPVModel(options = {}) {
     node_headlamp_led_l_18.position.copy(endpoint_headlamp_led_l_18.start);
     node_headlamp_led_l_18.rotation.set(0, 0, 0);
   } else {
-    node_headlamp_led_l_18.position.set(0.045, 0, 0.065);
+    node_headlamp_led_l_18.position.set(0.082, 0, 0.065);
     node_headlamp_led_l_18.rotation.set(0, 0, 0);
   }
-  node_headlamp_led_l_18.userData.sculptComponent = { "id": "headlamp-led-l", "name": "\u5927\u706F LED \u706F\u5E26\u5DE6", "level": "meso", "role": "detail", "importance": 0.9, "confidence": 0.95, "primitive": "box", "topologyClass": "assembled-solid", "topologyRationale": "box \u9002\u5408\u8BE5\u90E8\u4EF6\u7684\u53EF\u5C55\u62D3\u6251", "geometryDescriptor": { "topologyIntent": "hard-surface precise", "edgeTreatment": { "type": "bevel", "bevelRadius": 8e-3, "segments": 2 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry" }, "parent": "headlamp-l", "attachment": null, "dimensions": { "width": 0.022, "height": 0.4, "depth": 0.02, "units": "meters", "confidence": 0.95 }, "transform": { "position": [0.045, 0, 0.065], "rotation": [0, 0, 0], "scale": [0.022, 0.4, 0.02] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.95 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "lamp-head", "materialLayers": ["lamp-head"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u7EB5\u5411\u706F\u82AF + 3 \u679A\u5706\u5F62 LED", "kind": "emissive", "note": "EX-08\uFF1A3 \u679A\u5706\u5F62 LED \u70B9\u9635\u7531\u96C6\u6210\u5C42 Canvas emissiveMap \u63D0\u4F9B\uFF0C\u57FA\u5E95\u4FDD\u7559\u706F\u8154\u4EAE\u5EA6\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "" }, "evidenceRefs": ["img-intelligence"], "details": [], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(255, 255, 255, 1.0)", "secondaryAlbedo": "rgba(255, 255, 255, 1.0)", "materialClass": "plastic", "materialClassConfidence": 0.9 }, "notes": "\u6750\u8D28\u6539\u6D3E\uFF1Alamp-head [level\u2192meso] \u5934\u706F\u53D1\u5149\u5185\u82AF\uFF0C\u5FC5\u987B\u5B58\u5728\u3002 [\u5B9E\u6D4B\u4FEE\u6B63 z\u21920.095] \u5934\u706F\u5185\u82AF\u79FB\u5230\u4E16\u754C z[2.705,2.725]\uFF0C\u9732\u51FA\u706F\u58F3\u524D\u8138 5mm\u3002 [\u590D\u6D4B z\u21920.065] \u706F\u58F3\u524D\u8138\u4E16\u754C z=2.720\uFF1B\u5185\u82AF\u4E2D\u5FC3 2.715\uFF0C\u9732\u51FA 5mm" };
+  node_headlamp_led_l_18.userData.sculptComponent = { "id": "headlamp-led-l", "name": "\u5927\u706F LED \u706F\u5E26\u5DE6", "level": "meso", "role": "detail", "importance": 0.9, "confidence": 0.95, "primitive": "box", "topologyClass": "assembled-solid", "topologyRationale": "box \u9002\u5408\u8BE5\u90E8\u4EF6\u7684\u53EF\u5C55\u62D3\u6251", "geometryDescriptor": { "topologyIntent": "hard-surface precise", "edgeTreatment": { "type": "bevel", "bevelRadius": 8e-3, "segments": 2 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry" }, "parent": "headlamp-l", "attachment": null, "dimensions": { "width": 0.022, "height": 0.4, "depth": 0.02, "units": "meters", "confidence": 0.95 }, "transform": { "position": [0.082, 0, 0.065], "rotation": [0, 0, 0], "scale": [0.022, 0.4, 0.02] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.95 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "lamp-head", "materialLayers": ["lamp-head"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u5916\u7F18\u7AD6\u5411 LED \u5149\u5BFC", "kind": "emissive", "note": "EX-08\uFF1AA1/A8/E1/E2 \u524D\u8138\u53C2\u8003\u56FE\u2014\u2014\u7AD6\u5411\u7EC6\u767D LED \u7EBF\u4F4D\u4E8E\u706F\u7F69\u5916\u7F18\uFF1B3 \u679A\u5706\u5F62 LED \u70B9\u9635\u7531\u540C\u7236\u8282\u70B9\u4E0B headlamp-led-dot-* \u51E0\u4F55\u4EF6\u627F\u62C5\uFF08\u7B49\u8FB9\u4E09\u89D2\u5E03\u5C40\uFF09\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "" }, "evidenceRefs": ["img-headlamp-front"], "details": [], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(255, 255, 255, 1.0)", "secondaryAlbedo": "rgba(255, 255, 255, 1.0)", "materialClass": "plastic", "materialClassConfidence": 0.9 }, "notes": "EX-08 \u5927\u706F LED \u706F\u5E26\uFF08l\uFF09\uFF1A\u5916\u7F18\u7AD6\u5411\u5149\u5BFC\uFF0Cx=+0.082\uFF08\u706F\u7F69\u534A\u5BBD 0.1 \u7684\u5916\u7F18\u4FA7\uFF09\uFF1B\u5149\u5BFC\u8D34\u56FE\uFF08\u96C6\u6210\u5C42 createHeadlampLedTexture\uFF1A\u6697\u5E95 + \u5168\u9AD8\u4EAE\u5E26\uFF09\u53E0\u52A0\u4E8E\u706F\u5E26\u8868\u9762\uFF1B3 \u679A\u70B9\u9635\u7531 headlamp-led-dot-* \u51E0\u4F55\u4EF6\u627F\u62C5\u3002" };
   node_headlamp_led_l_18.userData.actionProfile = { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.95 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } };
   (nodes["headlamp-l"] ?? root).add(node_headlamp_led_l_18);
   nodes["headlamp-led-l"] = node_headlamp_led_l_18;
@@ -20299,7 +20595,7 @@ function createZunjieV800LuxuryMPVModel(options = {}) {
   }
   mesh_headlamp_led_l_18.castShadow = options.castShadow ?? true;
   mesh_headlamp_led_l_18.receiveShadow = options.receiveShadow ?? true;
-  mesh_headlamp_led_l_18.userData.sculptComponent = { "id": "headlamp-led-l", "name": "\u5927\u706F LED \u706F\u5E26\u5DE6", "level": "meso", "role": "detail", "importance": 0.9, "confidence": 0.95, "primitive": "box", "topologyClass": "assembled-solid", "topologyRationale": "box \u9002\u5408\u8BE5\u90E8\u4EF6\u7684\u53EF\u5C55\u62D3\u6251", "geometryDescriptor": { "topologyIntent": "hard-surface precise", "edgeTreatment": { "type": "bevel", "bevelRadius": 8e-3, "segments": 2 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry" }, "parent": "headlamp-l", "attachment": null, "dimensions": { "width": 0.022, "height": 0.4, "depth": 0.02, "units": "meters", "confidence": 0.95 }, "transform": { "position": [0.045, 0, 0.065], "rotation": [0, 0, 0], "scale": [0.022, 0.4, 0.02] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.95 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "lamp-head", "materialLayers": ["lamp-head"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u7EB5\u5411\u706F\u82AF + 3 \u679A\u5706\u5F62 LED", "kind": "emissive", "note": "EX-08\uFF1A3 \u679A\u5706\u5F62 LED \u70B9\u9635\u7531\u96C6\u6210\u5C42 Canvas emissiveMap \u63D0\u4F9B\uFF0C\u57FA\u5E95\u4FDD\u7559\u706F\u8154\u4EAE\u5EA6\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "" }, "evidenceRefs": ["img-intelligence"], "details": [], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(255, 255, 255, 1.0)", "secondaryAlbedo": "rgba(255, 255, 255, 1.0)", "materialClass": "plastic", "materialClassConfidence": 0.9 }, "notes": "\u6750\u8D28\u6539\u6D3E\uFF1Alamp-head [level\u2192meso] \u5934\u706F\u53D1\u5149\u5185\u82AF\uFF0C\u5FC5\u987B\u5B58\u5728\u3002 [\u5B9E\u6D4B\u4FEE\u6B63 z\u21920.095] \u5934\u706F\u5185\u82AF\u79FB\u5230\u4E16\u754C z[2.705,2.725]\uFF0C\u9732\u51FA\u706F\u58F3\u524D\u8138 5mm\u3002 [\u590D\u6D4B z\u21920.065] \u706F\u58F3\u524D\u8138\u4E16\u754C z=2.720\uFF1B\u5185\u82AF\u4E2D\u5FC3 2.715\uFF0C\u9732\u51FA 5mm" };
+  mesh_headlamp_led_l_18.userData.sculptComponent = { "id": "headlamp-led-l", "name": "\u5927\u706F LED \u706F\u5E26\u5DE6", "level": "meso", "role": "detail", "importance": 0.9, "confidence": 0.95, "primitive": "box", "topologyClass": "assembled-solid", "topologyRationale": "box \u9002\u5408\u8BE5\u90E8\u4EF6\u7684\u53EF\u5C55\u62D3\u6251", "geometryDescriptor": { "topologyIntent": "hard-surface precise", "edgeTreatment": { "type": "bevel", "bevelRadius": 8e-3, "segments": 2 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry" }, "parent": "headlamp-l", "attachment": null, "dimensions": { "width": 0.022, "height": 0.4, "depth": 0.02, "units": "meters", "confidence": 0.95 }, "transform": { "position": [0.082, 0, 0.065], "rotation": [0, 0, 0], "scale": [0.022, 0.4, 0.02] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.95 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "lamp-head", "materialLayers": ["lamp-head"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u5916\u7F18\u7AD6\u5411 LED \u5149\u5BFC", "kind": "emissive", "note": "EX-08\uFF1AA1/A8/E1/E2 \u524D\u8138\u53C2\u8003\u56FE\u2014\u2014\u7AD6\u5411\u7EC6\u767D LED \u7EBF\u4F4D\u4E8E\u706F\u7F69\u5916\u7F18\uFF1B3 \u679A\u5706\u5F62 LED \u70B9\u9635\u7531\u540C\u7236\u8282\u70B9\u4E0B headlamp-led-dot-* \u51E0\u4F55\u4EF6\u627F\u62C5\uFF08\u7B49\u8FB9\u4E09\u89D2\u5E03\u5C40\uFF09\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "" }, "evidenceRefs": ["img-headlamp-front"], "details": [], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(255, 255, 255, 1.0)", "secondaryAlbedo": "rgba(255, 255, 255, 1.0)", "materialClass": "plastic", "materialClassConfidence": 0.9 }, "notes": "EX-08 \u5927\u706F LED \u706F\u5E26\uFF08l\uFF09\uFF1A\u5916\u7F18\u7AD6\u5411\u5149\u5BFC\uFF0Cx=+0.082\uFF08\u706F\u7F69\u534A\u5BBD 0.1 \u7684\u5916\u7F18\u4FA7\uFF09\uFF1B\u5149\u5BFC\u8D34\u56FE\uFF08\u96C6\u6210\u5C42 createHeadlampLedTexture\uFF1A\u6697\u5E95 + \u5168\u9AD8\u4EAE\u5E26\uFF09\u53E0\u52A0\u4E8E\u706F\u5E26\u8868\u9762\uFF1B3 \u679A\u70B9\u9635\u7531 headlamp-led-dot-* \u51E0\u4F55\u4EF6\u627F\u62C5\u3002" };
   node_headlamp_led_l_18.add(mesh_headlamp_led_l_18);
   meshes2["headlamp-led-l"] = mesh_headlamp_led_l_18;
   colliders["headlamp-led-l"] = { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" };
@@ -20385,10 +20681,10 @@ function createZunjieV800LuxuryMPVModel(options = {}) {
     node_headlamp_led_r_21.position.copy(endpoint_headlamp_led_r_21.start);
     node_headlamp_led_r_21.rotation.set(0, 0, 0);
   } else {
-    node_headlamp_led_r_21.position.set(-0.045, 0, 0.065);
+    node_headlamp_led_r_21.position.set(-0.082, 0, 0.065);
     node_headlamp_led_r_21.rotation.set(0, 0, 0);
   }
-  node_headlamp_led_r_21.userData.sculptComponent = { "id": "headlamp-led-r", "name": "\u5927\u706F LED \u706F\u5E26\u53F3", "level": "meso", "role": "detail", "importance": 0.9, "confidence": 0.95, "primitive": "box", "topologyClass": "assembled-solid", "topologyRationale": "box \u9002\u5408\u8BE5\u90E8\u4EF6\u7684\u53EF\u5C55\u62D3\u6251", "geometryDescriptor": { "topologyIntent": "hard-surface precise", "edgeTreatment": { "type": "bevel", "bevelRadius": 8e-3, "segments": 2 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry" }, "parent": "headlamp-r", "attachment": null, "dimensions": { "width": 0.022, "height": 0.4, "depth": 0.02, "units": "meters", "confidence": 0.95 }, "transform": { "position": [-0.045, 0, 0.065], "rotation": [0, 0, 0], "scale": [0.022, 0.4, 0.02] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.95 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "lamp-head", "materialLayers": ["lamp-head"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u7EB5\u5411\u706F\u82AF + 3 \u679A\u5706\u5F62 LED", "kind": "emissive", "note": "EX-08\uFF1A3 \u679A\u5706\u5F62 LED \u70B9\u9635\u7531\u96C6\u6210\u5C42 Canvas emissiveMap \u63D0\u4F9B\uFF0C\u57FA\u5E95\u4FDD\u7559\u706F\u8154\u4EAE\u5EA6\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "" }, "evidenceRefs": ["img-intelligence"], "details": [], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(255, 255, 255, 1.0)", "secondaryAlbedo": "rgba(255, 255, 255, 1.0)", "materialClass": "plastic", "materialClassConfidence": 0.9 }, "notes": "\u6750\u8D28\u6539\u6D3E\uFF1Alamp-head [level\u2192meso] \u5934\u706F\u53D1\u5149\u5185\u82AF\uFF0C\u5FC5\u987B\u5B58\u5728\u3002 [\u5B9E\u6D4B\u4FEE\u6B63 z\u21920.095] \u540C\u4E0A\uFF08\u955C\u50CF\uFF09\u3002 [\u590D\u6D4B z\u21920.065] \u540C\u4E0A\uFF08\u955C\u50CF\uFF09" };
+  node_headlamp_led_r_21.userData.sculptComponent = { "id": "headlamp-led-r", "name": "\u5927\u706F LED \u706F\u5E26\u53F3", "level": "meso", "role": "detail", "importance": 0.9, "confidence": 0.95, "primitive": "box", "topologyClass": "assembled-solid", "topologyRationale": "box \u9002\u5408\u8BE5\u90E8\u4EF6\u7684\u53EF\u5C55\u62D3\u6251", "geometryDescriptor": { "topologyIntent": "hard-surface precise", "edgeTreatment": { "type": "bevel", "bevelRadius": 8e-3, "segments": 2 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry" }, "parent": "headlamp-r", "attachment": null, "dimensions": { "width": 0.022, "height": 0.4, "depth": 0.02, "units": "meters", "confidence": 0.95 }, "transform": { "position": [-0.082, 0, 0.065], "rotation": [0, 0, 0], "scale": [0.022, 0.4, 0.02] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.95 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "lamp-head", "materialLayers": ["lamp-head"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u5916\u7F18\u7AD6\u5411 LED \u5149\u5BFC", "kind": "emissive", "note": "EX-08\uFF1AA1/A8/E1/E2 \u524D\u8138\u53C2\u8003\u56FE\u2014\u2014\u7AD6\u5411\u7EC6\u767D LED \u7EBF\u4F4D\u4E8E\u706F\u7F69\u5916\u7F18\uFF1B3 \u679A\u5706\u5F62 LED \u70B9\u9635\u7531\u540C\u7236\u8282\u70B9\u4E0B headlamp-led-dot-* \u51E0\u4F55\u4EF6\u627F\u62C5\uFF08\u7B49\u8FB9\u4E09\u89D2\u5E03\u5C40\uFF09\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "" }, "evidenceRefs": ["img-headlamp-front"], "details": [], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(255, 255, 255, 1.0)", "secondaryAlbedo": "rgba(255, 255, 255, 1.0)", "materialClass": "plastic", "materialClassConfidence": 0.9 }, "notes": "EX-08 \u5927\u706F LED \u706F\u5E26\uFF08r\uFF09\uFF1A\u5916\u7F18\u7AD6\u5411\u5149\u5BFC\uFF0Cx=-0.082\uFF08\u706F\u7F69\u534A\u5BBD 0.1 \u7684\u5916\u7F18\u4FA7\uFF09\uFF1B\u5149\u5BFC\u8D34\u56FE\uFF08\u96C6\u6210\u5C42 createHeadlampLedTexture\uFF1A\u6697\u5E95 + \u5168\u9AD8\u4EAE\u5E26\uFF09\u53E0\u52A0\u4E8E\u706F\u5E26\u8868\u9762\uFF1B3 \u679A\u70B9\u9635\u7531 headlamp-led-dot-* \u51E0\u4F55\u4EF6\u627F\u62C5\u3002" };
   node_headlamp_led_r_21.userData.actionProfile = { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.95 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } };
   (nodes["headlamp-r"] ?? root).add(node_headlamp_led_r_21);
   nodes["headlamp-led-r"] = node_headlamp_led_r_21;
@@ -20407,7 +20703,7 @@ function createZunjieV800LuxuryMPVModel(options = {}) {
   }
   mesh_headlamp_led_r_21.castShadow = options.castShadow ?? true;
   mesh_headlamp_led_r_21.receiveShadow = options.receiveShadow ?? true;
-  mesh_headlamp_led_r_21.userData.sculptComponent = { "id": "headlamp-led-r", "name": "\u5927\u706F LED \u706F\u5E26\u53F3", "level": "meso", "role": "detail", "importance": 0.9, "confidence": 0.95, "primitive": "box", "topologyClass": "assembled-solid", "topologyRationale": "box \u9002\u5408\u8BE5\u90E8\u4EF6\u7684\u53EF\u5C55\u62D3\u6251", "geometryDescriptor": { "topologyIntent": "hard-surface precise", "edgeTreatment": { "type": "bevel", "bevelRadius": 8e-3, "segments": 2 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry" }, "parent": "headlamp-r", "attachment": null, "dimensions": { "width": 0.022, "height": 0.4, "depth": 0.02, "units": "meters", "confidence": 0.95 }, "transform": { "position": [-0.045, 0, 0.065], "rotation": [0, 0, 0], "scale": [0.022, 0.4, 0.02] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.95 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "lamp-head", "materialLayers": ["lamp-head"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u7EB5\u5411\u706F\u82AF + 3 \u679A\u5706\u5F62 LED", "kind": "emissive", "note": "EX-08\uFF1A3 \u679A\u5706\u5F62 LED \u70B9\u9635\u7531\u96C6\u6210\u5C42 Canvas emissiveMap \u63D0\u4F9B\uFF0C\u57FA\u5E95\u4FDD\u7559\u706F\u8154\u4EAE\u5EA6\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "" }, "evidenceRefs": ["img-intelligence"], "details": [], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(255, 255, 255, 1.0)", "secondaryAlbedo": "rgba(255, 255, 255, 1.0)", "materialClass": "plastic", "materialClassConfidence": 0.9 }, "notes": "\u6750\u8D28\u6539\u6D3E\uFF1Alamp-head [level\u2192meso] \u5934\u706F\u53D1\u5149\u5185\u82AF\uFF0C\u5FC5\u987B\u5B58\u5728\u3002 [\u5B9E\u6D4B\u4FEE\u6B63 z\u21920.095] \u540C\u4E0A\uFF08\u955C\u50CF\uFF09\u3002 [\u590D\u6D4B z\u21920.065] \u540C\u4E0A\uFF08\u955C\u50CF\uFF09" };
+  mesh_headlamp_led_r_21.userData.sculptComponent = { "id": "headlamp-led-r", "name": "\u5927\u706F LED \u706F\u5E26\u53F3", "level": "meso", "role": "detail", "importance": 0.9, "confidence": 0.95, "primitive": "box", "topologyClass": "assembled-solid", "topologyRationale": "box \u9002\u5408\u8BE5\u90E8\u4EF6\u7684\u53EF\u5C55\u62D3\u6251", "geometryDescriptor": { "topologyIntent": "hard-surface precise", "edgeTreatment": { "type": "bevel", "bevelRadius": 8e-3, "segments": 2 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry" }, "parent": "headlamp-r", "attachment": null, "dimensions": { "width": 0.022, "height": 0.4, "depth": 0.02, "units": "meters", "confidence": 0.95 }, "transform": { "position": [-0.082, 0, 0.065], "rotation": [0, 0, 0], "scale": [0.022, 0.4, 0.02] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.95 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "lamp-head", "materialLayers": ["lamp-head"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u5916\u7F18\u7AD6\u5411 LED \u5149\u5BFC", "kind": "emissive", "note": "EX-08\uFF1AA1/A8/E1/E2 \u524D\u8138\u53C2\u8003\u56FE\u2014\u2014\u7AD6\u5411\u7EC6\u767D LED \u7EBF\u4F4D\u4E8E\u706F\u7F69\u5916\u7F18\uFF1B3 \u679A\u5706\u5F62 LED \u70B9\u9635\u7531\u540C\u7236\u8282\u70B9\u4E0B headlamp-led-dot-* \u51E0\u4F55\u4EF6\u627F\u62C5\uFF08\u7B49\u8FB9\u4E09\u89D2\u5E03\u5C40\uFF09\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "" }, "evidenceRefs": ["img-headlamp-front"], "details": [], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(255, 255, 255, 1.0)", "secondaryAlbedo": "rgba(255, 255, 255, 1.0)", "materialClass": "plastic", "materialClassConfidence": 0.9 }, "notes": "EX-08 \u5927\u706F LED \u706F\u5E26\uFF08r\uFF09\uFF1A\u5916\u7F18\u7AD6\u5411\u5149\u5BFC\uFF0Cx=-0.082\uFF08\u706F\u7F69\u534A\u5BBD 0.1 \u7684\u5916\u7F18\u4FA7\uFF09\uFF1B\u5149\u5BFC\u8D34\u56FE\uFF08\u96C6\u6210\u5C42 createHeadlampLedTexture\uFF1A\u6697\u5E95 + \u5168\u9AD8\u4EAE\u5E26\uFF09\u53E0\u52A0\u4E8E\u706F\u5E26\u8868\u9762\uFF1B3 \u679A\u70B9\u9635\u7531 headlamp-led-dot-* \u51E0\u4F55\u4EF6\u627F\u62C5\u3002" };
   node_headlamp_led_r_21.add(mesh_headlamp_led_r_21);
   meshes2["headlamp-led-r"] = mesh_headlamp_led_r_21;
   colliders["headlamp-led-r"] = { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" };
@@ -21676,41 +21972,40 @@ function createZunjieV800LuxuryMPVModel(options = {}) {
   colliders["rim-fl"] = { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" };
   destructionGroups["root"] ??= [];
   destructionGroups["root"].push(node_rim_fl_56);
-  const attachment_cap_fl_57 = { "parentSocket": "wheel-fl.hub-front", "localStart": [0, 0, 0], "localEnd": [0, 0, 0], "contactType": "flush", "embedDepth": 5e-3, "gapTolerance": 2e-3 };
-  const endpoint_cap_fl_57 = makeAttachmentEndpoint(attachment_cap_fl_57);
+  const endpoint_cap_fl_57 = makeAttachmentEndpoint(null);
   const node_cap_fl_57 = new Group();
-  node_cap_fl_57.name = "\u60AC\u6D6E\u4E2D\u5FC3\u6807 fl__pivot";
+  node_cap_fl_57.name = "\u8F6E\u5FC3\u6EDA\u82B1\u9F7F\u73AF fl__pivot";
   node_cap_fl_57.scale.set(1, 1, 1);
   if (endpoint_cap_fl_57) {
     node_cap_fl_57.position.copy(endpoint_cap_fl_57.start);
-    node_cap_fl_57.rotation.set(0, 0, 1.5708);
+    node_cap_fl_57.rotation.set(0, 1.5708, 0);
   } else {
-    node_cap_fl_57.position.set(0, 0, 0.125);
-    node_cap_fl_57.rotation.set(0, 0, 1.5708);
+    node_cap_fl_57.position.set(0.131, 0, 0);
+    node_cap_fl_57.rotation.set(0, 1.5708, 0);
   }
-  node_cap_fl_57.userData.sculptComponent = { "id": "cap-fl", "name": "\u60AC\u6D6E\u4E2D\u5FC3\u6807 fl", "level": "micro", "role": "detail", "importance": 0.8, "confidence": 0.9, "primitive": "cylinder", "topologyClass": "assembled-solid", "topologyRationale": "cylinder \u9002\u5408\u8BE5\u90E8\u4EF6\u7684\u53EF\u5C55\u62D3\u6251", "geometryDescriptor": { "topologyIntent": "hard-surface precise", "edgeTreatment": { "type": "bevel", "bevelRadius": 8e-3, "segments": 2 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry" }, "parent": "wheel-fl", "attachment": { "parentSocket": "wheel-fl.hub-front", "localStart": [0, 0, 0], "localEnd": [0, 0, 0], "contactType": "flush", "embedDepth": 5e-3, "gapTolerance": 2e-3 }, "dimensions": { "width": 0.11, "height": 0.02, "depth": 0.11, "units": "meters", "confidence": 0.9 }, "transform": { "position": [0, 0, 0.125], "rotation": [0, 0, 1.5708], "scale": [0.11, 0.02, 0.11] }, "actionProfile": { "animationRole": "counter-rotate-lock", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 0, 1], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": true, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": false }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "\u96C6\u6210\u5C42\u4EE4\u5176\u4E16\u754C\u671D\u5411\u6052\u5B9A\uFF08\u60AC\u6D6E\u6807\uFF09" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "chrome", "materialLayers": ["chrome"], "deformations": [], "joints": [], "seams": [], "localFeatures": [], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "" }, "evidenceRefs": ["img-trunk"], "details": ["d-wheel-disc"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(232, 233, 236, 1.0)", "secondaryAlbedo": "rgba(232, 233, 236, 1.0)", "materialClass": "metal", "materialClassConfidence": 0.9 } };
-  node_cap_fl_57.userData.actionProfile = { "animationRole": "counter-rotate-lock", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 0, 1], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": true, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": false }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "\u96C6\u6210\u5C42\u4EE4\u5176\u4E16\u754C\u671D\u5411\u6052\u5B9A\uFF08\u60AC\u6D6E\u6807\uFF09" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } };
+  node_cap_fl_57.userData.sculptComponent = { "id": "cap-fl", "name": "\u8F6E\u5FC3\u6EDA\u82B1\u9F7F\u73AF fl", "level": "micro", "role": "detail", "importance": 0.8, "confidence": 0.9, "primitive": "extrude", "topologyClass": "conforming-shell", "topologyRationale": "\u952F\u9F7F\u73AF\u8F6E\u5ED3\u6324\u51FA\uFF08\u6EDA\u82B1\u9F7F\u73AF\uFF0C\u5185\u5F84\u8BA9\u4F4D\u60AC\u6D6E\u8F6E\u6807\uFF09", "geometryDescriptor": { "topologyIntent": "knurled ring around wheel center badge", "edgeTreatment": { "type": "none", "bevelRadius": 0, "segments": 0 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry", "profile2D": { "points": [[0.148, 0], [0.12346, 0.01955], [0.14076, 0.04573], [0.11138, 0.05675], [0.11973, 0.08699], [0.08839, 0.08839], [0.08699, 0.11973], [0.05675, 0.11138], [0.04573, 0.14076], [0.01955, 0.12346], [0, 0.148], [-0.01955, 0.12346], [-0.04573, 0.14076], [-0.05675, 0.11138], [-0.08699, 0.11973], [-0.08839, 0.08839], [-0.11973, 0.08699], [-0.11138, 0.05675], [-0.14076, 0.04573], [-0.12346, 0.01955], [-0.148, 0], [-0.12346, -0.01955], [-0.14076, -0.04573], [-0.11138, -0.05675], [-0.11973, -0.08699], [-0.08839, -0.08839], [-0.08699, -0.11973], [-0.05675, -0.11138], [-0.04573, -0.14076], [-0.01955, -0.12346], [-0, -0.148], [0.01955, -0.12346], [0.04573, -0.14076], [0.05675, -0.11138], [0.08699, -0.11973], [0.08839, -0.08839], [0.11973, -0.08699], [0.11138, -0.05675], [0.14076, -0.04573], [0.12346, -0.01955]], "depth": 8e-3, "ovalHoles": [{ "cx": 0, "cy": 0, "rx": 0.095, "ry": 0.095 }] } }, "parent": "wheel-fl", "attachment": { "parentSocket": "wheel-fl.hub-front", "localStart": [0, 0, 0], "localEnd": [0, 0, 0], "contactType": "flush", "embedDepth": 5e-3, "gapTolerance": 2e-3 }, "dimensions": { "width": 0.296, "height": 0.296, "depth": 8e-3, "units": "meters", "confidence": 0.9 }, "transform": { "position": [0.131, 0, 0], "rotation": [0, 1.5708, 0], "scale": [1, 1, 1] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [1, 0, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": false }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "chrome", "materialLayers": ["chrome"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u8F6E\u5FC3\u6EDA\u82B1\u9F7F\u73AF", "kind": "wheel-trim", "note": "EX-33/D1_\u8F6E\u6BC2-\u7279\u5199.jpg\uFF08D3/D4 \u540C\uFF09\uFF1A\u4E2D\u592E\u5FBD\u6807\u5916\u56F4\u4E00\u5708\u653E\u5C04\u6EDA\u82B1\u9F7F\u73AF\uFF1B\u672C\u4EF6 20 \u9F7F\u952F\u9F7F\u73AF\uFF08\u5185\u5F84 0.19 \u8BA9\u4F4D\u60AC\u6D6E\u8F6E\u6807 r0.07\u3001\u9F7F\u5C16\u5916\u5F84 0.296\u3001\u539A 8mm\uFF09\uFF0C\u843D\u4F4D\u8F6E\u8F8B\u5916\u8868\u9762 x=\xB11.010\uFF0C\u968F\u8F6E\u65CB\u8F6C\u3002\u7F3A\u9677\u4FEE\u590D\uFF1A\u539F cylinder \u4F4D\u7F6E\u9519\u5728\u8F6E\u5C40\u90E8 z=+0.125\uFF08\u4E16\u754C z 1.84\uFF0C\u57CB\u5728\u8F6E\u80CE\u5185\u4E0D\u53EF\u89C1\uFF09\uFF1B\u9ED1\u5E95\u76FE\u5FBD\u8D34\u56FE\u5F52\u8C03\u5149\uFF08wheel-alloy \u76D8\u9762\u8D34\u56FE\uFF09\uFF0C\u672C\u4EF6\u7528 chrome \u907F\u514D\u91C7\u6837\u76D8\u9762\u8D34\u56FE\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "" }, "evidenceRefs": ["img-wheel-center"], "details": ["d-wheel-disc"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(232, 233, 236, 1.0)", "secondaryAlbedo": "rgba(232, 233, 236, 1.0)", "materialClass": "metal", "materialClassConfidence": 0.9 }, "notes": "EX-33 \u8F6E\u5FC3\u6EDA\u82B1\u9F7F\u73AF fl\uFF1Aextrude 20 \u9F7F\u73AF\uFF08ID r0.095/\u8C37 r0.125/\u5C16 r0.148\uFF0C\u539A 8mm\uFF09\uFF0C\u8F6E\u5C40\u90E8 x=+0.131\uFF08\u4E16\u754C \xB11.006~1.014\uFF0C\u8DE8\u8F6E\u8F8B\u5916\u8868\u9762 \xB11.010\uFF09\uFF1Bchrome\u3002 [\u7F3A\u9677\u4FEE\u590D] \u539F\u4F4D\u7F6E z=+0.125 \u57CB\u5728\u80CE\u5185\u3002" };
+  node_cap_fl_57.userData.actionProfile = { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [1, 0, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": false }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } };
   (nodes["wheel-fl"] ?? root).add(node_cap_fl_57);
   nodes["cap-fl"] = node_cap_fl_57;
-  const mesh_cap_fl_57Geometry = endpoint_cap_fl_57 ? new CylinderGeometry(endpoint_cap_fl_57.endRadius, endpoint_cap_fl_57.baseRadius, endpoint_cap_fl_57.length, 16, 6) : new CylinderGeometry(0.5, 0.5, 1, 24, 8);
+  const mesh_cap_fl_57Geometry = endpoint_cap_fl_57 ? new CylinderGeometry(endpoint_cap_fl_57.endRadius, endpoint_cap_fl_57.baseRadius, endpoint_cap_fl_57.length, 16, 6) : buildExtrudeGeometry({ "points": [[0.148, 0], [0.12346, 0.01955], [0.14076, 0.04573], [0.11138, 0.05675], [0.11973, 0.08699], [0.08839, 0.08839], [0.08699, 0.11973], [0.05675, 0.11138], [0.04573, 0.14076], [0.01955, 0.12346], [0, 0.148], [-0.01955, 0.12346], [-0.04573, 0.14076], [-0.05675, 0.11138], [-0.08699, 0.11973], [-0.08839, 0.08839], [-0.11973, 0.08699], [-0.11138, 0.05675], [-0.14076, 0.04573], [-0.12346, 0.01955], [-0.148, 0], [-0.12346, -0.01955], [-0.14076, -0.04573], [-0.11138, -0.05675], [-0.11973, -0.08699], [-0.08839, -0.08839], [-0.08699, -0.11973], [-0.05675, -0.11138], [-0.04573, -0.14076], [-0.01955, -0.12346], [-0, -0.148], [0.01955, -0.12346], [0.04573, -0.14076], [0.05675, -0.11138], [0.08699, -0.11973], [0.08839, -0.08839], [0.11973, -0.08699], [0.11138, -0.05675], [0.14076, -0.04573], [0.12346, -0.01955]], "depth": 8e-3, "ovalHoles": [{ "cx": 0, "cy": 0, "rx": 0.095, "ry": 0.095 }] });
   if (!endpoint_cap_fl_57) {
-    mesh_cap_fl_57Geometry.scale(0.11, 0.02, 0.11);
+    mesh_cap_fl_57Geometry.scale(1, 1, 1);
   }
   const mesh_cap_fl_57 = new Mesh(
     mesh_cap_fl_57Geometry,
     materialMap["chrome"] ?? new MeshStandardMaterial({ color: 8947848 })
   );
-  mesh_cap_fl_57.name = "\u60AC\u6D6E\u4E2D\u5FC3\u6807 fl";
+  mesh_cap_fl_57.name = "\u8F6E\u5FC3\u6EDA\u82B1\u9F7F\u73AF fl";
   if (endpoint_cap_fl_57) {
     mesh_cap_fl_57.position.copy(endpoint_cap_fl_57.midpoint);
     mesh_cap_fl_57.quaternion.copy(endpoint_cap_fl_57.quaternion);
   }
   mesh_cap_fl_57.castShadow = options.castShadow ?? true;
   mesh_cap_fl_57.receiveShadow = options.receiveShadow ?? true;
-  mesh_cap_fl_57.userData.sculptComponent = { "id": "cap-fl", "name": "\u60AC\u6D6E\u4E2D\u5FC3\u6807 fl", "level": "micro", "role": "detail", "importance": 0.8, "confidence": 0.9, "primitive": "cylinder", "topologyClass": "assembled-solid", "topologyRationale": "cylinder \u9002\u5408\u8BE5\u90E8\u4EF6\u7684\u53EF\u5C55\u62D3\u6251", "geometryDescriptor": { "topologyIntent": "hard-surface precise", "edgeTreatment": { "type": "bevel", "bevelRadius": 8e-3, "segments": 2 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry" }, "parent": "wheel-fl", "attachment": { "parentSocket": "wheel-fl.hub-front", "localStart": [0, 0, 0], "localEnd": [0, 0, 0], "contactType": "flush", "embedDepth": 5e-3, "gapTolerance": 2e-3 }, "dimensions": { "width": 0.11, "height": 0.02, "depth": 0.11, "units": "meters", "confidence": 0.9 }, "transform": { "position": [0, 0, 0.125], "rotation": [0, 0, 1.5708], "scale": [0.11, 0.02, 0.11] }, "actionProfile": { "animationRole": "counter-rotate-lock", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 0, 1], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": true, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": false }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "\u96C6\u6210\u5C42\u4EE4\u5176\u4E16\u754C\u671D\u5411\u6052\u5B9A\uFF08\u60AC\u6D6E\u6807\uFF09" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "chrome", "materialLayers": ["chrome"], "deformations": [], "joints": [], "seams": [], "localFeatures": [], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "" }, "evidenceRefs": ["img-trunk"], "details": ["d-wheel-disc"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(232, 233, 236, 1.0)", "secondaryAlbedo": "rgba(232, 233, 236, 1.0)", "materialClass": "metal", "materialClassConfidence": 0.9 } };
+  mesh_cap_fl_57.userData.sculptComponent = { "id": "cap-fl", "name": "\u8F6E\u5FC3\u6EDA\u82B1\u9F7F\u73AF fl", "level": "micro", "role": "detail", "importance": 0.8, "confidence": 0.9, "primitive": "extrude", "topologyClass": "conforming-shell", "topologyRationale": "\u952F\u9F7F\u73AF\u8F6E\u5ED3\u6324\u51FA\uFF08\u6EDA\u82B1\u9F7F\u73AF\uFF0C\u5185\u5F84\u8BA9\u4F4D\u60AC\u6D6E\u8F6E\u6807\uFF09", "geometryDescriptor": { "topologyIntent": "knurled ring around wheel center badge", "edgeTreatment": { "type": "none", "bevelRadius": 0, "segments": 0 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry", "profile2D": { "points": [[0.148, 0], [0.12346, 0.01955], [0.14076, 0.04573], [0.11138, 0.05675], [0.11973, 0.08699], [0.08839, 0.08839], [0.08699, 0.11973], [0.05675, 0.11138], [0.04573, 0.14076], [0.01955, 0.12346], [0, 0.148], [-0.01955, 0.12346], [-0.04573, 0.14076], [-0.05675, 0.11138], [-0.08699, 0.11973], [-0.08839, 0.08839], [-0.11973, 0.08699], [-0.11138, 0.05675], [-0.14076, 0.04573], [-0.12346, 0.01955], [-0.148, 0], [-0.12346, -0.01955], [-0.14076, -0.04573], [-0.11138, -0.05675], [-0.11973, -0.08699], [-0.08839, -0.08839], [-0.08699, -0.11973], [-0.05675, -0.11138], [-0.04573, -0.14076], [-0.01955, -0.12346], [-0, -0.148], [0.01955, -0.12346], [0.04573, -0.14076], [0.05675, -0.11138], [0.08699, -0.11973], [0.08839, -0.08839], [0.11973, -0.08699], [0.11138, -0.05675], [0.14076, -0.04573], [0.12346, -0.01955]], "depth": 8e-3, "ovalHoles": [{ "cx": 0, "cy": 0, "rx": 0.095, "ry": 0.095 }] } }, "parent": "wheel-fl", "attachment": { "parentSocket": "wheel-fl.hub-front", "localStart": [0, 0, 0], "localEnd": [0, 0, 0], "contactType": "flush", "embedDepth": 5e-3, "gapTolerance": 2e-3 }, "dimensions": { "width": 0.296, "height": 0.296, "depth": 8e-3, "units": "meters", "confidence": 0.9 }, "transform": { "position": [0.131, 0, 0], "rotation": [0, 1.5708, 0], "scale": [1, 1, 1] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [1, 0, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": false }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "chrome", "materialLayers": ["chrome"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u8F6E\u5FC3\u6EDA\u82B1\u9F7F\u73AF", "kind": "wheel-trim", "note": "EX-33/D1_\u8F6E\u6BC2-\u7279\u5199.jpg\uFF08D3/D4 \u540C\uFF09\uFF1A\u4E2D\u592E\u5FBD\u6807\u5916\u56F4\u4E00\u5708\u653E\u5C04\u6EDA\u82B1\u9F7F\u73AF\uFF1B\u672C\u4EF6 20 \u9F7F\u952F\u9F7F\u73AF\uFF08\u5185\u5F84 0.19 \u8BA9\u4F4D\u60AC\u6D6E\u8F6E\u6807 r0.07\u3001\u9F7F\u5C16\u5916\u5F84 0.296\u3001\u539A 8mm\uFF09\uFF0C\u843D\u4F4D\u8F6E\u8F8B\u5916\u8868\u9762 x=\xB11.010\uFF0C\u968F\u8F6E\u65CB\u8F6C\u3002\u7F3A\u9677\u4FEE\u590D\uFF1A\u539F cylinder \u4F4D\u7F6E\u9519\u5728\u8F6E\u5C40\u90E8 z=+0.125\uFF08\u4E16\u754C z 1.84\uFF0C\u57CB\u5728\u8F6E\u80CE\u5185\u4E0D\u53EF\u89C1\uFF09\uFF1B\u9ED1\u5E95\u76FE\u5FBD\u8D34\u56FE\u5F52\u8C03\u5149\uFF08wheel-alloy \u76D8\u9762\u8D34\u56FE\uFF09\uFF0C\u672C\u4EF6\u7528 chrome \u907F\u514D\u91C7\u6837\u76D8\u9762\u8D34\u56FE\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "" }, "evidenceRefs": ["img-wheel-center"], "details": ["d-wheel-disc"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(232, 233, 236, 1.0)", "secondaryAlbedo": "rgba(232, 233, 236, 1.0)", "materialClass": "metal", "materialClassConfidence": 0.9 }, "notes": "EX-33 \u8F6E\u5FC3\u6EDA\u82B1\u9F7F\u73AF fl\uFF1Aextrude 20 \u9F7F\u73AF\uFF08ID r0.095/\u8C37 r0.125/\u5C16 r0.148\uFF0C\u539A 8mm\uFF09\uFF0C\u8F6E\u5C40\u90E8 x=+0.131\uFF08\u4E16\u754C \xB11.006~1.014\uFF0C\u8DE8\u8F6E\u8F8B\u5916\u8868\u9762 \xB11.010\uFF09\uFF1Bchrome\u3002 [\u7F3A\u9677\u4FEE\u590D] \u539F\u4F4D\u7F6E z=+0.125 \u57CB\u5728\u80CE\u5185\u3002" };
   node_cap_fl_57.add(mesh_cap_fl_57);
   meshes2["cap-fl"] = mesh_cap_fl_57;
-  colliders["cap-fl"] = { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "\u96C6\u6210\u5C42\u4EE4\u5176\u4E16\u754C\u671D\u5411\u6052\u5B9A\uFF08\u60AC\u6D6E\u6807\uFF09" };
+  colliders["cap-fl"] = { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" };
   destructionGroups["root"] ??= [];
   destructionGroups["root"].push(node_cap_fl_57);
   const endpoint_wheel_fr_58 = makeAttachmentEndpoint(null);
@@ -21823,41 +22118,40 @@ function createZunjieV800LuxuryMPVModel(options = {}) {
   colliders["rim-fr"] = { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" };
   destructionGroups["root"] ??= [];
   destructionGroups["root"].push(node_rim_fr_60);
-  const attachment_cap_fr_61 = { "parentSocket": "wheel-fr.hub-front", "localStart": [0, 0, 0], "localEnd": [0, 0, 0], "contactType": "flush", "embedDepth": 5e-3, "gapTolerance": 2e-3 };
-  const endpoint_cap_fr_61 = makeAttachmentEndpoint(attachment_cap_fr_61);
+  const endpoint_cap_fr_61 = makeAttachmentEndpoint(null);
   const node_cap_fr_61 = new Group();
-  node_cap_fr_61.name = "\u60AC\u6D6E\u4E2D\u5FC3\u6807 fr__pivot";
+  node_cap_fr_61.name = "\u8F6E\u5FC3\u6EDA\u82B1\u9F7F\u73AF fr__pivot";
   node_cap_fr_61.scale.set(1, 1, 1);
   if (endpoint_cap_fr_61) {
     node_cap_fr_61.position.copy(endpoint_cap_fr_61.start);
-    node_cap_fr_61.rotation.set(0, 0, 1.5708);
+    node_cap_fr_61.rotation.set(0, -1.5708, 0);
   } else {
-    node_cap_fr_61.position.set(0, 0, 0.125);
-    node_cap_fr_61.rotation.set(0, 0, 1.5708);
+    node_cap_fr_61.position.set(-0.131, 0, 0);
+    node_cap_fr_61.rotation.set(0, -1.5708, 0);
   }
-  node_cap_fr_61.userData.sculptComponent = { "id": "cap-fr", "name": "\u60AC\u6D6E\u4E2D\u5FC3\u6807 fr", "level": "micro", "role": "detail", "importance": 0.8, "confidence": 0.9, "primitive": "cylinder", "topologyClass": "assembled-solid", "topologyRationale": "cylinder \u9002\u5408\u8BE5\u90E8\u4EF6\u7684\u53EF\u5C55\u62D3\u6251", "geometryDescriptor": { "topologyIntent": "hard-surface precise", "edgeTreatment": { "type": "bevel", "bevelRadius": 8e-3, "segments": 2 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry" }, "parent": "wheel-fr", "attachment": { "parentSocket": "wheel-fr.hub-front", "localStart": [0, 0, 0], "localEnd": [0, 0, 0], "contactType": "flush", "embedDepth": 5e-3, "gapTolerance": 2e-3 }, "dimensions": { "width": 0.11, "height": 0.02, "depth": 0.11, "units": "meters", "confidence": 0.9 }, "transform": { "position": [0, 0, 0.125], "rotation": [0, 0, 1.5708], "scale": [0.11, 0.02, 0.11] }, "actionProfile": { "animationRole": "counter-rotate-lock", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 0, 1], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": true, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": false }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "\u96C6\u6210\u5C42\u4EE4\u5176\u4E16\u754C\u671D\u5411\u6052\u5B9A\uFF08\u60AC\u6D6E\u6807\uFF09" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "chrome", "materialLayers": ["chrome"], "deformations": [], "joints": [], "seams": [], "localFeatures": [], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "" }, "evidenceRefs": ["img-trunk"], "details": ["d-wheel-disc"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(232, 233, 236, 1.0)", "secondaryAlbedo": "rgba(232, 233, 236, 1.0)", "materialClass": "metal", "materialClassConfidence": 0.9 } };
-  node_cap_fr_61.userData.actionProfile = { "animationRole": "counter-rotate-lock", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 0, 1], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": true, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": false }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "\u96C6\u6210\u5C42\u4EE4\u5176\u4E16\u754C\u671D\u5411\u6052\u5B9A\uFF08\u60AC\u6D6E\u6807\uFF09" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } };
+  node_cap_fr_61.userData.sculptComponent = { "id": "cap-fr", "name": "\u8F6E\u5FC3\u6EDA\u82B1\u9F7F\u73AF fr", "level": "micro", "role": "detail", "importance": 0.8, "confidence": 0.9, "primitive": "extrude", "topologyClass": "conforming-shell", "topologyRationale": "\u952F\u9F7F\u73AF\u8F6E\u5ED3\u6324\u51FA\uFF08\u6EDA\u82B1\u9F7F\u73AF\uFF0C\u5185\u5F84\u8BA9\u4F4D\u60AC\u6D6E\u8F6E\u6807\uFF09", "geometryDescriptor": { "topologyIntent": "knurled ring around wheel center badge", "edgeTreatment": { "type": "none", "bevelRadius": 0, "segments": 0 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry", "profile2D": { "points": [[0.148, 0], [0.12346, 0.01955], [0.14076, 0.04573], [0.11138, 0.05675], [0.11973, 0.08699], [0.08839, 0.08839], [0.08699, 0.11973], [0.05675, 0.11138], [0.04573, 0.14076], [0.01955, 0.12346], [0, 0.148], [-0.01955, 0.12346], [-0.04573, 0.14076], [-0.05675, 0.11138], [-0.08699, 0.11973], [-0.08839, 0.08839], [-0.11973, 0.08699], [-0.11138, 0.05675], [-0.14076, 0.04573], [-0.12346, 0.01955], [-0.148, 0], [-0.12346, -0.01955], [-0.14076, -0.04573], [-0.11138, -0.05675], [-0.11973, -0.08699], [-0.08839, -0.08839], [-0.08699, -0.11973], [-0.05675, -0.11138], [-0.04573, -0.14076], [-0.01955, -0.12346], [-0, -0.148], [0.01955, -0.12346], [0.04573, -0.14076], [0.05675, -0.11138], [0.08699, -0.11973], [0.08839, -0.08839], [0.11973, -0.08699], [0.11138, -0.05675], [0.14076, -0.04573], [0.12346, -0.01955]], "depth": 8e-3, "ovalHoles": [{ "cx": 0, "cy": 0, "rx": 0.095, "ry": 0.095 }] } }, "parent": "wheel-fr", "attachment": { "parentSocket": "wheel-fr.hub-front", "localStart": [0, 0, 0], "localEnd": [0, 0, 0], "contactType": "flush", "embedDepth": 5e-3, "gapTolerance": 2e-3 }, "dimensions": { "width": 0.296, "height": 0.296, "depth": 8e-3, "units": "meters", "confidence": 0.9 }, "transform": { "position": [-0.131, 0, 0], "rotation": [0, -1.5708, 0], "scale": [1, 1, 1] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [1, 0, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": false }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "chrome", "materialLayers": ["chrome"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u8F6E\u5FC3\u6EDA\u82B1\u9F7F\u73AF", "kind": "wheel-trim", "note": "EX-33/D1_\u8F6E\u6BC2-\u7279\u5199.jpg\uFF08D3/D4 \u540C\uFF09\uFF1A\u4E2D\u592E\u5FBD\u6807\u5916\u56F4\u4E00\u5708\u653E\u5C04\u6EDA\u82B1\u9F7F\u73AF\uFF1B\u672C\u4EF6 20 \u9F7F\u952F\u9F7F\u73AF\uFF08\u5185\u5F84 0.19 \u8BA9\u4F4D\u60AC\u6D6E\u8F6E\u6807 r0.07\u3001\u9F7F\u5C16\u5916\u5F84 0.296\u3001\u539A 8mm\uFF09\uFF0C\u843D\u4F4D\u8F6E\u8F8B\u5916\u8868\u9762 x=\xB11.010\uFF0C\u968F\u8F6E\u65CB\u8F6C\u3002\u7F3A\u9677\u4FEE\u590D\uFF1A\u539F cylinder \u4F4D\u7F6E\u9519\u5728\u8F6E\u5C40\u90E8 z=+0.125\uFF08\u4E16\u754C z 1.84\uFF0C\u57CB\u5728\u8F6E\u80CE\u5185\u4E0D\u53EF\u89C1\uFF09\uFF1B\u9ED1\u5E95\u76FE\u5FBD\u8D34\u56FE\u5F52\u8C03\u5149\uFF08wheel-alloy \u76D8\u9762\u8D34\u56FE\uFF09\uFF0C\u672C\u4EF6\u7528 chrome \u907F\u514D\u91C7\u6837\u76D8\u9762\u8D34\u56FE\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "" }, "evidenceRefs": ["img-wheel-center"], "details": ["d-wheel-disc"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(232, 233, 236, 1.0)", "secondaryAlbedo": "rgba(232, 233, 236, 1.0)", "materialClass": "metal", "materialClassConfidence": 0.9 }, "notes": "EX-33 \u8F6E\u5FC3\u6EDA\u82B1\u9F7F\u73AF fr\uFF1Aextrude 20 \u9F7F\u73AF\uFF08ID r0.095/\u8C37 r0.125/\u5C16 r0.148\uFF0C\u539A 8mm\uFF09\uFF0C\u8F6E\u5C40\u90E8 x=-0.131\uFF08\u4E16\u754C \xB11.006~1.014\uFF0C\u8DE8\u8F6E\u8F8B\u5916\u8868\u9762 \xB11.010\uFF09\uFF1Bchrome\u3002 [\u7F3A\u9677\u4FEE\u590D] \u539F\u4F4D\u7F6E z=+0.125 \u57CB\u5728\u80CE\u5185\u3002" };
+  node_cap_fr_61.userData.actionProfile = { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [1, 0, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": false }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } };
   (nodes["wheel-fr"] ?? root).add(node_cap_fr_61);
   nodes["cap-fr"] = node_cap_fr_61;
-  const mesh_cap_fr_61Geometry = endpoint_cap_fr_61 ? new CylinderGeometry(endpoint_cap_fr_61.endRadius, endpoint_cap_fr_61.baseRadius, endpoint_cap_fr_61.length, 16, 6) : new CylinderGeometry(0.5, 0.5, 1, 24, 8);
+  const mesh_cap_fr_61Geometry = endpoint_cap_fr_61 ? new CylinderGeometry(endpoint_cap_fr_61.endRadius, endpoint_cap_fr_61.baseRadius, endpoint_cap_fr_61.length, 16, 6) : buildExtrudeGeometry({ "points": [[0.148, 0], [0.12346, 0.01955], [0.14076, 0.04573], [0.11138, 0.05675], [0.11973, 0.08699], [0.08839, 0.08839], [0.08699, 0.11973], [0.05675, 0.11138], [0.04573, 0.14076], [0.01955, 0.12346], [0, 0.148], [-0.01955, 0.12346], [-0.04573, 0.14076], [-0.05675, 0.11138], [-0.08699, 0.11973], [-0.08839, 0.08839], [-0.11973, 0.08699], [-0.11138, 0.05675], [-0.14076, 0.04573], [-0.12346, 0.01955], [-0.148, 0], [-0.12346, -0.01955], [-0.14076, -0.04573], [-0.11138, -0.05675], [-0.11973, -0.08699], [-0.08839, -0.08839], [-0.08699, -0.11973], [-0.05675, -0.11138], [-0.04573, -0.14076], [-0.01955, -0.12346], [-0, -0.148], [0.01955, -0.12346], [0.04573, -0.14076], [0.05675, -0.11138], [0.08699, -0.11973], [0.08839, -0.08839], [0.11973, -0.08699], [0.11138, -0.05675], [0.14076, -0.04573], [0.12346, -0.01955]], "depth": 8e-3, "ovalHoles": [{ "cx": 0, "cy": 0, "rx": 0.095, "ry": 0.095 }] });
   if (!endpoint_cap_fr_61) {
-    mesh_cap_fr_61Geometry.scale(0.11, 0.02, 0.11);
+    mesh_cap_fr_61Geometry.scale(1, 1, 1);
   }
   const mesh_cap_fr_61 = new Mesh(
     mesh_cap_fr_61Geometry,
     materialMap["chrome"] ?? new MeshStandardMaterial({ color: 8947848 })
   );
-  mesh_cap_fr_61.name = "\u60AC\u6D6E\u4E2D\u5FC3\u6807 fr";
+  mesh_cap_fr_61.name = "\u8F6E\u5FC3\u6EDA\u82B1\u9F7F\u73AF fr";
   if (endpoint_cap_fr_61) {
     mesh_cap_fr_61.position.copy(endpoint_cap_fr_61.midpoint);
     mesh_cap_fr_61.quaternion.copy(endpoint_cap_fr_61.quaternion);
   }
   mesh_cap_fr_61.castShadow = options.castShadow ?? true;
   mesh_cap_fr_61.receiveShadow = options.receiveShadow ?? true;
-  mesh_cap_fr_61.userData.sculptComponent = { "id": "cap-fr", "name": "\u60AC\u6D6E\u4E2D\u5FC3\u6807 fr", "level": "micro", "role": "detail", "importance": 0.8, "confidence": 0.9, "primitive": "cylinder", "topologyClass": "assembled-solid", "topologyRationale": "cylinder \u9002\u5408\u8BE5\u90E8\u4EF6\u7684\u53EF\u5C55\u62D3\u6251", "geometryDescriptor": { "topologyIntent": "hard-surface precise", "edgeTreatment": { "type": "bevel", "bevelRadius": 8e-3, "segments": 2 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry" }, "parent": "wheel-fr", "attachment": { "parentSocket": "wheel-fr.hub-front", "localStart": [0, 0, 0], "localEnd": [0, 0, 0], "contactType": "flush", "embedDepth": 5e-3, "gapTolerance": 2e-3 }, "dimensions": { "width": 0.11, "height": 0.02, "depth": 0.11, "units": "meters", "confidence": 0.9 }, "transform": { "position": [0, 0, 0.125], "rotation": [0, 0, 1.5708], "scale": [0.11, 0.02, 0.11] }, "actionProfile": { "animationRole": "counter-rotate-lock", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 0, 1], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": true, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": false }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "\u96C6\u6210\u5C42\u4EE4\u5176\u4E16\u754C\u671D\u5411\u6052\u5B9A\uFF08\u60AC\u6D6E\u6807\uFF09" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "chrome", "materialLayers": ["chrome"], "deformations": [], "joints": [], "seams": [], "localFeatures": [], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "" }, "evidenceRefs": ["img-trunk"], "details": ["d-wheel-disc"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(232, 233, 236, 1.0)", "secondaryAlbedo": "rgba(232, 233, 236, 1.0)", "materialClass": "metal", "materialClassConfidence": 0.9 } };
+  mesh_cap_fr_61.userData.sculptComponent = { "id": "cap-fr", "name": "\u8F6E\u5FC3\u6EDA\u82B1\u9F7F\u73AF fr", "level": "micro", "role": "detail", "importance": 0.8, "confidence": 0.9, "primitive": "extrude", "topologyClass": "conforming-shell", "topologyRationale": "\u952F\u9F7F\u73AF\u8F6E\u5ED3\u6324\u51FA\uFF08\u6EDA\u82B1\u9F7F\u73AF\uFF0C\u5185\u5F84\u8BA9\u4F4D\u60AC\u6D6E\u8F6E\u6807\uFF09", "geometryDescriptor": { "topologyIntent": "knurled ring around wheel center badge", "edgeTreatment": { "type": "none", "bevelRadius": 0, "segments": 0 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry", "profile2D": { "points": [[0.148, 0], [0.12346, 0.01955], [0.14076, 0.04573], [0.11138, 0.05675], [0.11973, 0.08699], [0.08839, 0.08839], [0.08699, 0.11973], [0.05675, 0.11138], [0.04573, 0.14076], [0.01955, 0.12346], [0, 0.148], [-0.01955, 0.12346], [-0.04573, 0.14076], [-0.05675, 0.11138], [-0.08699, 0.11973], [-0.08839, 0.08839], [-0.11973, 0.08699], [-0.11138, 0.05675], [-0.14076, 0.04573], [-0.12346, 0.01955], [-0.148, 0], [-0.12346, -0.01955], [-0.14076, -0.04573], [-0.11138, -0.05675], [-0.11973, -0.08699], [-0.08839, -0.08839], [-0.08699, -0.11973], [-0.05675, -0.11138], [-0.04573, -0.14076], [-0.01955, -0.12346], [-0, -0.148], [0.01955, -0.12346], [0.04573, -0.14076], [0.05675, -0.11138], [0.08699, -0.11973], [0.08839, -0.08839], [0.11973, -0.08699], [0.11138, -0.05675], [0.14076, -0.04573], [0.12346, -0.01955]], "depth": 8e-3, "ovalHoles": [{ "cx": 0, "cy": 0, "rx": 0.095, "ry": 0.095 }] } }, "parent": "wheel-fr", "attachment": { "parentSocket": "wheel-fr.hub-front", "localStart": [0, 0, 0], "localEnd": [0, 0, 0], "contactType": "flush", "embedDepth": 5e-3, "gapTolerance": 2e-3 }, "dimensions": { "width": 0.296, "height": 0.296, "depth": 8e-3, "units": "meters", "confidence": 0.9 }, "transform": { "position": [-0.131, 0, 0], "rotation": [0, -1.5708, 0], "scale": [1, 1, 1] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [1, 0, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": false }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "chrome", "materialLayers": ["chrome"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u8F6E\u5FC3\u6EDA\u82B1\u9F7F\u73AF", "kind": "wheel-trim", "note": "EX-33/D1_\u8F6E\u6BC2-\u7279\u5199.jpg\uFF08D3/D4 \u540C\uFF09\uFF1A\u4E2D\u592E\u5FBD\u6807\u5916\u56F4\u4E00\u5708\u653E\u5C04\u6EDA\u82B1\u9F7F\u73AF\uFF1B\u672C\u4EF6 20 \u9F7F\u952F\u9F7F\u73AF\uFF08\u5185\u5F84 0.19 \u8BA9\u4F4D\u60AC\u6D6E\u8F6E\u6807 r0.07\u3001\u9F7F\u5C16\u5916\u5F84 0.296\u3001\u539A 8mm\uFF09\uFF0C\u843D\u4F4D\u8F6E\u8F8B\u5916\u8868\u9762 x=\xB11.010\uFF0C\u968F\u8F6E\u65CB\u8F6C\u3002\u7F3A\u9677\u4FEE\u590D\uFF1A\u539F cylinder \u4F4D\u7F6E\u9519\u5728\u8F6E\u5C40\u90E8 z=+0.125\uFF08\u4E16\u754C z 1.84\uFF0C\u57CB\u5728\u8F6E\u80CE\u5185\u4E0D\u53EF\u89C1\uFF09\uFF1B\u9ED1\u5E95\u76FE\u5FBD\u8D34\u56FE\u5F52\u8C03\u5149\uFF08wheel-alloy \u76D8\u9762\u8D34\u56FE\uFF09\uFF0C\u672C\u4EF6\u7528 chrome \u907F\u514D\u91C7\u6837\u76D8\u9762\u8D34\u56FE\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "" }, "evidenceRefs": ["img-wheel-center"], "details": ["d-wheel-disc"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(232, 233, 236, 1.0)", "secondaryAlbedo": "rgba(232, 233, 236, 1.0)", "materialClass": "metal", "materialClassConfidence": 0.9 }, "notes": "EX-33 \u8F6E\u5FC3\u6EDA\u82B1\u9F7F\u73AF fr\uFF1Aextrude 20 \u9F7F\u73AF\uFF08ID r0.095/\u8C37 r0.125/\u5C16 r0.148\uFF0C\u539A 8mm\uFF09\uFF0C\u8F6E\u5C40\u90E8 x=-0.131\uFF08\u4E16\u754C \xB11.006~1.014\uFF0C\u8DE8\u8F6E\u8F8B\u5916\u8868\u9762 \xB11.010\uFF09\uFF1Bchrome\u3002 [\u7F3A\u9677\u4FEE\u590D] \u539F\u4F4D\u7F6E z=+0.125 \u57CB\u5728\u80CE\u5185\u3002" };
   node_cap_fr_61.add(mesh_cap_fr_61);
   meshes2["cap-fr"] = mesh_cap_fr_61;
-  colliders["cap-fr"] = { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "\u96C6\u6210\u5C42\u4EE4\u5176\u4E16\u754C\u671D\u5411\u6052\u5B9A\uFF08\u60AC\u6D6E\u6807\uFF09" };
+  colliders["cap-fr"] = { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" };
   destructionGroups["root"] ??= [];
   destructionGroups["root"].push(node_cap_fr_61);
   const endpoint_wheel_rl_62 = makeAttachmentEndpoint(null);
@@ -21970,41 +22264,40 @@ function createZunjieV800LuxuryMPVModel(options = {}) {
   colliders["rim-rl"] = { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" };
   destructionGroups["root"] ??= [];
   destructionGroups["root"].push(node_rim_rl_64);
-  const attachment_cap_rl_65 = { "parentSocket": "wheel-rl.hub-front", "localStart": [0, 0, 0], "localEnd": [0, 0, 0], "contactType": "flush", "embedDepth": 5e-3, "gapTolerance": 2e-3 };
-  const endpoint_cap_rl_65 = makeAttachmentEndpoint(attachment_cap_rl_65);
+  const endpoint_cap_rl_65 = makeAttachmentEndpoint(null);
   const node_cap_rl_65 = new Group();
-  node_cap_rl_65.name = "\u60AC\u6D6E\u4E2D\u5FC3\u6807 rl__pivot";
+  node_cap_rl_65.name = "\u8F6E\u5FC3\u6EDA\u82B1\u9F7F\u73AF rl__pivot";
   node_cap_rl_65.scale.set(1, 1, 1);
   if (endpoint_cap_rl_65) {
     node_cap_rl_65.position.copy(endpoint_cap_rl_65.start);
-    node_cap_rl_65.rotation.set(0, 0, 1.5708);
+    node_cap_rl_65.rotation.set(0, 1.5708, 0);
   } else {
-    node_cap_rl_65.position.set(0, 0, 0.125);
-    node_cap_rl_65.rotation.set(0, 0, 1.5708);
+    node_cap_rl_65.position.set(0.131, 0, 0);
+    node_cap_rl_65.rotation.set(0, 1.5708, 0);
   }
-  node_cap_rl_65.userData.sculptComponent = { "id": "cap-rl", "name": "\u60AC\u6D6E\u4E2D\u5FC3\u6807 rl", "level": "micro", "role": "detail", "importance": 0.8, "confidence": 0.9, "primitive": "cylinder", "topologyClass": "assembled-solid", "topologyRationale": "cylinder \u9002\u5408\u8BE5\u90E8\u4EF6\u7684\u53EF\u5C55\u62D3\u6251", "geometryDescriptor": { "topologyIntent": "hard-surface precise", "edgeTreatment": { "type": "bevel", "bevelRadius": 8e-3, "segments": 2 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry" }, "parent": "wheel-rl", "attachment": { "parentSocket": "wheel-rl.hub-front", "localStart": [0, 0, 0], "localEnd": [0, 0, 0], "contactType": "flush", "embedDepth": 5e-3, "gapTolerance": 2e-3 }, "dimensions": { "width": 0.11, "height": 0.02, "depth": 0.11, "units": "meters", "confidence": 0.9 }, "transform": { "position": [0, 0, 0.125], "rotation": [0, 0, 1.5708], "scale": [0.11, 0.02, 0.11] }, "actionProfile": { "animationRole": "counter-rotate-lock", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 0, 1], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": true, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": false }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "\u96C6\u6210\u5C42\u4EE4\u5176\u4E16\u754C\u671D\u5411\u6052\u5B9A\uFF08\u60AC\u6D6E\u6807\uFF09" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "chrome", "materialLayers": ["chrome"], "deformations": [], "joints": [], "seams": [], "localFeatures": [], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "" }, "evidenceRefs": ["img-trunk"], "details": ["d-wheel-disc"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(232, 233, 236, 1.0)", "secondaryAlbedo": "rgba(232, 233, 236, 1.0)", "materialClass": "metal", "materialClassConfidence": 0.9 } };
-  node_cap_rl_65.userData.actionProfile = { "animationRole": "counter-rotate-lock", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 0, 1], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": true, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": false }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "\u96C6\u6210\u5C42\u4EE4\u5176\u4E16\u754C\u671D\u5411\u6052\u5B9A\uFF08\u60AC\u6D6E\u6807\uFF09" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } };
+  node_cap_rl_65.userData.sculptComponent = { "id": "cap-rl", "name": "\u8F6E\u5FC3\u6EDA\u82B1\u9F7F\u73AF rl", "level": "micro", "role": "detail", "importance": 0.8, "confidence": 0.9, "primitive": "extrude", "topologyClass": "conforming-shell", "topologyRationale": "\u952F\u9F7F\u73AF\u8F6E\u5ED3\u6324\u51FA\uFF08\u6EDA\u82B1\u9F7F\u73AF\uFF0C\u5185\u5F84\u8BA9\u4F4D\u60AC\u6D6E\u8F6E\u6807\uFF09", "geometryDescriptor": { "topologyIntent": "knurled ring around wheel center badge", "edgeTreatment": { "type": "none", "bevelRadius": 0, "segments": 0 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry", "profile2D": { "points": [[0.148, 0], [0.12346, 0.01955], [0.14076, 0.04573], [0.11138, 0.05675], [0.11973, 0.08699], [0.08839, 0.08839], [0.08699, 0.11973], [0.05675, 0.11138], [0.04573, 0.14076], [0.01955, 0.12346], [0, 0.148], [-0.01955, 0.12346], [-0.04573, 0.14076], [-0.05675, 0.11138], [-0.08699, 0.11973], [-0.08839, 0.08839], [-0.11973, 0.08699], [-0.11138, 0.05675], [-0.14076, 0.04573], [-0.12346, 0.01955], [-0.148, 0], [-0.12346, -0.01955], [-0.14076, -0.04573], [-0.11138, -0.05675], [-0.11973, -0.08699], [-0.08839, -0.08839], [-0.08699, -0.11973], [-0.05675, -0.11138], [-0.04573, -0.14076], [-0.01955, -0.12346], [-0, -0.148], [0.01955, -0.12346], [0.04573, -0.14076], [0.05675, -0.11138], [0.08699, -0.11973], [0.08839, -0.08839], [0.11973, -0.08699], [0.11138, -0.05675], [0.14076, -0.04573], [0.12346, -0.01955]], "depth": 8e-3, "ovalHoles": [{ "cx": 0, "cy": 0, "rx": 0.095, "ry": 0.095 }] } }, "parent": "wheel-rl", "attachment": { "parentSocket": "wheel-rl.hub-front", "localStart": [0, 0, 0], "localEnd": [0, 0, 0], "contactType": "flush", "embedDepth": 5e-3, "gapTolerance": 2e-3 }, "dimensions": { "width": 0.296, "height": 0.296, "depth": 8e-3, "units": "meters", "confidence": 0.9 }, "transform": { "position": [0.131, 0, 0], "rotation": [0, 1.5708, 0], "scale": [1, 1, 1] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [1, 0, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": false }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "chrome", "materialLayers": ["chrome"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u8F6E\u5FC3\u6EDA\u82B1\u9F7F\u73AF", "kind": "wheel-trim", "note": "EX-33/D1_\u8F6E\u6BC2-\u7279\u5199.jpg\uFF08D3/D4 \u540C\uFF09\uFF1A\u4E2D\u592E\u5FBD\u6807\u5916\u56F4\u4E00\u5708\u653E\u5C04\u6EDA\u82B1\u9F7F\u73AF\uFF1B\u672C\u4EF6 20 \u9F7F\u952F\u9F7F\u73AF\uFF08\u5185\u5F84 0.19 \u8BA9\u4F4D\u60AC\u6D6E\u8F6E\u6807 r0.07\u3001\u9F7F\u5C16\u5916\u5F84 0.296\u3001\u539A 8mm\uFF09\uFF0C\u843D\u4F4D\u8F6E\u8F8B\u5916\u8868\u9762 x=\xB11.010\uFF0C\u968F\u8F6E\u65CB\u8F6C\u3002\u7F3A\u9677\u4FEE\u590D\uFF1A\u539F cylinder \u4F4D\u7F6E\u9519\u5728\u8F6E\u5C40\u90E8 z=+0.125\uFF08\u4E16\u754C z 1.84\uFF0C\u57CB\u5728\u8F6E\u80CE\u5185\u4E0D\u53EF\u89C1\uFF09\uFF1B\u9ED1\u5E95\u76FE\u5FBD\u8D34\u56FE\u5F52\u8C03\u5149\uFF08wheel-alloy \u76D8\u9762\u8D34\u56FE\uFF09\uFF0C\u672C\u4EF6\u7528 chrome \u907F\u514D\u91C7\u6837\u76D8\u9762\u8D34\u56FE\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "" }, "evidenceRefs": ["img-wheel-center"], "details": ["d-wheel-disc"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(232, 233, 236, 1.0)", "secondaryAlbedo": "rgba(232, 233, 236, 1.0)", "materialClass": "metal", "materialClassConfidence": 0.9 }, "notes": "EX-33 \u8F6E\u5FC3\u6EDA\u82B1\u9F7F\u73AF rl\uFF1Aextrude 20 \u9F7F\u73AF\uFF08ID r0.095/\u8C37 r0.125/\u5C16 r0.148\uFF0C\u539A 8mm\uFF09\uFF0C\u8F6E\u5C40\u90E8 x=+0.131\uFF08\u4E16\u754C \xB11.006~1.014\uFF0C\u8DE8\u8F6E\u8F8B\u5916\u8868\u9762 \xB11.010\uFF09\uFF1Bchrome\u3002 [\u7F3A\u9677\u4FEE\u590D] \u539F\u4F4D\u7F6E z=+0.125 \u57CB\u5728\u80CE\u5185\u3002" };
+  node_cap_rl_65.userData.actionProfile = { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [1, 0, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": false }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } };
   (nodes["wheel-rl"] ?? root).add(node_cap_rl_65);
   nodes["cap-rl"] = node_cap_rl_65;
-  const mesh_cap_rl_65Geometry = endpoint_cap_rl_65 ? new CylinderGeometry(endpoint_cap_rl_65.endRadius, endpoint_cap_rl_65.baseRadius, endpoint_cap_rl_65.length, 16, 6) : new CylinderGeometry(0.5, 0.5, 1, 24, 8);
+  const mesh_cap_rl_65Geometry = endpoint_cap_rl_65 ? new CylinderGeometry(endpoint_cap_rl_65.endRadius, endpoint_cap_rl_65.baseRadius, endpoint_cap_rl_65.length, 16, 6) : buildExtrudeGeometry({ "points": [[0.148, 0], [0.12346, 0.01955], [0.14076, 0.04573], [0.11138, 0.05675], [0.11973, 0.08699], [0.08839, 0.08839], [0.08699, 0.11973], [0.05675, 0.11138], [0.04573, 0.14076], [0.01955, 0.12346], [0, 0.148], [-0.01955, 0.12346], [-0.04573, 0.14076], [-0.05675, 0.11138], [-0.08699, 0.11973], [-0.08839, 0.08839], [-0.11973, 0.08699], [-0.11138, 0.05675], [-0.14076, 0.04573], [-0.12346, 0.01955], [-0.148, 0], [-0.12346, -0.01955], [-0.14076, -0.04573], [-0.11138, -0.05675], [-0.11973, -0.08699], [-0.08839, -0.08839], [-0.08699, -0.11973], [-0.05675, -0.11138], [-0.04573, -0.14076], [-0.01955, -0.12346], [-0, -0.148], [0.01955, -0.12346], [0.04573, -0.14076], [0.05675, -0.11138], [0.08699, -0.11973], [0.08839, -0.08839], [0.11973, -0.08699], [0.11138, -0.05675], [0.14076, -0.04573], [0.12346, -0.01955]], "depth": 8e-3, "ovalHoles": [{ "cx": 0, "cy": 0, "rx": 0.095, "ry": 0.095 }] });
   if (!endpoint_cap_rl_65) {
-    mesh_cap_rl_65Geometry.scale(0.11, 0.02, 0.11);
+    mesh_cap_rl_65Geometry.scale(1, 1, 1);
   }
   const mesh_cap_rl_65 = new Mesh(
     mesh_cap_rl_65Geometry,
     materialMap["chrome"] ?? new MeshStandardMaterial({ color: 8947848 })
   );
-  mesh_cap_rl_65.name = "\u60AC\u6D6E\u4E2D\u5FC3\u6807 rl";
+  mesh_cap_rl_65.name = "\u8F6E\u5FC3\u6EDA\u82B1\u9F7F\u73AF rl";
   if (endpoint_cap_rl_65) {
     mesh_cap_rl_65.position.copy(endpoint_cap_rl_65.midpoint);
     mesh_cap_rl_65.quaternion.copy(endpoint_cap_rl_65.quaternion);
   }
   mesh_cap_rl_65.castShadow = options.castShadow ?? true;
   mesh_cap_rl_65.receiveShadow = options.receiveShadow ?? true;
-  mesh_cap_rl_65.userData.sculptComponent = { "id": "cap-rl", "name": "\u60AC\u6D6E\u4E2D\u5FC3\u6807 rl", "level": "micro", "role": "detail", "importance": 0.8, "confidence": 0.9, "primitive": "cylinder", "topologyClass": "assembled-solid", "topologyRationale": "cylinder \u9002\u5408\u8BE5\u90E8\u4EF6\u7684\u53EF\u5C55\u62D3\u6251", "geometryDescriptor": { "topologyIntent": "hard-surface precise", "edgeTreatment": { "type": "bevel", "bevelRadius": 8e-3, "segments": 2 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry" }, "parent": "wheel-rl", "attachment": { "parentSocket": "wheel-rl.hub-front", "localStart": [0, 0, 0], "localEnd": [0, 0, 0], "contactType": "flush", "embedDepth": 5e-3, "gapTolerance": 2e-3 }, "dimensions": { "width": 0.11, "height": 0.02, "depth": 0.11, "units": "meters", "confidence": 0.9 }, "transform": { "position": [0, 0, 0.125], "rotation": [0, 0, 1.5708], "scale": [0.11, 0.02, 0.11] }, "actionProfile": { "animationRole": "counter-rotate-lock", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 0, 1], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": true, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": false }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "\u96C6\u6210\u5C42\u4EE4\u5176\u4E16\u754C\u671D\u5411\u6052\u5B9A\uFF08\u60AC\u6D6E\u6807\uFF09" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "chrome", "materialLayers": ["chrome"], "deformations": [], "joints": [], "seams": [], "localFeatures": [], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "" }, "evidenceRefs": ["img-trunk"], "details": ["d-wheel-disc"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(232, 233, 236, 1.0)", "secondaryAlbedo": "rgba(232, 233, 236, 1.0)", "materialClass": "metal", "materialClassConfidence": 0.9 } };
+  mesh_cap_rl_65.userData.sculptComponent = { "id": "cap-rl", "name": "\u8F6E\u5FC3\u6EDA\u82B1\u9F7F\u73AF rl", "level": "micro", "role": "detail", "importance": 0.8, "confidence": 0.9, "primitive": "extrude", "topologyClass": "conforming-shell", "topologyRationale": "\u952F\u9F7F\u73AF\u8F6E\u5ED3\u6324\u51FA\uFF08\u6EDA\u82B1\u9F7F\u73AF\uFF0C\u5185\u5F84\u8BA9\u4F4D\u60AC\u6D6E\u8F6E\u6807\uFF09", "geometryDescriptor": { "topologyIntent": "knurled ring around wheel center badge", "edgeTreatment": { "type": "none", "bevelRadius": 0, "segments": 0 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry", "profile2D": { "points": [[0.148, 0], [0.12346, 0.01955], [0.14076, 0.04573], [0.11138, 0.05675], [0.11973, 0.08699], [0.08839, 0.08839], [0.08699, 0.11973], [0.05675, 0.11138], [0.04573, 0.14076], [0.01955, 0.12346], [0, 0.148], [-0.01955, 0.12346], [-0.04573, 0.14076], [-0.05675, 0.11138], [-0.08699, 0.11973], [-0.08839, 0.08839], [-0.11973, 0.08699], [-0.11138, 0.05675], [-0.14076, 0.04573], [-0.12346, 0.01955], [-0.148, 0], [-0.12346, -0.01955], [-0.14076, -0.04573], [-0.11138, -0.05675], [-0.11973, -0.08699], [-0.08839, -0.08839], [-0.08699, -0.11973], [-0.05675, -0.11138], [-0.04573, -0.14076], [-0.01955, -0.12346], [-0, -0.148], [0.01955, -0.12346], [0.04573, -0.14076], [0.05675, -0.11138], [0.08699, -0.11973], [0.08839, -0.08839], [0.11973, -0.08699], [0.11138, -0.05675], [0.14076, -0.04573], [0.12346, -0.01955]], "depth": 8e-3, "ovalHoles": [{ "cx": 0, "cy": 0, "rx": 0.095, "ry": 0.095 }] } }, "parent": "wheel-rl", "attachment": { "parentSocket": "wheel-rl.hub-front", "localStart": [0, 0, 0], "localEnd": [0, 0, 0], "contactType": "flush", "embedDepth": 5e-3, "gapTolerance": 2e-3 }, "dimensions": { "width": 0.296, "height": 0.296, "depth": 8e-3, "units": "meters", "confidence": 0.9 }, "transform": { "position": [0.131, 0, 0], "rotation": [0, 1.5708, 0], "scale": [1, 1, 1] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [1, 0, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": false }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "chrome", "materialLayers": ["chrome"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u8F6E\u5FC3\u6EDA\u82B1\u9F7F\u73AF", "kind": "wheel-trim", "note": "EX-33/D1_\u8F6E\u6BC2-\u7279\u5199.jpg\uFF08D3/D4 \u540C\uFF09\uFF1A\u4E2D\u592E\u5FBD\u6807\u5916\u56F4\u4E00\u5708\u653E\u5C04\u6EDA\u82B1\u9F7F\u73AF\uFF1B\u672C\u4EF6 20 \u9F7F\u952F\u9F7F\u73AF\uFF08\u5185\u5F84 0.19 \u8BA9\u4F4D\u60AC\u6D6E\u8F6E\u6807 r0.07\u3001\u9F7F\u5C16\u5916\u5F84 0.296\u3001\u539A 8mm\uFF09\uFF0C\u843D\u4F4D\u8F6E\u8F8B\u5916\u8868\u9762 x=\xB11.010\uFF0C\u968F\u8F6E\u65CB\u8F6C\u3002\u7F3A\u9677\u4FEE\u590D\uFF1A\u539F cylinder \u4F4D\u7F6E\u9519\u5728\u8F6E\u5C40\u90E8 z=+0.125\uFF08\u4E16\u754C z 1.84\uFF0C\u57CB\u5728\u8F6E\u80CE\u5185\u4E0D\u53EF\u89C1\uFF09\uFF1B\u9ED1\u5E95\u76FE\u5FBD\u8D34\u56FE\u5F52\u8C03\u5149\uFF08wheel-alloy \u76D8\u9762\u8D34\u56FE\uFF09\uFF0C\u672C\u4EF6\u7528 chrome \u907F\u514D\u91C7\u6837\u76D8\u9762\u8D34\u56FE\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "" }, "evidenceRefs": ["img-wheel-center"], "details": ["d-wheel-disc"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(232, 233, 236, 1.0)", "secondaryAlbedo": "rgba(232, 233, 236, 1.0)", "materialClass": "metal", "materialClassConfidence": 0.9 }, "notes": "EX-33 \u8F6E\u5FC3\u6EDA\u82B1\u9F7F\u73AF rl\uFF1Aextrude 20 \u9F7F\u73AF\uFF08ID r0.095/\u8C37 r0.125/\u5C16 r0.148\uFF0C\u539A 8mm\uFF09\uFF0C\u8F6E\u5C40\u90E8 x=+0.131\uFF08\u4E16\u754C \xB11.006~1.014\uFF0C\u8DE8\u8F6E\u8F8B\u5916\u8868\u9762 \xB11.010\uFF09\uFF1Bchrome\u3002 [\u7F3A\u9677\u4FEE\u590D] \u539F\u4F4D\u7F6E z=+0.125 \u57CB\u5728\u80CE\u5185\u3002" };
   node_cap_rl_65.add(mesh_cap_rl_65);
   meshes2["cap-rl"] = mesh_cap_rl_65;
-  colliders["cap-rl"] = { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "\u96C6\u6210\u5C42\u4EE4\u5176\u4E16\u754C\u671D\u5411\u6052\u5B9A\uFF08\u60AC\u6D6E\u6807\uFF09" };
+  colliders["cap-rl"] = { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" };
   destructionGroups["root"] ??= [];
   destructionGroups["root"].push(node_cap_rl_65);
   const endpoint_wheel_rr_66 = makeAttachmentEndpoint(null);
@@ -22117,41 +22410,40 @@ function createZunjieV800LuxuryMPVModel(options = {}) {
   colliders["rim-rr"] = { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" };
   destructionGroups["root"] ??= [];
   destructionGroups["root"].push(node_rim_rr_68);
-  const attachment_cap_rr_69 = { "parentSocket": "wheel-rr.hub-front", "localStart": [0, 0, 0], "localEnd": [0, 0, 0], "contactType": "flush", "embedDepth": 5e-3, "gapTolerance": 2e-3 };
-  const endpoint_cap_rr_69 = makeAttachmentEndpoint(attachment_cap_rr_69);
+  const endpoint_cap_rr_69 = makeAttachmentEndpoint(null);
   const node_cap_rr_69 = new Group();
-  node_cap_rr_69.name = "\u60AC\u6D6E\u4E2D\u5FC3\u6807 rr__pivot";
+  node_cap_rr_69.name = "\u8F6E\u5FC3\u6EDA\u82B1\u9F7F\u73AF rr__pivot";
   node_cap_rr_69.scale.set(1, 1, 1);
   if (endpoint_cap_rr_69) {
     node_cap_rr_69.position.copy(endpoint_cap_rr_69.start);
-    node_cap_rr_69.rotation.set(0, 0, 1.5708);
+    node_cap_rr_69.rotation.set(0, -1.5708, 0);
   } else {
-    node_cap_rr_69.position.set(0, 0, 0.125);
-    node_cap_rr_69.rotation.set(0, 0, 1.5708);
+    node_cap_rr_69.position.set(-0.131, 0, 0);
+    node_cap_rr_69.rotation.set(0, -1.5708, 0);
   }
-  node_cap_rr_69.userData.sculptComponent = { "id": "cap-rr", "name": "\u60AC\u6D6E\u4E2D\u5FC3\u6807 rr", "level": "micro", "role": "detail", "importance": 0.8, "confidence": 0.9, "primitive": "cylinder", "topologyClass": "assembled-solid", "topologyRationale": "cylinder \u9002\u5408\u8BE5\u90E8\u4EF6\u7684\u53EF\u5C55\u62D3\u6251", "geometryDescriptor": { "topologyIntent": "hard-surface precise", "edgeTreatment": { "type": "bevel", "bevelRadius": 8e-3, "segments": 2 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry" }, "parent": "wheel-rr", "attachment": { "parentSocket": "wheel-rr.hub-front", "localStart": [0, 0, 0], "localEnd": [0, 0, 0], "contactType": "flush", "embedDepth": 5e-3, "gapTolerance": 2e-3 }, "dimensions": { "width": 0.11, "height": 0.02, "depth": 0.11, "units": "meters", "confidence": 0.9 }, "transform": { "position": [0, 0, 0.125], "rotation": [0, 0, 1.5708], "scale": [0.11, 0.02, 0.11] }, "actionProfile": { "animationRole": "counter-rotate-lock", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 0, 1], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": true, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": false }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "\u96C6\u6210\u5C42\u4EE4\u5176\u4E16\u754C\u671D\u5411\u6052\u5B9A\uFF08\u60AC\u6D6E\u6807\uFF09" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "chrome", "materialLayers": ["chrome"], "deformations": [], "joints": [], "seams": [], "localFeatures": [], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "" }, "evidenceRefs": ["img-trunk"], "details": ["d-wheel-disc"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(232, 233, 236, 1.0)", "secondaryAlbedo": "rgba(232, 233, 236, 1.0)", "materialClass": "metal", "materialClassConfidence": 0.9 } };
-  node_cap_rr_69.userData.actionProfile = { "animationRole": "counter-rotate-lock", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 0, 1], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": true, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": false }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "\u96C6\u6210\u5C42\u4EE4\u5176\u4E16\u754C\u671D\u5411\u6052\u5B9A\uFF08\u60AC\u6D6E\u6807\uFF09" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } };
+  node_cap_rr_69.userData.sculptComponent = { "id": "cap-rr", "name": "\u8F6E\u5FC3\u6EDA\u82B1\u9F7F\u73AF rr", "level": "micro", "role": "detail", "importance": 0.8, "confidence": 0.9, "primitive": "extrude", "topologyClass": "conforming-shell", "topologyRationale": "\u952F\u9F7F\u73AF\u8F6E\u5ED3\u6324\u51FA\uFF08\u6EDA\u82B1\u9F7F\u73AF\uFF0C\u5185\u5F84\u8BA9\u4F4D\u60AC\u6D6E\u8F6E\u6807\uFF09", "geometryDescriptor": { "topologyIntent": "knurled ring around wheel center badge", "edgeTreatment": { "type": "none", "bevelRadius": 0, "segments": 0 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry", "profile2D": { "points": [[0.148, 0], [0.12346, 0.01955], [0.14076, 0.04573], [0.11138, 0.05675], [0.11973, 0.08699], [0.08839, 0.08839], [0.08699, 0.11973], [0.05675, 0.11138], [0.04573, 0.14076], [0.01955, 0.12346], [0, 0.148], [-0.01955, 0.12346], [-0.04573, 0.14076], [-0.05675, 0.11138], [-0.08699, 0.11973], [-0.08839, 0.08839], [-0.11973, 0.08699], [-0.11138, 0.05675], [-0.14076, 0.04573], [-0.12346, 0.01955], [-0.148, 0], [-0.12346, -0.01955], [-0.14076, -0.04573], [-0.11138, -0.05675], [-0.11973, -0.08699], [-0.08839, -0.08839], [-0.08699, -0.11973], [-0.05675, -0.11138], [-0.04573, -0.14076], [-0.01955, -0.12346], [-0, -0.148], [0.01955, -0.12346], [0.04573, -0.14076], [0.05675, -0.11138], [0.08699, -0.11973], [0.08839, -0.08839], [0.11973, -0.08699], [0.11138, -0.05675], [0.14076, -0.04573], [0.12346, -0.01955]], "depth": 8e-3, "ovalHoles": [{ "cx": 0, "cy": 0, "rx": 0.095, "ry": 0.095 }] } }, "parent": "wheel-rr", "attachment": { "parentSocket": "wheel-rr.hub-front", "localStart": [0, 0, 0], "localEnd": [0, 0, 0], "contactType": "flush", "embedDepth": 5e-3, "gapTolerance": 2e-3 }, "dimensions": { "width": 0.296, "height": 0.296, "depth": 8e-3, "units": "meters", "confidence": 0.9 }, "transform": { "position": [-0.131, 0, 0], "rotation": [0, -1.5708, 0], "scale": [1, 1, 1] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [1, 0, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": false }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "chrome", "materialLayers": ["chrome"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u8F6E\u5FC3\u6EDA\u82B1\u9F7F\u73AF", "kind": "wheel-trim", "note": "EX-33/D1_\u8F6E\u6BC2-\u7279\u5199.jpg\uFF08D3/D4 \u540C\uFF09\uFF1A\u4E2D\u592E\u5FBD\u6807\u5916\u56F4\u4E00\u5708\u653E\u5C04\u6EDA\u82B1\u9F7F\u73AF\uFF1B\u672C\u4EF6 20 \u9F7F\u952F\u9F7F\u73AF\uFF08\u5185\u5F84 0.19 \u8BA9\u4F4D\u60AC\u6D6E\u8F6E\u6807 r0.07\u3001\u9F7F\u5C16\u5916\u5F84 0.296\u3001\u539A 8mm\uFF09\uFF0C\u843D\u4F4D\u8F6E\u8F8B\u5916\u8868\u9762 x=\xB11.010\uFF0C\u968F\u8F6E\u65CB\u8F6C\u3002\u7F3A\u9677\u4FEE\u590D\uFF1A\u539F cylinder \u4F4D\u7F6E\u9519\u5728\u8F6E\u5C40\u90E8 z=+0.125\uFF08\u4E16\u754C z 1.84\uFF0C\u57CB\u5728\u8F6E\u80CE\u5185\u4E0D\u53EF\u89C1\uFF09\uFF1B\u9ED1\u5E95\u76FE\u5FBD\u8D34\u56FE\u5F52\u8C03\u5149\uFF08wheel-alloy \u76D8\u9762\u8D34\u56FE\uFF09\uFF0C\u672C\u4EF6\u7528 chrome \u907F\u514D\u91C7\u6837\u76D8\u9762\u8D34\u56FE\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "" }, "evidenceRefs": ["img-wheel-center"], "details": ["d-wheel-disc"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(232, 233, 236, 1.0)", "secondaryAlbedo": "rgba(232, 233, 236, 1.0)", "materialClass": "metal", "materialClassConfidence": 0.9 }, "notes": "EX-33 \u8F6E\u5FC3\u6EDA\u82B1\u9F7F\u73AF rr\uFF1Aextrude 20 \u9F7F\u73AF\uFF08ID r0.095/\u8C37 r0.125/\u5C16 r0.148\uFF0C\u539A 8mm\uFF09\uFF0C\u8F6E\u5C40\u90E8 x=-0.131\uFF08\u4E16\u754C \xB11.006~1.014\uFF0C\u8DE8\u8F6E\u8F8B\u5916\u8868\u9762 \xB11.010\uFF09\uFF1Bchrome\u3002 [\u7F3A\u9677\u4FEE\u590D] \u539F\u4F4D\u7F6E z=+0.125 \u57CB\u5728\u80CE\u5185\u3002" };
+  node_cap_rr_69.userData.actionProfile = { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [1, 0, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": false }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } };
   (nodes["wheel-rr"] ?? root).add(node_cap_rr_69);
   nodes["cap-rr"] = node_cap_rr_69;
-  const mesh_cap_rr_69Geometry = endpoint_cap_rr_69 ? new CylinderGeometry(endpoint_cap_rr_69.endRadius, endpoint_cap_rr_69.baseRadius, endpoint_cap_rr_69.length, 16, 6) : new CylinderGeometry(0.5, 0.5, 1, 24, 8);
+  const mesh_cap_rr_69Geometry = endpoint_cap_rr_69 ? new CylinderGeometry(endpoint_cap_rr_69.endRadius, endpoint_cap_rr_69.baseRadius, endpoint_cap_rr_69.length, 16, 6) : buildExtrudeGeometry({ "points": [[0.148, 0], [0.12346, 0.01955], [0.14076, 0.04573], [0.11138, 0.05675], [0.11973, 0.08699], [0.08839, 0.08839], [0.08699, 0.11973], [0.05675, 0.11138], [0.04573, 0.14076], [0.01955, 0.12346], [0, 0.148], [-0.01955, 0.12346], [-0.04573, 0.14076], [-0.05675, 0.11138], [-0.08699, 0.11973], [-0.08839, 0.08839], [-0.11973, 0.08699], [-0.11138, 0.05675], [-0.14076, 0.04573], [-0.12346, 0.01955], [-0.148, 0], [-0.12346, -0.01955], [-0.14076, -0.04573], [-0.11138, -0.05675], [-0.11973, -0.08699], [-0.08839, -0.08839], [-0.08699, -0.11973], [-0.05675, -0.11138], [-0.04573, -0.14076], [-0.01955, -0.12346], [-0, -0.148], [0.01955, -0.12346], [0.04573, -0.14076], [0.05675, -0.11138], [0.08699, -0.11973], [0.08839, -0.08839], [0.11973, -0.08699], [0.11138, -0.05675], [0.14076, -0.04573], [0.12346, -0.01955]], "depth": 8e-3, "ovalHoles": [{ "cx": 0, "cy": 0, "rx": 0.095, "ry": 0.095 }] });
   if (!endpoint_cap_rr_69) {
-    mesh_cap_rr_69Geometry.scale(0.11, 0.02, 0.11);
+    mesh_cap_rr_69Geometry.scale(1, 1, 1);
   }
   const mesh_cap_rr_69 = new Mesh(
     mesh_cap_rr_69Geometry,
     materialMap["chrome"] ?? new MeshStandardMaterial({ color: 8947848 })
   );
-  mesh_cap_rr_69.name = "\u60AC\u6D6E\u4E2D\u5FC3\u6807 rr";
+  mesh_cap_rr_69.name = "\u8F6E\u5FC3\u6EDA\u82B1\u9F7F\u73AF rr";
   if (endpoint_cap_rr_69) {
     mesh_cap_rr_69.position.copy(endpoint_cap_rr_69.midpoint);
     mesh_cap_rr_69.quaternion.copy(endpoint_cap_rr_69.quaternion);
   }
   mesh_cap_rr_69.castShadow = options.castShadow ?? true;
   mesh_cap_rr_69.receiveShadow = options.receiveShadow ?? true;
-  mesh_cap_rr_69.userData.sculptComponent = { "id": "cap-rr", "name": "\u60AC\u6D6E\u4E2D\u5FC3\u6807 rr", "level": "micro", "role": "detail", "importance": 0.8, "confidence": 0.9, "primitive": "cylinder", "topologyClass": "assembled-solid", "topologyRationale": "cylinder \u9002\u5408\u8BE5\u90E8\u4EF6\u7684\u53EF\u5C55\u62D3\u6251", "geometryDescriptor": { "topologyIntent": "hard-surface precise", "edgeTreatment": { "type": "bevel", "bevelRadius": 8e-3, "segments": 2 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry" }, "parent": "wheel-rr", "attachment": { "parentSocket": "wheel-rr.hub-front", "localStart": [0, 0, 0], "localEnd": [0, 0, 0], "contactType": "flush", "embedDepth": 5e-3, "gapTolerance": 2e-3 }, "dimensions": { "width": 0.11, "height": 0.02, "depth": 0.11, "units": "meters", "confidence": 0.9 }, "transform": { "position": [0, 0, 0.125], "rotation": [0, 0, 1.5708], "scale": [0.11, 0.02, 0.11] }, "actionProfile": { "animationRole": "counter-rotate-lock", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 0, 1], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": true, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": false }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "\u96C6\u6210\u5C42\u4EE4\u5176\u4E16\u754C\u671D\u5411\u6052\u5B9A\uFF08\u60AC\u6D6E\u6807\uFF09" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "chrome", "materialLayers": ["chrome"], "deformations": [], "joints": [], "seams": [], "localFeatures": [], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "" }, "evidenceRefs": ["img-trunk"], "details": ["d-wheel-disc"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(232, 233, 236, 1.0)", "secondaryAlbedo": "rgba(232, 233, 236, 1.0)", "materialClass": "metal", "materialClassConfidence": 0.9 } };
+  mesh_cap_rr_69.userData.sculptComponent = { "id": "cap-rr", "name": "\u8F6E\u5FC3\u6EDA\u82B1\u9F7F\u73AF rr", "level": "micro", "role": "detail", "importance": 0.8, "confidence": 0.9, "primitive": "extrude", "topologyClass": "conforming-shell", "topologyRationale": "\u952F\u9F7F\u73AF\u8F6E\u5ED3\u6324\u51FA\uFF08\u6EDA\u82B1\u9F7F\u73AF\uFF0C\u5185\u5F84\u8BA9\u4F4D\u60AC\u6D6E\u8F6E\u6807\uFF09", "geometryDescriptor": { "topologyIntent": "knurled ring around wheel center badge", "edgeTreatment": { "type": "none", "bevelRadius": 0, "segments": 0 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry", "profile2D": { "points": [[0.148, 0], [0.12346, 0.01955], [0.14076, 0.04573], [0.11138, 0.05675], [0.11973, 0.08699], [0.08839, 0.08839], [0.08699, 0.11973], [0.05675, 0.11138], [0.04573, 0.14076], [0.01955, 0.12346], [0, 0.148], [-0.01955, 0.12346], [-0.04573, 0.14076], [-0.05675, 0.11138], [-0.08699, 0.11973], [-0.08839, 0.08839], [-0.11973, 0.08699], [-0.11138, 0.05675], [-0.14076, 0.04573], [-0.12346, 0.01955], [-0.148, 0], [-0.12346, -0.01955], [-0.14076, -0.04573], [-0.11138, -0.05675], [-0.11973, -0.08699], [-0.08839, -0.08839], [-0.08699, -0.11973], [-0.05675, -0.11138], [-0.04573, -0.14076], [-0.01955, -0.12346], [-0, -0.148], [0.01955, -0.12346], [0.04573, -0.14076], [0.05675, -0.11138], [0.08699, -0.11973], [0.08839, -0.08839], [0.11973, -0.08699], [0.11138, -0.05675], [0.14076, -0.04573], [0.12346, -0.01955]], "depth": 8e-3, "ovalHoles": [{ "cx": 0, "cy": 0, "rx": 0.095, "ry": 0.095 }] } }, "parent": "wheel-rr", "attachment": { "parentSocket": "wheel-rr.hub-front", "localStart": [0, 0, 0], "localEnd": [0, 0, 0], "contactType": "flush", "embedDepth": 5e-3, "gapTolerance": 2e-3 }, "dimensions": { "width": 0.296, "height": 0.296, "depth": 8e-3, "units": "meters", "confidence": 0.9 }, "transform": { "position": [-0.131, 0, 0], "rotation": [0, -1.5708, 0], "scale": [1, 1, 1] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [1, 0, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": false }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "chrome", "materialLayers": ["chrome"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u8F6E\u5FC3\u6EDA\u82B1\u9F7F\u73AF", "kind": "wheel-trim", "note": "EX-33/D1_\u8F6E\u6BC2-\u7279\u5199.jpg\uFF08D3/D4 \u540C\uFF09\uFF1A\u4E2D\u592E\u5FBD\u6807\u5916\u56F4\u4E00\u5708\u653E\u5C04\u6EDA\u82B1\u9F7F\u73AF\uFF1B\u672C\u4EF6 20 \u9F7F\u952F\u9F7F\u73AF\uFF08\u5185\u5F84 0.19 \u8BA9\u4F4D\u60AC\u6D6E\u8F6E\u6807 r0.07\u3001\u9F7F\u5C16\u5916\u5F84 0.296\u3001\u539A 8mm\uFF09\uFF0C\u843D\u4F4D\u8F6E\u8F8B\u5916\u8868\u9762 x=\xB11.010\uFF0C\u968F\u8F6E\u65CB\u8F6C\u3002\u7F3A\u9677\u4FEE\u590D\uFF1A\u539F cylinder \u4F4D\u7F6E\u9519\u5728\u8F6E\u5C40\u90E8 z=+0.125\uFF08\u4E16\u754C z 1.84\uFF0C\u57CB\u5728\u8F6E\u80CE\u5185\u4E0D\u53EF\u89C1\uFF09\uFF1B\u9ED1\u5E95\u76FE\u5FBD\u8D34\u56FE\u5F52\u8C03\u5149\uFF08wheel-alloy \u76D8\u9762\u8D34\u56FE\uFF09\uFF0C\u672C\u4EF6\u7528 chrome \u907F\u514D\u91C7\u6837\u76D8\u9762\u8D34\u56FE\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "" }, "evidenceRefs": ["img-wheel-center"], "details": ["d-wheel-disc"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(232, 233, 236, 1.0)", "secondaryAlbedo": "rgba(232, 233, 236, 1.0)", "materialClass": "metal", "materialClassConfidence": 0.9 }, "notes": "EX-33 \u8F6E\u5FC3\u6EDA\u82B1\u9F7F\u73AF rr\uFF1Aextrude 20 \u9F7F\u73AF\uFF08ID r0.095/\u8C37 r0.125/\u5C16 r0.148\uFF0C\u539A 8mm\uFF09\uFF0C\u8F6E\u5C40\u90E8 x=-0.131\uFF08\u4E16\u754C \xB11.006~1.014\uFF0C\u8DE8\u8F6E\u8F8B\u5916\u8868\u9762 \xB11.010\uFF09\uFF1Bchrome\u3002 [\u7F3A\u9677\u4FEE\u590D] \u539F\u4F4D\u7F6E z=+0.125 \u57CB\u5728\u80CE\u5185\u3002" };
   node_cap_rr_69.add(mesh_cap_rr_69);
   meshes2["cap-rr"] = mesh_cap_rr_69;
-  colliders["cap-rr"] = { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "\u96C6\u6210\u5C42\u4EE4\u5176\u4E16\u754C\u671D\u5411\u6052\u5B9A\uFF08\u60AC\u6D6E\u6807\uFF09" };
+  colliders["cap-rr"] = { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" };
   destructionGroups["root"] ??= [];
   destructionGroups["root"].push(node_cap_rr_69);
   const endpoint_cabin_interior_70 = makeAttachmentEndpoint(null);
@@ -24815,16 +25107,16 @@ function createZunjieV800LuxuryMPVModel(options = {}) {
     node_rear_reflector_l_143.position.copy(endpoint_rear_reflector_l_143.start);
     node_rear_reflector_l_143.rotation.set(0, 0, 0);
   } else {
-    node_rear_reflector_l_143.position.set(0.72, 0.3, -2.49);
+    node_rear_reflector_l_143.position.set(0.72, 0.3095, -2.49);
     node_rear_reflector_l_143.rotation.set(0, 0, 0);
   }
-  node_rear_reflector_l_143.userData.sculptComponent = { "id": "rear-reflector-l", "name": "\u540E\u4FDD\u7EA2\u8272\u53CD\u5149\u6761 L", "level": "meso", "role": "detail", "importance": 0.85, "confidence": 0.86, "primitive": "box", "topologyClass": "assembled-solid", "topologyRationale": "\u8584\u677F/\u56DE\u8F6C\u4F53\uFF0C\u786C\u8868\u9762\u53EF\u5C55\u62D3\u6251", "geometryDescriptor": { "topologyIntent": "hard-surface precise", "edgeTreatment": { "type": "bevel", "bevelRadius": 4e-3, "segments": 1 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry" }, "parent": "root", "attachment": null, "dimensions": { "width": 0.34, "height": 0.05, "depth": 0.02, "units": "meters", "confidence": 0.84 }, "transform": { "position": [0.72, 0.3, -2.49], "rotation": [0, 0, 0], "scale": [0.34, 0.05, 0.02] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "lamp-red", "materialLayers": ["lamp-red"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u540E\u4FDD\u7EA2\u8272\u53CD\u5149\u6761", "kind": "emissive-face", "note": "EX-31/B5\uFF1A\u540E\u4FDD\u4E0B\u90E8\u5DE6\u53F3\u5404\u4E00\u6761\u6A2A\u5411\u7EA2\u8272\u53CD\u5149\u6761/\u540E\u96FE\u706F\uFF0C\u8D34\u5728 body-lower \u5C3E\u7AEF\u5782\u76F4\u9762\uFF08z=-2.48\uFF09\u5916 1cm" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "" }, "evidenceRefs": ["img-dash"], "details": [], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(181, 31, 44, 1.0)", "secondaryAlbedo": "rgba(181, 31, 44, 1.0)", "materialClass": "fabric", "materialClassConfidence": 0.86 }, "notes": "EX-31 \u540E\u4FDD\u7EA2\u8272\u53CD\u5149\u6761 L\uFF1A\u4E16\u754C [0.72,0.30,-2.49]\uFF0Clamp-red \u4E0E\u5C3E\u706F\u5408\u6279 +0 DC\u3002" };
+  node_rear_reflector_l_143.userData.sculptComponent = { "id": "rear-reflector-l", "name": "\u540E\u4FDD\u7EA2\u8272\u53CD\u5149\u6761 L", "level": "meso", "role": "detail", "importance": 0.85, "confidence": 0.86, "primitive": "box", "topologyClass": "assembled-solid", "topologyRationale": "\u8584\u677F/\u56DE\u8F6C\u4F53\uFF0C\u786C\u8868\u9762\u53EF\u5C55\u62D3\u6251", "geometryDescriptor": { "topologyIntent": "hard-surface precise", "edgeTreatment": { "type": "bevel", "bevelRadius": 4e-3, "segments": 1 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry" }, "parent": "root", "attachment": null, "dimensions": { "width": 0.34, "height": 0.018, "depth": 0.02, "units": "meters", "confidence": 0.84 }, "transform": { "position": [0.72, 0.3095, -2.49], "rotation": [0, 0, 0], "scale": [0.34, 0.018, 0.02] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "lamp-red", "materialLayers": ["lamp-red"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u540E\u4FDD\u7EA2\u8272\u53CD\u5149\u6761\uFF08\u4E0A\u6761\uFF09", "kind": "emissive-face", "note": "EX-31/B5 \u53F3\u4E0A\u683C\uFF1A\u540E\u4FDD\u4E0B\u90E8\u6BCF\u4FA7\u4E24\u6761\u6A2A\u5411\u7EA2\u8272\u53CD\u5149\u6761\uFF0C\u672C\u6761\u4E3A\u4E0A\u6761\uFF1B\u4E0B\u6761\u4E3A rear-reflector-strip-l\uFF1B\u4E24\u8D34\u5747\u843D\u5728\u540E\u4FDD\u5782\u76F4\u9762\uFF08y0.272~0.3234\uFF0Cz=-2.48\uFF09\u5916 2cm\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "" }, "evidenceRefs": ["img-rear-bumper"], "details": [], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(181, 31, 44, 1.0)", "secondaryAlbedo": "rgba(181, 31, 44, 1.0)", "materialClass": "fabric", "materialClassConfidence": 0.86 }, "notes": "EX-31 \u540E\u4FDD\u7EA2\u8272\u53CD\u5149\u6761\u4E0A\u6761\uFF08l\uFF09\uFF1A\u4E16\u754C [0.72,0.3095,-2.49]\uFF0C0.34\xD70.018\xD70.02\uFF1B\u4E0E\u4E0B\u6761\u76F8\u8DDD 4mm\uFF0Clamp-red \u4E0E\u5C3E\u706F\u5408\u6279 +0 DC\u3002" };
   node_rear_reflector_l_143.userData.actionProfile = { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } };
   (nodes["root"] ?? root).add(node_rear_reflector_l_143);
   nodes["rear-reflector-l"] = node_rear_reflector_l_143;
   const mesh_rear_reflector_l_143Geometry = endpoint_rear_reflector_l_143 ? new CylinderGeometry(endpoint_rear_reflector_l_143.endRadius, endpoint_rear_reflector_l_143.baseRadius, endpoint_rear_reflector_l_143.length, 16, 6) : new BoxGeometry(1, 1, 1, 4, 4, 4);
   if (!endpoint_rear_reflector_l_143) {
-    mesh_rear_reflector_l_143Geometry.scale(0.34, 0.05, 0.02);
+    mesh_rear_reflector_l_143Geometry.scale(0.34, 0.018, 0.02);
   }
   const mesh_rear_reflector_l_143 = new Mesh(
     mesh_rear_reflector_l_143Geometry,
@@ -24837,7 +25129,7 @@ function createZunjieV800LuxuryMPVModel(options = {}) {
   }
   mesh_rear_reflector_l_143.castShadow = options.castShadow ?? true;
   mesh_rear_reflector_l_143.receiveShadow = options.receiveShadow ?? true;
-  mesh_rear_reflector_l_143.userData.sculptComponent = { "id": "rear-reflector-l", "name": "\u540E\u4FDD\u7EA2\u8272\u53CD\u5149\u6761 L", "level": "meso", "role": "detail", "importance": 0.85, "confidence": 0.86, "primitive": "box", "topologyClass": "assembled-solid", "topologyRationale": "\u8584\u677F/\u56DE\u8F6C\u4F53\uFF0C\u786C\u8868\u9762\u53EF\u5C55\u62D3\u6251", "geometryDescriptor": { "topologyIntent": "hard-surface precise", "edgeTreatment": { "type": "bevel", "bevelRadius": 4e-3, "segments": 1 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry" }, "parent": "root", "attachment": null, "dimensions": { "width": 0.34, "height": 0.05, "depth": 0.02, "units": "meters", "confidence": 0.84 }, "transform": { "position": [0.72, 0.3, -2.49], "rotation": [0, 0, 0], "scale": [0.34, 0.05, 0.02] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "lamp-red", "materialLayers": ["lamp-red"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u540E\u4FDD\u7EA2\u8272\u53CD\u5149\u6761", "kind": "emissive-face", "note": "EX-31/B5\uFF1A\u540E\u4FDD\u4E0B\u90E8\u5DE6\u53F3\u5404\u4E00\u6761\u6A2A\u5411\u7EA2\u8272\u53CD\u5149\u6761/\u540E\u96FE\u706F\uFF0C\u8D34\u5728 body-lower \u5C3E\u7AEF\u5782\u76F4\u9762\uFF08z=-2.48\uFF09\u5916 1cm" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "" }, "evidenceRefs": ["img-dash"], "details": [], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(181, 31, 44, 1.0)", "secondaryAlbedo": "rgba(181, 31, 44, 1.0)", "materialClass": "fabric", "materialClassConfidence": 0.86 }, "notes": "EX-31 \u540E\u4FDD\u7EA2\u8272\u53CD\u5149\u6761 L\uFF1A\u4E16\u754C [0.72,0.30,-2.49]\uFF0Clamp-red \u4E0E\u5C3E\u706F\u5408\u6279 +0 DC\u3002" };
+  mesh_rear_reflector_l_143.userData.sculptComponent = { "id": "rear-reflector-l", "name": "\u540E\u4FDD\u7EA2\u8272\u53CD\u5149\u6761 L", "level": "meso", "role": "detail", "importance": 0.85, "confidence": 0.86, "primitive": "box", "topologyClass": "assembled-solid", "topologyRationale": "\u8584\u677F/\u56DE\u8F6C\u4F53\uFF0C\u786C\u8868\u9762\u53EF\u5C55\u62D3\u6251", "geometryDescriptor": { "topologyIntent": "hard-surface precise", "edgeTreatment": { "type": "bevel", "bevelRadius": 4e-3, "segments": 1 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry" }, "parent": "root", "attachment": null, "dimensions": { "width": 0.34, "height": 0.018, "depth": 0.02, "units": "meters", "confidence": 0.84 }, "transform": { "position": [0.72, 0.3095, -2.49], "rotation": [0, 0, 0], "scale": [0.34, 0.018, 0.02] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "lamp-red", "materialLayers": ["lamp-red"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u540E\u4FDD\u7EA2\u8272\u53CD\u5149\u6761\uFF08\u4E0A\u6761\uFF09", "kind": "emissive-face", "note": "EX-31/B5 \u53F3\u4E0A\u683C\uFF1A\u540E\u4FDD\u4E0B\u90E8\u6BCF\u4FA7\u4E24\u6761\u6A2A\u5411\u7EA2\u8272\u53CD\u5149\u6761\uFF0C\u672C\u6761\u4E3A\u4E0A\u6761\uFF1B\u4E0B\u6761\u4E3A rear-reflector-strip-l\uFF1B\u4E24\u8D34\u5747\u843D\u5728\u540E\u4FDD\u5782\u76F4\u9762\uFF08y0.272~0.3234\uFF0Cz=-2.48\uFF09\u5916 2cm\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "" }, "evidenceRefs": ["img-rear-bumper"], "details": [], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(181, 31, 44, 1.0)", "secondaryAlbedo": "rgba(181, 31, 44, 1.0)", "materialClass": "fabric", "materialClassConfidence": 0.86 }, "notes": "EX-31 \u540E\u4FDD\u7EA2\u8272\u53CD\u5149\u6761\u4E0A\u6761\uFF08l\uFF09\uFF1A\u4E16\u754C [0.72,0.3095,-2.49]\uFF0C0.34\xD70.018\xD70.02\uFF1B\u4E0E\u4E0B\u6761\u76F8\u8DDD 4mm\uFF0Clamp-red \u4E0E\u5C3E\u706F\u5408\u6279 +0 DC\u3002" };
   node_rear_reflector_l_143.add(mesh_rear_reflector_l_143);
   meshes2["rear-reflector-l"] = mesh_rear_reflector_l_143;
   colliders["rear-reflector-l"] = { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" };
@@ -24851,16 +25143,16 @@ function createZunjieV800LuxuryMPVModel(options = {}) {
     node_rear_reflector_r_144.position.copy(endpoint_rear_reflector_r_144.start);
     node_rear_reflector_r_144.rotation.set(0, 0, 0);
   } else {
-    node_rear_reflector_r_144.position.set(-0.72, 0.3, -2.49);
+    node_rear_reflector_r_144.position.set(-0.72, 0.3095, -2.49);
     node_rear_reflector_r_144.rotation.set(0, 0, 0);
   }
-  node_rear_reflector_r_144.userData.sculptComponent = { "id": "rear-reflector-r", "name": "\u540E\u4FDD\u7EA2\u8272\u53CD\u5149\u6761 R", "level": "meso", "role": "detail", "importance": 0.85, "confidence": 0.86, "primitive": "box", "topologyClass": "assembled-solid", "topologyRationale": "\u8584\u677F/\u56DE\u8F6C\u4F53\uFF0C\u786C\u8868\u9762\u53EF\u5C55\u62D3\u6251", "geometryDescriptor": { "topologyIntent": "hard-surface precise", "edgeTreatment": { "type": "bevel", "bevelRadius": 4e-3, "segments": 1 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry" }, "parent": "root", "attachment": null, "dimensions": { "width": 0.34, "height": 0.05, "depth": 0.02, "units": "meters", "confidence": 0.84 }, "transform": { "position": [-0.72, 0.3, -2.49], "rotation": [0, 0, 0], "scale": [0.34, 0.05, 0.02] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "lamp-red", "materialLayers": ["lamp-red"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u540E\u4FDD\u7EA2\u8272\u53CD\u5149\u6761", "kind": "emissive-face", "note": "EX-31/B5\uFF1A\u540E\u4FDD\u4E0B\u90E8\u5DE6\u53F3\u5404\u4E00\u6761\u6A2A\u5411\u7EA2\u8272\u53CD\u5149\u6761/\u540E\u96FE\u706F\uFF0C\u8D34\u5728 body-lower \u5C3E\u7AEF\u5782\u76F4\u9762\uFF08z=-2.48\uFF09\u5916 1cm" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "" }, "evidenceRefs": ["img-dash"], "details": [], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(181, 31, 44, 1.0)", "secondaryAlbedo": "rgba(181, 31, 44, 1.0)", "materialClass": "fabric", "materialClassConfidence": 0.86 }, "notes": "EX-31 \u540E\u4FDD\u7EA2\u8272\u53CD\u5149\u6761 R\uFF1A\u4E16\u754C [-0.72,0.30,-2.49]\uFF0Clamp-red \u4E0E\u5C3E\u706F\u5408\u6279 +0 DC\u3002" };
+  node_rear_reflector_r_144.userData.sculptComponent = { "id": "rear-reflector-r", "name": "\u540E\u4FDD\u7EA2\u8272\u53CD\u5149\u6761 R", "level": "meso", "role": "detail", "importance": 0.85, "confidence": 0.86, "primitive": "box", "topologyClass": "assembled-solid", "topologyRationale": "\u8584\u677F/\u56DE\u8F6C\u4F53\uFF0C\u786C\u8868\u9762\u53EF\u5C55\u62D3\u6251", "geometryDescriptor": { "topologyIntent": "hard-surface precise", "edgeTreatment": { "type": "bevel", "bevelRadius": 4e-3, "segments": 1 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry" }, "parent": "root", "attachment": null, "dimensions": { "width": 0.34, "height": 0.018, "depth": 0.02, "units": "meters", "confidence": 0.84 }, "transform": { "position": [-0.72, 0.3095, -2.49], "rotation": [0, 0, 0], "scale": [0.34, 0.018, 0.02] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "lamp-red", "materialLayers": ["lamp-red"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u540E\u4FDD\u7EA2\u8272\u53CD\u5149\u6761\uFF08\u4E0A\u6761\uFF09", "kind": "emissive-face", "note": "EX-31/B5 \u53F3\u4E0A\u683C\uFF1A\u540E\u4FDD\u4E0B\u90E8\u6BCF\u4FA7\u4E24\u6761\u6A2A\u5411\u7EA2\u8272\u53CD\u5149\u6761\uFF0C\u672C\u6761\u4E3A\u4E0A\u6761\uFF1B\u4E0B\u6761\u4E3A rear-reflector-strip-r\uFF1B\u4E24\u8D34\u5747\u843D\u5728\u540E\u4FDD\u5782\u76F4\u9762\uFF08y0.272~0.3234\uFF0Cz=-2.48\uFF09\u5916 2cm\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "" }, "evidenceRefs": ["img-rear-bumper"], "details": [], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(181, 31, 44, 1.0)", "secondaryAlbedo": "rgba(181, 31, 44, 1.0)", "materialClass": "fabric", "materialClassConfidence": 0.86 }, "notes": "EX-31 \u540E\u4FDD\u7EA2\u8272\u53CD\u5149\u6761\u4E0A\u6761\uFF08r\uFF09\uFF1A\u4E16\u754C [-0.72,0.3095,-2.49]\uFF0C0.34\xD70.018\xD70.02\uFF1B\u4E0E\u4E0B\u6761\u76F8\u8DDD 4mm\uFF0Clamp-red \u4E0E\u5C3E\u706F\u5408\u6279 +0 DC\u3002" };
   node_rear_reflector_r_144.userData.actionProfile = { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } };
   (nodes["root"] ?? root).add(node_rear_reflector_r_144);
   nodes["rear-reflector-r"] = node_rear_reflector_r_144;
   const mesh_rear_reflector_r_144Geometry = endpoint_rear_reflector_r_144 ? new CylinderGeometry(endpoint_rear_reflector_r_144.endRadius, endpoint_rear_reflector_r_144.baseRadius, endpoint_rear_reflector_r_144.length, 16, 6) : new BoxGeometry(1, 1, 1, 4, 4, 4);
   if (!endpoint_rear_reflector_r_144) {
-    mesh_rear_reflector_r_144Geometry.scale(0.34, 0.05, 0.02);
+    mesh_rear_reflector_r_144Geometry.scale(0.34, 0.018, 0.02);
   }
   const mesh_rear_reflector_r_144 = new Mesh(
     mesh_rear_reflector_r_144Geometry,
@@ -24873,7 +25165,7 @@ function createZunjieV800LuxuryMPVModel(options = {}) {
   }
   mesh_rear_reflector_r_144.castShadow = options.castShadow ?? true;
   mesh_rear_reflector_r_144.receiveShadow = options.receiveShadow ?? true;
-  mesh_rear_reflector_r_144.userData.sculptComponent = { "id": "rear-reflector-r", "name": "\u540E\u4FDD\u7EA2\u8272\u53CD\u5149\u6761 R", "level": "meso", "role": "detail", "importance": 0.85, "confidence": 0.86, "primitive": "box", "topologyClass": "assembled-solid", "topologyRationale": "\u8584\u677F/\u56DE\u8F6C\u4F53\uFF0C\u786C\u8868\u9762\u53EF\u5C55\u62D3\u6251", "geometryDescriptor": { "topologyIntent": "hard-surface precise", "edgeTreatment": { "type": "bevel", "bevelRadius": 4e-3, "segments": 1 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry" }, "parent": "root", "attachment": null, "dimensions": { "width": 0.34, "height": 0.05, "depth": 0.02, "units": "meters", "confidence": 0.84 }, "transform": { "position": [-0.72, 0.3, -2.49], "rotation": [0, 0, 0], "scale": [0.34, 0.05, 0.02] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "lamp-red", "materialLayers": ["lamp-red"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u540E\u4FDD\u7EA2\u8272\u53CD\u5149\u6761", "kind": "emissive-face", "note": "EX-31/B5\uFF1A\u540E\u4FDD\u4E0B\u90E8\u5DE6\u53F3\u5404\u4E00\u6761\u6A2A\u5411\u7EA2\u8272\u53CD\u5149\u6761/\u540E\u96FE\u706F\uFF0C\u8D34\u5728 body-lower \u5C3E\u7AEF\u5782\u76F4\u9762\uFF08z=-2.48\uFF09\u5916 1cm" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "" }, "evidenceRefs": ["img-dash"], "details": [], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(181, 31, 44, 1.0)", "secondaryAlbedo": "rgba(181, 31, 44, 1.0)", "materialClass": "fabric", "materialClassConfidence": 0.86 }, "notes": "EX-31 \u540E\u4FDD\u7EA2\u8272\u53CD\u5149\u6761 R\uFF1A\u4E16\u754C [-0.72,0.30,-2.49]\uFF0Clamp-red \u4E0E\u5C3E\u706F\u5408\u6279 +0 DC\u3002" };
+  mesh_rear_reflector_r_144.userData.sculptComponent = { "id": "rear-reflector-r", "name": "\u540E\u4FDD\u7EA2\u8272\u53CD\u5149\u6761 R", "level": "meso", "role": "detail", "importance": 0.85, "confidence": 0.86, "primitive": "box", "topologyClass": "assembled-solid", "topologyRationale": "\u8584\u677F/\u56DE\u8F6C\u4F53\uFF0C\u786C\u8868\u9762\u53EF\u5C55\u62D3\u6251", "geometryDescriptor": { "topologyIntent": "hard-surface precise", "edgeTreatment": { "type": "bevel", "bevelRadius": 4e-3, "segments": 1 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry" }, "parent": "root", "attachment": null, "dimensions": { "width": 0.34, "height": 0.018, "depth": 0.02, "units": "meters", "confidence": 0.84 }, "transform": { "position": [-0.72, 0.3095, -2.49], "rotation": [0, 0, 0], "scale": [0.34, 0.018, 0.02] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "lamp-red", "materialLayers": ["lamp-red"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u540E\u4FDD\u7EA2\u8272\u53CD\u5149\u6761\uFF08\u4E0A\u6761\uFF09", "kind": "emissive-face", "note": "EX-31/B5 \u53F3\u4E0A\u683C\uFF1A\u540E\u4FDD\u4E0B\u90E8\u6BCF\u4FA7\u4E24\u6761\u6A2A\u5411\u7EA2\u8272\u53CD\u5149\u6761\uFF0C\u672C\u6761\u4E3A\u4E0A\u6761\uFF1B\u4E0B\u6761\u4E3A rear-reflector-strip-r\uFF1B\u4E24\u8D34\u5747\u843D\u5728\u540E\u4FDD\u5782\u76F4\u9762\uFF08y0.272~0.3234\uFF0Cz=-2.48\uFF09\u5916 2cm\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "" }, "evidenceRefs": ["img-rear-bumper"], "details": [], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(181, 31, 44, 1.0)", "secondaryAlbedo": "rgba(181, 31, 44, 1.0)", "materialClass": "fabric", "materialClassConfidence": 0.86 }, "notes": "EX-31 \u540E\u4FDD\u7EA2\u8272\u53CD\u5149\u6761\u4E0A\u6761\uFF08r\uFF09\uFF1A\u4E16\u754C [-0.72,0.3095,-2.49]\uFF0C0.34\xD70.018\xD70.02\uFF1B\u4E0E\u4E0B\u6761\u76F8\u8DDD 4mm\uFF0Clamp-red \u4E0E\u5C3E\u706F\u5408\u6279 +0 DC\u3002" };
   node_rear_reflector_r_144.add(mesh_rear_reflector_r_144);
   meshes2["rear-reflector-r"] = mesh_rear_reflector_r_144;
   colliders["rear-reflector-r"] = { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" };
@@ -25428,16 +25720,16 @@ function createZunjieV800LuxuryMPVModel(options = {}) {
     node_trunk_floor_160.position.copy(endpoint_trunk_floor_160.start);
     node_trunk_floor_160.rotation.set(0, 0, 0);
   } else {
-    node_trunk_floor_160.position.set(0, 0.3, -2.55);
+    node_trunk_floor_160.position.set(0, 0.3, -2.345);
     node_trunk_floor_160.rotation.set(0, 0, 0);
   }
-  node_trunk_floor_160.userData.sculptComponent = { "id": "trunk-floor", "name": "\u540E\u5907\u7BB1\u7EAF\u5E73\u5730\u677F", "level": "meso", "role": "detail", "importance": 0.85, "confidence": 0.86, "primitive": "box", "topologyClass": "assembled-solid", "topologyRationale": "\u8584\u677F/\u56DE\u8F6C\u4F53\uFF0C\u786C\u8868\u9762\u53EF\u5C55\u62D3\u6251", "geometryDescriptor": { "topologyIntent": "hard-surface precise", "edgeTreatment": { "type": "bevel", "bevelRadius": 4e-3, "segments": 1 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry" }, "parent": "cabin-interior", "attachment": { "parentSocket": "cabin-interior.floor", "localStart": [0, 0, 0], "localEnd": [0, 0, 0], "contactType": "flush", "embedDepth": 2e-3, "gapTolerance": 2e-3 }, "dimensions": { "width": 1.55, "height": 0.03, "depth": 0.55, "units": "meters", "confidence": 0.9 }, "transform": { "position": [0, 0.3, -2.55], "rotation": [0, 0, 0], "scale": [1.55, 0.03, 0.55] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "carpet", "materialLayers": ["carpet"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u7EAF\u5E73\u8F7D\u7269\u5730\u677F", "kind": "floor", "note": "K1_\u540E\u5907\u7BB1-\u7EAF\u5E73\u50A8\u7269.jpg\uFF1A\u4E09\u6392\u4E4B\u540E\u5730\u677F\u7EAF\u5E73\u3001\u4E0E\u5EA7\u8231\u5730\u6BEF\u9762\u9F50\u5E73\uFF08\u9876\u9762 0.315 \u5BF9\u5EA7\u8231\u5730\u677F 0.3175\uFF09" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": " carpet\uFF0C\u9876\u9762\u4E0E cabin-floor \u9F50\u5E73" }, "evidenceRefs": ["img-trunk-flat"], "details": ["d-trunk"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(138, 90, 48, 1.0)", "secondaryAlbedo": "rgba(138, 90, 48, 1.0)", "materialClass": "fabric", "materialClassConfidence": 0.9, "note": " carpet\uFF0C\u9876\u9762\u4E0E cabin-floor \u9F50\u5E73" }, "notes": "EX-25\uFF1A\u5C3E\u90E8\u6A2A\u5411\u8D2F\u7A7F\u9540\u94EC\u9970\u6761 1.50\xD70.035\uFF0C\u8D34\u5728\u5C3E\u95E8\u540E\u8138\uFF1Bchrome \u5408\u6279 +0 DC\u3002" };
+  node_trunk_floor_160.userData.sculptComponent = { "id": "trunk-floor", "name": "\u540E\u5907\u7BB1\u7EAF\u5E73\u5730\u677F", "level": "meso", "role": "detail", "importance": 0.85, "confidence": 0.86, "primitive": "box", "topologyClass": "assembled-solid", "topologyRationale": "\u8584\u677F/\u56DE\u8F6C\u4F53\uFF0C\u786C\u8868\u9762\u53EF\u5C55\u62D3\u6251", "geometryDescriptor": { "topologyIntent": "hard-surface precise", "edgeTreatment": { "type": "bevel", "bevelRadius": 4e-3, "segments": 1 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry" }, "parent": "cabin-interior", "attachment": { "parentSocket": "cabin-interior.floor", "localStart": [0, 0, 0], "localEnd": [0, 0, 0], "contactType": "flush", "embedDepth": 2e-3, "gapTolerance": 2e-3 }, "dimensions": { "width": 1.55, "height": 0.03, "depth": 0.19, "units": "meters", "confidence": 0.9 }, "transform": { "position": [0, 0.3, -2.345], "rotation": [0, 0, 0], "scale": [1.55, 0.03, 0.19] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "carpet", "materialLayers": ["carpet"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u7EAF\u5E73\u8F7D\u7269\u5730\u677F\uFF08\u4E09\u6392\u540E\u6BB5\uFF09", "kind": "floor", "note": "K1_\u540E\u5907\u7BB1-\u7EAF\u5E73\u50A8\u7269.jpg\uFF1A\u4E09\u6392\u4E4B\u540E\u5730\u677F\u7EAF\u5E73\u3001\u4E0E\u5EA7\u8231\u5730\u6BEF\u9762\u9F50\u5E73\uFF1B\u7F3A\u9677\u4FEE\u590D\uFF1A\u4E0A\u6CE2 z-2.825 \u4F38\u51FA\u540E\u4FDD\u8868\u9762\uFF08-2.48\uFF0934cm\uFF08P5-tail-wide-trueRear.png \u5B9E\u62CD\u5916\u9732\u4E14\u906E\u6321\u53CD\u5149\u6761\uFF09\uFF0C\u672C\u8F6E\u62C9\u56DE\u540E\u4FDD\u5185\u58C1 -2.44 \u5185\uFF0C\u4E0E cabin-floor \u540E\u7F18 -2.25 \u76F8\u63A5\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": " carpet\uFF0C\u9876\u9762\u4E0E cabin-floor \u9F50\u5E73" }, "evidenceRefs": ["img-trunk-flat"], "details": ["d-trunk"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(138, 90, 48, 1.0)", "secondaryAlbedo": "rgba(138, 90, 48, 1.0)", "materialClass": "fabric", "materialClassConfidence": 0.9, "note": " carpet\uFF0C\u9876\u9762\u4E0E cabin-floor \u9F50\u5E73" }, "notes": "EX-25/K1\uFF1A\u5C3E\u90E8\u6A2A\u5411\u8D2F\u7A7F\u9540\u94EC\u9970\u6761 1.50\xD70.035\uFF0C\u8D34\u5728\u5C3E\u95E8\u540E\u8138\uFF1Bchrome \u5408\u6279 +0 DC\u3002 [\u7F3A\u9677\u4FEE\u590D] z-2.44..-2.25\uFF08\u539F -2.825..-2.275 \u5916\u9732 34cm\uFF0C\u5DF2\u62C9\u56DE\u540E\u4FDD\u5185\u58C1\uFF09\u3002" };
   node_trunk_floor_160.userData.actionProfile = { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } };
   (nodes["cabin-interior"] ?? root).add(node_trunk_floor_160);
   nodes["trunk-floor"] = node_trunk_floor_160;
   const mesh_trunk_floor_160Geometry = endpoint_trunk_floor_160 ? new CylinderGeometry(endpoint_trunk_floor_160.endRadius, endpoint_trunk_floor_160.baseRadius, endpoint_trunk_floor_160.length, 16, 6) : new BoxGeometry(1, 1, 1, 4, 4, 4);
   if (!endpoint_trunk_floor_160) {
-    mesh_trunk_floor_160Geometry.scale(1.55, 0.03, 0.55);
+    mesh_trunk_floor_160Geometry.scale(1.55, 0.03, 0.19);
   }
   const mesh_trunk_floor_160 = new Mesh(
     mesh_trunk_floor_160Geometry,
@@ -25450,7 +25742,7 @@ function createZunjieV800LuxuryMPVModel(options = {}) {
   }
   mesh_trunk_floor_160.castShadow = options.castShadow ?? true;
   mesh_trunk_floor_160.receiveShadow = options.receiveShadow ?? true;
-  mesh_trunk_floor_160.userData.sculptComponent = { "id": "trunk-floor", "name": "\u540E\u5907\u7BB1\u7EAF\u5E73\u5730\u677F", "level": "meso", "role": "detail", "importance": 0.85, "confidence": 0.86, "primitive": "box", "topologyClass": "assembled-solid", "topologyRationale": "\u8584\u677F/\u56DE\u8F6C\u4F53\uFF0C\u786C\u8868\u9762\u53EF\u5C55\u62D3\u6251", "geometryDescriptor": { "topologyIntent": "hard-surface precise", "edgeTreatment": { "type": "bevel", "bevelRadius": 4e-3, "segments": 1 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry" }, "parent": "cabin-interior", "attachment": { "parentSocket": "cabin-interior.floor", "localStart": [0, 0, 0], "localEnd": [0, 0, 0], "contactType": "flush", "embedDepth": 2e-3, "gapTolerance": 2e-3 }, "dimensions": { "width": 1.55, "height": 0.03, "depth": 0.55, "units": "meters", "confidence": 0.9 }, "transform": { "position": [0, 0.3, -2.55], "rotation": [0, 0, 0], "scale": [1.55, 0.03, 0.55] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "carpet", "materialLayers": ["carpet"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u7EAF\u5E73\u8F7D\u7269\u5730\u677F", "kind": "floor", "note": "K1_\u540E\u5907\u7BB1-\u7EAF\u5E73\u50A8\u7269.jpg\uFF1A\u4E09\u6392\u4E4B\u540E\u5730\u677F\u7EAF\u5E73\u3001\u4E0E\u5EA7\u8231\u5730\u6BEF\u9762\u9F50\u5E73\uFF08\u9876\u9762 0.315 \u5BF9\u5EA7\u8231\u5730\u677F 0.3175\uFF09" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": " carpet\uFF0C\u9876\u9762\u4E0E cabin-floor \u9F50\u5E73" }, "evidenceRefs": ["img-trunk-flat"], "details": ["d-trunk"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(138, 90, 48, 1.0)", "secondaryAlbedo": "rgba(138, 90, 48, 1.0)", "materialClass": "fabric", "materialClassConfidence": 0.9, "note": " carpet\uFF0C\u9876\u9762\u4E0E cabin-floor \u9F50\u5E73" }, "notes": "EX-25\uFF1A\u5C3E\u90E8\u6A2A\u5411\u8D2F\u7A7F\u9540\u94EC\u9970\u6761 1.50\xD70.035\uFF0C\u8D34\u5728\u5C3E\u95E8\u540E\u8138\uFF1Bchrome \u5408\u6279 +0 DC\u3002" };
+  mesh_trunk_floor_160.userData.sculptComponent = { "id": "trunk-floor", "name": "\u540E\u5907\u7BB1\u7EAF\u5E73\u5730\u677F", "level": "meso", "role": "detail", "importance": 0.85, "confidence": 0.86, "primitive": "box", "topologyClass": "assembled-solid", "topologyRationale": "\u8584\u677F/\u56DE\u8F6C\u4F53\uFF0C\u786C\u8868\u9762\u53EF\u5C55\u62D3\u6251", "geometryDescriptor": { "topologyIntent": "hard-surface precise", "edgeTreatment": { "type": "bevel", "bevelRadius": 4e-3, "segments": 1 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry" }, "parent": "cabin-interior", "attachment": { "parentSocket": "cabin-interior.floor", "localStart": [0, 0, 0], "localEnd": [0, 0, 0], "contactType": "flush", "embedDepth": 2e-3, "gapTolerance": 2e-3 }, "dimensions": { "width": 1.55, "height": 0.03, "depth": 0.19, "units": "meters", "confidence": 0.9 }, "transform": { "position": [0, 0.3, -2.345], "rotation": [0, 0, 0], "scale": [1.55, 0.03, 0.19] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "carpet", "materialLayers": ["carpet"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u7EAF\u5E73\u8F7D\u7269\u5730\u677F\uFF08\u4E09\u6392\u540E\u6BB5\uFF09", "kind": "floor", "note": "K1_\u540E\u5907\u7BB1-\u7EAF\u5E73\u50A8\u7269.jpg\uFF1A\u4E09\u6392\u4E4B\u540E\u5730\u677F\u7EAF\u5E73\u3001\u4E0E\u5EA7\u8231\u5730\u6BEF\u9762\u9F50\u5E73\uFF1B\u7F3A\u9677\u4FEE\u590D\uFF1A\u4E0A\u6CE2 z-2.825 \u4F38\u51FA\u540E\u4FDD\u8868\u9762\uFF08-2.48\uFF0934cm\uFF08P5-tail-wide-trueRear.png \u5B9E\u62CD\u5916\u9732\u4E14\u906E\u6321\u53CD\u5149\u6761\uFF09\uFF0C\u672C\u8F6E\u62C9\u56DE\u540E\u4FDD\u5185\u58C1 -2.44 \u5185\uFF0C\u4E0E cabin-floor \u540E\u7F18 -2.25 \u76F8\u63A5\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": " carpet\uFF0C\u9876\u9762\u4E0E cabin-floor \u9F50\u5E73" }, "evidenceRefs": ["img-trunk-flat"], "details": ["d-trunk"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(138, 90, 48, 1.0)", "secondaryAlbedo": "rgba(138, 90, 48, 1.0)", "materialClass": "fabric", "materialClassConfidence": 0.9, "note": " carpet\uFF0C\u9876\u9762\u4E0E cabin-floor \u9F50\u5E73" }, "notes": "EX-25/K1\uFF1A\u5C3E\u90E8\u6A2A\u5411\u8D2F\u7A7F\u9540\u94EC\u9970\u6761 1.50\xD70.035\uFF0C\u8D34\u5728\u5C3E\u95E8\u540E\u8138\uFF1Bchrome \u5408\u6279 +0 DC\u3002 [\u7F3A\u9677\u4FEE\u590D] z-2.44..-2.25\uFF08\u539F -2.825..-2.275 \u5916\u9732 34cm\uFF0C\u5DF2\u62C9\u56DE\u540E\u4FDD\u5185\u58C1\uFF09\u3002" };
   node_trunk_floor_160.add(mesh_trunk_floor_160);
   meshes2["trunk-floor"] = mesh_trunk_floor_160;
   colliders["trunk-floor"] = { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" };
@@ -25464,16 +25756,16 @@ function createZunjieV800LuxuryMPVModel(options = {}) {
     node_trunk_sill_161.position.copy(endpoint_trunk_sill_161.start);
     node_trunk_sill_161.rotation.set(0, 0, 0);
   } else {
-    node_trunk_sill_161.position.set(0, 0.345, -2.8);
+    node_trunk_sill_161.position.set(0, 0.345, -2.42);
     node_trunk_sill_161.rotation.set(0, 0, 0);
   }
-  node_trunk_sill_161.userData.sculptComponent = { "id": "trunk-sill", "name": "\u540E\u5907\u7BB1\u95E8\u69DB\u62A4\u677F", "level": "meso", "role": "detail", "importance": 0.85, "confidence": 0.86, "primitive": "box", "topologyClass": "assembled-solid", "topologyRationale": "\u8584\u677F/\u56DE\u8F6C\u4F53\uFF0C\u786C\u8868\u9762\u53EF\u5C55\u62D3\u6251", "geometryDescriptor": { "topologyIntent": "hard-surface precise", "edgeTreatment": { "type": "bevel", "bevelRadius": 4e-3, "segments": 1 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry" }, "parent": "cabin-interior", "attachment": { "parentSocket": "cabin-interior.floor", "localStart": [0, 0, 0], "localEnd": [0, 0, 0], "contactType": "flush", "embedDepth": 4e-3, "gapTolerance": 2e-3 }, "dimensions": { "width": 1.42, "height": 0.05, "depth": 0.06, "units": "meters", "confidence": 0.9 }, "transform": { "position": [0, 0.345, -2.8], "rotation": [0, 0, 0], "scale": [1.42, 0.05, 0.06] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "matte-black", "materialLayers": ["matte-black"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u95E8\u69DB\u62A4\u677F", "kind": "trim", "note": "K1\uFF1A\u5C3E\u95E8\u5F00\u53E3\u4E0B\u7F18\u95E8\u69DB\u62A4\u677F\uFF08\u4E3B\u7406\u4EBA\u6307\u5B9A matte-black\uFF1BK1 \u5B9E\u8F66\u4E3A\u4EAE\u9762\u9970\u6761\uFF0C\u6750\u8D28\u6309\u4E3B\u7406\u4EBA\u53E3\u5F84\uFF09" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "\u5C3E\u95E8\u5F00\u53E3\u4E0B\u7F18" }, "evidenceRefs": ["img-trunk-flat"], "details": ["d-trunk"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(18, 18, 20, 1.0)", "secondaryAlbedo": "rgba(18, 18, 20, 1.0)", "materialClass": "plastic", "materialClassConfidence": 0.9, "note": "\u5C3E\u95E8\u5F00\u53E3\u4E0B\u7F18" }, "notes": "EX-25\uFF1A\u5C3E\u90E8\u6A2A\u5411\u8D2F\u7A7F\u9540\u94EC\u9970\u6761 1.50\xD70.035\uFF0C\u8D34\u5728\u5C3E\u95E8\u540E\u8138\uFF1Bchrome \u5408\u6279 +0 DC\u3002" };
+  node_trunk_sill_161.userData.sculptComponent = { "id": "trunk-sill", "name": "\u540E\u5907\u7BB1\u95E8\u69DB\u62A4\u677F", "level": "meso", "role": "detail", "importance": 0.85, "confidence": 0.86, "primitive": "box", "topologyClass": "assembled-solid", "topologyRationale": "\u8584\u677F/\u56DE\u8F6C\u4F53\uFF0C\u786C\u8868\u9762\u53EF\u5C55\u62D3\u6251", "geometryDescriptor": { "topologyIntent": "hard-surface precise", "edgeTreatment": { "type": "bevel", "bevelRadius": 4e-3, "segments": 1 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry" }, "parent": "cabin-interior", "attachment": { "parentSocket": "cabin-interior.floor", "localStart": [0, 0, 0], "localEnd": [0, 0, 0], "contactType": "flush", "embedDepth": 4e-3, "gapTolerance": 2e-3 }, "dimensions": { "width": 1.42, "height": 0.05, "depth": 0.04, "units": "meters", "confidence": 0.9 }, "transform": { "position": [0, 0.345, -2.42], "rotation": [0, 0, 0], "scale": [1.42, 0.05, 0.04] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "matte-black", "materialLayers": ["matte-black"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u540E\u5907\u7BB1\u95E8\u69DB\u62A4\u677F\uFF08\u5185\u79FB\u4FEE\u590D\uFF09", "kind": "trim", "note": "K1\uFF1A\u5C3E\u95E8\u5F00\u53E3\u4E0B\u7F18\u95E8\u69DB\u62A4\u677F\uFF1B\u7F3A\u9677\u4FEE\u590D\uFF1A\u539F z-2.80 \u4F38\u51FA\u540E\u4FDD\u8868\u9762\uFF0C\u672C\u8F6E\u62C9\u56DE\u540E\u4FDD\u5185\u58C1 -2.44..-2.40\uFF08\u5EA7\u8231\u5185\u53EF\u89C1\u3001\u5916\u90E8\u4E0D\u9732\u51FA\uFF09\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "\u5C3E\u95E8\u5F00\u53E3\u4E0B\u7F18" }, "evidenceRefs": ["img-trunk-flat"], "details": ["d-trunk"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(18, 18, 20, 1.0)", "secondaryAlbedo": "rgba(18, 18, 20, 1.0)", "materialClass": "plastic", "materialClassConfidence": 0.9, "note": "\u5C3E\u95E8\u5F00\u53E3\u4E0B\u7F18" }, "notes": "EX-25/K1\uFF1A\u5C3E\u95E8\u5F00\u53E3\u4E0B\u7F18\u95E8\u69DB\u62A4\u677F\u3002 [\u7F3A\u9677\u4FEE\u590D] z-2.44..-2.40\uFF08\u539F -2.83..-2.77 \u5916\u9732\uFF0C\u5DF2\u62C9\u56DE\u540E\u4FDD\u5185\u58C1\uFF09\u3002" };
   node_trunk_sill_161.userData.actionProfile = { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } };
   (nodes["cabin-interior"] ?? root).add(node_trunk_sill_161);
   nodes["trunk-sill"] = node_trunk_sill_161;
   const mesh_trunk_sill_161Geometry = endpoint_trunk_sill_161 ? new CylinderGeometry(endpoint_trunk_sill_161.endRadius, endpoint_trunk_sill_161.baseRadius, endpoint_trunk_sill_161.length, 16, 6) : new BoxGeometry(1, 1, 1, 4, 4, 4);
   if (!endpoint_trunk_sill_161) {
-    mesh_trunk_sill_161Geometry.scale(1.42, 0.05, 0.06);
+    mesh_trunk_sill_161Geometry.scale(1.42, 0.05, 0.04);
   }
   const mesh_trunk_sill_161 = new Mesh(
     mesh_trunk_sill_161Geometry,
@@ -25486,7 +25778,7 @@ function createZunjieV800LuxuryMPVModel(options = {}) {
   }
   mesh_trunk_sill_161.castShadow = options.castShadow ?? true;
   mesh_trunk_sill_161.receiveShadow = options.receiveShadow ?? true;
-  mesh_trunk_sill_161.userData.sculptComponent = { "id": "trunk-sill", "name": "\u540E\u5907\u7BB1\u95E8\u69DB\u62A4\u677F", "level": "meso", "role": "detail", "importance": 0.85, "confidence": 0.86, "primitive": "box", "topologyClass": "assembled-solid", "topologyRationale": "\u8584\u677F/\u56DE\u8F6C\u4F53\uFF0C\u786C\u8868\u9762\u53EF\u5C55\u62D3\u6251", "geometryDescriptor": { "topologyIntent": "hard-surface precise", "edgeTreatment": { "type": "bevel", "bevelRadius": 4e-3, "segments": 1 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry" }, "parent": "cabin-interior", "attachment": { "parentSocket": "cabin-interior.floor", "localStart": [0, 0, 0], "localEnd": [0, 0, 0], "contactType": "flush", "embedDepth": 4e-3, "gapTolerance": 2e-3 }, "dimensions": { "width": 1.42, "height": 0.05, "depth": 0.06, "units": "meters", "confidence": 0.9 }, "transform": { "position": [0, 0.345, -2.8], "rotation": [0, 0, 0], "scale": [1.42, 0.05, 0.06] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "matte-black", "materialLayers": ["matte-black"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u95E8\u69DB\u62A4\u677F", "kind": "trim", "note": "K1\uFF1A\u5C3E\u95E8\u5F00\u53E3\u4E0B\u7F18\u95E8\u69DB\u62A4\u677F\uFF08\u4E3B\u7406\u4EBA\u6307\u5B9A matte-black\uFF1BK1 \u5B9E\u8F66\u4E3A\u4EAE\u9762\u9970\u6761\uFF0C\u6750\u8D28\u6309\u4E3B\u7406\u4EBA\u53E3\u5F84\uFF09" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "\u5C3E\u95E8\u5F00\u53E3\u4E0B\u7F18" }, "evidenceRefs": ["img-trunk-flat"], "details": ["d-trunk"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(18, 18, 20, 1.0)", "secondaryAlbedo": "rgba(18, 18, 20, 1.0)", "materialClass": "plastic", "materialClassConfidence": 0.9, "note": "\u5C3E\u95E8\u5F00\u53E3\u4E0B\u7F18" }, "notes": "EX-25\uFF1A\u5C3E\u90E8\u6A2A\u5411\u8D2F\u7A7F\u9540\u94EC\u9970\u6761 1.50\xD70.035\uFF0C\u8D34\u5728\u5C3E\u95E8\u540E\u8138\uFF1Bchrome \u5408\u6279 +0 DC\u3002" };
+  mesh_trunk_sill_161.userData.sculptComponent = { "id": "trunk-sill", "name": "\u540E\u5907\u7BB1\u95E8\u69DB\u62A4\u677F", "level": "meso", "role": "detail", "importance": 0.85, "confidence": 0.86, "primitive": "box", "topologyClass": "assembled-solid", "topologyRationale": "\u8584\u677F/\u56DE\u8F6C\u4F53\uFF0C\u786C\u8868\u9762\u53EF\u5C55\u62D3\u6251", "geometryDescriptor": { "topologyIntent": "hard-surface precise", "edgeTreatment": { "type": "bevel", "bevelRadius": 4e-3, "segments": 1 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry" }, "parent": "cabin-interior", "attachment": { "parentSocket": "cabin-interior.floor", "localStart": [0, 0, 0], "localEnd": [0, 0, 0], "contactType": "flush", "embedDepth": 4e-3, "gapTolerance": 2e-3 }, "dimensions": { "width": 1.42, "height": 0.05, "depth": 0.04, "units": "meters", "confidence": 0.9 }, "transform": { "position": [0, 0.345, -2.42], "rotation": [0, 0, 0], "scale": [1.42, 0.05, 0.04] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "matte-black", "materialLayers": ["matte-black"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u540E\u5907\u7BB1\u95E8\u69DB\u62A4\u677F\uFF08\u5185\u79FB\u4FEE\u590D\uFF09", "kind": "trim", "note": "K1\uFF1A\u5C3E\u95E8\u5F00\u53E3\u4E0B\u7F18\u95E8\u69DB\u62A4\u677F\uFF1B\u7F3A\u9677\u4FEE\u590D\uFF1A\u539F z-2.80 \u4F38\u51FA\u540E\u4FDD\u8868\u9762\uFF0C\u672C\u8F6E\u62C9\u56DE\u540E\u4FDD\u5185\u58C1 -2.44..-2.40\uFF08\u5EA7\u8231\u5185\u53EF\u89C1\u3001\u5916\u90E8\u4E0D\u9732\u51FA\uFF09\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "\u5C3E\u95E8\u5F00\u53E3\u4E0B\u7F18" }, "evidenceRefs": ["img-trunk-flat"], "details": ["d-trunk"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(18, 18, 20, 1.0)", "secondaryAlbedo": "rgba(18, 18, 20, 1.0)", "materialClass": "plastic", "materialClassConfidence": 0.9, "note": "\u5C3E\u95E8\u5F00\u53E3\u4E0B\u7F18" }, "notes": "EX-25/K1\uFF1A\u5C3E\u95E8\u5F00\u53E3\u4E0B\u7F18\u95E8\u69DB\u62A4\u677F\u3002 [\u7F3A\u9677\u4FEE\u590D] z-2.44..-2.40\uFF08\u539F -2.83..-2.77 \u5916\u9732\uFF0C\u5DF2\u62C9\u56DE\u540E\u4FDD\u5185\u58C1\uFF09\u3002" };
   node_trunk_sill_161.add(mesh_trunk_sill_161);
   meshes2["trunk-sill"] = mesh_trunk_sill_161;
   colliders["trunk-sill"] = { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" };
@@ -25784,6 +26076,510 @@ function createZunjieV800LuxuryMPVModel(options = {}) {
   colliders["taillamp-bar-bottom-r"] = { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" };
   destructionGroups["root"] ??= [];
   destructionGroups["root"].push(node_taillamp_bar_bottom_r_169);
+  const endpoint_headlamp_led_dot_1_l_170 = makeAttachmentEndpoint(null);
+  const node_headlamp_led_dot_1_l_170 = new Group();
+  node_headlamp_led_dot_1_l_170.name = "\u5927\u706F LED \u70B9\u9635 1\uFF08l\uFF09__pivot";
+  node_headlamp_led_dot_1_l_170.scale.set(1, 1, 1);
+  if (endpoint_headlamp_led_dot_1_l_170) {
+    node_headlamp_led_dot_1_l_170.position.copy(endpoint_headlamp_led_dot_1_l_170.start);
+    node_headlamp_led_dot_1_l_170.rotation.set(0, 0, 0);
+  } else {
+    node_headlamp_led_dot_1_l_170.position.set(5e-3, 0.056, 0.064);
+    node_headlamp_led_dot_1_l_170.rotation.set(0, 0, 0);
+  }
+  node_headlamp_led_dot_1_l_170.userData.sculptComponent = { "id": "headlamp-led-dot-1-l", "name": "\u5927\u706F LED \u70B9\u9635 1\uFF08l\uFF09", "level": "micro", "role": "detail", "importance": 0.95, "confidence": 0.95, "primitive": "extrude", "topologyClass": "conforming-shell", "topologyRationale": "\u7AD6\u5706\u89D2\u77E9\u5F62\u706F\u7F69\u8F6E\u5ED3\u6324\u51FA", "geometryDescriptor": { "profile2D": { "points": [[0.017, 0], [0.01571, 651e-5], [0.01202, 0.01202], [651e-5, 0.01571], [0, 0.017], [-651e-5, 0.01571], [-0.01202, 0.01202], [-0.01571, 651e-5], [-0.017, 0], [-0.01571, -651e-5], [-0.01202, -0.01202], [-651e-5, -0.01571], [-0, -0.017], [651e-5, -0.01571], [0.01202, -0.01202], [0.01571, -651e-5]], "depth": 0.012 }, "topologyIntent": "rounded disc with radial knurl contour", "edgeTreatment": { "type": "none", "bevelRadius": 0, "segments": 0 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals" }, "parent": "headlamp-l", "attachment": null, "dimensions": { "width": 0.034, "height": 0.034, "depth": 0.012, "units": "meters", "confidence": 0.9 }, "transform": { "position": [5e-3, 0.056, 0.064], "rotation": [0, 0, 0], "scale": [1, 1, 1] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.95 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "lamp-head", "materialLayers": ["lamp-head"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u5706\u5F62 LED \u706F\u73E0", "kind": "emissive", "note": "EX-08\uFF1AA1/A8 \u524D\u8138\u2014\u2014\u5927\u706F\u5185\u4FA7 3 \u679A\u5706\u5F62\u706F\u73E0\uFF0C\u4E0A\u4E8C\u4E0B\u4E00\u4E09\u89D2\u70B9\u9635\uFF1Blamp-head \u81EA\u53D1\u5149\u5185\u82AF\u3002UV \u5DF2\u7531\u96C6\u6210\u5C42 remapUVToRegion \u843D\u5165 createHeadlampLedTexture \u5149\u5BFC\u4EAE\u5E26\uFF08\u7EAF\u767D\u67D4\u8FB9\u5706\u9762\uFF0C\u968F setHeadlights \u8054\u52A8\uFF09\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "EX-08 \u5927\u706F LED \u70B9\u9635 1\uFF08l\uFF09\uFF1A16 \u8FB9\u5F62\u5706\u76D8 r0.017\xD7\u539A0.012\uFF0C\u4F4D\u4E8E\u706F\u7F69\u524D\u8868\u9762\u5916 6mm\uFF08\u5C40\u90E8 z0.064~0.076\uFF09\uFF0C\u7B49\u8FB9\u4E09\u89D2\u5E03\u5C40\u4E4B\u4E00" }, "evidenceRefs": ["img-headlamp-front"], "details": ["d-headlamp-star"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(242, 248, 255, 1.0)", "secondaryAlbedo": "rgba(242, 248, 255, 1.0)", "materialClass": "plastic", "materialClassConfidence": 0.9, "note": "EX-08 \u5927\u706F LED \u70B9\u9635 1\uFF08l\uFF09\uFF1A16 \u8FB9\u5F62\u5706\u76D8 r0.017\xD7\u539A0.012\uFF0C\u4F4D\u4E8E\u706F\u7F69\u524D\u8868\u9762\u5916 6mm\uFF08\u5C40\u90E8 z0.064~0.076\uFF09\uFF0C\u7B49\u8FB9\u4E09\u89D2\u5E03\u5C40\u4E4B\u4E00" } };
+  node_headlamp_led_dot_1_l_170.userData.actionProfile = { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.95 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } };
+  (nodes["headlamp-l"] ?? root).add(node_headlamp_led_dot_1_l_170);
+  nodes["headlamp-led-dot-1-l"] = node_headlamp_led_dot_1_l_170;
+  const mesh_headlamp_led_dot_1_l_170Geometry = endpoint_headlamp_led_dot_1_l_170 ? new CylinderGeometry(endpoint_headlamp_led_dot_1_l_170.endRadius, endpoint_headlamp_led_dot_1_l_170.baseRadius, endpoint_headlamp_led_dot_1_l_170.length, 16, 6) : buildExtrudeGeometry({ "points": [[0.017, 0], [0.01571, 651e-5], [0.01202, 0.01202], [651e-5, 0.01571], [0, 0.017], [-651e-5, 0.01571], [-0.01202, 0.01202], [-0.01571, 651e-5], [-0.017, 0], [-0.01571, -651e-5], [-0.01202, -0.01202], [-651e-5, -0.01571], [-0, -0.017], [651e-5, -0.01571], [0.01202, -0.01202], [0.01571, -651e-5]], "depth": 0.012 });
+  if (!endpoint_headlamp_led_dot_1_l_170) {
+    mesh_headlamp_led_dot_1_l_170Geometry.scale(1, 1, 1);
+  }
+  const mesh_headlamp_led_dot_1_l_170 = new Mesh(
+    mesh_headlamp_led_dot_1_l_170Geometry,
+    materialMap["lamp-head"] ?? new MeshStandardMaterial({ color: 8947848 })
+  );
+  mesh_headlamp_led_dot_1_l_170.name = "\u5927\u706F LED \u70B9\u9635 1\uFF08l\uFF09";
+  if (endpoint_headlamp_led_dot_1_l_170) {
+    mesh_headlamp_led_dot_1_l_170.position.copy(endpoint_headlamp_led_dot_1_l_170.midpoint);
+    mesh_headlamp_led_dot_1_l_170.quaternion.copy(endpoint_headlamp_led_dot_1_l_170.quaternion);
+  }
+  mesh_headlamp_led_dot_1_l_170.castShadow = options.castShadow ?? true;
+  mesh_headlamp_led_dot_1_l_170.receiveShadow = options.receiveShadow ?? true;
+  mesh_headlamp_led_dot_1_l_170.userData.sculptComponent = { "id": "headlamp-led-dot-1-l", "name": "\u5927\u706F LED \u70B9\u9635 1\uFF08l\uFF09", "level": "micro", "role": "detail", "importance": 0.95, "confidence": 0.95, "primitive": "extrude", "topologyClass": "conforming-shell", "topologyRationale": "\u7AD6\u5706\u89D2\u77E9\u5F62\u706F\u7F69\u8F6E\u5ED3\u6324\u51FA", "geometryDescriptor": { "profile2D": { "points": [[0.017, 0], [0.01571, 651e-5], [0.01202, 0.01202], [651e-5, 0.01571], [0, 0.017], [-651e-5, 0.01571], [-0.01202, 0.01202], [-0.01571, 651e-5], [-0.017, 0], [-0.01571, -651e-5], [-0.01202, -0.01202], [-651e-5, -0.01571], [-0, -0.017], [651e-5, -0.01571], [0.01202, -0.01202], [0.01571, -651e-5]], "depth": 0.012 }, "topologyIntent": "rounded disc with radial knurl contour", "edgeTreatment": { "type": "none", "bevelRadius": 0, "segments": 0 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals" }, "parent": "headlamp-l", "attachment": null, "dimensions": { "width": 0.034, "height": 0.034, "depth": 0.012, "units": "meters", "confidence": 0.9 }, "transform": { "position": [5e-3, 0.056, 0.064], "rotation": [0, 0, 0], "scale": [1, 1, 1] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.95 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "lamp-head", "materialLayers": ["lamp-head"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u5706\u5F62 LED \u706F\u73E0", "kind": "emissive", "note": "EX-08\uFF1AA1/A8 \u524D\u8138\u2014\u2014\u5927\u706F\u5185\u4FA7 3 \u679A\u5706\u5F62\u706F\u73E0\uFF0C\u4E0A\u4E8C\u4E0B\u4E00\u4E09\u89D2\u70B9\u9635\uFF1Blamp-head \u81EA\u53D1\u5149\u5185\u82AF\u3002UV \u5DF2\u7531\u96C6\u6210\u5C42 remapUVToRegion \u843D\u5165 createHeadlampLedTexture \u5149\u5BFC\u4EAE\u5E26\uFF08\u7EAF\u767D\u67D4\u8FB9\u5706\u9762\uFF0C\u968F setHeadlights \u8054\u52A8\uFF09\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "EX-08 \u5927\u706F LED \u70B9\u9635 1\uFF08l\uFF09\uFF1A16 \u8FB9\u5F62\u5706\u76D8 r0.017\xD7\u539A0.012\uFF0C\u4F4D\u4E8E\u706F\u7F69\u524D\u8868\u9762\u5916 6mm\uFF08\u5C40\u90E8 z0.064~0.076\uFF09\uFF0C\u7B49\u8FB9\u4E09\u89D2\u5E03\u5C40\u4E4B\u4E00" }, "evidenceRefs": ["img-headlamp-front"], "details": ["d-headlamp-star"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(242, 248, 255, 1.0)", "secondaryAlbedo": "rgba(242, 248, 255, 1.0)", "materialClass": "plastic", "materialClassConfidence": 0.9, "note": "EX-08 \u5927\u706F LED \u70B9\u9635 1\uFF08l\uFF09\uFF1A16 \u8FB9\u5F62\u5706\u76D8 r0.017\xD7\u539A0.012\uFF0C\u4F4D\u4E8E\u706F\u7F69\u524D\u8868\u9762\u5916 6mm\uFF08\u5C40\u90E8 z0.064~0.076\uFF09\uFF0C\u7B49\u8FB9\u4E09\u89D2\u5E03\u5C40\u4E4B\u4E00" } };
+  node_headlamp_led_dot_1_l_170.add(mesh_headlamp_led_dot_1_l_170);
+  meshes2["headlamp-led-dot-1-l"] = mesh_headlamp_led_dot_1_l_170;
+  colliders["headlamp-led-dot-1-l"] = { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" };
+  destructionGroups["root"] ??= [];
+  destructionGroups["root"].push(node_headlamp_led_dot_1_l_170);
+  const endpoint_headlamp_led_dot_2_l_171 = makeAttachmentEndpoint(null);
+  const node_headlamp_led_dot_2_l_171 = new Group();
+  node_headlamp_led_dot_2_l_171.name = "\u5927\u706F LED \u70B9\u9635 2\uFF08l\uFF09__pivot";
+  node_headlamp_led_dot_2_l_171.scale.set(1, 1, 1);
+  if (endpoint_headlamp_led_dot_2_l_171) {
+    node_headlamp_led_dot_2_l_171.position.copy(endpoint_headlamp_led_dot_2_l_171.start);
+    node_headlamp_led_dot_2_l_171.rotation.set(0, 0, 0);
+  } else {
+    node_headlamp_led_dot_2_l_171.position.set(-0.055, 0.056, 0.064);
+    node_headlamp_led_dot_2_l_171.rotation.set(0, 0, 0);
+  }
+  node_headlamp_led_dot_2_l_171.userData.sculptComponent = { "id": "headlamp-led-dot-2-l", "name": "\u5927\u706F LED \u70B9\u9635 2\uFF08l\uFF09", "level": "micro", "role": "detail", "importance": 0.95, "confidence": 0.95, "primitive": "extrude", "topologyClass": "conforming-shell", "topologyRationale": "\u7AD6\u5706\u89D2\u77E9\u5F62\u706F\u7F69\u8F6E\u5ED3\u6324\u51FA", "geometryDescriptor": { "profile2D": { "points": [[0.017, 0], [0.01571, 651e-5], [0.01202, 0.01202], [651e-5, 0.01571], [0, 0.017], [-651e-5, 0.01571], [-0.01202, 0.01202], [-0.01571, 651e-5], [-0.017, 0], [-0.01571, -651e-5], [-0.01202, -0.01202], [-651e-5, -0.01571], [-0, -0.017], [651e-5, -0.01571], [0.01202, -0.01202], [0.01571, -651e-5]], "depth": 0.012 }, "topologyIntent": "rounded disc with radial knurl contour", "edgeTreatment": { "type": "none", "bevelRadius": 0, "segments": 0 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals" }, "parent": "headlamp-l", "attachment": null, "dimensions": { "width": 0.034, "height": 0.034, "depth": 0.012, "units": "meters", "confidence": 0.9 }, "transform": { "position": [-0.055, 0.056, 0.064], "rotation": [0, 0, 0], "scale": [1, 1, 1] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.95 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "lamp-head", "materialLayers": ["lamp-head"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u5706\u5F62 LED \u706F\u73E0", "kind": "emissive", "note": "EX-08\uFF1AA1/A8 \u524D\u8138\u2014\u2014\u5927\u706F\u5185\u4FA7 3 \u679A\u5706\u5F62\u706F\u73E0\uFF0C\u4E0A\u4E8C\u4E0B\u4E00\u4E09\u89D2\u70B9\u9635\uFF1Blamp-head \u81EA\u53D1\u5149\u5185\u82AF\u3002UV \u5DF2\u7531\u96C6\u6210\u5C42 remapUVToRegion \u843D\u5165 createHeadlampLedTexture \u5149\u5BFC\u4EAE\u5E26\uFF08\u7EAF\u767D\u67D4\u8FB9\u5706\u9762\uFF0C\u968F setHeadlights \u8054\u52A8\uFF09\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "EX-08 \u5927\u706F LED \u70B9\u9635 2\uFF08l\uFF09\uFF1A16 \u8FB9\u5F62\u5706\u76D8 r0.017\xD7\u539A0.012\uFF0C\u4F4D\u4E8E\u706F\u7F69\u524D\u8868\u9762\u5916 6mm\uFF08\u5C40\u90E8 z0.064~0.076\uFF09\uFF0C\u7B49\u8FB9\u4E09\u89D2\u5E03\u5C40\u4E4B\u4E00" }, "evidenceRefs": ["img-headlamp-front"], "details": ["d-headlamp-star"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(242, 248, 255, 1.0)", "secondaryAlbedo": "rgba(242, 248, 255, 1.0)", "materialClass": "plastic", "materialClassConfidence": 0.9, "note": "EX-08 \u5927\u706F LED \u70B9\u9635 2\uFF08l\uFF09\uFF1A16 \u8FB9\u5F62\u5706\u76D8 r0.017\xD7\u539A0.012\uFF0C\u4F4D\u4E8E\u706F\u7F69\u524D\u8868\u9762\u5916 6mm\uFF08\u5C40\u90E8 z0.064~0.076\uFF09\uFF0C\u7B49\u8FB9\u4E09\u89D2\u5E03\u5C40\u4E4B\u4E00" } };
+  node_headlamp_led_dot_2_l_171.userData.actionProfile = { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.95 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } };
+  (nodes["headlamp-l"] ?? root).add(node_headlamp_led_dot_2_l_171);
+  nodes["headlamp-led-dot-2-l"] = node_headlamp_led_dot_2_l_171;
+  const mesh_headlamp_led_dot_2_l_171Geometry = endpoint_headlamp_led_dot_2_l_171 ? new CylinderGeometry(endpoint_headlamp_led_dot_2_l_171.endRadius, endpoint_headlamp_led_dot_2_l_171.baseRadius, endpoint_headlamp_led_dot_2_l_171.length, 16, 6) : buildExtrudeGeometry({ "points": [[0.017, 0], [0.01571, 651e-5], [0.01202, 0.01202], [651e-5, 0.01571], [0, 0.017], [-651e-5, 0.01571], [-0.01202, 0.01202], [-0.01571, 651e-5], [-0.017, 0], [-0.01571, -651e-5], [-0.01202, -0.01202], [-651e-5, -0.01571], [-0, -0.017], [651e-5, -0.01571], [0.01202, -0.01202], [0.01571, -651e-5]], "depth": 0.012 });
+  if (!endpoint_headlamp_led_dot_2_l_171) {
+    mesh_headlamp_led_dot_2_l_171Geometry.scale(1, 1, 1);
+  }
+  const mesh_headlamp_led_dot_2_l_171 = new Mesh(
+    mesh_headlamp_led_dot_2_l_171Geometry,
+    materialMap["lamp-head"] ?? new MeshStandardMaterial({ color: 8947848 })
+  );
+  mesh_headlamp_led_dot_2_l_171.name = "\u5927\u706F LED \u70B9\u9635 2\uFF08l\uFF09";
+  if (endpoint_headlamp_led_dot_2_l_171) {
+    mesh_headlamp_led_dot_2_l_171.position.copy(endpoint_headlamp_led_dot_2_l_171.midpoint);
+    mesh_headlamp_led_dot_2_l_171.quaternion.copy(endpoint_headlamp_led_dot_2_l_171.quaternion);
+  }
+  mesh_headlamp_led_dot_2_l_171.castShadow = options.castShadow ?? true;
+  mesh_headlamp_led_dot_2_l_171.receiveShadow = options.receiveShadow ?? true;
+  mesh_headlamp_led_dot_2_l_171.userData.sculptComponent = { "id": "headlamp-led-dot-2-l", "name": "\u5927\u706F LED \u70B9\u9635 2\uFF08l\uFF09", "level": "micro", "role": "detail", "importance": 0.95, "confidence": 0.95, "primitive": "extrude", "topologyClass": "conforming-shell", "topologyRationale": "\u7AD6\u5706\u89D2\u77E9\u5F62\u706F\u7F69\u8F6E\u5ED3\u6324\u51FA", "geometryDescriptor": { "profile2D": { "points": [[0.017, 0], [0.01571, 651e-5], [0.01202, 0.01202], [651e-5, 0.01571], [0, 0.017], [-651e-5, 0.01571], [-0.01202, 0.01202], [-0.01571, 651e-5], [-0.017, 0], [-0.01571, -651e-5], [-0.01202, -0.01202], [-651e-5, -0.01571], [-0, -0.017], [651e-5, -0.01571], [0.01202, -0.01202], [0.01571, -651e-5]], "depth": 0.012 }, "topologyIntent": "rounded disc with radial knurl contour", "edgeTreatment": { "type": "none", "bevelRadius": 0, "segments": 0 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals" }, "parent": "headlamp-l", "attachment": null, "dimensions": { "width": 0.034, "height": 0.034, "depth": 0.012, "units": "meters", "confidence": 0.9 }, "transform": { "position": [-0.055, 0.056, 0.064], "rotation": [0, 0, 0], "scale": [1, 1, 1] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.95 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "lamp-head", "materialLayers": ["lamp-head"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u5706\u5F62 LED \u706F\u73E0", "kind": "emissive", "note": "EX-08\uFF1AA1/A8 \u524D\u8138\u2014\u2014\u5927\u706F\u5185\u4FA7 3 \u679A\u5706\u5F62\u706F\u73E0\uFF0C\u4E0A\u4E8C\u4E0B\u4E00\u4E09\u89D2\u70B9\u9635\uFF1Blamp-head \u81EA\u53D1\u5149\u5185\u82AF\u3002UV \u5DF2\u7531\u96C6\u6210\u5C42 remapUVToRegion \u843D\u5165 createHeadlampLedTexture \u5149\u5BFC\u4EAE\u5E26\uFF08\u7EAF\u767D\u67D4\u8FB9\u5706\u9762\uFF0C\u968F setHeadlights \u8054\u52A8\uFF09\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "EX-08 \u5927\u706F LED \u70B9\u9635 2\uFF08l\uFF09\uFF1A16 \u8FB9\u5F62\u5706\u76D8 r0.017\xD7\u539A0.012\uFF0C\u4F4D\u4E8E\u706F\u7F69\u524D\u8868\u9762\u5916 6mm\uFF08\u5C40\u90E8 z0.064~0.076\uFF09\uFF0C\u7B49\u8FB9\u4E09\u89D2\u5E03\u5C40\u4E4B\u4E00" }, "evidenceRefs": ["img-headlamp-front"], "details": ["d-headlamp-star"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(242, 248, 255, 1.0)", "secondaryAlbedo": "rgba(242, 248, 255, 1.0)", "materialClass": "plastic", "materialClassConfidence": 0.9, "note": "EX-08 \u5927\u706F LED \u70B9\u9635 2\uFF08l\uFF09\uFF1A16 \u8FB9\u5F62\u5706\u76D8 r0.017\xD7\u539A0.012\uFF0C\u4F4D\u4E8E\u706F\u7F69\u524D\u8868\u9762\u5916 6mm\uFF08\u5C40\u90E8 z0.064~0.076\uFF09\uFF0C\u7B49\u8FB9\u4E09\u89D2\u5E03\u5C40\u4E4B\u4E00" } };
+  node_headlamp_led_dot_2_l_171.add(mesh_headlamp_led_dot_2_l_171);
+  meshes2["headlamp-led-dot-2-l"] = mesh_headlamp_led_dot_2_l_171;
+  colliders["headlamp-led-dot-2-l"] = { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" };
+  destructionGroups["root"] ??= [];
+  destructionGroups["root"].push(node_headlamp_led_dot_2_l_171);
+  const endpoint_headlamp_led_dot_3_l_172 = makeAttachmentEndpoint(null);
+  const node_headlamp_led_dot_3_l_172 = new Group();
+  node_headlamp_led_dot_3_l_172.name = "\u5927\u706F LED \u70B9\u9635 3\uFF08l\uFF09__pivot";
+  node_headlamp_led_dot_3_l_172.scale.set(1, 1, 1);
+  if (endpoint_headlamp_led_dot_3_l_172) {
+    node_headlamp_led_dot_3_l_172.position.copy(endpoint_headlamp_led_dot_3_l_172.start);
+    node_headlamp_led_dot_3_l_172.rotation.set(0, 0, 0);
+  } else {
+    node_headlamp_led_dot_3_l_172.position.set(-0.025, -0.026, 0.064);
+    node_headlamp_led_dot_3_l_172.rotation.set(0, 0, 0);
+  }
+  node_headlamp_led_dot_3_l_172.userData.sculptComponent = { "id": "headlamp-led-dot-3-l", "name": "\u5927\u706F LED \u70B9\u9635 3\uFF08l\uFF09", "level": "micro", "role": "detail", "importance": 0.95, "confidence": 0.95, "primitive": "extrude", "topologyClass": "conforming-shell", "topologyRationale": "\u7AD6\u5706\u89D2\u77E9\u5F62\u706F\u7F69\u8F6E\u5ED3\u6324\u51FA", "geometryDescriptor": { "profile2D": { "points": [[0.017, 0], [0.01571, 651e-5], [0.01202, 0.01202], [651e-5, 0.01571], [0, 0.017], [-651e-5, 0.01571], [-0.01202, 0.01202], [-0.01571, 651e-5], [-0.017, 0], [-0.01571, -651e-5], [-0.01202, -0.01202], [-651e-5, -0.01571], [-0, -0.017], [651e-5, -0.01571], [0.01202, -0.01202], [0.01571, -651e-5]], "depth": 0.012 }, "topologyIntent": "rounded disc with radial knurl contour", "edgeTreatment": { "type": "none", "bevelRadius": 0, "segments": 0 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals" }, "parent": "headlamp-l", "attachment": null, "dimensions": { "width": 0.034, "height": 0.034, "depth": 0.012, "units": "meters", "confidence": 0.9 }, "transform": { "position": [-0.025, -0.026, 0.064], "rotation": [0, 0, 0], "scale": [1, 1, 1] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.95 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "lamp-head", "materialLayers": ["lamp-head"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u5706\u5F62 LED \u706F\u73E0", "kind": "emissive", "note": "EX-08\uFF1AA1/A8 \u524D\u8138\u2014\u2014\u5927\u706F\u5185\u4FA7 3 \u679A\u5706\u5F62\u706F\u73E0\uFF0C\u4E0A\u4E8C\u4E0B\u4E00\u4E09\u89D2\u70B9\u9635\uFF1Blamp-head \u81EA\u53D1\u5149\u5185\u82AF\u3002UV \u5DF2\u7531\u96C6\u6210\u5C42 remapUVToRegion \u843D\u5165 createHeadlampLedTexture \u5149\u5BFC\u4EAE\u5E26\uFF08\u7EAF\u767D\u67D4\u8FB9\u5706\u9762\uFF0C\u968F setHeadlights \u8054\u52A8\uFF09\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "EX-08 \u5927\u706F LED \u70B9\u9635 3\uFF08l\uFF09\uFF1A16 \u8FB9\u5F62\u5706\u76D8 r0.017\xD7\u539A0.012\uFF0C\u4F4D\u4E8E\u706F\u7F69\u524D\u8868\u9762\u5916 6mm\uFF08\u5C40\u90E8 z0.064~0.076\uFF09\uFF0C\u7B49\u8FB9\u4E09\u89D2\u5E03\u5C40\u4E4B\u4E00" }, "evidenceRefs": ["img-headlamp-front"], "details": ["d-headlamp-star"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(242, 248, 255, 1.0)", "secondaryAlbedo": "rgba(242, 248, 255, 1.0)", "materialClass": "plastic", "materialClassConfidence": 0.9, "note": "EX-08 \u5927\u706F LED \u70B9\u9635 3\uFF08l\uFF09\uFF1A16 \u8FB9\u5F62\u5706\u76D8 r0.017\xD7\u539A0.012\uFF0C\u4F4D\u4E8E\u706F\u7F69\u524D\u8868\u9762\u5916 6mm\uFF08\u5C40\u90E8 z0.064~0.076\uFF09\uFF0C\u7B49\u8FB9\u4E09\u89D2\u5E03\u5C40\u4E4B\u4E00" } };
+  node_headlamp_led_dot_3_l_172.userData.actionProfile = { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.95 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } };
+  (nodes["headlamp-l"] ?? root).add(node_headlamp_led_dot_3_l_172);
+  nodes["headlamp-led-dot-3-l"] = node_headlamp_led_dot_3_l_172;
+  const mesh_headlamp_led_dot_3_l_172Geometry = endpoint_headlamp_led_dot_3_l_172 ? new CylinderGeometry(endpoint_headlamp_led_dot_3_l_172.endRadius, endpoint_headlamp_led_dot_3_l_172.baseRadius, endpoint_headlamp_led_dot_3_l_172.length, 16, 6) : buildExtrudeGeometry({ "points": [[0.017, 0], [0.01571, 651e-5], [0.01202, 0.01202], [651e-5, 0.01571], [0, 0.017], [-651e-5, 0.01571], [-0.01202, 0.01202], [-0.01571, 651e-5], [-0.017, 0], [-0.01571, -651e-5], [-0.01202, -0.01202], [-651e-5, -0.01571], [-0, -0.017], [651e-5, -0.01571], [0.01202, -0.01202], [0.01571, -651e-5]], "depth": 0.012 });
+  if (!endpoint_headlamp_led_dot_3_l_172) {
+    mesh_headlamp_led_dot_3_l_172Geometry.scale(1, 1, 1);
+  }
+  const mesh_headlamp_led_dot_3_l_172 = new Mesh(
+    mesh_headlamp_led_dot_3_l_172Geometry,
+    materialMap["lamp-head"] ?? new MeshStandardMaterial({ color: 8947848 })
+  );
+  mesh_headlamp_led_dot_3_l_172.name = "\u5927\u706F LED \u70B9\u9635 3\uFF08l\uFF09";
+  if (endpoint_headlamp_led_dot_3_l_172) {
+    mesh_headlamp_led_dot_3_l_172.position.copy(endpoint_headlamp_led_dot_3_l_172.midpoint);
+    mesh_headlamp_led_dot_3_l_172.quaternion.copy(endpoint_headlamp_led_dot_3_l_172.quaternion);
+  }
+  mesh_headlamp_led_dot_3_l_172.castShadow = options.castShadow ?? true;
+  mesh_headlamp_led_dot_3_l_172.receiveShadow = options.receiveShadow ?? true;
+  mesh_headlamp_led_dot_3_l_172.userData.sculptComponent = { "id": "headlamp-led-dot-3-l", "name": "\u5927\u706F LED \u70B9\u9635 3\uFF08l\uFF09", "level": "micro", "role": "detail", "importance": 0.95, "confidence": 0.95, "primitive": "extrude", "topologyClass": "conforming-shell", "topologyRationale": "\u7AD6\u5706\u89D2\u77E9\u5F62\u706F\u7F69\u8F6E\u5ED3\u6324\u51FA", "geometryDescriptor": { "profile2D": { "points": [[0.017, 0], [0.01571, 651e-5], [0.01202, 0.01202], [651e-5, 0.01571], [0, 0.017], [-651e-5, 0.01571], [-0.01202, 0.01202], [-0.01571, 651e-5], [-0.017, 0], [-0.01571, -651e-5], [-0.01202, -0.01202], [-651e-5, -0.01571], [-0, -0.017], [651e-5, -0.01571], [0.01202, -0.01202], [0.01571, -651e-5]], "depth": 0.012 }, "topologyIntent": "rounded disc with radial knurl contour", "edgeTreatment": { "type": "none", "bevelRadius": 0, "segments": 0 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals" }, "parent": "headlamp-l", "attachment": null, "dimensions": { "width": 0.034, "height": 0.034, "depth": 0.012, "units": "meters", "confidence": 0.9 }, "transform": { "position": [-0.025, -0.026, 0.064], "rotation": [0, 0, 0], "scale": [1, 1, 1] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.95 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "lamp-head", "materialLayers": ["lamp-head"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u5706\u5F62 LED \u706F\u73E0", "kind": "emissive", "note": "EX-08\uFF1AA1/A8 \u524D\u8138\u2014\u2014\u5927\u706F\u5185\u4FA7 3 \u679A\u5706\u5F62\u706F\u73E0\uFF0C\u4E0A\u4E8C\u4E0B\u4E00\u4E09\u89D2\u70B9\u9635\uFF1Blamp-head \u81EA\u53D1\u5149\u5185\u82AF\u3002UV \u5DF2\u7531\u96C6\u6210\u5C42 remapUVToRegion \u843D\u5165 createHeadlampLedTexture \u5149\u5BFC\u4EAE\u5E26\uFF08\u7EAF\u767D\u67D4\u8FB9\u5706\u9762\uFF0C\u968F setHeadlights \u8054\u52A8\uFF09\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "EX-08 \u5927\u706F LED \u70B9\u9635 3\uFF08l\uFF09\uFF1A16 \u8FB9\u5F62\u5706\u76D8 r0.017\xD7\u539A0.012\uFF0C\u4F4D\u4E8E\u706F\u7F69\u524D\u8868\u9762\u5916 6mm\uFF08\u5C40\u90E8 z0.064~0.076\uFF09\uFF0C\u7B49\u8FB9\u4E09\u89D2\u5E03\u5C40\u4E4B\u4E00" }, "evidenceRefs": ["img-headlamp-front"], "details": ["d-headlamp-star"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(242, 248, 255, 1.0)", "secondaryAlbedo": "rgba(242, 248, 255, 1.0)", "materialClass": "plastic", "materialClassConfidence": 0.9, "note": "EX-08 \u5927\u706F LED \u70B9\u9635 3\uFF08l\uFF09\uFF1A16 \u8FB9\u5F62\u5706\u76D8 r0.017\xD7\u539A0.012\uFF0C\u4F4D\u4E8E\u706F\u7F69\u524D\u8868\u9762\u5916 6mm\uFF08\u5C40\u90E8 z0.064~0.076\uFF09\uFF0C\u7B49\u8FB9\u4E09\u89D2\u5E03\u5C40\u4E4B\u4E00" } };
+  node_headlamp_led_dot_3_l_172.add(mesh_headlamp_led_dot_3_l_172);
+  meshes2["headlamp-led-dot-3-l"] = mesh_headlamp_led_dot_3_l_172;
+  colliders["headlamp-led-dot-3-l"] = { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" };
+  destructionGroups["root"] ??= [];
+  destructionGroups["root"].push(node_headlamp_led_dot_3_l_172);
+  const endpoint_headlamp_led_dot_1_r_173 = makeAttachmentEndpoint(null);
+  const node_headlamp_led_dot_1_r_173 = new Group();
+  node_headlamp_led_dot_1_r_173.name = "\u5927\u706F LED \u70B9\u9635 1\uFF08r\uFF09__pivot";
+  node_headlamp_led_dot_1_r_173.scale.set(1, 1, 1);
+  if (endpoint_headlamp_led_dot_1_r_173) {
+    node_headlamp_led_dot_1_r_173.position.copy(endpoint_headlamp_led_dot_1_r_173.start);
+    node_headlamp_led_dot_1_r_173.rotation.set(0, 0, 0);
+  } else {
+    node_headlamp_led_dot_1_r_173.position.set(-5e-3, 0.056, 0.064);
+    node_headlamp_led_dot_1_r_173.rotation.set(0, 0, 0);
+  }
+  node_headlamp_led_dot_1_r_173.userData.sculptComponent = { "id": "headlamp-led-dot-1-r", "name": "\u5927\u706F LED \u70B9\u9635 1\uFF08r\uFF09", "level": "micro", "role": "detail", "importance": 0.95, "confidence": 0.95, "primitive": "extrude", "topologyClass": "conforming-shell", "topologyRationale": "\u7AD6\u5706\u89D2\u77E9\u5F62\u706F\u7F69\u8F6E\u5ED3\u6324\u51FA", "geometryDescriptor": { "profile2D": { "points": [[0.017, 0], [0.01571, 651e-5], [0.01202, 0.01202], [651e-5, 0.01571], [0, 0.017], [-651e-5, 0.01571], [-0.01202, 0.01202], [-0.01571, 651e-5], [-0.017, 0], [-0.01571, -651e-5], [-0.01202, -0.01202], [-651e-5, -0.01571], [-0, -0.017], [651e-5, -0.01571], [0.01202, -0.01202], [0.01571, -651e-5]], "depth": 0.012 }, "topologyIntent": "rounded disc with radial knurl contour", "edgeTreatment": { "type": "none", "bevelRadius": 0, "segments": 0 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals" }, "parent": "headlamp-r", "attachment": null, "dimensions": { "width": 0.034, "height": 0.034, "depth": 0.012, "units": "meters", "confidence": 0.9 }, "transform": { "position": [-5e-3, 0.056, 0.064], "rotation": [0, 0, 0], "scale": [1, 1, 1] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.95 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "lamp-head", "materialLayers": ["lamp-head"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u5706\u5F62 LED \u706F\u73E0", "kind": "emissive", "note": "EX-08\uFF1AA1/A8 \u524D\u8138\u2014\u2014\u5927\u706F\u5185\u4FA7 3 \u679A\u5706\u5F62\u706F\u73E0\uFF0C\u4E0A\u4E8C\u4E0B\u4E00\u4E09\u89D2\u70B9\u9635\uFF1Blamp-head \u81EA\u53D1\u5149\u5185\u82AF\u3002UV \u5DF2\u7531\u96C6\u6210\u5C42 remapUVToRegion \u843D\u5165 createHeadlampLedTexture \u5149\u5BFC\u4EAE\u5E26\uFF08\u7EAF\u767D\u67D4\u8FB9\u5706\u9762\uFF0C\u968F setHeadlights \u8054\u52A8\uFF09\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "EX-08 \u5927\u706F LED \u70B9\u9635 1\uFF08r\uFF09\uFF1A16 \u8FB9\u5F62\u5706\u76D8 r0.017\xD7\u539A0.012\uFF0C\u4F4D\u4E8E\u706F\u7F69\u524D\u8868\u9762\u5916 6mm\uFF08\u5C40\u90E8 z0.064~0.076\uFF09\uFF0C\u7B49\u8FB9\u4E09\u89D2\u5E03\u5C40\u4E4B\u4E00" }, "evidenceRefs": ["img-headlamp-front"], "details": ["d-headlamp-star"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(242, 248, 255, 1.0)", "secondaryAlbedo": "rgba(242, 248, 255, 1.0)", "materialClass": "plastic", "materialClassConfidence": 0.9, "note": "EX-08 \u5927\u706F LED \u70B9\u9635 1\uFF08r\uFF09\uFF1A16 \u8FB9\u5F62\u5706\u76D8 r0.017\xD7\u539A0.012\uFF0C\u4F4D\u4E8E\u706F\u7F69\u524D\u8868\u9762\u5916 6mm\uFF08\u5C40\u90E8 z0.064~0.076\uFF09\uFF0C\u7B49\u8FB9\u4E09\u89D2\u5E03\u5C40\u4E4B\u4E00" } };
+  node_headlamp_led_dot_1_r_173.userData.actionProfile = { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.95 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } };
+  (nodes["headlamp-r"] ?? root).add(node_headlamp_led_dot_1_r_173);
+  nodes["headlamp-led-dot-1-r"] = node_headlamp_led_dot_1_r_173;
+  const mesh_headlamp_led_dot_1_r_173Geometry = endpoint_headlamp_led_dot_1_r_173 ? new CylinderGeometry(endpoint_headlamp_led_dot_1_r_173.endRadius, endpoint_headlamp_led_dot_1_r_173.baseRadius, endpoint_headlamp_led_dot_1_r_173.length, 16, 6) : buildExtrudeGeometry({ "points": [[0.017, 0], [0.01571, 651e-5], [0.01202, 0.01202], [651e-5, 0.01571], [0, 0.017], [-651e-5, 0.01571], [-0.01202, 0.01202], [-0.01571, 651e-5], [-0.017, 0], [-0.01571, -651e-5], [-0.01202, -0.01202], [-651e-5, -0.01571], [-0, -0.017], [651e-5, -0.01571], [0.01202, -0.01202], [0.01571, -651e-5]], "depth": 0.012 });
+  if (!endpoint_headlamp_led_dot_1_r_173) {
+    mesh_headlamp_led_dot_1_r_173Geometry.scale(1, 1, 1);
+  }
+  const mesh_headlamp_led_dot_1_r_173 = new Mesh(
+    mesh_headlamp_led_dot_1_r_173Geometry,
+    materialMap["lamp-head"] ?? new MeshStandardMaterial({ color: 8947848 })
+  );
+  mesh_headlamp_led_dot_1_r_173.name = "\u5927\u706F LED \u70B9\u9635 1\uFF08r\uFF09";
+  if (endpoint_headlamp_led_dot_1_r_173) {
+    mesh_headlamp_led_dot_1_r_173.position.copy(endpoint_headlamp_led_dot_1_r_173.midpoint);
+    mesh_headlamp_led_dot_1_r_173.quaternion.copy(endpoint_headlamp_led_dot_1_r_173.quaternion);
+  }
+  mesh_headlamp_led_dot_1_r_173.castShadow = options.castShadow ?? true;
+  mesh_headlamp_led_dot_1_r_173.receiveShadow = options.receiveShadow ?? true;
+  mesh_headlamp_led_dot_1_r_173.userData.sculptComponent = { "id": "headlamp-led-dot-1-r", "name": "\u5927\u706F LED \u70B9\u9635 1\uFF08r\uFF09", "level": "micro", "role": "detail", "importance": 0.95, "confidence": 0.95, "primitive": "extrude", "topologyClass": "conforming-shell", "topologyRationale": "\u7AD6\u5706\u89D2\u77E9\u5F62\u706F\u7F69\u8F6E\u5ED3\u6324\u51FA", "geometryDescriptor": { "profile2D": { "points": [[0.017, 0], [0.01571, 651e-5], [0.01202, 0.01202], [651e-5, 0.01571], [0, 0.017], [-651e-5, 0.01571], [-0.01202, 0.01202], [-0.01571, 651e-5], [-0.017, 0], [-0.01571, -651e-5], [-0.01202, -0.01202], [-651e-5, -0.01571], [-0, -0.017], [651e-5, -0.01571], [0.01202, -0.01202], [0.01571, -651e-5]], "depth": 0.012 }, "topologyIntent": "rounded disc with radial knurl contour", "edgeTreatment": { "type": "none", "bevelRadius": 0, "segments": 0 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals" }, "parent": "headlamp-r", "attachment": null, "dimensions": { "width": 0.034, "height": 0.034, "depth": 0.012, "units": "meters", "confidence": 0.9 }, "transform": { "position": [-5e-3, 0.056, 0.064], "rotation": [0, 0, 0], "scale": [1, 1, 1] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.95 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "lamp-head", "materialLayers": ["lamp-head"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u5706\u5F62 LED \u706F\u73E0", "kind": "emissive", "note": "EX-08\uFF1AA1/A8 \u524D\u8138\u2014\u2014\u5927\u706F\u5185\u4FA7 3 \u679A\u5706\u5F62\u706F\u73E0\uFF0C\u4E0A\u4E8C\u4E0B\u4E00\u4E09\u89D2\u70B9\u9635\uFF1Blamp-head \u81EA\u53D1\u5149\u5185\u82AF\u3002UV \u5DF2\u7531\u96C6\u6210\u5C42 remapUVToRegion \u843D\u5165 createHeadlampLedTexture \u5149\u5BFC\u4EAE\u5E26\uFF08\u7EAF\u767D\u67D4\u8FB9\u5706\u9762\uFF0C\u968F setHeadlights \u8054\u52A8\uFF09\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "EX-08 \u5927\u706F LED \u70B9\u9635 1\uFF08r\uFF09\uFF1A16 \u8FB9\u5F62\u5706\u76D8 r0.017\xD7\u539A0.012\uFF0C\u4F4D\u4E8E\u706F\u7F69\u524D\u8868\u9762\u5916 6mm\uFF08\u5C40\u90E8 z0.064~0.076\uFF09\uFF0C\u7B49\u8FB9\u4E09\u89D2\u5E03\u5C40\u4E4B\u4E00" }, "evidenceRefs": ["img-headlamp-front"], "details": ["d-headlamp-star"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(242, 248, 255, 1.0)", "secondaryAlbedo": "rgba(242, 248, 255, 1.0)", "materialClass": "plastic", "materialClassConfidence": 0.9, "note": "EX-08 \u5927\u706F LED \u70B9\u9635 1\uFF08r\uFF09\uFF1A16 \u8FB9\u5F62\u5706\u76D8 r0.017\xD7\u539A0.012\uFF0C\u4F4D\u4E8E\u706F\u7F69\u524D\u8868\u9762\u5916 6mm\uFF08\u5C40\u90E8 z0.064~0.076\uFF09\uFF0C\u7B49\u8FB9\u4E09\u89D2\u5E03\u5C40\u4E4B\u4E00" } };
+  node_headlamp_led_dot_1_r_173.add(mesh_headlamp_led_dot_1_r_173);
+  meshes2["headlamp-led-dot-1-r"] = mesh_headlamp_led_dot_1_r_173;
+  colliders["headlamp-led-dot-1-r"] = { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" };
+  destructionGroups["root"] ??= [];
+  destructionGroups["root"].push(node_headlamp_led_dot_1_r_173);
+  const endpoint_headlamp_led_dot_2_r_174 = makeAttachmentEndpoint(null);
+  const node_headlamp_led_dot_2_r_174 = new Group();
+  node_headlamp_led_dot_2_r_174.name = "\u5927\u706F LED \u70B9\u9635 2\uFF08r\uFF09__pivot";
+  node_headlamp_led_dot_2_r_174.scale.set(1, 1, 1);
+  if (endpoint_headlamp_led_dot_2_r_174) {
+    node_headlamp_led_dot_2_r_174.position.copy(endpoint_headlamp_led_dot_2_r_174.start);
+    node_headlamp_led_dot_2_r_174.rotation.set(0, 0, 0);
+  } else {
+    node_headlamp_led_dot_2_r_174.position.set(0.055, 0.056, 0.064);
+    node_headlamp_led_dot_2_r_174.rotation.set(0, 0, 0);
+  }
+  node_headlamp_led_dot_2_r_174.userData.sculptComponent = { "id": "headlamp-led-dot-2-r", "name": "\u5927\u706F LED \u70B9\u9635 2\uFF08r\uFF09", "level": "micro", "role": "detail", "importance": 0.95, "confidence": 0.95, "primitive": "extrude", "topologyClass": "conforming-shell", "topologyRationale": "\u7AD6\u5706\u89D2\u77E9\u5F62\u706F\u7F69\u8F6E\u5ED3\u6324\u51FA", "geometryDescriptor": { "profile2D": { "points": [[0.017, 0], [0.01571, 651e-5], [0.01202, 0.01202], [651e-5, 0.01571], [0, 0.017], [-651e-5, 0.01571], [-0.01202, 0.01202], [-0.01571, 651e-5], [-0.017, 0], [-0.01571, -651e-5], [-0.01202, -0.01202], [-651e-5, -0.01571], [-0, -0.017], [651e-5, -0.01571], [0.01202, -0.01202], [0.01571, -651e-5]], "depth": 0.012 }, "topologyIntent": "rounded disc with radial knurl contour", "edgeTreatment": { "type": "none", "bevelRadius": 0, "segments": 0 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals" }, "parent": "headlamp-r", "attachment": null, "dimensions": { "width": 0.034, "height": 0.034, "depth": 0.012, "units": "meters", "confidence": 0.9 }, "transform": { "position": [0.055, 0.056, 0.064], "rotation": [0, 0, 0], "scale": [1, 1, 1] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.95 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "lamp-head", "materialLayers": ["lamp-head"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u5706\u5F62 LED \u706F\u73E0", "kind": "emissive", "note": "EX-08\uFF1AA1/A8 \u524D\u8138\u2014\u2014\u5927\u706F\u5185\u4FA7 3 \u679A\u5706\u5F62\u706F\u73E0\uFF0C\u4E0A\u4E8C\u4E0B\u4E00\u4E09\u89D2\u70B9\u9635\uFF1Blamp-head \u81EA\u53D1\u5149\u5185\u82AF\u3002UV \u5DF2\u7531\u96C6\u6210\u5C42 remapUVToRegion \u843D\u5165 createHeadlampLedTexture \u5149\u5BFC\u4EAE\u5E26\uFF08\u7EAF\u767D\u67D4\u8FB9\u5706\u9762\uFF0C\u968F setHeadlights \u8054\u52A8\uFF09\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "EX-08 \u5927\u706F LED \u70B9\u9635 2\uFF08r\uFF09\uFF1A16 \u8FB9\u5F62\u5706\u76D8 r0.017\xD7\u539A0.012\uFF0C\u4F4D\u4E8E\u706F\u7F69\u524D\u8868\u9762\u5916 6mm\uFF08\u5C40\u90E8 z0.064~0.076\uFF09\uFF0C\u7B49\u8FB9\u4E09\u89D2\u5E03\u5C40\u4E4B\u4E00" }, "evidenceRefs": ["img-headlamp-front"], "details": ["d-headlamp-star"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(242, 248, 255, 1.0)", "secondaryAlbedo": "rgba(242, 248, 255, 1.0)", "materialClass": "plastic", "materialClassConfidence": 0.9, "note": "EX-08 \u5927\u706F LED \u70B9\u9635 2\uFF08r\uFF09\uFF1A16 \u8FB9\u5F62\u5706\u76D8 r0.017\xD7\u539A0.012\uFF0C\u4F4D\u4E8E\u706F\u7F69\u524D\u8868\u9762\u5916 6mm\uFF08\u5C40\u90E8 z0.064~0.076\uFF09\uFF0C\u7B49\u8FB9\u4E09\u89D2\u5E03\u5C40\u4E4B\u4E00" } };
+  node_headlamp_led_dot_2_r_174.userData.actionProfile = { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.95 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } };
+  (nodes["headlamp-r"] ?? root).add(node_headlamp_led_dot_2_r_174);
+  nodes["headlamp-led-dot-2-r"] = node_headlamp_led_dot_2_r_174;
+  const mesh_headlamp_led_dot_2_r_174Geometry = endpoint_headlamp_led_dot_2_r_174 ? new CylinderGeometry(endpoint_headlamp_led_dot_2_r_174.endRadius, endpoint_headlamp_led_dot_2_r_174.baseRadius, endpoint_headlamp_led_dot_2_r_174.length, 16, 6) : buildExtrudeGeometry({ "points": [[0.017, 0], [0.01571, 651e-5], [0.01202, 0.01202], [651e-5, 0.01571], [0, 0.017], [-651e-5, 0.01571], [-0.01202, 0.01202], [-0.01571, 651e-5], [-0.017, 0], [-0.01571, -651e-5], [-0.01202, -0.01202], [-651e-5, -0.01571], [-0, -0.017], [651e-5, -0.01571], [0.01202, -0.01202], [0.01571, -651e-5]], "depth": 0.012 });
+  if (!endpoint_headlamp_led_dot_2_r_174) {
+    mesh_headlamp_led_dot_2_r_174Geometry.scale(1, 1, 1);
+  }
+  const mesh_headlamp_led_dot_2_r_174 = new Mesh(
+    mesh_headlamp_led_dot_2_r_174Geometry,
+    materialMap["lamp-head"] ?? new MeshStandardMaterial({ color: 8947848 })
+  );
+  mesh_headlamp_led_dot_2_r_174.name = "\u5927\u706F LED \u70B9\u9635 2\uFF08r\uFF09";
+  if (endpoint_headlamp_led_dot_2_r_174) {
+    mesh_headlamp_led_dot_2_r_174.position.copy(endpoint_headlamp_led_dot_2_r_174.midpoint);
+    mesh_headlamp_led_dot_2_r_174.quaternion.copy(endpoint_headlamp_led_dot_2_r_174.quaternion);
+  }
+  mesh_headlamp_led_dot_2_r_174.castShadow = options.castShadow ?? true;
+  mesh_headlamp_led_dot_2_r_174.receiveShadow = options.receiveShadow ?? true;
+  mesh_headlamp_led_dot_2_r_174.userData.sculptComponent = { "id": "headlamp-led-dot-2-r", "name": "\u5927\u706F LED \u70B9\u9635 2\uFF08r\uFF09", "level": "micro", "role": "detail", "importance": 0.95, "confidence": 0.95, "primitive": "extrude", "topologyClass": "conforming-shell", "topologyRationale": "\u7AD6\u5706\u89D2\u77E9\u5F62\u706F\u7F69\u8F6E\u5ED3\u6324\u51FA", "geometryDescriptor": { "profile2D": { "points": [[0.017, 0], [0.01571, 651e-5], [0.01202, 0.01202], [651e-5, 0.01571], [0, 0.017], [-651e-5, 0.01571], [-0.01202, 0.01202], [-0.01571, 651e-5], [-0.017, 0], [-0.01571, -651e-5], [-0.01202, -0.01202], [-651e-5, -0.01571], [-0, -0.017], [651e-5, -0.01571], [0.01202, -0.01202], [0.01571, -651e-5]], "depth": 0.012 }, "topologyIntent": "rounded disc with radial knurl contour", "edgeTreatment": { "type": "none", "bevelRadius": 0, "segments": 0 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals" }, "parent": "headlamp-r", "attachment": null, "dimensions": { "width": 0.034, "height": 0.034, "depth": 0.012, "units": "meters", "confidence": 0.9 }, "transform": { "position": [0.055, 0.056, 0.064], "rotation": [0, 0, 0], "scale": [1, 1, 1] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.95 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "lamp-head", "materialLayers": ["lamp-head"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u5706\u5F62 LED \u706F\u73E0", "kind": "emissive", "note": "EX-08\uFF1AA1/A8 \u524D\u8138\u2014\u2014\u5927\u706F\u5185\u4FA7 3 \u679A\u5706\u5F62\u706F\u73E0\uFF0C\u4E0A\u4E8C\u4E0B\u4E00\u4E09\u89D2\u70B9\u9635\uFF1Blamp-head \u81EA\u53D1\u5149\u5185\u82AF\u3002UV \u5DF2\u7531\u96C6\u6210\u5C42 remapUVToRegion \u843D\u5165 createHeadlampLedTexture \u5149\u5BFC\u4EAE\u5E26\uFF08\u7EAF\u767D\u67D4\u8FB9\u5706\u9762\uFF0C\u968F setHeadlights \u8054\u52A8\uFF09\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "EX-08 \u5927\u706F LED \u70B9\u9635 2\uFF08r\uFF09\uFF1A16 \u8FB9\u5F62\u5706\u76D8 r0.017\xD7\u539A0.012\uFF0C\u4F4D\u4E8E\u706F\u7F69\u524D\u8868\u9762\u5916 6mm\uFF08\u5C40\u90E8 z0.064~0.076\uFF09\uFF0C\u7B49\u8FB9\u4E09\u89D2\u5E03\u5C40\u4E4B\u4E00" }, "evidenceRefs": ["img-headlamp-front"], "details": ["d-headlamp-star"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(242, 248, 255, 1.0)", "secondaryAlbedo": "rgba(242, 248, 255, 1.0)", "materialClass": "plastic", "materialClassConfidence": 0.9, "note": "EX-08 \u5927\u706F LED \u70B9\u9635 2\uFF08r\uFF09\uFF1A16 \u8FB9\u5F62\u5706\u76D8 r0.017\xD7\u539A0.012\uFF0C\u4F4D\u4E8E\u706F\u7F69\u524D\u8868\u9762\u5916 6mm\uFF08\u5C40\u90E8 z0.064~0.076\uFF09\uFF0C\u7B49\u8FB9\u4E09\u89D2\u5E03\u5C40\u4E4B\u4E00" } };
+  node_headlamp_led_dot_2_r_174.add(mesh_headlamp_led_dot_2_r_174);
+  meshes2["headlamp-led-dot-2-r"] = mesh_headlamp_led_dot_2_r_174;
+  colliders["headlamp-led-dot-2-r"] = { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" };
+  destructionGroups["root"] ??= [];
+  destructionGroups["root"].push(node_headlamp_led_dot_2_r_174);
+  const endpoint_headlamp_led_dot_3_r_175 = makeAttachmentEndpoint(null);
+  const node_headlamp_led_dot_3_r_175 = new Group();
+  node_headlamp_led_dot_3_r_175.name = "\u5927\u706F LED \u70B9\u9635 3\uFF08r\uFF09__pivot";
+  node_headlamp_led_dot_3_r_175.scale.set(1, 1, 1);
+  if (endpoint_headlamp_led_dot_3_r_175) {
+    node_headlamp_led_dot_3_r_175.position.copy(endpoint_headlamp_led_dot_3_r_175.start);
+    node_headlamp_led_dot_3_r_175.rotation.set(0, 0, 0);
+  } else {
+    node_headlamp_led_dot_3_r_175.position.set(0.025, -0.026, 0.064);
+    node_headlamp_led_dot_3_r_175.rotation.set(0, 0, 0);
+  }
+  node_headlamp_led_dot_3_r_175.userData.sculptComponent = { "id": "headlamp-led-dot-3-r", "name": "\u5927\u706F LED \u70B9\u9635 3\uFF08r\uFF09", "level": "micro", "role": "detail", "importance": 0.95, "confidence": 0.95, "primitive": "extrude", "topologyClass": "conforming-shell", "topologyRationale": "\u7AD6\u5706\u89D2\u77E9\u5F62\u706F\u7F69\u8F6E\u5ED3\u6324\u51FA", "geometryDescriptor": { "profile2D": { "points": [[0.017, 0], [0.01571, 651e-5], [0.01202, 0.01202], [651e-5, 0.01571], [0, 0.017], [-651e-5, 0.01571], [-0.01202, 0.01202], [-0.01571, 651e-5], [-0.017, 0], [-0.01571, -651e-5], [-0.01202, -0.01202], [-651e-5, -0.01571], [-0, -0.017], [651e-5, -0.01571], [0.01202, -0.01202], [0.01571, -651e-5]], "depth": 0.012 }, "topologyIntent": "rounded disc with radial knurl contour", "edgeTreatment": { "type": "none", "bevelRadius": 0, "segments": 0 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals" }, "parent": "headlamp-r", "attachment": null, "dimensions": { "width": 0.034, "height": 0.034, "depth": 0.012, "units": "meters", "confidence": 0.9 }, "transform": { "position": [0.025, -0.026, 0.064], "rotation": [0, 0, 0], "scale": [1, 1, 1] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.95 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "lamp-head", "materialLayers": ["lamp-head"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u5706\u5F62 LED \u706F\u73E0", "kind": "emissive", "note": "EX-08\uFF1AA1/A8 \u524D\u8138\u2014\u2014\u5927\u706F\u5185\u4FA7 3 \u679A\u5706\u5F62\u706F\u73E0\uFF0C\u4E0A\u4E8C\u4E0B\u4E00\u4E09\u89D2\u70B9\u9635\uFF1Blamp-head \u81EA\u53D1\u5149\u5185\u82AF\u3002UV \u5DF2\u7531\u96C6\u6210\u5C42 remapUVToRegion \u843D\u5165 createHeadlampLedTexture \u5149\u5BFC\u4EAE\u5E26\uFF08\u7EAF\u767D\u67D4\u8FB9\u5706\u9762\uFF0C\u968F setHeadlights \u8054\u52A8\uFF09\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "EX-08 \u5927\u706F LED \u70B9\u9635 3\uFF08r\uFF09\uFF1A16 \u8FB9\u5F62\u5706\u76D8 r0.017\xD7\u539A0.012\uFF0C\u4F4D\u4E8E\u706F\u7F69\u524D\u8868\u9762\u5916 6mm\uFF08\u5C40\u90E8 z0.064~0.076\uFF09\uFF0C\u7B49\u8FB9\u4E09\u89D2\u5E03\u5C40\u4E4B\u4E00" }, "evidenceRefs": ["img-headlamp-front"], "details": ["d-headlamp-star"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(242, 248, 255, 1.0)", "secondaryAlbedo": "rgba(242, 248, 255, 1.0)", "materialClass": "plastic", "materialClassConfidence": 0.9, "note": "EX-08 \u5927\u706F LED \u70B9\u9635 3\uFF08r\uFF09\uFF1A16 \u8FB9\u5F62\u5706\u76D8 r0.017\xD7\u539A0.012\uFF0C\u4F4D\u4E8E\u706F\u7F69\u524D\u8868\u9762\u5916 6mm\uFF08\u5C40\u90E8 z0.064~0.076\uFF09\uFF0C\u7B49\u8FB9\u4E09\u89D2\u5E03\u5C40\u4E4B\u4E00" } };
+  node_headlamp_led_dot_3_r_175.userData.actionProfile = { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.95 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } };
+  (nodes["headlamp-r"] ?? root).add(node_headlamp_led_dot_3_r_175);
+  nodes["headlamp-led-dot-3-r"] = node_headlamp_led_dot_3_r_175;
+  const mesh_headlamp_led_dot_3_r_175Geometry = endpoint_headlamp_led_dot_3_r_175 ? new CylinderGeometry(endpoint_headlamp_led_dot_3_r_175.endRadius, endpoint_headlamp_led_dot_3_r_175.baseRadius, endpoint_headlamp_led_dot_3_r_175.length, 16, 6) : buildExtrudeGeometry({ "points": [[0.017, 0], [0.01571, 651e-5], [0.01202, 0.01202], [651e-5, 0.01571], [0, 0.017], [-651e-5, 0.01571], [-0.01202, 0.01202], [-0.01571, 651e-5], [-0.017, 0], [-0.01571, -651e-5], [-0.01202, -0.01202], [-651e-5, -0.01571], [-0, -0.017], [651e-5, -0.01571], [0.01202, -0.01202], [0.01571, -651e-5]], "depth": 0.012 });
+  if (!endpoint_headlamp_led_dot_3_r_175) {
+    mesh_headlamp_led_dot_3_r_175Geometry.scale(1, 1, 1);
+  }
+  const mesh_headlamp_led_dot_3_r_175 = new Mesh(
+    mesh_headlamp_led_dot_3_r_175Geometry,
+    materialMap["lamp-head"] ?? new MeshStandardMaterial({ color: 8947848 })
+  );
+  mesh_headlamp_led_dot_3_r_175.name = "\u5927\u706F LED \u70B9\u9635 3\uFF08r\uFF09";
+  if (endpoint_headlamp_led_dot_3_r_175) {
+    mesh_headlamp_led_dot_3_r_175.position.copy(endpoint_headlamp_led_dot_3_r_175.midpoint);
+    mesh_headlamp_led_dot_3_r_175.quaternion.copy(endpoint_headlamp_led_dot_3_r_175.quaternion);
+  }
+  mesh_headlamp_led_dot_3_r_175.castShadow = options.castShadow ?? true;
+  mesh_headlamp_led_dot_3_r_175.receiveShadow = options.receiveShadow ?? true;
+  mesh_headlamp_led_dot_3_r_175.userData.sculptComponent = { "id": "headlamp-led-dot-3-r", "name": "\u5927\u706F LED \u70B9\u9635 3\uFF08r\uFF09", "level": "micro", "role": "detail", "importance": 0.95, "confidence": 0.95, "primitive": "extrude", "topologyClass": "conforming-shell", "topologyRationale": "\u7AD6\u5706\u89D2\u77E9\u5F62\u706F\u7F69\u8F6E\u5ED3\u6324\u51FA", "geometryDescriptor": { "profile2D": { "points": [[0.017, 0], [0.01571, 651e-5], [0.01202, 0.01202], [651e-5, 0.01571], [0, 0.017], [-651e-5, 0.01571], [-0.01202, 0.01202], [-0.01571, 651e-5], [-0.017, 0], [-0.01571, -651e-5], [-0.01202, -0.01202], [-651e-5, -0.01571], [-0, -0.017], [651e-5, -0.01571], [0.01202, -0.01202], [0.01571, -651e-5]], "depth": 0.012 }, "topologyIntent": "rounded disc with radial knurl contour", "edgeTreatment": { "type": "none", "bevelRadius": 0, "segments": 0 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals" }, "parent": "headlamp-r", "attachment": null, "dimensions": { "width": 0.034, "height": 0.034, "depth": 0.012, "units": "meters", "confidence": 0.9 }, "transform": { "position": [0.025, -0.026, 0.064], "rotation": [0, 0, 0], "scale": [1, 1, 1] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.95 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "lamp-head", "materialLayers": ["lamp-head"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u5706\u5F62 LED \u706F\u73E0", "kind": "emissive", "note": "EX-08\uFF1AA1/A8 \u524D\u8138\u2014\u2014\u5927\u706F\u5185\u4FA7 3 \u679A\u5706\u5F62\u706F\u73E0\uFF0C\u4E0A\u4E8C\u4E0B\u4E00\u4E09\u89D2\u70B9\u9635\uFF1Blamp-head \u81EA\u53D1\u5149\u5185\u82AF\u3002UV \u5DF2\u7531\u96C6\u6210\u5C42 remapUVToRegion \u843D\u5165 createHeadlampLedTexture \u5149\u5BFC\u4EAE\u5E26\uFF08\u7EAF\u767D\u67D4\u8FB9\u5706\u9762\uFF0C\u968F setHeadlights \u8054\u52A8\uFF09\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "EX-08 \u5927\u706F LED \u70B9\u9635 3\uFF08r\uFF09\uFF1A16 \u8FB9\u5F62\u5706\u76D8 r0.017\xD7\u539A0.012\uFF0C\u4F4D\u4E8E\u706F\u7F69\u524D\u8868\u9762\u5916 6mm\uFF08\u5C40\u90E8 z0.064~0.076\uFF09\uFF0C\u7B49\u8FB9\u4E09\u89D2\u5E03\u5C40\u4E4B\u4E00" }, "evidenceRefs": ["img-headlamp-front"], "details": ["d-headlamp-star"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(242, 248, 255, 1.0)", "secondaryAlbedo": "rgba(242, 248, 255, 1.0)", "materialClass": "plastic", "materialClassConfidence": 0.9, "note": "EX-08 \u5927\u706F LED \u70B9\u9635 3\uFF08r\uFF09\uFF1A16 \u8FB9\u5F62\u5706\u76D8 r0.017\xD7\u539A0.012\uFF0C\u4F4D\u4E8E\u706F\u7F69\u524D\u8868\u9762\u5916 6mm\uFF08\u5C40\u90E8 z0.064~0.076\uFF09\uFF0C\u7B49\u8FB9\u4E09\u89D2\u5E03\u5C40\u4E4B\u4E00" } };
+  node_headlamp_led_dot_3_r_175.add(mesh_headlamp_led_dot_3_r_175);
+  meshes2["headlamp-led-dot-3-r"] = mesh_headlamp_led_dot_3_r_175;
+  colliders["headlamp-led-dot-3-r"] = { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" };
+  destructionGroups["root"] ??= [];
+  destructionGroups["root"].push(node_headlamp_led_dot_3_r_175);
+  const endpoint_rear_reflector_strip_l_176 = makeAttachmentEndpoint(null);
+  const node_rear_reflector_strip_l_176 = new Group();
+  node_rear_reflector_strip_l_176.name = "\u540E\u4FDD\u7EA2\u8272\u53CD\u5149\u6761\u4E0B\u6761\uFF08l\uFF09__pivot";
+  node_rear_reflector_strip_l_176.scale.set(1, 1, 1);
+  if (endpoint_rear_reflector_strip_l_176) {
+    node_rear_reflector_strip_l_176.position.copy(endpoint_rear_reflector_strip_l_176.start);
+    node_rear_reflector_strip_l_176.rotation.set(0, 0, 0);
+  } else {
+    node_rear_reflector_strip_l_176.position.set(0.72, 0.2875, -2.49);
+    node_rear_reflector_strip_l_176.rotation.set(0, 0, 0);
+  }
+  node_rear_reflector_strip_l_176.userData.sculptComponent = { "id": "rear-reflector-strip-l", "name": "\u540E\u4FDD\u7EA2\u8272\u53CD\u5149\u6761\u4E0B\u6761\uFF08l\uFF09", "level": "micro", "role": "detail", "importance": 0.85, "confidence": 0.86, "primitive": "box", "topologyClass": "assembled-solid", "topologyRationale": "\u8584\u677F/\u56DE\u8F6C\u4F53\uFF0C\u786C\u8868\u9762\u53EF\u5C55\u62D3\u6251", "geometryDescriptor": { "topologyIntent": "hard-surface precise", "edgeTreatment": { "type": "bevel", "bevelRadius": 4e-3, "segments": 1 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry" }, "parent": "root", "attachment": null, "dimensions": { "width": 0.34, "height": 0.018, "depth": 0.02, "units": "meters", "confidence": 0.9 }, "transform": { "position": [0.72, 0.2875, -2.49], "rotation": [0, 0, 0], "scale": [0.34, 0.018, 0.02] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "lamp-red", "materialLayers": ["lamp-red"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u540E\u4FDD\u7EA2\u8272\u53CD\u5149\u6761\uFF08\u4E0B\u6761\uFF09", "kind": "emissive-face", "note": "EX-31/B5 \u53F3\u4E0A\u683C\uFF1A\u540E\u4FDD\u4E0B\u90E8\u6BCF\u4FA7\u4E24\u6761\u6A2A\u5411\u7EA2\u8272\u53CD\u5149\u6761\uFF0C\u672C\u6761\u4E3A\u4E0B\u6761\uFF1B\u4E0E\u4E0A\u6761 rear-reflector-l \u5E73\u884C\u76F8\u8DDD 4mm\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "EX-31 \u540E\u4FDD\u7EA2\u8272\u53CD\u5149\u6761\u4E0B\u6761\uFF08l\uFF09\uFF1A\u4E16\u754C [0.72,0.2875,-2.49]\uFF0C0.34\xD70.018\xD70.02\uFF1Blamp-red \u4E0E\u5C3E\u706F\u5408\u6279 +0 DC\u3002" }, "evidenceRefs": ["img-rear-bumper"], "details": ["d-taillamp"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(181, 31, 44, 1.0)", "secondaryAlbedo": "rgba(181, 31, 44, 1.0)", "materialClass": "plastic", "materialClassConfidence": 0.9, "note": "EX-31 \u540E\u4FDD\u7EA2\u8272\u53CD\u5149\u6761\u4E0B\u6761\uFF08l\uFF09\uFF1A\u4E16\u754C [0.72,0.2875,-2.49]\uFF0C0.34\xD70.018\xD70.02\uFF1Blamp-red \u4E0E\u5C3E\u706F\u5408\u6279 +0 DC\u3002" }, "notes": "EX-25\uFF1A\u5C3E\u90E8\u6A2A\u5411\u8D2F\u7A7F\u9540\u94EC\u9970\u6761 1.50\xD70.035\uFF0C\u8D34\u5728\u5C3E\u95E8\u540E\u8138\uFF1Bchrome \u5408\u6279 +0 DC\u3002" };
+  node_rear_reflector_strip_l_176.userData.actionProfile = { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } };
+  (nodes["root"] ?? root).add(node_rear_reflector_strip_l_176);
+  nodes["rear-reflector-strip-l"] = node_rear_reflector_strip_l_176;
+  const mesh_rear_reflector_strip_l_176Geometry = endpoint_rear_reflector_strip_l_176 ? new CylinderGeometry(endpoint_rear_reflector_strip_l_176.endRadius, endpoint_rear_reflector_strip_l_176.baseRadius, endpoint_rear_reflector_strip_l_176.length, 16, 6) : new BoxGeometry(1, 1, 1, 4, 4, 4);
+  if (!endpoint_rear_reflector_strip_l_176) {
+    mesh_rear_reflector_strip_l_176Geometry.scale(0.34, 0.018, 0.02);
+  }
+  const mesh_rear_reflector_strip_l_176 = new Mesh(
+    mesh_rear_reflector_strip_l_176Geometry,
+    materialMap["lamp-red"] ?? new MeshStandardMaterial({ color: 8947848 })
+  );
+  mesh_rear_reflector_strip_l_176.name = "\u540E\u4FDD\u7EA2\u8272\u53CD\u5149\u6761\u4E0B\u6761\uFF08l\uFF09";
+  if (endpoint_rear_reflector_strip_l_176) {
+    mesh_rear_reflector_strip_l_176.position.copy(endpoint_rear_reflector_strip_l_176.midpoint);
+    mesh_rear_reflector_strip_l_176.quaternion.copy(endpoint_rear_reflector_strip_l_176.quaternion);
+  }
+  mesh_rear_reflector_strip_l_176.castShadow = options.castShadow ?? true;
+  mesh_rear_reflector_strip_l_176.receiveShadow = options.receiveShadow ?? true;
+  mesh_rear_reflector_strip_l_176.userData.sculptComponent = { "id": "rear-reflector-strip-l", "name": "\u540E\u4FDD\u7EA2\u8272\u53CD\u5149\u6761\u4E0B\u6761\uFF08l\uFF09", "level": "micro", "role": "detail", "importance": 0.85, "confidence": 0.86, "primitive": "box", "topologyClass": "assembled-solid", "topologyRationale": "\u8584\u677F/\u56DE\u8F6C\u4F53\uFF0C\u786C\u8868\u9762\u53EF\u5C55\u62D3\u6251", "geometryDescriptor": { "topologyIntent": "hard-surface precise", "edgeTreatment": { "type": "bevel", "bevelRadius": 4e-3, "segments": 1 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry" }, "parent": "root", "attachment": null, "dimensions": { "width": 0.34, "height": 0.018, "depth": 0.02, "units": "meters", "confidence": 0.9 }, "transform": { "position": [0.72, 0.2875, -2.49], "rotation": [0, 0, 0], "scale": [0.34, 0.018, 0.02] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "lamp-red", "materialLayers": ["lamp-red"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u540E\u4FDD\u7EA2\u8272\u53CD\u5149\u6761\uFF08\u4E0B\u6761\uFF09", "kind": "emissive-face", "note": "EX-31/B5 \u53F3\u4E0A\u683C\uFF1A\u540E\u4FDD\u4E0B\u90E8\u6BCF\u4FA7\u4E24\u6761\u6A2A\u5411\u7EA2\u8272\u53CD\u5149\u6761\uFF0C\u672C\u6761\u4E3A\u4E0B\u6761\uFF1B\u4E0E\u4E0A\u6761 rear-reflector-l \u5E73\u884C\u76F8\u8DDD 4mm\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "EX-31 \u540E\u4FDD\u7EA2\u8272\u53CD\u5149\u6761\u4E0B\u6761\uFF08l\uFF09\uFF1A\u4E16\u754C [0.72,0.2875,-2.49]\uFF0C0.34\xD70.018\xD70.02\uFF1Blamp-red \u4E0E\u5C3E\u706F\u5408\u6279 +0 DC\u3002" }, "evidenceRefs": ["img-rear-bumper"], "details": ["d-taillamp"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(181, 31, 44, 1.0)", "secondaryAlbedo": "rgba(181, 31, 44, 1.0)", "materialClass": "plastic", "materialClassConfidence": 0.9, "note": "EX-31 \u540E\u4FDD\u7EA2\u8272\u53CD\u5149\u6761\u4E0B\u6761\uFF08l\uFF09\uFF1A\u4E16\u754C [0.72,0.2875,-2.49]\uFF0C0.34\xD70.018\xD70.02\uFF1Blamp-red \u4E0E\u5C3E\u706F\u5408\u6279 +0 DC\u3002" }, "notes": "EX-25\uFF1A\u5C3E\u90E8\u6A2A\u5411\u8D2F\u7A7F\u9540\u94EC\u9970\u6761 1.50\xD70.035\uFF0C\u8D34\u5728\u5C3E\u95E8\u540E\u8138\uFF1Bchrome \u5408\u6279 +0 DC\u3002" };
+  node_rear_reflector_strip_l_176.add(mesh_rear_reflector_strip_l_176);
+  meshes2["rear-reflector-strip-l"] = mesh_rear_reflector_strip_l_176;
+  colliders["rear-reflector-strip-l"] = { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" };
+  destructionGroups["root"] ??= [];
+  destructionGroups["root"].push(node_rear_reflector_strip_l_176);
+  const endpoint_rear_reflector_strip_r_177 = makeAttachmentEndpoint(null);
+  const node_rear_reflector_strip_r_177 = new Group();
+  node_rear_reflector_strip_r_177.name = "\u540E\u4FDD\u7EA2\u8272\u53CD\u5149\u6761\u4E0B\u6761\uFF08r\uFF09__pivot";
+  node_rear_reflector_strip_r_177.scale.set(1, 1, 1);
+  if (endpoint_rear_reflector_strip_r_177) {
+    node_rear_reflector_strip_r_177.position.copy(endpoint_rear_reflector_strip_r_177.start);
+    node_rear_reflector_strip_r_177.rotation.set(0, 0, 0);
+  } else {
+    node_rear_reflector_strip_r_177.position.set(-0.72, 0.2875, -2.49);
+    node_rear_reflector_strip_r_177.rotation.set(0, 0, 0);
+  }
+  node_rear_reflector_strip_r_177.userData.sculptComponent = { "id": "rear-reflector-strip-r", "name": "\u540E\u4FDD\u7EA2\u8272\u53CD\u5149\u6761\u4E0B\u6761\uFF08r\uFF09", "level": "micro", "role": "detail", "importance": 0.85, "confidence": 0.86, "primitive": "box", "topologyClass": "assembled-solid", "topologyRationale": "\u8584\u677F/\u56DE\u8F6C\u4F53\uFF0C\u786C\u8868\u9762\u53EF\u5C55\u62D3\u6251", "geometryDescriptor": { "topologyIntent": "hard-surface precise", "edgeTreatment": { "type": "bevel", "bevelRadius": 4e-3, "segments": 1 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry" }, "parent": "root", "attachment": null, "dimensions": { "width": 0.34, "height": 0.018, "depth": 0.02, "units": "meters", "confidence": 0.9 }, "transform": { "position": [-0.72, 0.2875, -2.49], "rotation": [0, 0, 0], "scale": [0.34, 0.018, 0.02] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "lamp-red", "materialLayers": ["lamp-red"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u540E\u4FDD\u7EA2\u8272\u53CD\u5149\u6761\uFF08\u4E0B\u6761\uFF09", "kind": "emissive-face", "note": "EX-31/B5 \u53F3\u4E0A\u683C\uFF1A\u540E\u4FDD\u4E0B\u90E8\u6BCF\u4FA7\u4E24\u6761\u6A2A\u5411\u7EA2\u8272\u53CD\u5149\u6761\uFF0C\u672C\u6761\u4E3A\u4E0B\u6761\uFF1B\u4E0E\u4E0A\u6761 rear-reflector-r \u5E73\u884C\u76F8\u8DDD 4mm\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "EX-31 \u540E\u4FDD\u7EA2\u8272\u53CD\u5149\u6761\u4E0B\u6761\uFF08r\uFF09\uFF1A\u4E16\u754C [-0.72,0.2875,-2.49]\uFF0C0.34\xD70.018\xD70.02\uFF1Blamp-red \u4E0E\u5C3E\u706F\u5408\u6279 +0 DC\u3002" }, "evidenceRefs": ["img-rear-bumper"], "details": ["d-taillamp"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(181, 31, 44, 1.0)", "secondaryAlbedo": "rgba(181, 31, 44, 1.0)", "materialClass": "plastic", "materialClassConfidence": 0.9, "note": "EX-31 \u540E\u4FDD\u7EA2\u8272\u53CD\u5149\u6761\u4E0B\u6761\uFF08r\uFF09\uFF1A\u4E16\u754C [-0.72,0.2875,-2.49]\uFF0C0.34\xD70.018\xD70.02\uFF1Blamp-red \u4E0E\u5C3E\u706F\u5408\u6279 +0 DC\u3002" }, "notes": "EX-25\uFF1A\u5C3E\u90E8\u6A2A\u5411\u8D2F\u7A7F\u9540\u94EC\u9970\u6761 1.50\xD70.035\uFF0C\u8D34\u5728\u5C3E\u95E8\u540E\u8138\uFF1Bchrome \u5408\u6279 +0 DC\u3002" };
+  node_rear_reflector_strip_r_177.userData.actionProfile = { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } };
+  (nodes["root"] ?? root).add(node_rear_reflector_strip_r_177);
+  nodes["rear-reflector-strip-r"] = node_rear_reflector_strip_r_177;
+  const mesh_rear_reflector_strip_r_177Geometry = endpoint_rear_reflector_strip_r_177 ? new CylinderGeometry(endpoint_rear_reflector_strip_r_177.endRadius, endpoint_rear_reflector_strip_r_177.baseRadius, endpoint_rear_reflector_strip_r_177.length, 16, 6) : new BoxGeometry(1, 1, 1, 4, 4, 4);
+  if (!endpoint_rear_reflector_strip_r_177) {
+    mesh_rear_reflector_strip_r_177Geometry.scale(0.34, 0.018, 0.02);
+  }
+  const mesh_rear_reflector_strip_r_177 = new Mesh(
+    mesh_rear_reflector_strip_r_177Geometry,
+    materialMap["lamp-red"] ?? new MeshStandardMaterial({ color: 8947848 })
+  );
+  mesh_rear_reflector_strip_r_177.name = "\u540E\u4FDD\u7EA2\u8272\u53CD\u5149\u6761\u4E0B\u6761\uFF08r\uFF09";
+  if (endpoint_rear_reflector_strip_r_177) {
+    mesh_rear_reflector_strip_r_177.position.copy(endpoint_rear_reflector_strip_r_177.midpoint);
+    mesh_rear_reflector_strip_r_177.quaternion.copy(endpoint_rear_reflector_strip_r_177.quaternion);
+  }
+  mesh_rear_reflector_strip_r_177.castShadow = options.castShadow ?? true;
+  mesh_rear_reflector_strip_r_177.receiveShadow = options.receiveShadow ?? true;
+  mesh_rear_reflector_strip_r_177.userData.sculptComponent = { "id": "rear-reflector-strip-r", "name": "\u540E\u4FDD\u7EA2\u8272\u53CD\u5149\u6761\u4E0B\u6761\uFF08r\uFF09", "level": "micro", "role": "detail", "importance": 0.85, "confidence": 0.86, "primitive": "box", "topologyClass": "assembled-solid", "topologyRationale": "\u8584\u677F/\u56DE\u8F6C\u4F53\uFF0C\u786C\u8868\u9762\u53EF\u5C55\u62D3\u6251", "geometryDescriptor": { "topologyIntent": "hard-surface precise", "edgeTreatment": { "type": "bevel", "bevelRadius": 4e-3, "segments": 1 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry" }, "parent": "root", "attachment": null, "dimensions": { "width": 0.34, "height": 0.018, "depth": 0.02, "units": "meters", "confidence": 0.9 }, "transform": { "position": [-0.72, 0.2875, -2.49], "rotation": [0, 0, 0], "scale": [0.34, 0.018, 0.02] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "lamp-red", "materialLayers": ["lamp-red"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u540E\u4FDD\u7EA2\u8272\u53CD\u5149\u6761\uFF08\u4E0B\u6761\uFF09", "kind": "emissive-face", "note": "EX-31/B5 \u53F3\u4E0A\u683C\uFF1A\u540E\u4FDD\u4E0B\u90E8\u6BCF\u4FA7\u4E24\u6761\u6A2A\u5411\u7EA2\u8272\u53CD\u5149\u6761\uFF0C\u672C\u6761\u4E3A\u4E0B\u6761\uFF1B\u4E0E\u4E0A\u6761 rear-reflector-r \u5E73\u884C\u76F8\u8DDD 4mm\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "EX-31 \u540E\u4FDD\u7EA2\u8272\u53CD\u5149\u6761\u4E0B\u6761\uFF08r\uFF09\uFF1A\u4E16\u754C [-0.72,0.2875,-2.49]\uFF0C0.34\xD70.018\xD70.02\uFF1Blamp-red \u4E0E\u5C3E\u706F\u5408\u6279 +0 DC\u3002" }, "evidenceRefs": ["img-rear-bumper"], "details": ["d-taillamp"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(181, 31, 44, 1.0)", "secondaryAlbedo": "rgba(181, 31, 44, 1.0)", "materialClass": "plastic", "materialClassConfidence": 0.9, "note": "EX-31 \u540E\u4FDD\u7EA2\u8272\u53CD\u5149\u6761\u4E0B\u6761\uFF08r\uFF09\uFF1A\u4E16\u754C [-0.72,0.2875,-2.49]\uFF0C0.34\xD70.018\xD70.02\uFF1Blamp-red \u4E0E\u5C3E\u706F\u5408\u6279 +0 DC\u3002" }, "notes": "EX-25\uFF1A\u5C3E\u90E8\u6A2A\u5411\u8D2F\u7A7F\u9540\u94EC\u9970\u6761 1.50\xD70.035\uFF0C\u8D34\u5728\u5C3E\u95E8\u540E\u8138\uFF1Bchrome \u5408\u6279 +0 DC\u3002" };
+  node_rear_reflector_strip_r_177.add(mesh_rear_reflector_strip_r_177);
+  meshes2["rear-reflector-strip-r"] = mesh_rear_reflector_strip_r_177;
+  colliders["rear-reflector-strip-r"] = { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" };
+  destructionGroups["root"] ??= [];
+  destructionGroups["root"].push(node_rear_reflector_strip_r_177);
+  const endpoint_seat_rear_l_screen_arm_178 = makeAttachmentEndpoint(null);
+  const node_seat_rear_l_screen_arm_178 = new Group();
+  node_seat_rear_l_screen_arm_178.name = "\u6276\u624B\u5C4F\u9540\u94EC\u652F\u81C2\uFF08l\uFF09__pivot";
+  node_seat_rear_l_screen_arm_178.scale.set(1, 1, 1);
+  if (endpoint_seat_rear_l_screen_arm_178) {
+    node_seat_rear_l_screen_arm_178.position.copy(endpoint_seat_rear_l_screen_arm_178.start);
+    node_seat_rear_l_screen_arm_178.rotation.set(-1.75, 0, 0);
+  } else {
+    node_seat_rear_l_screen_arm_178.position.set(0, 0.3405, 0.1935);
+    node_seat_rear_l_screen_arm_178.rotation.set(-1.75, 0, 0);
+  }
+  node_seat_rear_l_screen_arm_178.userData.sculptComponent = { "id": "seat-rear-l-screen-arm", "name": "\u6276\u624B\u5C4F\u9540\u94EC\u652F\u81C2\uFF08l\uFF09", "level": "micro", "role": "detail", "importance": 0.85, "confidence": 0.86, "primitive": "box", "topologyClass": "assembled-solid", "topologyRationale": "\u8584\u677F/\u56DE\u8F6C\u4F53\uFF0C\u786C\u8868\u9762\u53EF\u5C55\u62D3\u6251", "geometryDescriptor": { "topologyIntent": "hard-surface precise", "edgeTreatment": { "type": "bevel", "bevelRadius": 4e-3, "segments": 1 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry" }, "parent": "seat-rear-l", "attachment": null, "dimensions": { "width": 0.078, "height": 0.022, "depth": 0.02, "units": "meters", "confidence": 0.9 }, "transform": { "position": [0, 0.3405, 0.1935], "rotation": [-1.75, 0, 0], "scale": [0.078, 0.022, 0.02] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "chrome", "materialLayers": ["chrome"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u5C4F\u524D\u6CBF\u9540\u94EC\u652F\u81C2", "kind": "hardware", "note": "N1_\u6276\u624B\u5C4F-4\u82F1\u5BF8\u7FFB\u8F6C.jpg / N3_\u6276\u624B\u5C4F.png\uFF1A\u5C4F\u81EA\u6276\u624B\u524D\u7AEF\u5347\u8D77\uFF0C\u5C4F\u524D\u6CBF\u4E0B\u6CBF\u4E3A\u9540\u94EC\u652F\u81C2/\u94F0\u94FE\uFF1B\u672C\u4EF6\u5BBD\u51FA\u5C4F\u5E55 8mm\uFF08\u4E24\u7AEF\u51FA\u6CBF\u517C\u4F5C\u5C4F\u6846\u4E0B\u6CBF\uFF09\uFF0C\u4E0B\u7AEF\u5D4C\u5165\u6276\u624B\u7AEF\u76D6\u9644\u8FD1\uFF08\u6276\u624B\u9876\u9762 y0.95\uFF09\uFF0C\u4E0E armrest-cap \u6210\u5BF9\u3002\u72EC\u7ACB\u4EAE\u9ED1\u5C4F\u6846\u56E0\u7EC4\u4EF6\u9884\u7B97\uFF08184/185\uFF09\u672A\u5355\u5217\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "IN-09 \u6276\u624B\u5C4F\u652F\u81C2\uFF08l\uFF09\uFF1Achrome 0.078\xD70.022\xD70.02\uFF0CrotX-1.75 \u4E0E\u5C4F\u540C\u5411\uFF0C\u5C4F\u524D\u6CBF\u4E0B\u7F18\u3001\u5D4C\u5165\u6276\u624B\u9876\u9762" }, "evidenceRefs": ["img-seat-screen"], "details": ["d-rear-seat"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(232, 233, 236, 1.0)", "secondaryAlbedo": "rgba(232, 233, 236, 1.0)", "materialClass": "metal", "materialClassConfidence": 0.9, "note": "IN-09 \u6276\u624B\u5C4F\u652F\u81C2\uFF08l\uFF09\uFF1Achrome 0.078\xD70.022\xD70.02\uFF0CrotX-1.75 \u4E0E\u5C4F\u540C\u5411\uFF0C\u5C4F\u524D\u6CBF\u4E0B\u7F18\u3001\u5D4C\u5165\u6276\u624B\u9876\u9762" }, "notes": "EX-25\uFF1A\u5C3E\u90E8\u6A2A\u5411\u8D2F\u7A7F\u9540\u94EC\u9970\u6761 1.50\xD70.035\uFF0C\u8D34\u5728\u5C3E\u95E8\u540E\u8138\uFF1Bchrome \u5408\u6279 +0 DC\u3002" };
+  node_seat_rear_l_screen_arm_178.userData.actionProfile = { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } };
+  (nodes["seat-rear-l"] ?? root).add(node_seat_rear_l_screen_arm_178);
+  nodes["seat-rear-l-screen-arm"] = node_seat_rear_l_screen_arm_178;
+  const mesh_seat_rear_l_screen_arm_178Geometry = endpoint_seat_rear_l_screen_arm_178 ? new CylinderGeometry(endpoint_seat_rear_l_screen_arm_178.endRadius, endpoint_seat_rear_l_screen_arm_178.baseRadius, endpoint_seat_rear_l_screen_arm_178.length, 16, 6) : new BoxGeometry(1, 1, 1, 4, 4, 4);
+  if (!endpoint_seat_rear_l_screen_arm_178) {
+    mesh_seat_rear_l_screen_arm_178Geometry.scale(0.078, 0.022, 0.02);
+  }
+  const mesh_seat_rear_l_screen_arm_178 = new Mesh(
+    mesh_seat_rear_l_screen_arm_178Geometry,
+    materialMap["chrome"] ?? new MeshStandardMaterial({ color: 8947848 })
+  );
+  mesh_seat_rear_l_screen_arm_178.name = "\u6276\u624B\u5C4F\u9540\u94EC\u652F\u81C2\uFF08l\uFF09";
+  if (endpoint_seat_rear_l_screen_arm_178) {
+    mesh_seat_rear_l_screen_arm_178.position.copy(endpoint_seat_rear_l_screen_arm_178.midpoint);
+    mesh_seat_rear_l_screen_arm_178.quaternion.copy(endpoint_seat_rear_l_screen_arm_178.quaternion);
+  }
+  mesh_seat_rear_l_screen_arm_178.castShadow = options.castShadow ?? true;
+  mesh_seat_rear_l_screen_arm_178.receiveShadow = options.receiveShadow ?? true;
+  mesh_seat_rear_l_screen_arm_178.userData.sculptComponent = { "id": "seat-rear-l-screen-arm", "name": "\u6276\u624B\u5C4F\u9540\u94EC\u652F\u81C2\uFF08l\uFF09", "level": "micro", "role": "detail", "importance": 0.85, "confidence": 0.86, "primitive": "box", "topologyClass": "assembled-solid", "topologyRationale": "\u8584\u677F/\u56DE\u8F6C\u4F53\uFF0C\u786C\u8868\u9762\u53EF\u5C55\u62D3\u6251", "geometryDescriptor": { "topologyIntent": "hard-surface precise", "edgeTreatment": { "type": "bevel", "bevelRadius": 4e-3, "segments": 1 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry" }, "parent": "seat-rear-l", "attachment": null, "dimensions": { "width": 0.078, "height": 0.022, "depth": 0.02, "units": "meters", "confidence": 0.9 }, "transform": { "position": [0, 0.3405, 0.1935], "rotation": [-1.75, 0, 0], "scale": [0.078, 0.022, 0.02] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "chrome", "materialLayers": ["chrome"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u5C4F\u524D\u6CBF\u9540\u94EC\u652F\u81C2", "kind": "hardware", "note": "N1_\u6276\u624B\u5C4F-4\u82F1\u5BF8\u7FFB\u8F6C.jpg / N3_\u6276\u624B\u5C4F.png\uFF1A\u5C4F\u81EA\u6276\u624B\u524D\u7AEF\u5347\u8D77\uFF0C\u5C4F\u524D\u6CBF\u4E0B\u6CBF\u4E3A\u9540\u94EC\u652F\u81C2/\u94F0\u94FE\uFF1B\u672C\u4EF6\u5BBD\u51FA\u5C4F\u5E55 8mm\uFF08\u4E24\u7AEF\u51FA\u6CBF\u517C\u4F5C\u5C4F\u6846\u4E0B\u6CBF\uFF09\uFF0C\u4E0B\u7AEF\u5D4C\u5165\u6276\u624B\u7AEF\u76D6\u9644\u8FD1\uFF08\u6276\u624B\u9876\u9762 y0.95\uFF09\uFF0C\u4E0E armrest-cap \u6210\u5BF9\u3002\u72EC\u7ACB\u4EAE\u9ED1\u5C4F\u6846\u56E0\u7EC4\u4EF6\u9884\u7B97\uFF08184/185\uFF09\u672A\u5355\u5217\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "IN-09 \u6276\u624B\u5C4F\u652F\u81C2\uFF08l\uFF09\uFF1Achrome 0.078\xD70.022\xD70.02\uFF0CrotX-1.75 \u4E0E\u5C4F\u540C\u5411\uFF0C\u5C4F\u524D\u6CBF\u4E0B\u7F18\u3001\u5D4C\u5165\u6276\u624B\u9876\u9762" }, "evidenceRefs": ["img-seat-screen"], "details": ["d-rear-seat"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(232, 233, 236, 1.0)", "secondaryAlbedo": "rgba(232, 233, 236, 1.0)", "materialClass": "metal", "materialClassConfidence": 0.9, "note": "IN-09 \u6276\u624B\u5C4F\u652F\u81C2\uFF08l\uFF09\uFF1Achrome 0.078\xD70.022\xD70.02\uFF0CrotX-1.75 \u4E0E\u5C4F\u540C\u5411\uFF0C\u5C4F\u524D\u6CBF\u4E0B\u7F18\u3001\u5D4C\u5165\u6276\u624B\u9876\u9762" }, "notes": "EX-25\uFF1A\u5C3E\u90E8\u6A2A\u5411\u8D2F\u7A7F\u9540\u94EC\u9970\u6761 1.50\xD70.035\uFF0C\u8D34\u5728\u5C3E\u95E8\u540E\u8138\uFF1Bchrome \u5408\u6279 +0 DC\u3002" };
+  node_seat_rear_l_screen_arm_178.add(mesh_seat_rear_l_screen_arm_178);
+  meshes2["seat-rear-l-screen-arm"] = mesh_seat_rear_l_screen_arm_178;
+  colliders["seat-rear-l-screen-arm"] = { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" };
+  destructionGroups["root"] ??= [];
+  destructionGroups["root"].push(node_seat_rear_l_screen_arm_178);
+  const endpoint_seat_rear_r_screen_arm_179 = makeAttachmentEndpoint(null);
+  const node_seat_rear_r_screen_arm_179 = new Group();
+  node_seat_rear_r_screen_arm_179.name = "\u6276\u624B\u5C4F\u9540\u94EC\u652F\u81C2\uFF08r\uFF09__pivot";
+  node_seat_rear_r_screen_arm_179.scale.set(1, 1, 1);
+  if (endpoint_seat_rear_r_screen_arm_179) {
+    node_seat_rear_r_screen_arm_179.position.copy(endpoint_seat_rear_r_screen_arm_179.start);
+    node_seat_rear_r_screen_arm_179.rotation.set(-1.75, 0, 0);
+  } else {
+    node_seat_rear_r_screen_arm_179.position.set(0, 0.3405, 0.1935);
+    node_seat_rear_r_screen_arm_179.rotation.set(-1.75, 0, 0);
+  }
+  node_seat_rear_r_screen_arm_179.userData.sculptComponent = { "id": "seat-rear-r-screen-arm", "name": "\u6276\u624B\u5C4F\u9540\u94EC\u652F\u81C2\uFF08r\uFF09", "level": "micro", "role": "detail", "importance": 0.85, "confidence": 0.86, "primitive": "box", "topologyClass": "assembled-solid", "topologyRationale": "\u8584\u677F/\u56DE\u8F6C\u4F53\uFF0C\u786C\u8868\u9762\u53EF\u5C55\u62D3\u6251", "geometryDescriptor": { "topologyIntent": "hard-surface precise", "edgeTreatment": { "type": "bevel", "bevelRadius": 4e-3, "segments": 1 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry" }, "parent": "seat-rear-r", "attachment": null, "dimensions": { "width": 0.078, "height": 0.022, "depth": 0.02, "units": "meters", "confidence": 0.9 }, "transform": { "position": [0, 0.3405, 0.1935], "rotation": [-1.75, 0, 0], "scale": [0.078, 0.022, 0.02] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "chrome", "materialLayers": ["chrome"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u5C4F\u524D\u6CBF\u9540\u94EC\u652F\u81C2", "kind": "hardware", "note": "N1_\u6276\u624B\u5C4F-4\u82F1\u5BF8\u7FFB\u8F6C.jpg / N3_\u6276\u624B\u5C4F.png\uFF1A\u5C4F\u81EA\u6276\u624B\u524D\u7AEF\u5347\u8D77\uFF0C\u5C4F\u524D\u6CBF\u4E0B\u6CBF\u4E3A\u9540\u94EC\u652F\u81C2/\u94F0\u94FE\uFF1B\u672C\u4EF6\u5BBD\u51FA\u5C4F\u5E55 8mm\uFF08\u4E24\u7AEF\u51FA\u6CBF\u517C\u4F5C\u5C4F\u6846\u4E0B\u6CBF\uFF09\uFF0C\u4E0B\u7AEF\u5D4C\u5165\u6276\u624B\u7AEF\u76D6\u9644\u8FD1\uFF08\u6276\u624B\u9876\u9762 y0.95\uFF09\uFF0C\u4E0E armrest-cap \u6210\u5BF9\u3002\u72EC\u7ACB\u4EAE\u9ED1\u5C4F\u6846\u56E0\u7EC4\u4EF6\u9884\u7B97\uFF08184/185\uFF09\u672A\u5355\u5217\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "IN-09 \u6276\u624B\u5C4F\u652F\u81C2\uFF08r\uFF09\uFF1Achrome 0.078\xD70.022\xD70.02\uFF0CrotX-1.75 \u4E0E\u5C4F\u540C\u5411\uFF0C\u5C4F\u524D\u6CBF\u4E0B\u7F18\u3001\u5D4C\u5165\u6276\u624B\u9876\u9762" }, "evidenceRefs": ["img-seat-screen"], "details": ["d-rear-seat"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(232, 233, 236, 1.0)", "secondaryAlbedo": "rgba(232, 233, 236, 1.0)", "materialClass": "metal", "materialClassConfidence": 0.9, "note": "IN-09 \u6276\u624B\u5C4F\u652F\u81C2\uFF08r\uFF09\uFF1Achrome 0.078\xD70.022\xD70.02\uFF0CrotX-1.75 \u4E0E\u5C4F\u540C\u5411\uFF0C\u5C4F\u524D\u6CBF\u4E0B\u7F18\u3001\u5D4C\u5165\u6276\u624B\u9876\u9762" }, "notes": "EX-25\uFF1A\u5C3E\u90E8\u6A2A\u5411\u8D2F\u7A7F\u9540\u94EC\u9970\u6761 1.50\xD70.035\uFF0C\u8D34\u5728\u5C3E\u95E8\u540E\u8138\uFF1Bchrome \u5408\u6279 +0 DC\u3002" };
+  node_seat_rear_r_screen_arm_179.userData.actionProfile = { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } };
+  (nodes["seat-rear-r"] ?? root).add(node_seat_rear_r_screen_arm_179);
+  nodes["seat-rear-r-screen-arm"] = node_seat_rear_r_screen_arm_179;
+  const mesh_seat_rear_r_screen_arm_179Geometry = endpoint_seat_rear_r_screen_arm_179 ? new CylinderGeometry(endpoint_seat_rear_r_screen_arm_179.endRadius, endpoint_seat_rear_r_screen_arm_179.baseRadius, endpoint_seat_rear_r_screen_arm_179.length, 16, 6) : new BoxGeometry(1, 1, 1, 4, 4, 4);
+  if (!endpoint_seat_rear_r_screen_arm_179) {
+    mesh_seat_rear_r_screen_arm_179Geometry.scale(0.078, 0.022, 0.02);
+  }
+  const mesh_seat_rear_r_screen_arm_179 = new Mesh(
+    mesh_seat_rear_r_screen_arm_179Geometry,
+    materialMap["chrome"] ?? new MeshStandardMaterial({ color: 8947848 })
+  );
+  mesh_seat_rear_r_screen_arm_179.name = "\u6276\u624B\u5C4F\u9540\u94EC\u652F\u81C2\uFF08r\uFF09";
+  if (endpoint_seat_rear_r_screen_arm_179) {
+    mesh_seat_rear_r_screen_arm_179.position.copy(endpoint_seat_rear_r_screen_arm_179.midpoint);
+    mesh_seat_rear_r_screen_arm_179.quaternion.copy(endpoint_seat_rear_r_screen_arm_179.quaternion);
+  }
+  mesh_seat_rear_r_screen_arm_179.castShadow = options.castShadow ?? true;
+  mesh_seat_rear_r_screen_arm_179.receiveShadow = options.receiveShadow ?? true;
+  mesh_seat_rear_r_screen_arm_179.userData.sculptComponent = { "id": "seat-rear-r-screen-arm", "name": "\u6276\u624B\u5C4F\u9540\u94EC\u652F\u81C2\uFF08r\uFF09", "level": "micro", "role": "detail", "importance": 0.85, "confidence": 0.86, "primitive": "box", "topologyClass": "assembled-solid", "topologyRationale": "\u8584\u677F/\u56DE\u8F6C\u4F53\uFF0C\u786C\u8868\u9762\u53EF\u5C55\u62D3\u6251", "geometryDescriptor": { "topologyIntent": "hard-surface precise", "edgeTreatment": { "type": "bevel", "bevelRadius": 4e-3, "segments": 1 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry" }, "parent": "seat-rear-r", "attachment": null, "dimensions": { "width": 0.078, "height": 0.022, "depth": 0.02, "units": "meters", "confidence": 0.9 }, "transform": { "position": [0, 0.3405, 0.1935], "rotation": [-1.75, 0, 0], "scale": [0.078, 0.022, 0.02] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "chrome", "materialLayers": ["chrome"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u5C4F\u524D\u6CBF\u9540\u94EC\u652F\u81C2", "kind": "hardware", "note": "N1_\u6276\u624B\u5C4F-4\u82F1\u5BF8\u7FFB\u8F6C.jpg / N3_\u6276\u624B\u5C4F.png\uFF1A\u5C4F\u81EA\u6276\u624B\u524D\u7AEF\u5347\u8D77\uFF0C\u5C4F\u524D\u6CBF\u4E0B\u6CBF\u4E3A\u9540\u94EC\u652F\u81C2/\u94F0\u94FE\uFF1B\u672C\u4EF6\u5BBD\u51FA\u5C4F\u5E55 8mm\uFF08\u4E24\u7AEF\u51FA\u6CBF\u517C\u4F5C\u5C4F\u6846\u4E0B\u6CBF\uFF09\uFF0C\u4E0B\u7AEF\u5D4C\u5165\u6276\u624B\u7AEF\u76D6\u9644\u8FD1\uFF08\u6276\u624B\u9876\u9762 y0.95\uFF09\uFF0C\u4E0E armrest-cap \u6210\u5BF9\u3002\u72EC\u7ACB\u4EAE\u9ED1\u5C4F\u6846\u56E0\u7EC4\u4EF6\u9884\u7B97\uFF08184/185\uFF09\u672A\u5355\u5217\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "IN-09 \u6276\u624B\u5C4F\u652F\u81C2\uFF08r\uFF09\uFF1Achrome 0.078\xD70.022\xD70.02\uFF0CrotX-1.75 \u4E0E\u5C4F\u540C\u5411\uFF0C\u5C4F\u524D\u6CBF\u4E0B\u7F18\u3001\u5D4C\u5165\u6276\u624B\u9876\u9762" }, "evidenceRefs": ["img-seat-screen"], "details": ["d-rear-seat"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(232, 233, 236, 1.0)", "secondaryAlbedo": "rgba(232, 233, 236, 1.0)", "materialClass": "metal", "materialClassConfidence": 0.9, "note": "IN-09 \u6276\u624B\u5C4F\u652F\u81C2\uFF08r\uFF09\uFF1Achrome 0.078\xD70.022\xD70.02\uFF0CrotX-1.75 \u4E0E\u5C4F\u540C\u5411\uFF0C\u5C4F\u524D\u6CBF\u4E0B\u7F18\u3001\u5D4C\u5165\u6276\u624B\u9876\u9762" }, "notes": "EX-25\uFF1A\u5C3E\u90E8\u6A2A\u5411\u8D2F\u7A7F\u9540\u94EC\u9970\u6761 1.50\xD70.035\uFF0C\u8D34\u5728\u5C3E\u95E8\u540E\u8138\uFF1Bchrome \u5408\u6279 +0 DC\u3002" };
+  node_seat_rear_r_screen_arm_179.add(mesh_seat_rear_r_screen_arm_179);
+  meshes2["seat-rear-r-screen-arm"] = mesh_seat_rear_r_screen_arm_179;
+  colliders["seat-rear-r-screen-arm"] = { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" };
+  destructionGroups["root"] ??= [];
+  destructionGroups["root"].push(node_seat_rear_r_screen_arm_179);
+  const endpoint_seat_rear_l_armrest_cap_180 = makeAttachmentEndpoint(null);
+  const node_seat_rear_l_armrest_cap_180 = new Group();
+  node_seat_rear_l_armrest_cap_180.name = "\u6276\u624B\u7AEF\u76D6\u9540\u94EC\uFF08l\uFF09__pivot";
+  node_seat_rear_l_armrest_cap_180.scale.set(1, 1, 1);
+  if (endpoint_seat_rear_l_armrest_cap_180) {
+    node_seat_rear_l_armrest_cap_180.position.copy(endpoint_seat_rear_l_armrest_cap_180.start);
+    node_seat_rear_l_armrest_cap_180.rotation.set(0, 0, 0);
+  } else {
+    node_seat_rear_l_armrest_cap_180.position.set(0, 0.28, 0.215);
+    node_seat_rear_l_armrest_cap_180.rotation.set(0, 0, 0);
+  }
+  node_seat_rear_l_armrest_cap_180.userData.sculptComponent = { "id": "seat-rear-l-armrest-cap", "name": "\u6276\u624B\u7AEF\u76D6\u9540\u94EC\uFF08l\uFF09", "level": "micro", "role": "detail", "importance": 0.85, "confidence": 0.86, "primitive": "box", "topologyClass": "assembled-solid", "topologyRationale": "\u8584\u677F/\u56DE\u8F6C\u4F53\uFF0C\u786C\u8868\u9762\u53EF\u5C55\u62D3\u6251", "geometryDescriptor": { "topologyIntent": "hard-surface precise", "edgeTreatment": { "type": "bevel", "bevelRadius": 4e-3, "segments": 1 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry" }, "parent": "seat-rear-l", "attachment": null, "dimensions": { "width": 0.62, "height": 0.095, "depth": 0.02, "units": "meters", "confidence": 0.9 }, "transform": { "position": [0, 0.28, 0.215], "rotation": [0, 0, 0], "scale": [0.62, 0.095, 0.02] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "chrome", "materialLayers": ["chrome"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u6276\u624B\u524D\u7AEF\u9540\u94EC\u7AEF\u76D6", "kind": "hardware", "note": "I1_\u5EA7\u6905-\u4E8C\u6392.jpg / I5 / I6 / U7\uFF1A\u4FA7\u6276\u624B\u524D\u7AEF\u7AEF\u76D6\u4E3A\u9540\u94EC\u4EAE\u9762\uFF1B\u672C\u4EF6\u8986\u76D6\u6276\u624B\u524D\u7AEF\u7AEF\u9762\u5E76\u5BBD\u51FA\u4FA7\u6CBF 1cm \u5305\u524D\u89D2\uFF08\u5EA7\u5C40\u90E8 z0.205~0.225\uFF0C\u4E16\u754C -1.095~-1.075\uFF0C\u8F83\u6276\u624B\u7AEF\u9762\u5916\u51F8 5mm\uFF09\uFF0C\u4E0E\u6276\u624B\u5C4F\u652F\u81C2\u6210\u5BF9\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "IN-06 \u6276\u624B\u7AEF\u76D6\uFF08l\uFF09\uFF1Achrome 0.62\xD70.095\xD70.02\uFF0C\u6276\u624B\u524D\u7AEF\u7AEF\u9762\u5916\u51F8 5mm\u3001\u4FA7\u6CBF\u5305\u89D2 1cm" }, "evidenceRefs": ["img-seat-trim"], "details": ["d-rear-seat"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(232, 233, 236, 1.0)", "secondaryAlbedo": "rgba(232, 233, 236, 1.0)", "materialClass": "metal", "materialClassConfidence": 0.9, "note": "IN-06 \u6276\u624B\u7AEF\u76D6\uFF08l\uFF09\uFF1Achrome 0.62\xD70.095\xD70.02\uFF0C\u6276\u624B\u524D\u7AEF\u7AEF\u9762\u5916\u51F8 5mm\u3001\u4FA7\u6CBF\u5305\u89D2 1cm" }, "notes": "EX-25\uFF1A\u5C3E\u90E8\u6A2A\u5411\u8D2F\u7A7F\u9540\u94EC\u9970\u6761 1.50\xD70.035\uFF0C\u8D34\u5728\u5C3E\u95E8\u540E\u8138\uFF1Bchrome \u5408\u6279 +0 DC\u3002" };
+  node_seat_rear_l_armrest_cap_180.userData.actionProfile = { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } };
+  (nodes["seat-rear-l"] ?? root).add(node_seat_rear_l_armrest_cap_180);
+  nodes["seat-rear-l-armrest-cap"] = node_seat_rear_l_armrest_cap_180;
+  const mesh_seat_rear_l_armrest_cap_180Geometry = endpoint_seat_rear_l_armrest_cap_180 ? new CylinderGeometry(endpoint_seat_rear_l_armrest_cap_180.endRadius, endpoint_seat_rear_l_armrest_cap_180.baseRadius, endpoint_seat_rear_l_armrest_cap_180.length, 16, 6) : new BoxGeometry(1, 1, 1, 4, 4, 4);
+  if (!endpoint_seat_rear_l_armrest_cap_180) {
+    mesh_seat_rear_l_armrest_cap_180Geometry.scale(0.62, 0.095, 0.02);
+  }
+  const mesh_seat_rear_l_armrest_cap_180 = new Mesh(
+    mesh_seat_rear_l_armrest_cap_180Geometry,
+    materialMap["chrome"] ?? new MeshStandardMaterial({ color: 8947848 })
+  );
+  mesh_seat_rear_l_armrest_cap_180.name = "\u6276\u624B\u7AEF\u76D6\u9540\u94EC\uFF08l\uFF09";
+  if (endpoint_seat_rear_l_armrest_cap_180) {
+    mesh_seat_rear_l_armrest_cap_180.position.copy(endpoint_seat_rear_l_armrest_cap_180.midpoint);
+    mesh_seat_rear_l_armrest_cap_180.quaternion.copy(endpoint_seat_rear_l_armrest_cap_180.quaternion);
+  }
+  mesh_seat_rear_l_armrest_cap_180.castShadow = options.castShadow ?? true;
+  mesh_seat_rear_l_armrest_cap_180.receiveShadow = options.receiveShadow ?? true;
+  mesh_seat_rear_l_armrest_cap_180.userData.sculptComponent = { "id": "seat-rear-l-armrest-cap", "name": "\u6276\u624B\u7AEF\u76D6\u9540\u94EC\uFF08l\uFF09", "level": "micro", "role": "detail", "importance": 0.85, "confidence": 0.86, "primitive": "box", "topologyClass": "assembled-solid", "topologyRationale": "\u8584\u677F/\u56DE\u8F6C\u4F53\uFF0C\u786C\u8868\u9762\u53EF\u5C55\u62D3\u6251", "geometryDescriptor": { "topologyIntent": "hard-surface precise", "edgeTreatment": { "type": "bevel", "bevelRadius": 4e-3, "segments": 1 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry" }, "parent": "seat-rear-l", "attachment": null, "dimensions": { "width": 0.62, "height": 0.095, "depth": 0.02, "units": "meters", "confidence": 0.9 }, "transform": { "position": [0, 0.28, 0.215], "rotation": [0, 0, 0], "scale": [0.62, 0.095, 0.02] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "chrome", "materialLayers": ["chrome"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u6276\u624B\u524D\u7AEF\u9540\u94EC\u7AEF\u76D6", "kind": "hardware", "note": "I1_\u5EA7\u6905-\u4E8C\u6392.jpg / I5 / I6 / U7\uFF1A\u4FA7\u6276\u624B\u524D\u7AEF\u7AEF\u76D6\u4E3A\u9540\u94EC\u4EAE\u9762\uFF1B\u672C\u4EF6\u8986\u76D6\u6276\u624B\u524D\u7AEF\u7AEF\u9762\u5E76\u5BBD\u51FA\u4FA7\u6CBF 1cm \u5305\u524D\u89D2\uFF08\u5EA7\u5C40\u90E8 z0.205~0.225\uFF0C\u4E16\u754C -1.095~-1.075\uFF0C\u8F83\u6276\u624B\u7AEF\u9762\u5916\u51F8 5mm\uFF09\uFF0C\u4E0E\u6276\u624B\u5C4F\u652F\u81C2\u6210\u5BF9\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "IN-06 \u6276\u624B\u7AEF\u76D6\uFF08l\uFF09\uFF1Achrome 0.62\xD70.095\xD70.02\uFF0C\u6276\u624B\u524D\u7AEF\u7AEF\u9762\u5916\u51F8 5mm\u3001\u4FA7\u6CBF\u5305\u89D2 1cm" }, "evidenceRefs": ["img-seat-trim"], "details": ["d-rear-seat"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(232, 233, 236, 1.0)", "secondaryAlbedo": "rgba(232, 233, 236, 1.0)", "materialClass": "metal", "materialClassConfidence": 0.9, "note": "IN-06 \u6276\u624B\u7AEF\u76D6\uFF08l\uFF09\uFF1Achrome 0.62\xD70.095\xD70.02\uFF0C\u6276\u624B\u524D\u7AEF\u7AEF\u9762\u5916\u51F8 5mm\u3001\u4FA7\u6CBF\u5305\u89D2 1cm" }, "notes": "EX-25\uFF1A\u5C3E\u90E8\u6A2A\u5411\u8D2F\u7A7F\u9540\u94EC\u9970\u6761 1.50\xD70.035\uFF0C\u8D34\u5728\u5C3E\u95E8\u540E\u8138\uFF1Bchrome \u5408\u6279 +0 DC\u3002" };
+  node_seat_rear_l_armrest_cap_180.add(mesh_seat_rear_l_armrest_cap_180);
+  meshes2["seat-rear-l-armrest-cap"] = mesh_seat_rear_l_armrest_cap_180;
+  colliders["seat-rear-l-armrest-cap"] = { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" };
+  destructionGroups["root"] ??= [];
+  destructionGroups["root"].push(node_seat_rear_l_armrest_cap_180);
+  const endpoint_seat_rear_l_side_trim_181 = makeAttachmentEndpoint(null);
+  const node_seat_rear_l_side_trim_181 = new Group();
+  node_seat_rear_l_side_trim_181.name = "\u5EA7\u6905\u4FA7\u7F18\u9540\u94EC\u9970\u6761\uFF08l\uFF09__pivot";
+  node_seat_rear_l_side_trim_181.scale.set(1, 1, 1);
+  if (endpoint_seat_rear_l_side_trim_181) {
+    node_seat_rear_l_side_trim_181.position.copy(endpoint_seat_rear_l_side_trim_181.start);
+    node_seat_rear_l_side_trim_181.rotation.set(0, 0, 0);
+  } else {
+    node_seat_rear_l_side_trim_181.position.set(-0.278, 0.22, 0.01);
+    node_seat_rear_l_side_trim_181.rotation.set(0, 0, 0);
+  }
+  node_seat_rear_l_side_trim_181.userData.sculptComponent = { "id": "seat-rear-l-side-trim", "name": "\u5EA7\u6905\u4FA7\u7F18\u9540\u94EC\u9970\u6761\uFF08l\uFF09", "level": "micro", "role": "detail", "importance": 0.85, "confidence": 0.86, "primitive": "box", "topologyClass": "assembled-solid", "topologyRationale": "\u8584\u677F/\u56DE\u8F6C\u4F53\uFF0C\u786C\u8868\u9762\u53EF\u5C55\u62D3\u6251", "geometryDescriptor": { "topologyIntent": "hard-surface precise", "edgeTreatment": { "type": "bevel", "bevelRadius": 4e-3, "segments": 1 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry" }, "parent": "seat-rear-l", "attachment": null, "dimensions": { "width": 0.018, "height": 0.52, "depth": 0.46, "units": "meters", "confidence": 0.9 }, "transform": { "position": [-0.278, 0.22, 0.01], "rotation": [0, 0, 0], "scale": [0.018, 0.52, 0.46] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "chrome", "materialLayers": ["chrome"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u5EA7\u57AB/\u9760\u80CC\u4FA7\u7F18\u7AD6\u5411\u9540\u94EC\u9970\u6761", "kind": "trim", "note": "I1/I5/I6/U7\uFF1A\u5EA7\u57AB\u4E0E\u9760\u80CC\u4FA7\u7F18\uFF08\u9762\u5411\u4E2D\u5C9B\u4E00\u4FA7\uFF09\u6709\u7AD6\u5411\u9540\u94EC\u9970\u6761\uFF1B\u672C\u4EF6\u6CBF\u5EA7\u4FA7\u5185\u7F18\uFF08\u5EA7\u5C40\u90E8 x\xB10.278\uFF0C\u4E16\u754C 0.213~0.231\uFF0C\u5D4C\u5165\u5EA7\u4FA7 7mm\uFF09\u7EB5\u8D2F\u5EA7\u57AB\u81F3\u9760\u80CC\u4E0B\u90E8\uFF08\u4E16\u754C y0.58~1.10\uFF09\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "IN-07 \u5EA7\u6905\u4FA7\u7F18\u9540\u94EC\u9970\u6761\uFF08l\uFF09\uFF1Achrome 0.018\xD70.52\xD70.46\uFF0C\u5EA7\u4FA7\u5185\u7F18\u3001\u7EB5\u8D2F\u5EA7\u57AB\u81F3\u9760\u80CC\u4E0B\u90E8" }, "evidenceRefs": ["img-seat-trim"], "details": ["d-rear-seat"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(232, 233, 236, 1.0)", "secondaryAlbedo": "rgba(232, 233, 236, 1.0)", "materialClass": "metal", "materialClassConfidence": 0.9, "note": "IN-07 \u5EA7\u6905\u4FA7\u7F18\u9540\u94EC\u9970\u6761\uFF08l\uFF09\uFF1Achrome 0.018\xD70.52\xD70.46\uFF0C\u5EA7\u4FA7\u5185\u7F18\u3001\u7EB5\u8D2F\u5EA7\u57AB\u81F3\u9760\u80CC\u4E0B\u90E8" }, "notes": "EX-25\uFF1A\u5C3E\u90E8\u6A2A\u5411\u8D2F\u7A7F\u9540\u94EC\u9970\u6761 1.50\xD70.035\uFF0C\u8D34\u5728\u5C3E\u95E8\u540E\u8138\uFF1Bchrome \u5408\u6279 +0 DC\u3002" };
+  node_seat_rear_l_side_trim_181.userData.actionProfile = { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } };
+  (nodes["seat-rear-l"] ?? root).add(node_seat_rear_l_side_trim_181);
+  nodes["seat-rear-l-side-trim"] = node_seat_rear_l_side_trim_181;
+  const mesh_seat_rear_l_side_trim_181Geometry = endpoint_seat_rear_l_side_trim_181 ? new CylinderGeometry(endpoint_seat_rear_l_side_trim_181.endRadius, endpoint_seat_rear_l_side_trim_181.baseRadius, endpoint_seat_rear_l_side_trim_181.length, 16, 6) : new BoxGeometry(1, 1, 1, 4, 4, 4);
+  if (!endpoint_seat_rear_l_side_trim_181) {
+    mesh_seat_rear_l_side_trim_181Geometry.scale(0.018, 0.52, 0.46);
+  }
+  const mesh_seat_rear_l_side_trim_181 = new Mesh(
+    mesh_seat_rear_l_side_trim_181Geometry,
+    materialMap["chrome"] ?? new MeshStandardMaterial({ color: 8947848 })
+  );
+  mesh_seat_rear_l_side_trim_181.name = "\u5EA7\u6905\u4FA7\u7F18\u9540\u94EC\u9970\u6761\uFF08l\uFF09";
+  if (endpoint_seat_rear_l_side_trim_181) {
+    mesh_seat_rear_l_side_trim_181.position.copy(endpoint_seat_rear_l_side_trim_181.midpoint);
+    mesh_seat_rear_l_side_trim_181.quaternion.copy(endpoint_seat_rear_l_side_trim_181.quaternion);
+  }
+  mesh_seat_rear_l_side_trim_181.castShadow = options.castShadow ?? true;
+  mesh_seat_rear_l_side_trim_181.receiveShadow = options.receiveShadow ?? true;
+  mesh_seat_rear_l_side_trim_181.userData.sculptComponent = { "id": "seat-rear-l-side-trim", "name": "\u5EA7\u6905\u4FA7\u7F18\u9540\u94EC\u9970\u6761\uFF08l\uFF09", "level": "micro", "role": "detail", "importance": 0.85, "confidence": 0.86, "primitive": "box", "topologyClass": "assembled-solid", "topologyRationale": "\u8584\u677F/\u56DE\u8F6C\u4F53\uFF0C\u786C\u8868\u9762\u53EF\u5C55\u62D3\u6251", "geometryDescriptor": { "topologyIntent": "hard-surface precise", "edgeTreatment": { "type": "bevel", "bevelRadius": 4e-3, "segments": 1 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry" }, "parent": "seat-rear-l", "attachment": null, "dimensions": { "width": 0.018, "height": 0.52, "depth": 0.46, "units": "meters", "confidence": 0.9 }, "transform": { "position": [-0.278, 0.22, 0.01], "rotation": [0, 0, 0], "scale": [0.018, 0.52, 0.46] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "chrome", "materialLayers": ["chrome"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u5EA7\u57AB/\u9760\u80CC\u4FA7\u7F18\u7AD6\u5411\u9540\u94EC\u9970\u6761", "kind": "trim", "note": "I1/I5/I6/U7\uFF1A\u5EA7\u57AB\u4E0E\u9760\u80CC\u4FA7\u7F18\uFF08\u9762\u5411\u4E2D\u5C9B\u4E00\u4FA7\uFF09\u6709\u7AD6\u5411\u9540\u94EC\u9970\u6761\uFF1B\u672C\u4EF6\u6CBF\u5EA7\u4FA7\u5185\u7F18\uFF08\u5EA7\u5C40\u90E8 x\xB10.278\uFF0C\u4E16\u754C 0.213~0.231\uFF0C\u5D4C\u5165\u5EA7\u4FA7 7mm\uFF09\u7EB5\u8D2F\u5EA7\u57AB\u81F3\u9760\u80CC\u4E0B\u90E8\uFF08\u4E16\u754C y0.58~1.10\uFF09\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "IN-07 \u5EA7\u6905\u4FA7\u7F18\u9540\u94EC\u9970\u6761\uFF08l\uFF09\uFF1Achrome 0.018\xD70.52\xD70.46\uFF0C\u5EA7\u4FA7\u5185\u7F18\u3001\u7EB5\u8D2F\u5EA7\u57AB\u81F3\u9760\u80CC\u4E0B\u90E8" }, "evidenceRefs": ["img-seat-trim"], "details": ["d-rear-seat"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(232, 233, 236, 1.0)", "secondaryAlbedo": "rgba(232, 233, 236, 1.0)", "materialClass": "metal", "materialClassConfidence": 0.9, "note": "IN-07 \u5EA7\u6905\u4FA7\u7F18\u9540\u94EC\u9970\u6761\uFF08l\uFF09\uFF1Achrome 0.018\xD70.52\xD70.46\uFF0C\u5EA7\u4FA7\u5185\u7F18\u3001\u7EB5\u8D2F\u5EA7\u57AB\u81F3\u9760\u80CC\u4E0B\u90E8" }, "notes": "EX-25\uFF1A\u5C3E\u90E8\u6A2A\u5411\u8D2F\u7A7F\u9540\u94EC\u9970\u6761 1.50\xD70.035\uFF0C\u8D34\u5728\u5C3E\u95E8\u540E\u8138\uFF1Bchrome \u5408\u6279 +0 DC\u3002" };
+  node_seat_rear_l_side_trim_181.add(mesh_seat_rear_l_side_trim_181);
+  meshes2["seat-rear-l-side-trim"] = mesh_seat_rear_l_side_trim_181;
+  colliders["seat-rear-l-side-trim"] = { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" };
+  destructionGroups["root"] ??= [];
+  destructionGroups["root"].push(node_seat_rear_l_side_trim_181);
+  const endpoint_seat_rear_r_armrest_cap_182 = makeAttachmentEndpoint(null);
+  const node_seat_rear_r_armrest_cap_182 = new Group();
+  node_seat_rear_r_armrest_cap_182.name = "\u6276\u624B\u7AEF\u76D6\u9540\u94EC\uFF08r\uFF09__pivot";
+  node_seat_rear_r_armrest_cap_182.scale.set(1, 1, 1);
+  if (endpoint_seat_rear_r_armrest_cap_182) {
+    node_seat_rear_r_armrest_cap_182.position.copy(endpoint_seat_rear_r_armrest_cap_182.start);
+    node_seat_rear_r_armrest_cap_182.rotation.set(0, 0, 0);
+  } else {
+    node_seat_rear_r_armrest_cap_182.position.set(0, 0.28, 0.215);
+    node_seat_rear_r_armrest_cap_182.rotation.set(0, 0, 0);
+  }
+  node_seat_rear_r_armrest_cap_182.userData.sculptComponent = { "id": "seat-rear-r-armrest-cap", "name": "\u6276\u624B\u7AEF\u76D6\u9540\u94EC\uFF08r\uFF09", "level": "micro", "role": "detail", "importance": 0.85, "confidence": 0.86, "primitive": "box", "topologyClass": "assembled-solid", "topologyRationale": "\u8584\u677F/\u56DE\u8F6C\u4F53\uFF0C\u786C\u8868\u9762\u53EF\u5C55\u62D3\u6251", "geometryDescriptor": { "topologyIntent": "hard-surface precise", "edgeTreatment": { "type": "bevel", "bevelRadius": 4e-3, "segments": 1 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry" }, "parent": "seat-rear-r", "attachment": null, "dimensions": { "width": 0.62, "height": 0.095, "depth": 0.02, "units": "meters", "confidence": 0.9 }, "transform": { "position": [0, 0.28, 0.215], "rotation": [0, 0, 0], "scale": [0.62, 0.095, 0.02] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "chrome", "materialLayers": ["chrome"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u6276\u624B\u524D\u7AEF\u9540\u94EC\u7AEF\u76D6", "kind": "hardware", "note": "I1_\u5EA7\u6905-\u4E8C\u6392.jpg / I5 / I6 / U7\uFF1A\u4FA7\u6276\u624B\u524D\u7AEF\u7AEF\u76D6\u4E3A\u9540\u94EC\u4EAE\u9762\uFF1B\u672C\u4EF6\u8986\u76D6\u6276\u624B\u524D\u7AEF\u7AEF\u9762\u5E76\u5BBD\u51FA\u4FA7\u6CBF 1cm \u5305\u524D\u89D2\uFF08\u5EA7\u5C40\u90E8 z0.205~0.225\uFF0C\u4E16\u754C -1.095~-1.075\uFF0C\u8F83\u6276\u624B\u7AEF\u9762\u5916\u51F8 5mm\uFF09\uFF0C\u4E0E\u6276\u624B\u5C4F\u652F\u81C2\u6210\u5BF9\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "IN-06 \u6276\u624B\u7AEF\u76D6\uFF08r\uFF09\uFF1Achrome 0.62\xD70.095\xD70.02\uFF0C\u6276\u624B\u524D\u7AEF\u7AEF\u9762\u5916\u51F8 5mm\u3001\u4FA7\u6CBF\u5305\u89D2 1cm" }, "evidenceRefs": ["img-seat-trim"], "details": ["d-rear-seat"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(232, 233, 236, 1.0)", "secondaryAlbedo": "rgba(232, 233, 236, 1.0)", "materialClass": "metal", "materialClassConfidence": 0.9, "note": "IN-06 \u6276\u624B\u7AEF\u76D6\uFF08r\uFF09\uFF1Achrome 0.62\xD70.095\xD70.02\uFF0C\u6276\u624B\u524D\u7AEF\u7AEF\u9762\u5916\u51F8 5mm\u3001\u4FA7\u6CBF\u5305\u89D2 1cm" }, "notes": "EX-25\uFF1A\u5C3E\u90E8\u6A2A\u5411\u8D2F\u7A7F\u9540\u94EC\u9970\u6761 1.50\xD70.035\uFF0C\u8D34\u5728\u5C3E\u95E8\u540E\u8138\uFF1Bchrome \u5408\u6279 +0 DC\u3002" };
+  node_seat_rear_r_armrest_cap_182.userData.actionProfile = { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } };
+  (nodes["seat-rear-r"] ?? root).add(node_seat_rear_r_armrest_cap_182);
+  nodes["seat-rear-r-armrest-cap"] = node_seat_rear_r_armrest_cap_182;
+  const mesh_seat_rear_r_armrest_cap_182Geometry = endpoint_seat_rear_r_armrest_cap_182 ? new CylinderGeometry(endpoint_seat_rear_r_armrest_cap_182.endRadius, endpoint_seat_rear_r_armrest_cap_182.baseRadius, endpoint_seat_rear_r_armrest_cap_182.length, 16, 6) : new BoxGeometry(1, 1, 1, 4, 4, 4);
+  if (!endpoint_seat_rear_r_armrest_cap_182) {
+    mesh_seat_rear_r_armrest_cap_182Geometry.scale(0.62, 0.095, 0.02);
+  }
+  const mesh_seat_rear_r_armrest_cap_182 = new Mesh(
+    mesh_seat_rear_r_armrest_cap_182Geometry,
+    materialMap["chrome"] ?? new MeshStandardMaterial({ color: 8947848 })
+  );
+  mesh_seat_rear_r_armrest_cap_182.name = "\u6276\u624B\u7AEF\u76D6\u9540\u94EC\uFF08r\uFF09";
+  if (endpoint_seat_rear_r_armrest_cap_182) {
+    mesh_seat_rear_r_armrest_cap_182.position.copy(endpoint_seat_rear_r_armrest_cap_182.midpoint);
+    mesh_seat_rear_r_armrest_cap_182.quaternion.copy(endpoint_seat_rear_r_armrest_cap_182.quaternion);
+  }
+  mesh_seat_rear_r_armrest_cap_182.castShadow = options.castShadow ?? true;
+  mesh_seat_rear_r_armrest_cap_182.receiveShadow = options.receiveShadow ?? true;
+  mesh_seat_rear_r_armrest_cap_182.userData.sculptComponent = { "id": "seat-rear-r-armrest-cap", "name": "\u6276\u624B\u7AEF\u76D6\u9540\u94EC\uFF08r\uFF09", "level": "micro", "role": "detail", "importance": 0.85, "confidence": 0.86, "primitive": "box", "topologyClass": "assembled-solid", "topologyRationale": "\u8584\u677F/\u56DE\u8F6C\u4F53\uFF0C\u786C\u8868\u9762\u53EF\u5C55\u62D3\u6251", "geometryDescriptor": { "topologyIntent": "hard-surface precise", "edgeTreatment": { "type": "bevel", "bevelRadius": 4e-3, "segments": 1 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry" }, "parent": "seat-rear-r", "attachment": null, "dimensions": { "width": 0.62, "height": 0.095, "depth": 0.02, "units": "meters", "confidence": 0.9 }, "transform": { "position": [0, 0.28, 0.215], "rotation": [0, 0, 0], "scale": [0.62, 0.095, 0.02] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "chrome", "materialLayers": ["chrome"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u6276\u624B\u524D\u7AEF\u9540\u94EC\u7AEF\u76D6", "kind": "hardware", "note": "I1_\u5EA7\u6905-\u4E8C\u6392.jpg / I5 / I6 / U7\uFF1A\u4FA7\u6276\u624B\u524D\u7AEF\u7AEF\u76D6\u4E3A\u9540\u94EC\u4EAE\u9762\uFF1B\u672C\u4EF6\u8986\u76D6\u6276\u624B\u524D\u7AEF\u7AEF\u9762\u5E76\u5BBD\u51FA\u4FA7\u6CBF 1cm \u5305\u524D\u89D2\uFF08\u5EA7\u5C40\u90E8 z0.205~0.225\uFF0C\u4E16\u754C -1.095~-1.075\uFF0C\u8F83\u6276\u624B\u7AEF\u9762\u5916\u51F8 5mm\uFF09\uFF0C\u4E0E\u6276\u624B\u5C4F\u652F\u81C2\u6210\u5BF9\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "IN-06 \u6276\u624B\u7AEF\u76D6\uFF08r\uFF09\uFF1Achrome 0.62\xD70.095\xD70.02\uFF0C\u6276\u624B\u524D\u7AEF\u7AEF\u9762\u5916\u51F8 5mm\u3001\u4FA7\u6CBF\u5305\u89D2 1cm" }, "evidenceRefs": ["img-seat-trim"], "details": ["d-rear-seat"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(232, 233, 236, 1.0)", "secondaryAlbedo": "rgba(232, 233, 236, 1.0)", "materialClass": "metal", "materialClassConfidence": 0.9, "note": "IN-06 \u6276\u624B\u7AEF\u76D6\uFF08r\uFF09\uFF1Achrome 0.62\xD70.095\xD70.02\uFF0C\u6276\u624B\u524D\u7AEF\u7AEF\u9762\u5916\u51F8 5mm\u3001\u4FA7\u6CBF\u5305\u89D2 1cm" }, "notes": "EX-25\uFF1A\u5C3E\u90E8\u6A2A\u5411\u8D2F\u7A7F\u9540\u94EC\u9970\u6761 1.50\xD70.035\uFF0C\u8D34\u5728\u5C3E\u95E8\u540E\u8138\uFF1Bchrome \u5408\u6279 +0 DC\u3002" };
+  node_seat_rear_r_armrest_cap_182.add(mesh_seat_rear_r_armrest_cap_182);
+  meshes2["seat-rear-r-armrest-cap"] = mesh_seat_rear_r_armrest_cap_182;
+  colliders["seat-rear-r-armrest-cap"] = { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" };
+  destructionGroups["root"] ??= [];
+  destructionGroups["root"].push(node_seat_rear_r_armrest_cap_182);
+  const endpoint_seat_rear_r_side_trim_183 = makeAttachmentEndpoint(null);
+  const node_seat_rear_r_side_trim_183 = new Group();
+  node_seat_rear_r_side_trim_183.name = "\u5EA7\u6905\u4FA7\u7F18\u9540\u94EC\u9970\u6761\uFF08r\uFF09__pivot";
+  node_seat_rear_r_side_trim_183.scale.set(1, 1, 1);
+  if (endpoint_seat_rear_r_side_trim_183) {
+    node_seat_rear_r_side_trim_183.position.copy(endpoint_seat_rear_r_side_trim_183.start);
+    node_seat_rear_r_side_trim_183.rotation.set(0, 0, 0);
+  } else {
+    node_seat_rear_r_side_trim_183.position.set(0.278, 0.22, 0.01);
+    node_seat_rear_r_side_trim_183.rotation.set(0, 0, 0);
+  }
+  node_seat_rear_r_side_trim_183.userData.sculptComponent = { "id": "seat-rear-r-side-trim", "name": "\u5EA7\u6905\u4FA7\u7F18\u9540\u94EC\u9970\u6761\uFF08r\uFF09", "level": "micro", "role": "detail", "importance": 0.85, "confidence": 0.86, "primitive": "box", "topologyClass": "assembled-solid", "topologyRationale": "\u8584\u677F/\u56DE\u8F6C\u4F53\uFF0C\u786C\u8868\u9762\u53EF\u5C55\u62D3\u6251", "geometryDescriptor": { "topologyIntent": "hard-surface precise", "edgeTreatment": { "type": "bevel", "bevelRadius": 4e-3, "segments": 1 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry" }, "parent": "seat-rear-r", "attachment": null, "dimensions": { "width": 0.018, "height": 0.52, "depth": 0.46, "units": "meters", "confidence": 0.9 }, "transform": { "position": [0.278, 0.22, 0.01], "rotation": [0, 0, 0], "scale": [0.018, 0.52, 0.46] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "chrome", "materialLayers": ["chrome"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u5EA7\u57AB/\u9760\u80CC\u4FA7\u7F18\u7AD6\u5411\u9540\u94EC\u9970\u6761", "kind": "trim", "note": "I1/I5/I6/U7\uFF1A\u5EA7\u57AB\u4E0E\u9760\u80CC\u4FA7\u7F18\uFF08\u9762\u5411\u4E2D\u5C9B\u4E00\u4FA7\uFF09\u6709\u7AD6\u5411\u9540\u94EC\u9970\u6761\uFF1B\u672C\u4EF6\u6CBF\u5EA7\u4FA7\u5185\u7F18\uFF08\u5EA7\u5C40\u90E8 x\xB10.278\uFF0C\u4E16\u754C 0.213~0.231\uFF0C\u5D4C\u5165\u5EA7\u4FA7 7mm\uFF09\u7EB5\u8D2F\u5EA7\u57AB\u81F3\u9760\u80CC\u4E0B\u90E8\uFF08\u4E16\u754C y0.58~1.10\uFF09\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "IN-07 \u5EA7\u6905\u4FA7\u7F18\u9540\u94EC\u9970\u6761\uFF08r\uFF09\uFF1Achrome 0.018\xD70.52\xD70.46\uFF0C\u5EA7\u4FA7\u5185\u7F18\u3001\u7EB5\u8D2F\u5EA7\u57AB\u81F3\u9760\u80CC\u4E0B\u90E8" }, "evidenceRefs": ["img-seat-trim"], "details": ["d-rear-seat"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(232, 233, 236, 1.0)", "secondaryAlbedo": "rgba(232, 233, 236, 1.0)", "materialClass": "metal", "materialClassConfidence": 0.9, "note": "IN-07 \u5EA7\u6905\u4FA7\u7F18\u9540\u94EC\u9970\u6761\uFF08r\uFF09\uFF1Achrome 0.018\xD70.52\xD70.46\uFF0C\u5EA7\u4FA7\u5185\u7F18\u3001\u7EB5\u8D2F\u5EA7\u57AB\u81F3\u9760\u80CC\u4E0B\u90E8" }, "notes": "EX-25\uFF1A\u5C3E\u90E8\u6A2A\u5411\u8D2F\u7A7F\u9540\u94EC\u9970\u6761 1.50\xD70.035\uFF0C\u8D34\u5728\u5C3E\u95E8\u540E\u8138\uFF1Bchrome \u5408\u6279 +0 DC\u3002" };
+  node_seat_rear_r_side_trim_183.userData.actionProfile = { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } };
+  (nodes["seat-rear-r"] ?? root).add(node_seat_rear_r_side_trim_183);
+  nodes["seat-rear-r-side-trim"] = node_seat_rear_r_side_trim_183;
+  const mesh_seat_rear_r_side_trim_183Geometry = endpoint_seat_rear_r_side_trim_183 ? new CylinderGeometry(endpoint_seat_rear_r_side_trim_183.endRadius, endpoint_seat_rear_r_side_trim_183.baseRadius, endpoint_seat_rear_r_side_trim_183.length, 16, 6) : new BoxGeometry(1, 1, 1, 4, 4, 4);
+  if (!endpoint_seat_rear_r_side_trim_183) {
+    mesh_seat_rear_r_side_trim_183Geometry.scale(0.018, 0.52, 0.46);
+  }
+  const mesh_seat_rear_r_side_trim_183 = new Mesh(
+    mesh_seat_rear_r_side_trim_183Geometry,
+    materialMap["chrome"] ?? new MeshStandardMaterial({ color: 8947848 })
+  );
+  mesh_seat_rear_r_side_trim_183.name = "\u5EA7\u6905\u4FA7\u7F18\u9540\u94EC\u9970\u6761\uFF08r\uFF09";
+  if (endpoint_seat_rear_r_side_trim_183) {
+    mesh_seat_rear_r_side_trim_183.position.copy(endpoint_seat_rear_r_side_trim_183.midpoint);
+    mesh_seat_rear_r_side_trim_183.quaternion.copy(endpoint_seat_rear_r_side_trim_183.quaternion);
+  }
+  mesh_seat_rear_r_side_trim_183.castShadow = options.castShadow ?? true;
+  mesh_seat_rear_r_side_trim_183.receiveShadow = options.receiveShadow ?? true;
+  mesh_seat_rear_r_side_trim_183.userData.sculptComponent = { "id": "seat-rear-r-side-trim", "name": "\u5EA7\u6905\u4FA7\u7F18\u9540\u94EC\u9970\u6761\uFF08r\uFF09", "level": "micro", "role": "detail", "importance": 0.85, "confidence": 0.86, "primitive": "box", "topologyClass": "assembled-solid", "topologyRationale": "\u8584\u677F/\u56DE\u8F6C\u4F53\uFF0C\u786C\u8868\u9762\u53EF\u5C55\u62D3\u6251", "geometryDescriptor": { "topologyIntent": "hard-surface precise", "edgeTreatment": { "type": "bevel", "bevelRadius": 4e-3, "segments": 1 }, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry" }, "parent": "seat-rear-r", "attachment": null, "dimensions": { "width": 0.018, "height": 0.52, "depth": 0.46, "units": "meters", "confidence": 0.9 }, "transform": { "position": [0.278, 0.22, 0.01], "rotation": [0, 0, 0], "scale": [0.018, 0.52, 0.46] }, "actionProfile": { "animationRole": "static", "pivot": { "mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.9 }, "transformChannels": { "translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true }, "sockets": [], "collider": { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" }, "constraints": [], "destruction": { "breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base" } }, "material": "chrome", "materialLayers": ["chrome"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{ "name": "\u5EA7\u57AB/\u9760\u80CC\u4FA7\u7F18\u7AD6\u5411\u9540\u94EC\u9970\u6761", "kind": "trim", "note": "I1/I5/I6/U7\uFF1A\u5EA7\u57AB\u4E0E\u9760\u80CC\u4FA7\u7F18\uFF08\u9762\u5411\u4E2D\u5C9B\u4E00\u4FA7\uFF09\u6709\u7AD6\u5411\u9540\u94EC\u9970\u6761\uFF1B\u672C\u4EF6\u6CBF\u5EA7\u4FA7\u5185\u7F18\uFF08\u5EA7\u5C40\u90E8 x\xB10.278\uFF0C\u4E16\u754C 0.213~0.231\uFF0C\u5D4C\u5165\u5EA7\u4FA7 7mm\uFF09\u7EB5\u8D2F\u5EA7\u57AB\u81F3\u9760\u80CC\u4E0B\u90E8\uFF08\u4E16\u754C y0.58~1.10\uFF09\u3002" }], "surfaceDetail": { "macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": "IN-07 \u5EA7\u6905\u4FA7\u7F18\u9540\u94EC\u9970\u6761\uFF08r\uFF09\uFF1Achrome 0.018\xD70.52\xD70.46\uFF0C\u5EA7\u4FA7\u5185\u7F18\u3001\u7EB5\u8D2F\u5EA7\u57AB\u81F3\u9760\u80CC\u4E0B\u90E8" }, "evidenceRefs": ["img-seat-trim"], "details": ["d-rear-seat"], "fidelityTier": "hero", "colorMaterialRecipe": { "dominantAlbedo": "rgba(232, 233, 236, 1.0)", "secondaryAlbedo": "rgba(232, 233, 236, 1.0)", "materialClass": "metal", "materialClassConfidence": 0.9, "note": "IN-07 \u5EA7\u6905\u4FA7\u7F18\u9540\u94EC\u9970\u6761\uFF08r\uFF09\uFF1Achrome 0.018\xD70.52\xD70.46\uFF0C\u5EA7\u4FA7\u5185\u7F18\u3001\u7EB5\u8D2F\u5EA7\u57AB\u81F3\u9760\u80CC\u4E0B\u90E8" }, "notes": "EX-25\uFF1A\u5C3E\u90E8\u6A2A\u5411\u8D2F\u7A7F\u9540\u94EC\u9970\u6761 1.50\xD70.035\uFF0C\u8D34\u5728\u5C3E\u95E8\u540E\u8138\uFF1Bchrome \u5408\u6279 +0 DC\u3002" };
+  node_seat_rear_r_side_trim_183.add(mesh_seat_rear_r_side_trim_183);
+  meshes2["seat-rear-r-side-trim"] = mesh_seat_rear_r_side_trim_183;
+  colliders["seat-rear-r-side-trim"] = { "type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": "" };
+  destructionGroups["root"] ??= [];
+  destructionGroups["root"].push(node_seat_rear_r_side_trim_183);
   root.userData.sculptRuntime = { nodes, meshes: meshes2, sockets, colliders, destructionGroups };
   root.userData.lookDevTargets = { "qualityPriority": "realtime-balanced", "materialPass": { "albedoPaletteRequired": true, "roughnessVariationRequired": true, "normalOrBumpRequired": true, "localOverridesRequired": true, "minimumTextureResolution": 1024, "preferredTextureResolution": 2048, "independentMapChannels": ["albedo", "roughness", "height", "normal", "ambient-occlusion"], "requiredSurfaceFrequencyBands": ["macro", "meso", "micro"], "geometryReliefRequiredWhenSilhouetteAffected": true, "referencePbrExtraction": { "requiredWhenSourceImagePresent": true, "targetThreshold": 0.7, "stopOnLowConfidence": true, "script": "forge/stage1_intake/extract_pbr_evidence.py", "acceptedLimitation": "single-image extraction is reference-derived inference, not exact photogrammetry" }, "mustAvoid": ["single flat albedo per material", "uniform roughness", "albedo texture reused as roughness/height/normal/AO", "single-frequency random noise", "plastic-looking smooth bark, stone, cloth, foliage, or aged material", "local color/detail described only in prose without material masks", "claiming exact PBR recovery when confidence is below the target threshold"] }, "lightingPass": { "requiredTerms": ["key light", "fill light", "rim or environment light", "exposure", "tone mapping", "background", "contact shadow"], "mustAvoid": ["ambient-only lighting", "flat value range", "missing contact shadow", "reference lighting copied without separating material readability"] }, "screenshotReview": ["Compare albedo palette and local color zones.", "Compare roughness/normal/bump response under light.", "Compare cavity dirt, edge wear, stains, moss, scratches, or other local masks.", "Compare key/fill/rim structure, exposure, tone mapping, background, and contact shadows.", "Capture a neutral-light render to verify material readability without reference lighting.", "Capture a grazing-light close-up to expose flat normals, uniform roughness, tiling, and plastic highlights.", "Capture a reference-matched render from the same camera framing as the source."] };
   root.userData.actionReadiness = {
@@ -25815,6 +26611,19 @@ var WHEEL_FACE_SIZE = {
   low: 256
 };
 var WHEEL_WINDOWS = 20;
+var TIRE_ATLAS_W = { high: 1024, medium: 512, low: 512 };
+var WHEEL_BADGE_SIZE = { high: 512, medium: 256, low: 256 };
+var CARPET_TEX_SIZE = { high: 512, medium: 384, low: 256 };
+var WELCOME_CARPET_W = 0.72;
+var WELCOME_CARPET_L = 0.54;
+var WELCOME_CARPET_Y = 0.018;
+var WELCOME_CARPET_SPOTS = [
+  [1.13, 0.85],
+  [-1.13, 0.85],
+  [1.13, -0.95],
+  [-1.13, -0.95]
+];
+var WELCOME_CARPET_SPEED_GATE = 5;
 var STARLIGHT_BASE_INTENSITY = 0.9;
 var STARLIGHT_BREATH_PERIOD = 4;
 var STARLIGHT_BREATH_AMPLITUDE = 0.08;
@@ -26253,42 +27062,44 @@ function pnoise(x, y, period, seed) {
   return a + (b - a) * fx + (c - a) * fy + (a - b - c + d) * fx * fy;
 }
 var clamp012 = (t) => Math.max(0, Math.min(1, t));
-function createProceduralSurface(size, normalStrength, sample) {
+function createProceduralSurface(size, normalStrength, sample, height = size) {
+  const w = size;
+  const h = height;
   const colorCanvas = document.createElement("canvas");
-  colorCanvas.width = size;
-  colorCanvas.height = size;
+  colorCanvas.width = w;
+  colorCanvas.height = h;
   const colorCtx = colorCanvas.getContext("2d");
-  const colorImage = colorCtx.createImageData(size, size);
+  const colorImage = colorCtx.createImageData(w, h);
   const normalCanvas = document.createElement("canvas");
-  normalCanvas.width = size;
-  normalCanvas.height = size;
+  normalCanvas.width = w;
+  normalCanvas.height = h;
   const normalCtx = normalCanvas.getContext("2d");
-  const normalImage = normalCtx.createImageData(size, size);
-  const height = new Float32Array(size * size);
-  for (let y = 0; y < size; y++) {
-    const v = y / size;
-    for (let x = 0; x < size; x++) {
-      const u = x / size;
-      const [h, r, g2, b] = sample(u, v);
-      height[y * size + x] = h;
-      const off = (y * size + x) * 4;
+  const normalImage = normalCtx.createImageData(w, h);
+  const heights = new Float32Array(w * h);
+  for (let y = 0; y < h; y++) {
+    const v = y / h;
+    for (let x = 0; x < w; x++) {
+      const u = x / w;
+      const [hh, r, g2, b] = sample(u, v);
+      heights[y * w + x] = hh;
+      const off = (y * w + x) * 4;
       colorImage.data[off] = r;
       colorImage.data[off + 1] = g2;
       colorImage.data[off + 2] = b;
       colorImage.data[off + 3] = 255;
     }
   }
-  const s = normalStrength * size;
-  for (let y = 0; y < size; y++) {
-    const yUp = (y - 1 + size) % size;
-    const yDn = (y + 1) % size;
-    for (let x = 0; x < size; x++) {
-      const xL = (x - 1 + size) % size;
-      const xR = (x + 1) % size;
-      const dx = (height[y * size + xR] - height[y * size + xL]) * s;
-      const dy = (height[yDn * size + x] - height[yUp * size + x]) * s;
+  const s = normalStrength * Math.min(w, h);
+  for (let y = 0; y < h; y++) {
+    const yUp = (y - 1 + h) % h;
+    const yDn = (y + 1) % h;
+    for (let x = 0; x < w; x++) {
+      const xL = (x - 1 + w) % w;
+      const xR = (x + 1) % w;
+      const dx = (heights[y * w + xR] - heights[y * w + xL]) * s;
+      const dy = (heights[yDn * w + x] - heights[yUp * w + x]) * s;
       const invLen = 1 / Math.sqrt(dx * dx + dy * dy + 1);
-      const off = (y * size + x) * 4;
+      const off = (y * w + x) * 4;
       normalImage.data[off] = Math.round((-dx * invLen * 0.5 + 0.5) * 255);
       normalImage.data[off + 1] = Math.round((-dy * invLen * 0.5 + 0.5) * 255);
       normalImage.data[off + 2] = Math.round((invLen * 0.5 + 0.5) * 255);
@@ -26489,34 +27300,508 @@ function createHeadlampLedTexture() {
   const ctx = canvas.getContext("2d");
   ctx.fillStyle = "rgb(80, 88, 100)";
   ctx.fillRect(0, 0, W, H);
-  ctx.strokeStyle = "rgba(220, 228, 240, 0.1)";
-  ctx.lineWidth = 6;
-  for (let i = 0; i < 4; i++) {
-    const x = 18 + i * 28 + i % 2 * 6;
+  const band = ctx.createLinearGradient(40, 0, 88, 0);
+  band.addColorStop(0, "rgba(80, 88, 100, 0)");
+  band.addColorStop(0.14, "rgba(196, 204, 218, 0.85)");
+  band.addColorStop(0.32, "rgba(242, 246, 252, 0.97)");
+  band.addColorStop(0.5, "rgb(255, 255, 255)");
+  band.addColorStop(0.68, "rgba(242, 246, 252, 0.97)");
+  band.addColorStop(0.86, "rgba(196, 204, 218, 0.85)");
+  band.addColorStop(1, "rgba(80, 88, 100, 0)");
+  ctx.fillStyle = band;
+  ctx.fillRect(0, 0, W, H);
+  const tex = new CanvasTexture(canvas);
+  tex.colorSpace = SRGBColorSpace;
+  tex.needsUpdate = true;
+  return tex;
+}
+var TRI_SCREEN_UI_REGION = Object.freeze([4 / 1024, 1020 / 1024, 1 - 227 / 512, 1 - 4 / 512]);
+var REAR_CTRL_UI_REGION = Object.freeze([4 / 1024, 316 / 1024, 1 - 508 / 512, 1 - 300 / 512]);
+var SEAT_CTRL_UI_REGION = Object.freeze([332 / 1024, 470 / 1024, 1 - 482 / 512, 1 - 380 / 512]);
+function createScreenUIAtlasTexture() {
+  const W = 1024;
+  const H = 512;
+  const canvas = document.createElement("canvas");
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#0a0c10";
+  ctx.fillRect(0, 0, W, H);
+  const roundRect = (x, y, w, h, r) => {
     ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, H);
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  };
+  const panel = (x, y, w, h) => {
+    roundRect(x, y, w, h, 8);
+    ctx.fillStyle = "#10141b";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(159, 182, 200, 0.28)";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  };
+  const label = (text, x, y, size, color, align = "left") => {
+    ctx.fillStyle = color;
+    ctx.textAlign = align;
+    ctx.textBaseline = "middle";
+    ctx.font = `${size}px "Segoe UI", "Microsoft YaHei", sans-serif`;
+    ctx.fillText(text, x, y);
+  };
+  panel(4, 4, 1016, 223);
+  ctx.strokeStyle = "rgba(159, 182, 200, 0.18)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(342, 14);
+  ctx.lineTo(342, 217);
+  ctx.moveTo(682, 14);
+  ctx.lineTo(682, 217);
+  ctx.stroke();
+  label("88", 60, 108, 92, "#e8f2ec");
+  label("km/h", 60, 176, 22, "#6e8494");
+  label("P", 300, 60, 44, "#9fb6c8", "right");
+  ctx.fillStyle = "#16241d";
+  roundRect(56, 196, 220, 12, 6);
+  ctx.fill();
+  ctx.fillStyle = "#7fd8a8";
+  roundRect(56, 196, 150, 12, 6);
+  ctx.fill();
+  label("READY", 180, 26, 18, "#7fd8a8", "center");
+  label("10:36", 512, 62, 56, "#eef3f8", "center");
+  label("10\u670816\u65E5 \u5468\u4E94", 512, 104, 20, "#6e8494", "center");
+  panel(376, 128, 272, 76);
+  label("\u266A \u6E56\u7554\u6668\u66F2 \u2014 \u8F66\u8F7D\u6B4C\u5355", 512, 152, 22, "#c8d4de", "center");
+  label("\u5BFC\u822A \xB7 \u524D\u5F80\u516C\u53F8 24 \u5206\u949F", 512, 186, 18, "#7fa8c8", "center");
+  panel(716, 28, 268, 120);
+  label("\u591A\u5A92\u4F53", 850, 78, 26, "#c8d4de", "center");
+  label("\u89C6\u9891\u5361\u7247", 850, 112, 18, "#6e8494", "center");
+  panel(716, 160, 128, 52);
+  label("23\xB0C \u6674", 780, 186, 20, "#c8d4de", "center");
+  panel(856, 160, 128, 52);
+  label("\u7A7A\u6C14\u51C0\u5316\u4E2D", 920, 186, 17, "#7fd8a8", "center");
+  panel(4, 300, 312, 208);
+  label("\u540E\u6392\u63A7\u5236", 160, 330, 24, "#c8d4de", "center");
+  for (const [i, t] of [["24\xB0C", "\u6E29\u5EA6"], ["\u5EA7\u6905", "\u52A0\u70ED"], ["\u906E\u9633", "\u7A97\u5E18"], ["\u6C1B\u56F4", "\u706F\u6548"]].entries()) {
+    const bx = 28 + i % 2 * 140;
+    const by = 356 + Math.floor(i / 2) * 68;
+    panel(bx, by, 120, 56);
+    label(t[0], bx + 60, by + 24, 20, "#e8eef4", "center");
+    label(t[1], bx + 60, by + 44, 13, "#6e8494", "center");
+  }
+  panel(332, 380, 138, 102);
+  for (const [i, t] of [["\u5EA7\u6905", "\u6309\u6469"], ["\u8170\u6258", "\u901A\u98CE"]].entries()) {
+    const by = 392 + i * 42;
+    label(t[0], 402, by, 15, "#d8e2ea", "center");
+    label(t[1], 402, by + 18, 11, "#5f7080", "center");
+  }
+  const tex = new CanvasTexture(canvas);
+  tex.colorSpace = SRGBColorSpace;
+  tex.anisotropy = 4;
+  tex.needsUpdate = true;
+  return tex;
+}
+function createGoldAlbedoAtlasTexture() {
+  const S = 512;
+  const canvas = document.createElement("canvas");
+  canvas.width = S;
+  canvas.height = S;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#181309";
+  ctx.fillRect(0, 0, S, S);
+  ctx.fillStyle = "rgb(12, 10, 7)";
+  ctx.fillRect(0, 0, S / 2, S);
+  const bx0 = GOLD_BRUSHED_REGION[0] * S;
+  const bx1 = GOLD_BRUSHED_REGION[1] * S;
+  const by0 = (1 - GOLD_BRUSHED_REGION[3]) * S;
+  const by1 = (1 - GOLD_BRUSHED_REGION[2]) * S;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(bx0, by0, bx1 - bx0, by1 - by0);
+  ctx.clip();
+  const base = ctx.createLinearGradient(bx0, 0, bx1, 0);
+  base.addColorStop(0, "rgb(38, 30, 18)");
+  base.addColorStop(0.5, "rgb(52, 41, 25)");
+  base.addColorStop(1, "rgb(38, 30, 18)");
+  ctx.fillStyle = base;
+  ctx.fillRect(bx0, by0, bx1 - bx0, by1 - by0);
+  const rnd = makeLcg(7455653);
+  for (let y = by0; y <= by1; y += 1) {
+    const a = 0.05 + rnd() * 0.12;
+    const light = rnd() > 0.5;
+    ctx.strokeStyle = light ? `rgba(122, 98, 58, ${a.toFixed(3)})` : `rgba(16, 12, 7, ${a.toFixed(3)})`;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(bx0, y + (rnd() - 0.5) * 0.6);
+    ctx.lineTo(bx1, y + (rnd() - 0.5) * 0.6);
     ctx.stroke();
   }
-  for (const vy of [0.25, 0.5, 0.75]) {
-    const y = (1 - vy) * H;
-    const halo = ctx.createRadialGradient(W / 2, y, 0, W / 2, y, 52);
-    halo.addColorStop(0, "rgba(255, 255, 255, 0.95)");
-    halo.addColorStop(0.35, "rgba(226, 234, 248, 0.55)");
-    halo.addColorStop(1, "rgba(226, 234, 248, 0)");
-    ctx.fillStyle = halo;
+  ctx.restore();
+  const tex = new CanvasTexture(canvas);
+  tex.colorSpace = SRGBColorSpace;
+  tex.needsUpdate = true;
+  return tex;
+}
+var TIRE_TREAD_REGION = Object.freeze([0, 0.5, 0, 1]);
+var TIRE_SIDEWALL_REGION = Object.freeze([0.5, 1, 0, 1]);
+var QUILT_CELL_WORLD_M = 0.06;
+var LEATHER_WARM_BASE = [122, 64, 52];
+function drawTireSidewallLettering(ctx, W, H) {
+  const cx = W * 0.75;
+  const cy = H * 0.5;
+  const R = H * 0.5 * (0.335 / 0.382);
+  const ink = "rgb(232, 224, 202)";
+  ctx.strokeStyle = "rgb(120, 118, 112)";
+  ctx.lineWidth = Math.max(1, H * 5e-3);
+  for (const rr of [R + H * 0.035, R - H * 0.03]) {
     ctx.beginPath();
-    ctx.arc(W / 2, y, 52, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "rgb(255, 255, 255)";
+    ctx.arc(cx, cy, rr, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  const placeText = (s, thetaC, px2) => {
+    ctx.save();
+    ctx.font = `bold ${px2}px "Segoe UI", Arial, sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = ink;
+    const widths = [...s].map((ch) => ctx.measureText(ch).width);
+    const total = widths.reduce((a, b) => a + b, 0);
+    let theta = thetaC + total / R / 2;
+    for (let i = 0; i < s.length; i++) {
+      const cw = widths[i];
+      theta -= cw / R / 2;
+      ctx.save();
+      ctx.translate(cx + R * Math.cos(theta), cy - R * Math.sin(theta));
+      ctx.rotate(Math.PI / 2 - theta);
+      ctx.fillText(s[i], 0, 0);
+      ctx.restore();
+      theta -= cw / R / 2;
+    }
+    ctx.restore();
+  };
+  placeText("V800", Math.PI / 2, Math.round(H * 0.05));
+  placeText("MAEXTRO", Math.PI * 1.5, Math.round(H * 0.045));
+  ctx.fillStyle = ink;
+  for (const theta of [Math.PI / 4, Math.PI * 3 / 4, Math.PI * 5 / 4, Math.PI * 7 / 4]) {
+    const sx = cx + R * Math.cos(theta);
+    const sy = cy - R * Math.sin(theta);
+    const len = H * 0.032;
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.rotate(Math.PI / 2 - theta);
     ctx.beginPath();
-    ctx.arc(W / 2, y, 22, 0, Math.PI * 2);
+    ctx.moveTo(0, -len);
+    ctx.lineTo(len * 0.22, -len * 0.22);
+    ctx.lineTo(len, 0);
+    ctx.lineTo(len * 0.22, len * 0.22);
+    ctx.lineTo(0, len);
+    ctx.lineTo(-len * 0.22, len * 0.22);
+    ctx.lineTo(-len, 0);
+    ctx.lineTo(-len * 0.22, -len * 0.22);
+    ctx.closePath();
     ctx.fill();
+    ctx.restore();
+  }
+  for (const theta of [Math.PI / 4, Math.PI * 3 / 4, Math.PI * 5 / 4, Math.PI * 7 / 4]) {
+    for (const d of [-0.09, 0.09]) {
+      const t = theta + d;
+      ctx.beginPath();
+      ctx.arc(cx + R * Math.cos(t), cy - R * Math.sin(t), Math.max(1, H * 8e-3), 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+function createTireAtlasTexture(size) {
+  const W = size;
+  const H = size / 2;
+  const scratch = document.createElement("canvas");
+  scratch.width = W;
+  scratch.height = H;
+  drawTireSidewallLettering(scratch.getContext("2d"), W, H);
+  const letter = scratch.getContext("2d").getImageData(0, 0, W, H).data;
+  const sample = (u, v) => {
+    const x = Math.min(W - 1, Math.floor(u * W));
+    const y = Math.min(H - 1, Math.floor(v * H));
+    const off = (y * W + x) * 4;
+    const la = letter[off + 3] / 255;
+    if (u >= 0.5) {
+      const grain2 = pnoise(u * 60, v * 60, 60, 388817);
+      const base = 17 + grain2 * 7;
+      let r = base;
+      let g2 = base + 1;
+      let b = base + 4;
+      let h = 0.5 + grain2 * 0.12;
+      if (la > 0) {
+        r = r * (1 - la) + letter[off] * la;
+        g2 = g2 * (1 - la) + letter[off + 1] * la;
+        b = b * (1 - la) + letter[off + 2] * la;
+        h = h * (1 - la) + 0.92 * la;
+      }
+      return [h, r, g2, b];
+    }
+    const P = 12;
+    const grain = pnoise(u * 2 * P, v * P, P, 29150);
+    const fine = pnoise(u * 2 * 48, v * 48, 48, 39468);
+    let groove = 0;
+    for (const gv of [0.13, 0.38, 0.62, 0.87]) {
+      const m = clamp012(1 - Math.abs(v - gv) / 0.035);
+      groove = Math.max(groove, m * m * (3 - 2 * m));
+    }
+    const shoulder = clamp012(1 - Math.min(v, 1 - v) / 0.06);
+    const sp = u * 80 % 1;
+    const sipe = clamp012(1 - Math.min(sp, 1 - sp) / 0.33) * (1 - shoulder);
+    let hh = 0.56 + grain * 0.14 + fine * 0.06;
+    hh = hh * (1 - groove) + 0.08 * groove;
+    hh = hh * (1 - sipe) + 0.2 * sipe;
+    const shade = 0.5 + 0.55 * hh;
+    const tint = 0.98 + fine * 0.06;
+    return [hh, 21 * shade * tint, 21 * shade, 23 * shade * (2 - tint)];
+  };
+  return createProceduralSurface(size, 0.15, sample, H);
+}
+var REFLECTOR_PATTERN_REGION = Object.freeze([4e-3, 0.496, 4e-3, 0.996]);
+var REFLECTOR_EMISSIVE_INTENSITY = 0.55;
+function createReflectorAtlasTexture() {
+  const S = 256;
+  const canvas = document.createElement("canvas");
+  canvas.width = S;
+  canvas.height = S;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "rgb(0, 0, 0)";
+  ctx.fillRect(0, 0, S, S);
+  const x0 = REFLECTOR_PATTERN_REGION[0] * S;
+  const x1 = REFLECTOR_PATTERN_REGION[1] * S;
+  const y0 = (1 - REFLECTOR_PATTERN_REGION[3]) * S;
+  const y1 = (1 - REFLECTOR_PATTERN_REGION[2]) * S;
+  const SEGS = 5;
+  const pitch = (x1 - x0) / SEGS;
+  const bandW = pitch * 0.66;
+  for (let i = 0; i < SEGS; i++) {
+    const bx = x0 + i * pitch + (pitch - bandW) / 2;
+    const grad = ctx.createLinearGradient(0, y0, 0, y1);
+    grad.addColorStop(0, "rgb(96, 20, 26)");
+    grad.addColorStop(0.18, "rgb(226, 96, 88)");
+    grad.addColorStop(0.5, "rgb(255, 236, 228)");
+    grad.addColorStop(0.82, "rgb(226, 96, 88)");
+    grad.addColorStop(1, "rgb(96, 20, 26)");
+    ctx.fillStyle = grad;
+    ctx.fillRect(bx, y0, bandW, y1 - y0);
   }
   const tex = new CanvasTexture(canvas);
   tex.colorSpace = SRGBColorSpace;
   tex.needsUpdate = true;
   return tex;
+}
+function createWheelBadgeTexture(size) {
+  const S = size;
+  const canvas = document.createElement("canvas");
+  canvas.width = S;
+  canvas.height = S;
+  const ctx = canvas.getContext("2d");
+  const cx = S / 2;
+  const cy = S / 2;
+  ctx.fillStyle = "#04050a";
+  ctx.fillRect(0, 0, S, S);
+  ctx.strokeStyle = "rgba(216, 179, 106, 0.6)";
+  ctx.lineWidth = Math.max(1.5, S * 0.01);
+  ctx.beginPath();
+  ctx.arc(cx, cy, S * 0.465, 0, Math.PI * 2);
+  ctx.stroke();
+  const sw = S * 0.33;
+  const top = cy - S * 0.3;
+  const bot = cy + S * 0.335;
+  ctx.beginPath();
+  ctx.moveTo(cx - sw, top);
+  ctx.lineTo(cx + sw, top);
+  ctx.lineTo(cx + sw, cy + S * 0.05);
+  ctx.quadraticCurveTo(cx + sw * 0.62, bot - S * 0.11, cx, bot);
+  ctx.quadraticCurveTo(cx - sw * 0.62, bot - S * 0.11, cx - sw, cy + S * 0.05);
+  ctx.closePath();
+  const fill = ctx.createLinearGradient(0, top, 0, bot);
+  fill.addColorStop(0, "rgb(17, 15, 12)");
+  fill.addColorStop(0.55, "rgb(28, 24, 17)");
+  fill.addColorStop(1, "rgb(11, 10, 8)");
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.strokeStyle = "rgb(216, 179, 106)";
+  ctx.lineWidth = Math.max(2, S * 0.014);
+  ctx.stroke();
+  const star = (sx, sy, len) => {
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.beginPath();
+    ctx.moveTo(0, -len);
+    ctx.lineTo(len * 0.22, -len * 0.22);
+    ctx.lineTo(len, 0);
+    ctx.lineTo(len * 0.22, len * 0.22);
+    ctx.lineTo(0, len);
+    ctx.lineTo(-len * 0.22, len * 0.22);
+    ctx.lineTo(-len, 0);
+    ctx.lineTo(-len * 0.22, -len * 0.22);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  };
+  ctx.fillStyle = "rgb(233, 198, 128)";
+  star(cx, cy - S * 0.155, S * 0.05);
+  ctx.fillStyle = "rgb(242, 244, 247)";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const px2 = Math.round(S * 0.062);
+  ctx.font = `bold ${px2}px "Segoe UI", Arial, sans-serif`;
+  const natural = ctx.measureText("MAEXTRO").width;
+  const scale = Math.min(1, sw * 2 * 0.86 / natural);
+  ctx.save();
+  ctx.translate(cx, cy + S * 0.06);
+  ctx.scale(scale, 1);
+  ctx.fillText("MAEXTRO", 0, 0);
+  ctx.restore();
+  ctx.strokeStyle = "rgba(216, 179, 106, 0.85)";
+  ctx.lineWidth = Math.max(1, S * 6e-3);
+  ctx.beginPath();
+  ctx.moveTo(cx - sw * 0.5, cy + S * 0.145);
+  ctx.lineTo(cx + sw * 0.5, cy + S * 0.145);
+  ctx.stroke();
+  const tex = new CanvasTexture(canvas);
+  tex.colorSpace = SRGBColorSpace;
+  tex.anisotropy = 4;
+  tex.needsUpdate = true;
+  return tex;
+}
+function createWelcomeCarpetTexture(size) {
+  const W = size;
+  const H = size * 3 / 4;
+  const canvas = document.createElement("canvas");
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext("2d");
+  const cx = W / 2;
+  const cy = H / 2;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(1, H / W);
+  const pool = ctx.createRadialGradient(0, 0, 0, 0, 0, W * 0.46);
+  pool.addColorStop(0, "rgba(255, 216, 150, 0.30)");
+  pool.addColorStop(0.55, "rgba(240, 190, 120, 0.13)");
+  pool.addColorStop(1, "rgba(230, 180, 110, 0)");
+  ctx.fillStyle = pool;
+  ctx.fillRect(-W, -H, W * 2, H * 2);
+  ctx.restore();
+  const cell = H / GOLD_MATRIX_PATTERN.length;
+  const ox = cx - GOLD_MATRIX_PATTERN[0].length * cell / 2;
+  for (let r = 0; r < GOLD_MATRIX_PATTERN.length; r++) {
+    const line = GOLD_MATRIX_PATTERN[r];
+    for (let c = 0; c < line.length; c++) {
+      if (line[c] !== "#") continue;
+      const px2 = ox + (c + 0.5) * cell;
+      const py2 = (r + 0.5) * cell;
+      const grad = ctx.createRadialGradient(px2, py2, 0, px2, py2, cell * 0.62);
+      grad.addColorStop(0, "rgba(255, 241, 205, 0.96)");
+      grad.addColorStop(0.5, "rgba(233, 190, 110, 0.88)");
+      grad.addColorStop(1, "rgba(212, 158, 70, 0)");
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(px2, py2, cell * 0.62, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  const rnd = makeLcg(647546);
+  const inBody = (x, y) => Math.abs(x - cx) < W * 0.21 && Math.abs(y - cy) < H * 0.3;
+  for (let i = 0; i < 34; i++) {
+    const x = rnd() * W;
+    const y = rnd() * H;
+    if (inBody(x, y)) continue;
+    const roll = rnd();
+    const rad = roll > 0.9 ? 2.6 : roll > 0.6 ? 1.6 : 1;
+    ctx.fillStyle = `rgba(255, 240, 200, ${(0.4 + rnd() * 0.5).toFixed(3)})`;
+    ctx.beginPath();
+    ctx.arc(x, y, rad, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  for (let i = 0; i < 5; i++) {
+    const x = W * (0.1 + rnd() * 0.8);
+    const y = H * (0.08 + rnd() * 0.84);
+    if (inBody(x, y)) continue;
+    const len = 5 + rnd() * 5;
+    ctx.strokeStyle = `rgba(255, 244, 210, ${(0.5 + rnd() * 0.35).toFixed(3)})`;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x - len, y);
+    ctx.lineTo(x + len, y);
+    ctx.moveTo(x, y - len);
+    ctx.lineTo(x, y + len);
+    ctx.stroke();
+  }
+  ctx.save();
+  ctx.globalCompositeOperation = "destination-out";
+  ctx.translate(cx, cy);
+  ctx.scale(1, H / W);
+  const fade = ctx.createRadialGradient(0, 0, W * 0.3, 0, 0, W * 0.52);
+  fade.addColorStop(0, "rgba(0, 0, 0, 0)");
+  fade.addColorStop(1, "rgba(0, 0, 0, 1)");
+  ctx.fillStyle = fade;
+  ctx.fillRect(-W, -H, W * 2, H * 2);
+  ctx.restore();
+  const tex = new CanvasTexture(canvas);
+  tex.colorSpace = SRGBColorSpace;
+  tex.anisotropy = 4;
+  tex.needsUpdate = true;
+  return tex;
+}
+function createQuiltTileTexture(size, seed, baseHex, perforated = false) {
+  const cells = 16;
+  const [br, bg, bb] = baseHex;
+  const plain = leatherSampler(baseHex, seed);
+  const stitchPitch = 0.25;
+  const holeR = (size >= 1024 ? 15e-4 : size >= 512 ? 3e-3 : 6e-3) / QUILT_CELL_WORLD_M;
+  const sample = (u, v) => {
+    const cx = u * cells;
+    const cy = v * cells;
+    const d1 = ((cx + cy) % 1 + 1) % 1;
+    const d2 = ((cx - cy) % 1 + 1) % 1;
+    const w = 0.055;
+    const dist = Math.min(Math.min(d1, 1 - d1), Math.min(d2, 1 - d2));
+    const [h0, r0, g0, b0] = plain(u, v);
+    if (dist < w) {
+      const beadPhase = ((cx + cy) % stitchPitch + stitchPitch) % stitchPitch / stitchPitch;
+      const bead = dist < w * 0.5 && beadPhase < 0.22 ? 1 : 0;
+      const shade2 = bead ? 1.35 : 0.55;
+      const h2 = bead ? 0.95 : 0.12;
+      return [h2, Math.min(255, br * shade2), Math.min(255, bg * shade2), Math.min(255, bb * shade2)];
+    }
+    const puff = clamp012(dist / 0.5);
+    let h = clamp012(h0 * 0.55 + 0.45 * puff);
+    let r = r0;
+    let g2 = g0;
+    let b = b0;
+    const shade = 0.86 + 0.3 * h;
+    r *= shade;
+    g2 *= shade;
+    b *= shade;
+    if (perforated) {
+      const fx = cx - Math.floor(cx) - 0.5;
+      const fy = cy - Math.floor(cy) - 0.5;
+      let bd = Infinity;
+      for (let i = -1; i <= 1; i++) {
+        for (let j = -1; j <= 1; j++) {
+          const d = Math.hypot(fx - i * 0.08, fy - j * 0.08);
+          if (d < bd) bd = d;
+        }
+      }
+      if (bd < holeR) {
+        const k = clamp012(bd / holeR);
+        h = h * k + 0.05 * (1 - k);
+        const dark = 0.45 + 0.55 * k;
+        r *= dark;
+        g2 *= dark;
+        b *= dark;
+      }
+    }
+    return [h, r, g2, b];
+  };
+  return createProceduralSurface(size, 0.55, sample);
 }
 function createV800CarAdapter(tier2 = "high") {
   const model = createZunjieV800LuxuryMPVModel({ textureSize: carTextureSizeFor(tier2) });
@@ -26581,6 +27866,17 @@ function createV800CarAdapter(tier2 = "high") {
       m.castShadow = false;
     }
   });
+  root.updateMatrixWorld(true);
+  for (const id of ["tri-screen", "gauge-screen", "rear-control-screen"]) {
+    const node = byId.get(id);
+    if (node && node.parent && node.parent !== model) {
+      model.attach(node);
+    }
+  }
+  for (const id of ["tri-screen", "gauge-screen"]) {
+    const node = byId.get(id);
+    if (node) node.rotateY(Math.PI);
+  }
   const wheels = [];
   for (const tag of ["wheel-fl", "wheel-fr", "wheel-rl", "wheel-rr"]) {
     const pivot = byId.get(tag);
@@ -26617,6 +27913,28 @@ function createV800CarAdapter(tier2 = "high") {
   let pedalVelZ = 0;
   let pedalBounce = 0;
   let pedalRotX = 0;
+  const ownedTextures = [];
+  const welcomeGeo = mergeSafe(
+    WELCOME_CARPET_SPOTS.map(
+      ([sx, sz]) => new PlaneGeometry(WELCOME_CARPET_W, WELCOME_CARPET_L).rotateX(-Math.PI / 2).translate(sx, WELCOME_CARPET_Y, sz)
+    )
+  );
+  const welcomeTex = createWelcomeCarpetTexture(CARPET_TEX_SIZE[tier2]);
+  ownedTextures.push(welcomeTex);
+  const welcomeMat = new MeshBasicMaterial({
+    map: welcomeTex,
+    transparent: true,
+    depthWrite: false,
+    opacity: 0.85,
+    color: 16777215
+  });
+  const welcomeMesh = new Mesh(welcomeGeo, welcomeMat);
+  welcomeMesh.name = "welcome-carpet";
+  welcomeMesh.castShadow = false;
+  welcomeMesh.receiveShadow = false;
+  body.add(welcomeMesh);
+  let welcomeGain = 1;
+  let lastSpeedKmh = 0;
   const warnedLamps = /* @__PURE__ */ new Set();
   const usedMats = /* @__PURE__ */ new Set();
   const pickLamp = (label, chain) => {
@@ -26639,7 +27957,6 @@ function createV800CarAdapter(tier2 = "high") {
   const tailMat = tailLamp?.mat ?? null;
   const headMat = headLamp?.mat ?? null;
   const markMat = markLamp?.mat ?? null;
-  const ownedTextures = [];
   const starMat = matById2.get("starlight") ?? null;
   const goldMat = matById2.get("lamp-gold") ?? null;
   if (starMat) {
@@ -26654,6 +27971,11 @@ function createV800CarAdapter(tier2 = "high") {
     ownedTextures.push(tex);
     goldMat.emissiveMap = tex;
     goldMat.emissive.set(16777215);
+    const albedo = createGoldAlbedoAtlasTexture();
+    ownedTextures.push(albedo);
+    goldMat.map = albedo;
+    goldMat.color.set(16777215);
+    goldMat.roughness = 0.45;
     goldMat.needsUpdate = true;
   }
   let markBase = MARK_BASE_INTENSITY;
@@ -26723,6 +28045,49 @@ function createV800CarAdapter(tier2 = "high") {
     }
     uv.needsUpdate = true;
   };
+  const remapTireUV = (mesh) => {
+    const geo = mesh.geometry;
+    const uv = geo.getAttribute("uv");
+    const index = geo.getIndex();
+    const groups = geo.groups;
+    if (!uv) return;
+    if (index && groups.length === 3) {
+      const seen = /* @__PURE__ */ new Set();
+      for (let gi = 0; gi < 3; gi++) {
+        const g2 = groups[gi];
+        const isCap = gi > 0;
+        const isBottomCap = gi === 2;
+        for (let t = g2.start; t < g2.start + g2.count; t++) {
+          const vi = index.getX(t);
+          if (seen.has(vi)) continue;
+          seen.add(vi);
+          const u = uv.getX(vi);
+          const v = uv.getY(vi);
+          uv.setXY(vi, isCap ? 0.5 + u * 0.5 : u * 0.5, isBottomCap ? 1 - v : v);
+        }
+      }
+      uv.needsUpdate = true;
+      return;
+    }
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * 0.5, uv.getY(i));
+    uv.needsUpdate = true;
+  };
+  const remapWheelCapCapUV = (mesh) => {
+    const geo = mesh.geometry;
+    const uv = geo.getAttribute("uv");
+    const index = geo.getIndex();
+    const groups = geo.groups;
+    if (!uv || !index || groups.length !== 3) return;
+    const seen = /* @__PURE__ */ new Set();
+    const g2 = groups[2];
+    for (let t = g2.start; t < g2.start + g2.count; t++) {
+      const vi = index.getX(t);
+      if (seen.has(vi)) continue;
+      seen.add(vi);
+      uv.setXY(vi, uv.getX(vi), 1 - uv.getY(vi));
+    }
+    uv.needsUpdate = true;
+  };
   const tailFieldMat = matById2.get("housing-dark") ?? null;
   if (tailFieldMat && !tailFieldMat.emissiveMap) {
     const tex = createTailBandAtlasTexture();
@@ -26784,6 +28149,108 @@ function createV800CarAdapter(tier2 = "high") {
       if (mesh) remapUV(mesh, GOLD_BRUSHED_REGION[0], GOLD_BRUSHED_REGION[1], GOLD_BRUSHED_REGION[2], GOLD_BRUSHED_REGION[3]);
     }
   }
+  const screenMat = matById2.get("screen-ui") ?? null;
+  if (screenMat && !screenMat.emissiveMap) {
+    const tex = createScreenUIAtlasTexture();
+    ownedTextures.push(tex);
+    screenMat.emissiveMap = tex;
+    screenMat.map = tex;
+    screenMat.emissive.set(16777215);
+    screenMat.color.set(16777215);
+    screenMat.emissiveIntensity = 1.25;
+    screenMat.needsUpdate = true;
+    const triScreen = meshOf("tri-screen");
+    if (triScreen) remapUV(triScreen, TRI_SCREEN_UI_REGION[0], TRI_SCREEN_UI_REGION[1], TRI_SCREEN_UI_REGION[2], TRI_SCREEN_UI_REGION[3]);
+    const rearCtrl = meshOf("rear-control-screen");
+    if (rearCtrl) remapUV(rearCtrl, REAR_CTRL_UI_REGION[0], REAR_CTRL_UI_REGION[1], REAR_CTRL_UI_REGION[2], REAR_CTRL_UI_REGION[3]);
+    for (const id of ["seat-rear-l-screen", "seat-rear-r-screen"]) {
+      const mesh = meshOf(id);
+      if (!mesh) continue;
+      remapUV(mesh, SEAT_CTRL_UI_REGION[1], SEAT_CTRL_UI_REGION[0], SEAT_CTRL_UI_REGION[3], SEAT_CTRL_UI_REGION[2]);
+    }
+  }
+  const tireMat = matById2.get("tire") ?? null;
+  if (tireMat && !tireMat.map) {
+    const set = createTireAtlasTexture(TIRE_ATLAS_W[tier2]);
+    ownedTextures.push(set.map, set.normalMap);
+    tireMat.map = set.map;
+    tireMat.normalMap = set.normalMap;
+    tireMat.normalScale.setScalar(0.8);
+    tireMat.color.set(16777215);
+    tireMat.needsUpdate = true;
+    model.traverse((o) => {
+      const m = o;
+      if (!m.isMesh) return;
+      const mats = Array.isArray(m.material) ? m.material : [m.material];
+      if (!mats.includes(tireMat)) return;
+      remapTireUV(m);
+    });
+  }
+  const lampRedMat = matById2.get("lamp-red") ?? null;
+  const reflectorMat = lampRedMat ? lampRedMat.clone() : null;
+  if (reflectorMat && !reflectorMat.emissiveMap) {
+    const tex = createReflectorAtlasTexture();
+    ownedTextures.push(tex);
+    reflectorMat.emissiveMap = tex;
+    reflectorMat.emissiveIntensity = REFLECTOR_EMISSIVE_INTENSITY;
+    reflectorMat.needsUpdate = true;
+    for (const id of [
+      "rear-reflector-l",
+      "rear-reflector-r",
+      "rear-reflector-strip-l",
+      "rear-reflector-strip-r"
+    ]) {
+      const mesh = meshOf(id);
+      if (mesh) {
+        mesh.material = reflectorMat;
+        remapUV(
+          mesh,
+          REFLECTOR_PATTERN_REGION[0],
+          REFLECTOR_PATTERN_REGION[1],
+          REFLECTOR_PATTERN_REGION[2],
+          REFLECTOR_PATTERN_REGION[3]
+        );
+      }
+    }
+  }
+  const LED_DOT_REGION = Object.freeze([0.328, 0.672, 0.457, 0.543]);
+  let ledDotCount = 0;
+  for (const id of [
+    "headlamp-led-dot-1-l",
+    "headlamp-led-dot-2-l",
+    "headlamp-led-dot-3-l",
+    "headlamp-led-dot-1-r",
+    "headlamp-led-dot-2-r",
+    "headlamp-led-dot-3-r"
+  ]) {
+    const mesh = meshOf(id);
+    if (mesh) {
+      remapUVToRegion(
+        mesh,
+        LED_DOT_REGION[0],
+        LED_DOT_REGION[1],
+        LED_DOT_REGION[2],
+        LED_DOT_REGION[3]
+      );
+      ledDotCount++;
+    }
+  }
+  const markMatForBadge = matById2.get("lamp-mark") ?? null;
+  const wheelCapMat = markMatForBadge ? markMatForBadge.clone() : null;
+  if (wheelCapMat && !wheelCapMat.emissiveMap) {
+    const tex = createWheelBadgeTexture(WHEEL_BADGE_SIZE[tier2]);
+    ownedTextures.push(tex);
+    wheelCapMat.emissiveMap = tex;
+    wheelCapMat.emissive.set(16777215);
+    wheelCapMat.needsUpdate = true;
+    for (const id of ["wheel-cap-fl", "wheel-cap-fr", "wheel-cap-rl", "wheel-cap-rr"]) {
+      const mesh = meshOf(id);
+      if (mesh) {
+        mesh.material = wheelCapMat;
+        remapWheelCapCapUV(mesh);
+      }
+    }
+  }
   const fabricSize = tier2 === "low" ? 256 : 512;
   const atlasSize = tier2 === "high" ? 1024 : 512;
   const applySurface = (mat, set, normalScale) => {
@@ -26810,22 +28277,137 @@ function createV800CarAdapter(tier2 = "high") {
       0.65
     );
   }
+  const QUILT_CELL_WORLD = QUILT_CELL_WORLD_M;
+  const remapUVQuiltTriplanar = (mesh) => {
+    let geo = mesh.geometry;
+    if (geo.index) {
+      const old = geo;
+      geo = geo.toNonIndexed();
+      mesh.geometry = geo;
+      old.dispose();
+    }
+    const pos = geo.getAttribute("position");
+    const uv = geo.getAttribute("uv");
+    if (!pos || !uv || pos.count === 0) return;
+    model.updateMatrixWorld(true);
+    const modelToLocal = new Matrix4().copy(model.matrixWorld).invert().multiply(mesh.matrixWorld);
+    const count = pos.count;
+    const pts = new Float32Array(count * 3);
+    const tv = new Vector3();
+    for (let i = 0; i < count; i++) {
+      tv.fromBufferAttribute(pos, i).applyMatrix4(modelToLocal);
+      pts[i * 3] = tv.x;
+      pts[i * 3 + 1] = tv.y;
+      pts[i * 3 + 2] = tv.z;
+    }
+    const uvPerCell = 1 / 16;
+    for (let t = 0; t < count; t += 3) {
+      const ax = pts[(t + 1) * 3] - pts[t * 3];
+      const ay = pts[(t + 1) * 3 + 1] - pts[t * 3 + 1];
+      const az = pts[(t + 1) * 3 + 2] - pts[t * 3 + 2];
+      const bx = pts[(t + 2) * 3] - pts[t * 3];
+      const by = pts[(t + 2) * 3 + 1] - pts[t * 3 + 1];
+      const bz = pts[(t + 2) * 3 + 2] - pts[t * 3 + 2];
+      const nx = ay * bz - az * by;
+      const ny = az * bx - ax * bz;
+      const nz = ax * by - ay * bx;
+      const abs = [Math.abs(nx), Math.abs(ny), Math.abs(nz)];
+      const a = abs[0] >= abs[1] && abs[0] >= abs[2] ? 0 : abs[1] >= abs[2] ? 1 : 2;
+      const a1 = (a + 1) % 3;
+      const a2 = (a + 2) % 3;
+      for (let k = 0; k < 3; k++) {
+        const i = t + k;
+        const u = pts[i * 3 + a1] / QUILT_CELL_WORLD * uvPerCell;
+        const v = pts[i * 3 + a2] / QUILT_CELL_WORLD * uvPerCell;
+        uv.setXY(i, u, v);
+      }
+    }
+    uv.needsUpdate = true;
+  };
+  const PLAIN_MIN_DENSITY = 0.47;
+  const remapUVPlainBoxProject = (mesh, u0, v0, span) => {
+    remapUVBoxProject(mesh, u0, v0, (size, axes) => {
+      const short = size[axes[1]];
+      const long = size[axes[0]];
+      const density = Math.max(short / span, PLAIN_MIN_DENSITY);
+      return [short / density, long / density];
+    }, true);
+  };
+  function remapUVBoxProject(mesh, u0, v0, spansOf, swapAxes = false) {
+    const geo = mesh.geometry;
+    const pos = geo.getAttribute("position");
+    const uv = geo.getAttribute("uv");
+    if (!pos || !uv || pos.count === 0) return;
+    model.updateMatrixWorld(true);
+    const modelToLocal = new Matrix4().copy(model.matrixWorld).invert().multiply(mesh.matrixWorld);
+    const count = pos.count;
+    const pts = new Float32Array(count * 3);
+    const tv = new Vector3();
+    const mn = [Infinity, Infinity, Infinity];
+    const mx = [-Infinity, -Infinity, -Infinity];
+    for (let i = 0; i < count; i++) {
+      tv.fromBufferAttribute(pos, i).applyMatrix4(modelToLocal);
+      for (let a = 0; a < 3; a++) {
+        const val = a === 0 ? tv.x : a === 1 ? tv.y : tv.z;
+        pts[i * 3 + a] = val;
+        if (val < mn[a]) mn[a] = val;
+        if (val > mx[a]) mx[a] = val;
+      }
+    }
+    const size = [mx[0] - mn[0], mx[1] - mn[1], mx[2] - mn[2]];
+    const axes = [0, 1, 2].sort((a, b) => size[b] - size[a]);
+    const uAxis = swapAxes ? axes[1] : axes[0];
+    const vAxis = swapAxes ? axes[0] : axes[1];
+    const w = size[uAxis];
+    const h = size[vAxis];
+    if (w < 1e-6 || h < 1e-6) return;
+    const [uSpan, vSpan] = spansOf(size, axes);
+    for (let i = 0; i < count; i++) {
+      const pu = (pts[i * 3 + uAxis] - mn[uAxis]) / w;
+      const pv = (pts[i * 3 + vAxis] - mn[vAxis]) / h;
+      uv.setXY(i, u0 + pu * uSpan, v0 + pv * vSpan);
+    }
+    uv.needsUpdate = true;
+  }
   const leatherWarmMat = matById2.get("leather-warm") ?? null;
+  let quiltPerfMat = null;
   if (leatherWarmMat && !leatherWarmMat.map) {
-    const warm = createLeatherAtlasTexture(atlasSize, 5360084, [192, 138, 94], atlasSize / 16);
+    const warm = createLeatherAtlasTexture(atlasSize, 5360084, LEATHER_WARM_BASE, atlasSize / 32);
     applySurface(leatherWarmMat, warm, 0.7);
+    const quiltMat = leatherWarmMat.clone();
+    const quiltSet = createQuiltTileTexture(atlasSize / 2, 5360085, LEATHER_WARM_BASE);
+    ownedTextures.push(quiltSet.map, quiltSet.normalMap);
+    quiltMat.map = quiltSet.map;
+    quiltMat.normalMap = quiltSet.normalMap;
+    quiltMat.userData.quiltTiled = true;
+    quiltMat.needsUpdate = true;
+    const quiltPerf = leatherWarmMat.clone();
+    const perfSet = createQuiltTileTexture(atlasSize, 5360085, LEATHER_WARM_BASE, true);
+    ownedTextures.push(perfSet.map, perfSet.normalMap);
+    quiltPerf.map = perfSet.map;
+    quiltPerf.normalMap = perfSet.normalMap;
+    quiltPerf.userData.quiltTiled = true;
+    quiltPerf.needsUpdate = true;
+    quiltPerfMat = quiltPerf;
+    for (const id of ["seat-rear-l", "seat-rear-l-back", "seat-rear-r", "seat-rear-r-back"]) {
+      const mesh = meshOf(id);
+      if (mesh) {
+        mesh.material = quiltPerf;
+        remapUVQuiltTriplanar(mesh);
+      }
+    }
+    for (const id of ["seat-rear-l-headrest", "seat-rear-r-headrest"]) {
+      const mesh = meshOf(id);
+      if (mesh) {
+        mesh.material = quiltMat;
+        remapUVQuiltTriplanar(mesh);
+      }
+    }
     const half = 0.5;
     const inset = 8e-3;
-    for (const id of [
-      "seat-rear-l",
-      "seat-rear-l-back",
-      "seat-rear-l-headrest",
-      "seat-rear-r",
-      "seat-rear-r-back",
-      "seat-rear-r-headrest"
-    ]) {
+    for (const id of ["seat-third-row", "seat-third-row-back", "seat-third-row-headrest"]) {
       const mesh = meshOf(id);
-      if (mesh) remapUVToRegion(mesh, half + inset, 1 - inset, half + inset, 1 - inset);
+      if (mesh) remapUVPlainBoxProject(mesh, inset, half + inset, half - inset * 2);
     }
     for (const id of [
       "cabin-interior",
@@ -26835,9 +28417,6 @@ function createV800CarAdapter(tier2 = "high") {
       "seat-passenger",
       "seat-passenger-back",
       "seat-passenger-headrest",
-      "seat-third-row",
-      "seat-third-row-back",
-      "seat-third-row-headrest",
       "door-panel-fl",
       "door-panel-fr",
       "door-panel-rl",
@@ -26894,9 +28473,17 @@ function createV800CarAdapter(tier2 = "high") {
       { \u706F\u7EC4: "\u5C3E\u706F 3+3 \u706F\u5E26\u8D34\u56FE", \u671F\u671B: "housing-dark", \u547D\u4E2D: tailFieldMat ? "housing-dark" : "(\u65E0)" },
       { \u706F\u7EC4: "\u661F\u5C18\u9897\u7C92", \u671F\u671B: "lamp-star", \u547D\u4E2D: starDustMat ? "lamp-star" : "(\u65E0)" },
       { \u706F\u7EC4: "\u5934\u706F LED \u70B9\u9635", \u671F\u671B: "lamp-head", \u547D\u4E2D: ledMat ? "lamp-head" : "(\u65E0)" },
+      { \u706F\u7EC4: "\u5934\u706F 3-LED \u70B9\u9635\u706F\u73E0(EX-08)", \u671F\u671B: "led-dot\xD76", \u547D\u4E2D: ledDotCount > 0 ? `remapped\xD7${ledDotCount}` : "(\u65E0)" },
       { \u706F\u7EC4: "\u8F66\u540D\u724C\u9540\u94EC\u5B57", \u671F\u671B: "plate", \u547D\u4E2D: plateMat ? "plate" : "(\u65E0)" },
       { \u706F\u7EC4: "\u76FE\u5FBD\u9762\u677F\u5206\u533A\u8D34\u56FE", \u671F\u671B: "lamp-white", \u547D\u4E2D: whiteMat ? "lamp-white" : "(\u65E0)" },
       { \u706F\u7EC4: "\u76AE\u9769\u56FE\u96C6(\u7D20\u9762+\u83F1\u683C)", \u671F\u671B: "leather-warm", \u547D\u4E2D: leatherWarmMat ? "leather-warm" : "(\u65E0)" },
+      { \u706F\u7EC4: "\u76AE\u9769\u8272\u8C03\u6821\u51C6(\u6DF1Cognac)", \u671F\u671B: "#7A4034", \u547D\u4E2D: leatherWarmMat?.map ? "#7A4034" : "(\u65E0)" },
+      { \u706F\u7EC4: "\u5EA7\u6905\u6253\u5B54\u533A(IN-08)", \u671F\u671B: "leather-warm \u6253\u5B54\u514B\u9686", \u547D\u4E2D: quiltPerfMat ? "quilt-perf" : "(\u65E0)" },
+      { \u706F\u7EC4: "\u80CE\u9762\u6C9F\u69FD+\u80CE\u4FA7\u5B57\u73AF(EX-34)", \u671F\u671B: "tire", \u547D\u4E2D: tireMat ? "tire" : "(\u65E0)" },
+      { \u706F\u7EC4: "\u540E\u4FDD\u53CD\u5149\u6761\u5206\u6BB5(EX-31)", \u671F\u671B: "lamp-red \u514B\u9686", \u547D\u4E2D: reflectorMat ? "reflector-clone" : "(\u65E0)" },
+      { \u706F\u7EC4: "\u8F6E\u5FC3\u9ED1\u5E95\u76FE\u5FBD(EX-33)", \u671F\u671B: "lamp-mark \u514B\u9686", \u547D\u4E2D: wheelCapMat ? "wheel-badge" : "(\u65E0)" },
+      { \u706F\u7EC4: "\u8FCE\u5BBE\u5149\u6BEF(EX-09)", \u671F\u671B: "welcome-carpet", \u547D\u4E2D: welcomeMesh ? "welcome-carpet" : "(\u65E0)" },
+      { \u706F\u7EC4: "\u5C4F\u5E55\u5BB6\u65CFUI(\u4E09\u8054/\u540E\u6392/\u6276\u624B)", \u671F\u671B: "screen-ui", \u547D\u4E2D: matById2.has("screen-ui") ? "screen-ui" : "(\u65E0)" },
       { \u706F\u7EC4: "\u6DF1\u68D5\u76AE\u9769\u7C92\u9762", \u671F\u671B: "leather-dark", \u547D\u4E2D: leatherDarkMat ? "leather-dark" : "(\u65E0)" },
       { \u706F\u7EC4: "\u7C73\u767D\u76AE\u9769\u7C92\u9762", \u671F\u671B: "leather-ivory", \u547D\u4E2D: leatherIvoryMat ? "leather-ivory" : "(\u65E0)" },
       { \u706F\u7EC4: "\u5F00\u653E\u6728\u7EB9", \u671F\u671B: "wood", \u547D\u4E2D: woodMatTrim ? "wood" : "(\u65E0)" },
@@ -26929,8 +28516,17 @@ function createV800CarAdapter(tier2 = "high") {
   const gctx = gaugeCanvas.getContext("2d");
   const gaugeTex = new CanvasTexture(gaugeCanvas);
   gaugeTex.colorSpace = SRGBColorSpace;
-  const gaugeNode = byId.get("gauge-screen");
-  const gaugeMesh = gaugeNode && gaugeNode.isMesh ? gaugeNode : runtime?.meshes?.["gauge-screen"];
+  let gaugeMesh = null;
+  {
+    const gaugeNode = byId.get("gauge-screen");
+    if (gaugeNode) {
+      if (gaugeNode.isMesh) gaugeMesh = gaugeNode;
+      else gaugeNode.traverse((o) => {
+        if (!gaugeMesh && o.isMesh) gaugeMesh = o;
+      });
+    }
+    if (!gaugeMesh) gaugeMesh = runtime?.meshes?.["gauge-screen"] ?? null;
+  }
   if (gaugeMesh && gaugeMesh.material) {
     const mat = gaugeMesh.material;
     mat.map = gaugeTex;
@@ -26981,9 +28577,15 @@ function createV800CarAdapter(tier2 = "high") {
     gctx.fillText("READY", w / 2, 240);
     gaugeTex.needsUpdate = true;
   };
+  drawGauge(0, 0, 0, "P");
   let tmpQuat = new Quaternion();
   const tmpVec = new Vector3();
   const tmpParentQuat = new Quaternion();
+  const tmpCamVec = new Vector3();
+  const tmpDir = new Vector3();
+  const tmpCross = new Vector3();
+  const tmpBasis = new Matrix4();
+  const BILLBOARD_UP = new Vector3(0, 1, 0);
   const batchStats = batchMergeStatic(model, {
     excludeObjects: [...wheels.map((w) => w.spin), ...caps, ...gaugeMesh ? [gaugeMesh] : [], pedal],
     excludeMaterialIds: UV_CONTENT_MATERIAL_IDS
@@ -27007,16 +28609,21 @@ function createV800CarAdapter(tier2 = "high") {
     );
   }
   if (typeof window !== "undefined" && window.location.hash.includes("uvassert")) {
+    const WRAP_PLAIN_MATS = /* @__PURE__ */ new Set(["leather-warm"]);
     const UV_ATLAS_REGIONS = {
       // lamp-gold：点阵图案区 + 素面拉丝金区（P1-1）
       "lamp-gold": [
         [GOLD_PATTERN_REGION[0], GOLD_PATTERN_REGION[1], GOLD_PATTERN_REGION[2], GOLD_PATTERN_REGION[3]],
         [GOLD_BRUSHED_REGION[0], GOLD_BRUSHED_REGION[1], GOLD_BRUSHED_REGION[2], GOLD_BRUSHED_REGION[3]]
       ],
-      // leather-warm：素面粒面区（左上）+ 菱形缝格区（右上）（P1-2）
+      // leather-warm：素面粒面区（左上）+ 菱形缝格区（右上）（P1-2）；
+      // R2/R3 = 素面环绕扩展区（下半幅两象限：素面长轴 v 经 RepeatWrapping 环绕时
+      // 采样落点，粒面噪声 1.0 UV 周期故内容与 R0 连续；u<0.5 或 v<0.5 恒为素面 paint 区）
       "leather-warm": [
         [8e-3, 0.492, 0.508, 0.992],
-        [0.508, 0.992, 0.508, 0.992]
+        [0.508, 0.992, 0.508, 0.992],
+        [8e-3, 0.492, 0, 0.492],
+        [0.508, 0.992, 0, 0.492]
       ],
       // housing-dark：3+3 红带区 + 纯黑壳体区（EX-28）
       "housing-dark": [
@@ -27027,6 +28634,22 @@ function createV800CarAdapter(tier2 = "high") {
       "lamp-white": [
         [4e-3, 0.496, 4e-3, 0.996],
         [0.55, 0.95, 0.3, 0.7]
+      ],
+      // screen-ui：三联屏横条 + 后排控制屏 + 扶手屏（N1）
+      "screen-ui": [
+        [TRI_SCREEN_UI_REGION[0], TRI_SCREEN_UI_REGION[1], TRI_SCREEN_UI_REGION[2], TRI_SCREEN_UI_REGION[3]],
+        [REAR_CTRL_UI_REGION[0], REAR_CTRL_UI_REGION[1], REAR_CTRL_UI_REGION[2], REAR_CTRL_UI_REGION[3]],
+        [SEAT_CTRL_UI_REGION[0], SEAT_CTRL_UI_REGION[1], SEAT_CTRL_UI_REGION[2], SEAT_CTRL_UI_REGION[3]]
+      ],
+      // tire：胎面沟槽区（左半）+ 胎侧字环区（右半）（EX-34）
+      "tire": [
+        [TIRE_TREAD_REGION[0], TIRE_TREAD_REGION[1], TIRE_TREAD_REGION[2], TIRE_TREAD_REGION[3]],
+        [TIRE_SIDEWALL_REGION[0], TIRE_SIDEWALL_REGION[1], TIRE_SIDEWALL_REGION[2], TIRE_SIDEWALL_REGION[3]]
+      ],
+      // lamp-red：反光条分段图集（EX-31）—— 只对克隆（挂了 emissiveMap）生效，
+      // 原例（尾灯芯/尾灯横带，无图集）被下方「未挂图集材质跳过」守卫挡住
+      "lamp-red": [
+        [REFLECTOR_PATTERN_REGION[0], REFLECTOR_PATTERN_REGION[1], REFLECTOR_PATTERN_REGION[2], REFLECTOR_PATTERN_REGION[3]]
       ]
     };
     const EPS = 15e-4;
@@ -27038,6 +28661,8 @@ function createV800CarAdapter(tier2 = "high") {
       const mid = mat?.userData?.sculptMaterial?.id;
       const regions = mid ? UV_ATLAS_REGIONS[mid] : void 0;
       if (!regions) return;
+      const matRec = mat;
+      if (!matRec?.map && !matRec?.emissiveMap) return;
       const uv = m.geometry.getAttribute("uv");
       const index = m.geometry.getIndex();
       const pos = m.geometry.getAttribute("position");
@@ -27052,12 +28677,14 @@ function createV800CarAdapter(tier2 = "high") {
       for (let t = 0; t < triCount; t++) {
         let uMin = Infinity;
         let uMax = -Infinity;
+        const vArr = [0, 0, 0];
         let vMin = Infinity;
         let vMax = -Infinity;
         for (let k = 0; k < 3; k++) {
           const i = vertexOf(t, k);
           const u = uv.getX(i);
           const v = uv.getY(i);
+          vArr[k] = v;
           if (u < uMin) uMin = u;
           if (u > uMax) uMax = u;
           if (v < vMin) vMin = v;
@@ -27065,11 +28692,28 @@ function createV800CarAdapter(tier2 = "high") {
         }
         rec.tris++;
         let regionHit = -1;
-        for (let ri = 0; ri < regions.length; ri++) {
-          const [u0, u1, v0, v1] = regions[ri];
-          if (uMin >= u0 - EPS && uMax <= u1 + EPS && vMin >= v0 - EPS && vMax <= v1 + EPS) {
-            regionHit = ri;
-            break;
+        if (mat?.userData?.quiltTiled === true) {
+          regionHit = 0;
+        } else if (WRAP_PLAIN_MATS.has(mid)) {
+          if (uMax <= 0.492 + EPS) {
+            regionHit = 0;
+          } else if (uMin >= 0.5 - EPS) {
+            let quilt = true;
+            let lowerPlain = true;
+            for (let k2 = 0; k2 < 3; k2++) {
+              const mv = vArr[k2] - Math.floor(vArr[k2]);
+              if (mv < 0.508 - EPS || mv > 0.992 + EPS) quilt = false;
+              if (mv > 0.492 + EPS) lowerPlain = false;
+            }
+            regionHit = quilt ? 1 : lowerPlain ? 3 : -1;
+          }
+        } else {
+          for (let ri = 0; ri < regions.length; ri++) {
+            const [u0, u1, v0, v1] = regions[ri];
+            if (uMin >= u0 - EPS && uMax <= u1 + EPS && vMin >= v0 - EPS && vMax <= v1 + EPS) {
+              regionHit = ri;
+              break;
+            }
           }
         }
         if (regionHit >= 0) rec.perRegion[regionHit]++;
@@ -27095,6 +28739,156 @@ function createV800CarAdapter(tier2 = "high") {
     const totalBad = rows.reduce((s, r) => s + r["\u8D8A\u754C\u4E32\u5473"], 0);
     if (totalBad > 0) console.error(`[V800Adapter] #uvassert\uFF1A${totalBad} \u4E2A\u4E09\u89D2\u5F62 UV \u8D8A\u51FA\u56FE\u96C6\u5206\u533A\uFF08\u4E32\u5473\uFF09`);
     else console.info("[V800Adapter] #uvassert\uFF1A\u5168\u90E8\u4E09\u89D2\u5F62 UV \u843D\u5728\u5408\u6CD5\u5206\u533A\u5185\uFF0C\u65E0\u4E32\u5473");
+    const modelInv = new Matrix4().copy(model.matrixWorld).invert();
+    const m2m = new Matrix4();
+    const pA = new Vector3();
+    const pB = new Vector3();
+    const pC = new Vector3();
+    const ANISO_LIMIT = 4;
+    const AREA_MIN = 1e-5;
+    const densStats = /* @__PURE__ */ new Map();
+    const statOf = (key) => {
+      let s = densStats.get(key);
+      if (!s) {
+        s = { n: 0, dens: [], aniso: [], over: 0, over8: 0, worst: 0, worstAt: "" };
+        densStats.set(key, s);
+      }
+      return s;
+    };
+    model.updateMatrixWorld(true);
+    model.traverse((o) => {
+      const m = o;
+      if (!m.isMesh) return;
+      const mat = Array.isArray(m.material) ? m.material[0] : m.material;
+      const matRec = mat;
+      const mid = matRec?.userData?.sculptMaterial?.id;
+      if (!mid) return;
+      if (!matRec?.map && !matRec?.emissiveMap) return;
+      const geo = m.geometry;
+      const pos = geo.getAttribute("position");
+      const uvA = geo.getAttribute("uv");
+      if (!pos || !uvA || pos.count < 3) return;
+      m2m.copy(modelInv).multiply(m.matrixWorld);
+      const index = geo.getIndex();
+      const triCount = index ? index.count / 3 : pos.count / 3;
+      const vid = (t, k) => index ? index.getX(t * 3 + k) : t * 3 + k;
+      const regions = UV_ATLAS_REGIONS[mid];
+      for (let t = 0; t < triCount; t++) {
+        pA.fromBufferAttribute(pos, vid(t, 0)).applyMatrix4(m2m);
+        pB.fromBufferAttribute(pos, vid(t, 1)).applyMatrix4(m2m);
+        pC.fromBufferAttribute(pos, vid(t, 2)).applyMatrix4(m2m);
+        const wArea = ((pB.x - pA.x) * (pC.y - pA.y) - (pC.x - pA.x) * (pB.y - pA.y)) * 0.5;
+        if (Math.abs(wArea) < AREA_MIN) continue;
+        const us = [uvA.getX(vid(t, 0)), uvA.getX(vid(t, 1)), uvA.getX(vid(t, 2))];
+        const vs = [uvA.getY(vid(t, 0)), uvA.getY(vid(t, 1)), uvA.getY(vid(t, 2))];
+        let regionKey = "tile";
+        if (regions) {
+          const uMin = Math.min(...us);
+          const uMax = Math.max(...us);
+          let ri = -1;
+          let forceTile = false;
+          if (mat?.userData?.quiltTiled === true) {
+            regionKey = "tile";
+            forceTile = true;
+          } else if (WRAP_PLAIN_MATS.has(mid)) {
+            if (uMax <= 0.492 + EPS) {
+              ri = uMin >= 8e-3 - EPS ? 0 : -1;
+            } else if (uMin >= 0.5 - EPS) {
+              let quilt = true;
+              let lowerPlain = true;
+              for (let k2 = 0; k2 < 3; k2++) {
+                const mv = vs[k2] - Math.floor(vs[k2]);
+                if (mv < 0.508 - EPS || mv > 0.992 + EPS) quilt = false;
+                if (mv > 0.492 + EPS) lowerPlain = false;
+              }
+              ri = quilt ? 1 : lowerPlain ? 3 : -1;
+            }
+          } else {
+            const vMin = Math.min(...vs);
+            const vMax = Math.max(...vs);
+            for (let k = 0; k < regions.length && ri < 0; k++) {
+              const [u0, u1, v0, v1] = regions[k];
+              if (uMin >= u0 - EPS && uMax <= u1 + EPS && vMin >= v0 - EPS && vMax <= v1 + EPS) {
+                ri = k;
+              }
+            }
+          }
+          if (ri < 0 && !forceTile) continue;
+          if (ri >= 0) regionKey = `R${ri}`;
+        }
+        const uvArea = Math.abs(
+          (us[1] - us[0]) * (vs[2] - vs[0]) - (us[2] - us[0]) * (vs[1] - vs[0])
+        ) / 2;
+        if (uvArea < 1e-12) continue;
+        const edges = [
+          [pA, pB, us[0], vs[0], us[1], vs[1]],
+          [pB, pC, us[1], vs[1], us[2], vs[2]],
+          [pC, pA, us[2], vs[2], us[0], vs[0]]
+        ];
+        let isFold = false;
+        for (const [P, Q, su, sv, tu, tvv] of edges) {
+          const ul = Math.hypot(tu - su, tvv - sv);
+          if (ul < 1e-4 && P.distanceTo(Q) > 5e-3) {
+            isFold = true;
+            break;
+          }
+        }
+        if (isFold) {
+          statOf(`${mid}/foldWalls`).n++;
+          continue;
+        }
+        let dMax = 0;
+        let dMin = Infinity;
+        for (const [P, Q, su, sv, tu, tvv] of edges) {
+          const ul = Math.hypot(tu - su, tvv - sv);
+          if (ul < 1e-12) continue;
+          const d = P.distanceTo(Q) / ul;
+          if (d > dMax) dMax = d;
+          if (d < dMin) dMin = d;
+        }
+        if (!isFinite(dMin) || dMin <= 0) continue;
+        const aniso = dMax / dMin;
+        const key = `${mid}/${regionKey}`;
+        const st = statOf(key);
+        st.n++;
+        st.dens.push(Math.sqrt(Math.abs(wArea) / uvArea));
+        st.aniso.push(aniso);
+        if (aniso > 8) st.over8++;
+        if (aniso > ANISO_LIMIT) {
+          st.over++;
+          if (aniso > st.worst) {
+            st.worst = aniso;
+            st.worstAt = `${m.userData.component?.id ?? m.name}#${t}@(${pA.x.toFixed(2)},${pA.y.toFixed(2)},${pA.z.toFixed(2)})`;
+          }
+        }
+      }
+    });
+    const ATLAS_PX = 1024;
+    const densRows = [...densStats.entries()].map(([key, s]) => {
+      const sorted = s.dens.slice().sort((a, b) => a - b);
+      const med = sorted.length ? sorted[Math.floor(sorted.length / 2)] : 0;
+      const aSorted = s.aniso.slice().sort((a, b) => a - b);
+      const aMed = aSorted.length ? aSorted[Math.floor(aSorted.length / 2)] : 0;
+      return {
+        "\u6750\u8D28/\u5206\u533A": key,
+        \u4E09\u89D2\u5F62: s.n,
+        "\u5BC6\u5EA6\u4E2D\u4F4D(mm/px)": +(med / ATLAS_PX * 1e3).toFixed(2),
+        "\u5404\u5411\u5F02\u6027\u4E2D\u4F4D": +aMed.toFixed(2),
+        \u8D85\u9608: s.over,
+        \u8D85\u96088x: s.over8,
+        \u6700\u5DEE: s.worst > 0 ? `${s.worst.toFixed(1)}x ${s.worstAt}` : "\u2014"
+      };
+    });
+    console.table(densRows);
+    const PATTERN_REGION_KEYS = /^(leather-warm\/R1|housing-dark\/R0|lamp-gold\/R0|lamp-white\/R0|screen-ui\/R\d|tire\/R1)$/;
+    const totalOver = densRows.filter((r) => PATTERN_REGION_KEYS.test(r["\u6750\u8D28/\u5206\u533A"])).reduce((s2, r) => s2 + r["\u8D85\u96088x"], 0);
+    if (totalOver > 0) {
+      console.error(
+        `[V800Adapter] #uvassert \u5BC6\u5EA6\u5224\u636E\uFF1A\u56FE\u6848\u5206\u533A ${totalOver} \u4E2A\u4E09\u89D2\u5F62\u5404\u5411\u5F02\u6027\u62C9\u4F38 > 8x\uFF08\u4E16\u754C\u9762\u79EF > ${AREA_MIN * 1e4}cm\xB2\uFF09\uFF0C\u89C1\u4E0A\u8868`
+      );
+    } else {
+      console.info(`[V800Adapter] #uvassert \u5BC6\u5EA6\u5224\u636E\uFF1A\u56FE\u6848\u5206\u533A\u65E0 > 8x \u7684\u5404\u5411\u5F02\u6027\u62C9\u4F38\uFF08\u4E16\u754C\u9762\u79EF > ${AREA_MIN * 1e4}cm\xB2 \u53E3\u5F84\uFF09`);
+    }
   }
   const api = {
     root,
@@ -27124,6 +28918,7 @@ function createV800CarAdapter(tier2 = "high") {
       heat = t;
     },
     updateCluster(speedKmh, forceN, g2, gear) {
+      lastSpeedKmh = speedKmh;
       drawGauge(speedKmh, forceN, g2, gear);
     },
     setSteer(_angle) {
@@ -27157,13 +28952,25 @@ function createV800CarAdapter(tier2 = "high") {
       headLevel = damp2(headLevel, headTarget, 14, dt);
       if (headMat) headMat.emissiveIntensity = headLevel;
       if (markMat) markMat.emissiveIntensity = markBase * (1 + MARK_BREATH_AMPLITUDE * Math.sin(now * 1.6));
+      if (wheelCapMat) {
+        wheelCapMat.emissiveIntensity = markBase * (1 + MARK_BREATH_AMPLITUDE * Math.sin(now * 1.6));
+      }
       if (starMat) {
         const phase = now / STARLIGHT_BREATH_PERIOD * Math.PI * 2;
         starMat.emissiveIntensity = STARLIGHT_BASE_INTENSITY * (1 + STARLIGHT_BREATH_AMPLITUDE * Math.sin(phase));
       }
       if (camera) {
-        camera.getWorldQuaternion(tmpQuat);
+        camera.getWorldPosition(tmpCamVec);
         for (const c of caps) {
+          c.getWorldPosition(tmpVec);
+          const dx = tmpCamVec.x - tmpVec.x;
+          const dz = tmpCamVec.z - tmpVec.z;
+          const len = Math.hypot(dx, dz);
+          if (len <= 1e-4) continue;
+          tmpDir.set(dx / len, 0, dz / len);
+          tmpCross.set(tmpDir.z, 0, -tmpDir.x);
+          tmpBasis.makeBasis(BILLBOARD_UP, tmpDir, tmpCross);
+          tmpQuat.setFromRotationMatrix(tmpBasis);
           if (c.parent) {
             c.parent.getWorldQuaternion(tmpParentQuat);
             c.quaternion.copy(tmpParentQuat).invert().multiply(tmpQuat);
@@ -27172,6 +28979,11 @@ function createV800CarAdapter(tier2 = "high") {
           }
         }
       }
+      const carpetTarget = lastSpeedKmh < WELCOME_CARPET_SPEED_GATE ? 1 : 0;
+      welcomeGain = damp2(welcomeGain, carpetTarget, 3, dt);
+      welcomeMat.opacity = (0.8 + 0.16 * Math.sin(now * 1.35)) * welcomeGain;
+      const welcomeVisible = welcomeGain > 0.02;
+      if (welcomeMesh.visible !== welcomeVisible) welcomeMesh.visible = welcomeVisible;
       pedal.getWorldPosition(tmpVec);
       const pedalVisible = tmpVec.distanceTo(camera.position) < 2.5;
       if (pedal.visible !== pedalVisible) pedal.visible = pedalVisible;
@@ -27212,6 +29024,8 @@ function createV800CarAdapter(tier2 = "high") {
       });
       pedalGeo.dispose();
       pedalMat.dispose();
+      welcomeGeo.dispose();
+      welcomeMat.dispose();
       gaugeTex.dispose();
       for (const tex of ownedTextures) tex.dispose();
     }
@@ -27238,7 +29052,7 @@ function disposeMaterial(mat) {
 }
 
 // .img2threejs/tools/a2_probe_entry.ts
-globalThis.window.location.hash = "#uvassert";
+globalThis.window.location.hash = "#uvassert+lightassert+batchmerge";
 var tier = process.argv[2] ?? "high";
 var car = createV800CarAdapter(tier);
 var matById = /* @__PURE__ */ new Map();
@@ -27287,6 +29101,189 @@ for (const target of targets) {
       `  ${cid.padEnd(28)} prim=${prim.padEnd(12)} tris=${String(tris2).padStart(6)} uv=[${uv ? uMin.toFixed(3) + ".." + uMax.toFixed(3) + " , " + vMin.toFixed(3) + ".." + vMax.toFixed(3) : "NONE"}]`
     );
   });
+}
+var diagIds = (process.argv[4] ?? "").split(",").filter(Boolean);
+if (diagIds.length > 0) {
+  console.log("\n== geometry diagnostics ==");
+  const diagNode = (id) => {
+    let found = null;
+    car.root.traverse((o) => {
+      const cid = o.userData.sculptComponent?.id;
+      if (!found && cid === id) found = o;
+    });
+    return found;
+  };
+  for (const id of diagIds) {
+    const node = diagNode(id);
+    if (!node) {
+      console.log(`-- ${id} -- (\u672A\u627E\u5230)`);
+      continue;
+    }
+    console.log(`-- ${id} --`);
+    node.traverse((o) => {
+      const m = o;
+      if (!m.isMesh) return;
+      const geo = m.geometry;
+      const params = geo.parameters;
+      const uv = geo.getAttribute("uv");
+      const pos = geo.getAttribute("position");
+      const box = new Box3().setFromObject(m);
+      console.log(
+        `  mesh name=${m.name} groups=${JSON.stringify(geo.groups)} params=${params ? JSON.stringify(params) : "NONE"} verts=${pos?.count ?? 0} tris=${geo.index ? geo.index.count / 3 : (pos?.count ?? 0) / 3}`
+      );
+      console.log(
+        `  world bbox min=(${box.min.x.toFixed(3)},${box.min.y.toFixed(3)},${box.min.z.toFixed(3)}) max=(${box.max.x.toFixed(3)},${box.max.y.toFixed(3)},${box.max.z.toFixed(3)})`
+      );
+      if (uv && geo.groups && geo.groups.length === 3) {
+        const idx = geo.getIndex();
+        for (let gi = 0; gi < geo.groups.length; gi++) {
+          const g2 = geo.groups[gi];
+          let uMin = Infinity, uMax = -Infinity, vMin = Infinity, vMax = -Infinity;
+          let yAtVmin = 0, yAtVmax = 0;
+          let maxDiscR2 = 0;
+          for (let t = g2.start; t < g2.start + g2.count; t++) {
+            const vi = idx ? idx.getX(t) : t;
+            const u = uv.getX(vi), v = uv.getY(vi);
+            const y = pos ? pos.getY(vi) : 0;
+            if (u < uMin) uMin = u;
+            if (u > uMax) uMax = u;
+            if (v < vMin) {
+              vMin = v;
+              yAtVmin = y;
+            }
+            if (v > vMax) {
+              vMax = v;
+              yAtVmax = y;
+            }
+            const r2 = (u - 0.5) * (u - 0.5) + (v - 0.5) * (v - 0.5);
+            if (r2 > maxDiscR2) maxDiscR2 = r2;
+          }
+          console.log(
+            `  group${gi}(mat${g2.materialIndex}) tris=${g2.count / 3} uv=[${uMin.toFixed(3)}..${uMax.toFixed(3)},${vMin.toFixed(3)}..${vMax.toFixed(3)}] localY@vMin=${yAtVmin.toFixed(3)} localY@vMax=${yAtVmax.toFixed(3)} discR2max=${maxDiscR2.toFixed(4)}${gi > 0 ? maxDiscR2 <= 0.2501 ? " (\u22640.25 \u5E3D\u9762\u5185\u5207\u5706 \u2713)" : " (\u975E\u5185\u5207\u5706 \u2717)" : ""}`
+          );
+        }
+      }
+    });
+  }
+}
+console.log("\n== runtime orientation ==");
+var cam = new PerspectiveCamera(30, 2.78, 0.1, 100);
+cam.position.set(6.5, 1.6, 0);
+cam.lookAt(0, 0.6, 0);
+car.update(cam, 1 / 60);
+var capNode = (() => {
+  let found = null;
+  car.root.traverse((o) => {
+    const cid = o.userData.sculptComponent?.id;
+    if (!found && (cid === "wheel-cap-fl" || cid === "wheel-cap-fr")) found = o;
+  });
+  return found;
+})();
+if (capNode) {
+  const box = new Box3().setFromObject(capNode);
+  const wq = capNode.getWorldQuaternion(new Quaternion());
+  const n = new Vector3(0, 1, 0).applyQuaternion(wq);
+  const up = new Vector3(1, 0, 0).applyQuaternion(wq);
+  const toCam = cam.position.clone().sub(box.getCenter(new Vector3())).normalize();
+  console.log(
+    `wheel-cap(${capNode.userData.sculptComponent.id}) bbox x[${box.min.x.toFixed(3)},${box.max.x.toFixed(3)}] y[${box.min.y.toFixed(3)},${box.max.y.toFixed(3)}] z[${box.min.z.toFixed(3)},${box.max.z.toFixed(3)}] normal=(${n.x.toFixed(2)},${n.y.toFixed(2)},${n.z.toFixed(2)}) badgeUp=(${up.x.toFixed(2)},${up.y.toFixed(2)},${up.z.toFixed(2)}) facingCam=${n.dot(toCam).toFixed(3)}`
+  );
+}
+var tireNode = (() => {
+  let found = null;
+  car.root.traverse((o) => {
+    const cid = o.userData.sculptComponent?.id;
+    if (!found && cid === "tire-fl") found = o;
+  });
+  return found;
+})();
+if (tireNode) {
+  const mesh = (() => {
+    let f = null;
+    tireNode.traverse((o) => {
+      if (!f && o.isMesh) f = o;
+    });
+    return f;
+  })();
+  if (mesh) {
+    const wq = mesh.getWorldQuaternion(new Quaternion());
+    const up = new Vector3(1, 0, 0).applyQuaternion(wq);
+    console.log(`tire-fl letterUp=(${up.x.toFixed(2)},${up.y.toFixed(2)},${up.z.toFixed(2)}) (1,0,0)=\u4E16\u754C\u6B63\u4E0A \u2713)`);
+  }
+}
+var carpet = car.root.getObjectByName("welcome-carpet");
+if (carpet) {
+  const box = new Box3().setFromObject(carpet);
+  const mat = carpet.material;
+  console.log(
+    `welcome-carpet bbox x[${box.min.x.toFixed(2)},${box.max.x.toFixed(2)}] y[${box.min.y.toFixed(3)},${box.max.y.toFixed(3)}] z[${box.min.z.toFixed(2)},${box.max.z.toFixed(2)}] opacity=${mat.opacity.toFixed(3)} visible=${carpet.visible}`
+  );
+}
+console.log("\n== billboard criterion sweep (PERF.md #19 revision) ==");
+var capFl = (() => {
+  let found = null;
+  car.root.traverse((o) => {
+    const cid = o.userData.sculptComponent?.id;
+    if (!found && cid === "wheel-cap-fl") found = o;
+  });
+  return found;
+})();
+if (capFl) {
+  const MODES = [
+    ["side(QA)", 4.6, 1.5, 0.6],
+    ["chase", 1.6, 2.2, 8.2],
+    ["orbit-0", 7.8, 1.5, 0],
+    ["orbit-90", 0, 1.5, 7.8],
+    ["orbit-180", -7.8, 1.5, 0],
+    ["orbit-270", 0, 1.5, -7.8],
+    ["hood", 0, 1.45, 1.45],
+    ["cabin", 0.55, 1.16, 0.45],
+    ["crash", 9, 4.5, 13],
+    ["low-side", 4.6, 0.5, 0.6]
+  ];
+  const wq = new Quaternion();
+  const nV = new Vector3();
+  const upV = new Vector3();
+  const rdV = new Vector3();
+  const ctr = new Vector3();
+  const toCam = new Vector3();
+  const toCamH = new Vector3();
+  const WORLD_UP = new Vector3(0, 1, 0);
+  capFl.getWorldPosition(ctr);
+  for (const [name, cx2, cy2, cz2] of MODES) {
+    cam.position.set(cx2, cy2, cz2);
+    cam.lookAt(ctr.x, ctr.y, ctr.z);
+    car.update(cam, 1 / 60);
+    capFl.getWorldQuaternion(wq);
+    nV.set(0, 1, 0).applyQuaternion(wq);
+    upV.set(1, 0, 0).applyQuaternion(wq);
+    rdV.set(0, 0, 1).applyQuaternion(wq);
+    toCam.subVectors(cam.position, ctr).normalize();
+    toCamH.set(toCam.x, 0, toCam.z).normalize();
+    console.log(
+      `  ${name.padEnd(10)} normal\xB7toCamH=${nV.dot(toCamH).toFixed(3)} normal\xB7toCam=${nV.dot(toCam).toFixed(3)} up\xB7worldUp=${upV.dot(WORLD_UP).toFixed(3)} |read\xB7worldUp|=${Math.abs(rdV.dot(WORLD_UP)).toFixed(3)} |read\xB7viewDir|=${Math.abs(rdV.dot(toCam)).toFixed(3)}`
+    );
+  }
+  const body0 = car.body.rotation.clone();
+  for (const [tag, rx, rz] of [["pitch+0.3", 0.3, 0], ["roll+0.5", 0, 0.5], ["yaw+pitch+roll", 0.4, 0.25]]) {
+    car.body.rotation.set(Math.PI + rx * 0.2, Math.PI, rz);
+    for (const [cn, cx2, cy2, cz2] of [["side", 4.6, 1.5, 0.6], ["chase", 1.6, 2.2, 8.2]]) {
+      cam.position.set(cx2, cy2, cz2);
+      car.update(cam, 1 / 60);
+      capFl.getWorldQuaternion(wq);
+      capFl.getWorldPosition(ctr);
+      nV.set(0, 1, 0).applyQuaternion(wq);
+      upV.set(1, 0, 0).applyQuaternion(wq);
+      rdV.set(0, 0, 1).applyQuaternion(wq);
+      toCam.subVectors(cam.position, ctr).normalize();
+      toCamH.set(toCam.x, 0, toCam.z).normalize();
+      console.log(
+        `  ${tag.padEnd(14)}${cn.padEnd(7)} normal\xB7toCamH=${nV.dot(toCamH).toFixed(3)} up\xB7worldUp=${upV.dot(WORLD_UP).toFixed(3)} |read\xB7worldUp|=${Math.abs(rdV.dot(WORLD_UP)).toFixed(3)} |read\xB7viewDir|=${Math.abs(rdV.dot(toCam)).toFixed(3)}`
+      );
+    }
+  }
+  car.body.rotation.copy(body0);
+  car.update(cam, 1 / 60);
 }
 var meshes = 0;
 var tris = 0;
