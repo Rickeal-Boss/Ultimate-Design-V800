@@ -285,3 +285,20 @@ tumblehome/收窄/腰鼓是逐顶点函数（依赖 wy/wz），轮廓点天然�
 | 内饰透色 | LEATHER_WARM_BASE [122,64,52]→[88,48,40]（透过玻璃的红棕更暗沉） |
 | 回归 | strict PASS / tsc 0 / vitest 58/58 / build ✓ / Edge 6机位（尾灯红657稳定） |
 | 遗留（R9） | 前挡内仪表台白板材质、玻璃带柱分段微缝、rim 残余暖反射、前脸中网镀铬条+盾标、车头俯视收窄加强 |
+
+## 附录 H · R10「斜坡鼻尾+穹顶归位」波实测记录（2026-10-17）
+
+用户指认：①车头/车尾不是突起板块而是斜坡；②前窗前的外伸「穹顶」应是车内顶部装饰。
+
+| 项 | 结果 |
+|---|---|
+| 穹顶归位 | lidar-wedge 从顶棚前缘外挂（y1.884/z0.98 骑顶）收进车内顶下（y1.78/z0.35，scale 0.14/0.045/0.30，matte-black）——座舱顶饰语义（用户指认） |
+| 鼻部斜坡 | front-end 垂直立板（顶1.425>机盖1.09）→ 前倾斜坡：rotX −0.30、pos y0.86、scaleY 0.46，顶边 1.10 = 机盖前缘埋入 |
+| 尾部斜坡 | tailgate rotX +0.10 后掠（MPV 尾门倾角） |
+| 头灯嵌入 | headlamp-l/r local z 0.07→−0.02、headlamp-led 0.055→−0.03（原悬出鼻面 5-6cm 成「栏杆柱」） |
+| 腰带缩短 | chrome-belt span [−2.45,+2.15]→[−1.95,+1.75]（不再伸到鼻尾角） |
+| 大理石纹定罪 | hide-test 三连（wood/leather-warm/carpet）：腰带杂色带=舱内皮革/木纹透过玻璃；非贴图串味、非漆面反射（撤 map/压 env 均无效，隐藏舱内件即消）。玻璃 trans 0.22→**0.12**（B1 深烟灰黑）+ wood 纹理基色 [107,52,24]→[54,32,20] |
+| 纯色件弃图集 | paint-upper/paint-lower/matte-black/chrome/wheel-alloy 撤 map+normalMap 回退 spec 色（帽面 UV 串味根治）；车漆改清漆语义 metal 0.12/rough 0.42/env 0.55 |
+| QA 工具 | preview 新增 __v800Scene/__v800HideMat（材质隐藏对照实验）；qa-hide.mjs |
+| 验证 | tsc 0 / vitest 58/58 / build ✓ / Edge 7 机位（尾灯红 653 稳定） |
+| 遗留（R11） | 轮胎侧壁大理石纹（tire 图集帽面 UV）、风挡内仪表台木纹在侧视的透视条、roof-rails 前端亮轨观感、front-light-bar 与鼻面贴合度、中网镀铬条+盾标 |

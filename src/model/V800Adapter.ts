@@ -1645,6 +1645,44 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
     }
   });
 
+  // ---- R10 外观纯色件弃用图集（挤出帽面 UV 串味根治）----
+  // 工厂烘焙图集按「侧面 UV」设计，挤出帽面/棱边碎 UV 会采到木纹/皮革等装饰区
+  // （机盖大理石纹、腰带杂色 = 实机 r7-side/front45 实证）。这些材质语义就是
+  // 纯色，直接撤 map/normalMap 回退 spec 颜色 —— 串味源头整体消失。
+  for (const solidId of ['paint-upper', 'paint-lower', 'matte-black', 'chrome', 'wheel-alloy']) {
+    const mat = matById.get(solidId);
+    if (!mat) continue;
+    if (mat.map) mat.map = null;
+    if (mat.normalMap) mat.normalMap = null;
+    const sc = mat.userData?.sculptMaterial as { color?: string } | undefined;
+    if (sc?.color) mat.color.set(sc.color);
+    mat.needsUpdate = true;
+  }
+  // R10b：平滑法线后高金属漆面把 RoomEnvironment 暖色矩形镜像成大理石漩涡
+  // （前后两次截图逐像素一致、撤 map 无效 → 反射实锤）。车漆改清漆语义：
+  // 低金属度+较高粗糙+压低 env；铬件同压。
+  const paintMat = matById.get('paint-upper');
+  if (paintMat) {
+    paintMat.metalness = 0.12;
+    paintMat.roughness = 0.42;
+    paintMat.envMapIntensity = 0.55;
+    paintMat.needsUpdate = true;
+  }
+  const paintLowerMat = matById.get('paint-lower');
+  if (paintLowerMat) {
+    paintLowerMat.metalness = 0.1;
+    paintLowerMat.roughness = 0.5;
+    paintLowerMat.envMapIntensity = 0.45;
+    paintLowerMat.needsUpdate = true;
+  }
+  const chromeMatSolid = matById.get('chrome');
+  if (chromeMatSolid) {
+    chromeMatSolid.metalness = 0.6;
+    chromeMatSolid.roughness = 0.35;
+    chromeMatSolid.envMapIntensity = 0.5;
+    chromeMatSolid.needsUpdate = true;
+  }
+
   // ---- P1-5 greenhouse 玻璃一致性（适配层覆盖；spec 数值不动，决策回写 spec 留给主理人）----
   // 根因：高透射（0.82）+ 中灰色调下侧窗整条读作「天空色空带」，顶棚视觉悬空
   // （第四轮审查 S1）。改走「隐私玻璃」观感：透射压到 0.10（R6 修订）、色调近黑，
@@ -1653,9 +1691,9 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
   // 存在，此处零新增 pass、零 DC 增量；transparent 关闭（透射材质不再叠加混合）。
   const greenhouseMat = matById.get('glass-dark') ?? null;
   if (greenhouseMat) {
-    // trans 0.18→0.10（R6 修订，证据=用户录屏 14-51 与 R6 侧截图）：0.18 下窗帘/
-    // 仪表台顶的红金图案在侧视透出成排色块；0.10 保持「隐约可辨」的隐私玻璃语义。
-    greenhouseMat.transmission = 0.1;
+    // trans 0.12（R10 终值）：深烟灰偏黑 —— B1 黑版侧窗只隐约透出座舱轮廓；
+    // 0.22 时木纹/菱格透色成「大理石腰带」（hide-test 实证：纹样=舱内 wood/皮革）。
+    greenhouseMat.transmission = 0.12;
     greenhouseMat.color.set(0x10151b);
     greenhouseMat.roughness = 0.06;
     greenhouseMat.envMapIntensity = 1.35;
@@ -2730,7 +2768,7 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
   if (woodMatTrim && !woodMatTrim.map) {
     applySurface(
       woodMatTrim,
-      createProceduralSurface(fabricSize, 0.45, woodSampler([107, 52, 24], 37)),
+      createProceduralSurface(fabricSize, 0.45, woodSampler([54, 32, 20], 37)),
       0.45
     );
   }

@@ -136,8 +136,28 @@ window.__v800Info = (): { tris: number; calls: number; box: number[] } => {
 declare global {
   interface Window {
     __v800Parts: () => Array<{ id: string; size: number[]; pos: number[]; scale: number[]; worldMin?: number[]; worldPos?: number[] }>;
+    /** QA 调试：拿场景根（隐藏对照实验用），并按材质 id 隐藏/恢复 mesh */
+    __v800Scene: () => THREE.Object3D;
+    __v800HideMat: (matId: string, hide: boolean) => number;
   }
 }
+window.__v800Scene = (): THREE.Object3D => scene;
+window.__v800HideMat = (matId: string, hide: boolean): number => {
+  let n = 0;
+  scene.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    const arr = Array.isArray(m.material) ? m.material : [m.material];
+    for (const mt of arr) {
+      if ((mt as THREE.MeshPhysicalMaterial)?.userData?.sculptMaterial?.id === matId) {
+        m.visible = !hide;
+        n += 1;
+        break;
+      }
+    }
+  });
+  return n;
+};
 window.__v800Parts = (): Array<{ id: string; size: number[]; pos: number[]; scale: number[] }> => {
   const rows: Array<{ id: string; size: number[]; pos: number[]; scale: number[]; worldMin?: number[]; worldPos?: number[] }> = [];
   model.updateWorldMatrix(true, true);
