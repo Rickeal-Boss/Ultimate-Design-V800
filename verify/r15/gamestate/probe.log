@@ -1,0 +1,20 @@
+GOTO http://localhost:4317/preview.html#assembled MODE=rayfan
+READY
+HIDEMAT(before) glass-clear meshes=1
+HIDEMAT(before) glass-dark meshes=1
+RAY eye=[-0.55,1.33,-0.58] -> road=[-0.42,0.03,-30.58] dir=[0.0043,-0.0433,-0.9991]
+  HIT none (ray reaches 35m)
+PITCHFAN (0°=水平, 负=向下): pitch | nearest hit | dist | hitY
+  pitch=12° batch/leather-ivory|leather-ivory@1.86m hitY=1.716
+  pitch=11° MISS(路面/远景)
+  pitch=-4° tri-screen|screen-ui@0.83m hitY=1.272
+  pitch=-12° steering|wood@0.82m hitY=1.16
+  pitch=-15° tri-screen|screen-ui@0.87m hitY=1.104
+  pitch=-17° batch/paint-upper|paint-upper@0.82m hitY=1.091
+ANGLES: (相对水平线, 正=向下俯角)
+  注视点 tgt俯角=1.76°
+  tri-screen顶沿(1.2875,z-1.42)俯角=2.9°  底沿(0.9725)俯角=23.05°
+  dash-upper顶面(0.985,前缘z-1.32)俯角=25°  后缘(z-1.78)俯角=16.04°
+  dash-lower底(0.67,z-1.45)俯角=37.18°
+  FOV=68 半垂直FOV=34.0° 注视俯角含在内
+ALL DONE

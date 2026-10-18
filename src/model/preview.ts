@@ -16,6 +16,7 @@ import {
   configureZunjieV800LuxuryMPVRenderer,
 } from './createV800Model';
 import { createV800CarAdapter } from './V800Adapter';
+import { createR7CarAdapter } from './R7Adapter';
 import { ContactShadow } from '../render/scene/ContactShadow';
 
 declare global {
@@ -56,8 +57,11 @@ scene.add(createZunjieV800LuxuryMPVLookDevLights());
 // 行数变少属预期降级（console 一次说明），不崩溃、不静默错拍。
 const ASSEMBLED =
   typeof window !== 'undefined' && window.location.hash.includes('assembled');
+/** R15：`#assembled&vehicle=r7` 切换到第二辆车（智界 R7）的装配产物 */
+const PREVIEW_R7 =
+  ASSEMBLED && /(?:^|[#&])vehicle=r7/i.test(window.location.hash);
 const model: THREE.Object3D = ASSEMBLED
-  ? createV800CarAdapter('high').root
+  ? (PREVIEW_R7 ? createR7CarAdapter('high') : createV800CarAdapter('high')).root
   : createZunjieV800LuxuryMPVModel({ textureSize: 1024 });
 scene.add(model);
 if (ASSEMBLED) {

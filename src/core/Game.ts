@@ -5,14 +5,16 @@
 import * as THREE from 'three';
 import { Sfx, vibrate } from '../audio/Sfx';
 import { BRAKE, CRASH, MS_TO_KMH, REDUNDANCY, VEHICLE } from '../config/physics';
-import { AdaptiveQuality, type QualitySettings } from '../config/quality';
+import { getVehicleProfile, resolveVehicleId, type InteriorViews } from '../config/vehicles';
+import { AdaptiveQuality, type QualitySettings, type QualityTier } from '../config/quality';
 import { World } from '../physics/World';
 import { FxSystems } from '../fx';
-import { CYCLE_VIEWS, CameraRig } from '../render/CameraRig';
+import { cycleViewsFor, CameraRig, isInteriorMode } from '../render/CameraRig';
 import type { CameraMode } from '../render/CameraRig';
 import { Postfx } from '../render/Postfx';
 import { createRenderer } from '../render/Renderer';
 import { createV800CarAdapter, type CarLike } from '../model/V800Adapter';
+import { createR7CarAdapter } from '../model/R7Adapter';
 import { Environment } from '../render/scene/Environment';
 import { ContactShadow } from '../render/scene/ContactShadow';
 
@@ -76,10 +78,16 @@ export class Game {
   private readonly road: Road;
   private readonly waterway: Waterway;
   private readonly car: CarLike;
+  /** 活动车型档位（URL #vehicle= > localStorage > v800） */
+  private readonly profile = getVehicleProfile(resolveVehicleId());
+  /** 装配层注入的内饰三机位（可能为 null → CameraRig 退回内置 cabin 偏移） */
+  private readonly interiorViews: InteriorViews | null;
+  /** 质量档（createCar 装配注入点要用） */
+  private readonly tier: QualityTier;
   private readonly fx: FxSystems;
   private readonly crashWorld: World;
   private readonly sfx = new Sfx();
-  private readonly sm = new StateMachine();
+  private readonly sm = new StateMachine(getVehicleProfile(resolveVehicleId()));
   private readonly hud: Hud;
   private readonly menu: Menu;
   private readonly result: Result;
@@ -100,6 +108,14 @@ export class Game {
   private forceBrakeTick = false;
   /** V 键循环游标（ACCEL/BRAKE 段可用视角） */
   private cycleIndex = 0;
+  /**
+   * 当前车型的 V 键循环表（V800 5 档 / R7 7 档含三内饰机位），见 cycleViewsFor()：
+   * - V800：chase / hood / cabin / orbit / side
+   * - R7  ：chase / hood / cabinDriver / cabinPassenger / cabinRear / orbit / side
+   */
+  private readonly cycleViews: readonly CameraMode[];
+  /** 车内机位（用于断裂特写回退 / 前挡遮挡判定的代表机位） */
+  private readonly interiorMode: CameraMode;
   /** 结算段自动机位计时（side 2s → orbit；crash 段 crash 2s → side 2s → orbit） */
   private settleTimer = 0;
   private lastImpactStrength = 0;
@@ -148,6 +164,7 @@ export class Game {
     onFirstFrame: () => void
   ) {
     this.renderer = createRenderer(container, quality);
+    this.tier = quality.tier;
     this.qualityGovernor = new AdaptiveQuality(quality);
 
     this.rig = new CameraRig(window.innerWidth / window.innerHeight);
@@ -157,7 +174,8 @@ export class Game {
     this.road = new Road(this.scene, this.renderer.capabilities.getMaxAnisotropy());
     new Terrain(this.scene);
     this.waterway = new Waterway(this.scene);
-    this.car = createV800CarAdapter(quality.tier);
+    this.car = this.createCar();
+    this.interiorViews = this.readInteriorViews();
     this.scene.add(this.car.root);
     // R14 座舱机位：从车内看，前挡（glass-clear，全车唯一）会糊成一块灰板
     // （env 反射 + 单面材质从背面看 = 半透明灰皮），驾驶视野被吃掉。
@@ -182,6 +200,15 @@ export class Game {
       this.sfx.impact(impact.strength);
       this.rig.addShake(0.25 * impact.strength);
     });
+
+    // ---- 车型视角接线 ----
+    // CarLike.interiorViews? 由装配层（V800Adapter / R7Adapter）提供，属**可选**字段：
+    // 结构化访问，避免依赖尚未合并的 model 改动；缺失则 CameraRig 退回内置 cabin 偏移。
+    this.rig.setInteriorViews(this.interiorViews);
+    this.rig.setViewScale(this.profile.cameraScale ?? 1);
+    // V800 无内饰三机位 → 5 档；注入了 → 7 档（含主驾/副驾/后排）
+    this.cycleViews = cycleViewsFor(this.interiorViews !== null);
+    this.interiorMode = this.interiorViews ? 'cabinDriver' : 'cabin';
 
     // ---- UI ----
     this.hud = new Hud({
@@ -241,6 +268,32 @@ export class Game {
   }
 
   /** renderer 初始化见 render/Renderer.ts（结构要素 1：WebGLRenderer） */
+
+  /**
+   * 【车型装配注入点】按活动车型构建车模。
+   * 主理人接线：R7 模型就绪后在此按 this.profile.id 分支选择装配入口，例如
+   *   return this.profile.id === 'r7' ? createR7CarAdapter(quality.tier) : createV800CarAdapter(quality.tier);
+   * 换车必须重载页面（Menu 选车即 reload），见 Menu.pick()。
+   */
+  /**
+   * 【车型装配注入点】按活动车型构建车模（R15 双车）。
+   * 换车 = Menu 选车后 location.reload()，因此这里只做一次性分支，不需要 dispose/热切换。
+   * 两车共用同一份 CarLike 契约与材质 ID 语义族，灯光/热量/仪表驱动路径零分叉。
+   */
+  private createCar(): CarLike {
+    return this.profile.id === 'r7'
+      ? createR7CarAdapter(this.tier)
+      : createV800CarAdapter(this.tier);
+  }
+
+  /**
+   * 读取装配层注入的内饰三机位。结构化访问（`interiorViews?` 是 V800Adapter 的
+   * **可选**字段，另一端尚未合并），缺失返回 null。
+   */
+  private readInteriorViews(): InteriorViews | null {
+    const iv = (this.car as CarLike & { interiorViews?: InteriorViews }).interiorViews;
+    return iv ?? null;
+  }
 
   private startRun(): void {
     this.sfx.unlock();
@@ -340,19 +393,19 @@ export class Game {
     canvas.addEventListener('contextmenu', (e) => e.preventDefault(), opts);
   }
 
-  /** V 键：ACCEL/BRAKE 段循环 chase→hood→cabin→side */
+  /** V 键：ACCEL/BRAKE 段按车型循环（V800 5 档 / R7 7 档） */
   private cycleCamera(): void {
     if (this.sm.phase !== 'accel' && this.sm.phase !== 'brake') return;
-    this.cycleIndex = (this.cycleIndex + 1) % CYCLE_VIEWS.length;
-    this.rig.setMode(CYCLE_VIEWS[this.cycleIndex]);
-    this.hud.setActiveView(CYCLE_VIEWS[this.cycleIndex]);
+    this.cycleIndex = (this.cycleIndex + 1) % this.cycleViews.length;
+    this.rig.setMode(this.cycleViews[this.cycleIndex]);
+    this.hud.setActiveView(this.cycleViews[this.cycleIndex]);
     this.sfx.uiClick();
   }
 
-  /** HUD 视角按钮：直接切到指定视角 */
+  /** HUD 视角按钮：直接切到指定视角（HUD 只渲染本车存在的按钮） */
   private selectView(mode: CameraMode): void {
     if (this.sm.phase !== 'accel' && this.sm.phase !== 'brake') return;
-    const idx = CYCLE_VIEWS.indexOf(mode);
+    const idx = this.cycleViews.indexOf(mode);
     if (idx >= 0) this.cycleIndex = idx;
     this.rig.setMode(mode);
     this.hud.setActiveView(mode);
@@ -420,10 +473,12 @@ export class Game {
           true,
           2400
         );
-        // 车内视角停留看踏板脱落，之后交还常规机位（玩家仍可自由拖拽环视）
-        this.snapCamReturn = this.rig.mode === 'cabin' ? null : this.rig.mode;
-        this.rig.setMode('cabin');
-        this.hud.setActiveView('cabin');
+        // 车内视角停留看踏板脱落，之后交还常规机位（玩家仍可自由拖拽环视）。
+        // 已在车内则不必切（也没地方还）；R7 用首个内饰机位（主驾），
+        // 且 R7 踏板不会断裂 → 该事件本就不会派发。
+        this.snapCamReturn = isInteriorMode(this.rig.mode) ? null : this.rig.mode;
+        this.rig.setMode(this.interiorMode);
+        this.hud.setActiveView(this.interiorMode);
         this.snapCamTimer = REDUNDANCY.cabinHoldSeconds;
         break;
       case 'stopped': {
@@ -530,7 +585,7 @@ export class Game {
     // ---- 断裂特写：车内视角停留 cabinHoldSeconds 后交还原机位 ----
     if (this.snapCamTimer > 0 && this.sm.phase === 'brake') {
       this.snapCamTimer -= dt;
-      if (this.snapCamTimer <= 0 && this.rig.mode === 'cabin' && this.snapCamReturn) {
+      if (this.snapCamTimer <= 0 && isInteriorMode(this.rig.mode) && this.snapCamReturn) {
         this.rig.setMode(this.snapCamReturn);
         this.hud.setActiveView(this.snapCamReturn);
         this.snapCamReturn = null;
@@ -559,7 +614,7 @@ export class Game {
     // ---- 相机与后处理 ----
     this.rig.update(dt, focus, vehicle.speed, this.car.root.quaternion);
     // 车内机位遮挡切换（前挡从内部看是灰板）：仅在模式变化时写，零每帧开销
-    const wantHide = this.rig.mode === 'cabin';
+    const wantHide = isInteriorMode(this.rig.mode);
     if (wantHide !== this.windshieldHidden) {
       this.windshieldHidden = wantHide;
       for (const m of this.windshieldMeshes) m.visible = !wantHide;

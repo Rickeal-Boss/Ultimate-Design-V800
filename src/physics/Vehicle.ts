@@ -4,6 +4,7 @@
  * 电机模型：恒扭矩(T_max)→恒功率曲线，效率 0.92；电子限速 200km/h。
  */
 import { BRAKE, DRIVE, GRAVITY, MS_TO_KMH, REDUNDANCY, VEHICLE } from '../config/physics';
+import type { VehicleProfile } from '../config/vehicles';
 
 export interface VehicleState {
   /** m/s */
@@ -110,8 +111,18 @@ export function regenDecel(brake: number): number {
  * 电子限速只钳速度、动力保持（2026-10-18 玩法改版）：被钳住时 speed 钉在 200 km/h，
  * state.accel 保留计算值——油门继续有劲、G 表/俯仰/电机音持续，
  * 表现为「速度被电子限速钉住」而非「动力主动退出」。
+ *
+ * 第四参 `profile`（R15-4 双车玩法档位）：只取 `brakeTempGainScale` 作为制动盘升温
+ * 倍率；**不传时行为与 R15 之前逐位一致**（既有 66 项回归不得改断言）。
+ * 质量/极速仍读 VEHICLE 常量——见 config/vehicles.ts 顶部「未接线项」说明。
  */
-export function stepVehicle(state: VehicleState, dt: number, input: VehicleInput): void {
+export function stepVehicle(
+  state: VehicleState,
+  dt: number,
+  input: VehicleInput,
+  profile?: Pick<VehicleProfile, 'brakeTempGainScale'>
+): void {
+  const gainScale = profile?.brakeTempGainScale ?? 1;
   const speed = state.speed;
   let accel: number;
   let regen = 0;
@@ -166,7 +177,7 @@ export function stepVehicle(state: VehicleState, dt: number, input: VehicleInput
     if (heating) {
       state.brakeTemp = Math.min(
         1.5,
-        state.brakeTemp + mechDecel * MASS * speed * dt * BRAKE.brakeTempGain
+        state.brakeTemp + mechDecel * MASS * speed * dt * BRAKE.brakeTempGain * gainScale
       );
     } else {
       state.brakeTemp = Math.max(0, state.brakeTemp - BRAKE.brakeTempCoolRate * dt);

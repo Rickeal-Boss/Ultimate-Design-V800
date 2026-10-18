@@ -17483,8 +17483,8 @@
    "parent": "cabin-interior",
    "attachment": null,
    "dimensions": {
-    "width": 1.46,
-    "height": 0.315,
+    "width": 1.52,
+    "height": 0.212,
     "depth": 0.006,
     "units": "meters",
     "confidence": 0.95
@@ -17492,7 +17492,7 @@
    "transform": {
     "position": [
      0,
-     1.13,
+     1.09,
      1.42
     ],
     "rotation": [
@@ -17501,8 +17501,8 @@
      0
     ],
     "scale": [
-     1.66,
-     0.315,
+     1.52,
+     0.212,
      0.006
     ]
    },
@@ -17621,8 +17621,8 @@
    "parent": "cabin-interior",
    "attachment": null,
    "dimensions": {
-    "width": 0.38,
-    "height": 0.2,
+    "width": 0.36,
+    "height": 0.15,
     "depth": 0.005,
     "units": "meters",
     "confidence": 0.95
@@ -17630,7 +17630,7 @@
    "transform": {
     "position": [
      0.72,
-     1.135,
+     1.093,
      1.426
     ],
     "rotation": [
@@ -17639,8 +17639,8 @@
      0
     ],
     "scale": [
-     0.38,
-     0.2,
+     0.36,
+     0.15,
      0.005
     ]
    },

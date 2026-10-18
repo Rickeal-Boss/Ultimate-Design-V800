@@ -1,0 +1,187 @@
+GOTO http://localhost:4317/preview.html#assembled MODE=rayfan
+READY
+GOTO http://localhost:4317/preview.html#assembled MODE=rayfan
+READY
+RAY eye=[-0.55,1.33,-0.58] -> road=[-0.42,0.03,-30.58] dir=[0.0043,-0.0433,-0.9991]
+GOTO http://localhost:4317/preview.html#assembled MODE=rayfan
+READY
+RAY eye=[-0.55,1.33,-0.58] -> road=[-0.42,0.03,-30.58] dir=[0.0043,-0.0433,-0.9991]
+GOTO http://localhost:4317/preview.html#assembled MODE=rayfan
+READY
+RAY eye=[-0.55,1.33,-0.58] -> road=[-0.42,0.03,-30.58] dir=[0.0043,-0.0433,-0.9991]
+GOTO http://localhost:4317/preview.html#assembled MODE=rayfan
+READY
+RAY eye=[-0.55,1.33,-0.58] -> road=[-0.42,0.03,-30.58] dir=[0.0043,-0.0433,-0.9991]
+  HIT d=0.903 id=windshield|glass-clear p=[-0.546,1.291,-1.482]
+  HIT d=0.919 id=greenhouse-glass|glass-dark p=[-0.546,1.29,-1.498]
+  HIT d=0.934 id=windshield|glass-clear p=[-0.546,1.29,-1.513]
+PITCHFAN (0°=水平, 负=向下): pitch | nearest hit | dist | hitY
+  pitch=12° windshield|glass-clear@0.78m hitY=1.492
+  pitch=-4° tri-screen|screen-ui@0.83m hitY=1.272
+  pitch=-12° steering|wood@0.82m hitY=1.16
+  pitch=-15° tri-screen|screen-ui@0.87m hitY=1.104
+  pitch=-16° greenhouse-glass|glass-dark@0.82m hitY=1.103
+ANGLES: (相对水平线, 正=向下俯角)
+  注视点 tgt俯角=1.76°
+  tri-screen顶沿(1.2875,z-1.42)俯角=2.9°  底沿(0.9725)俯角=23.05°
+  dash-upper顶面(0.985,前缘z-1.32)俯角=25°  后缘(z-1.78)俯角=16.04°
+  dash-lower底(0.67,z-1.45)俯角=37.18°
+GOTO http://localhost:4317/preview.html#assembled MODE=boxes
+READY
+BOX dash-upper min=[-0.89,0.8152,-2.0143] max=[0.89,1.0124,-1.5449]
+BOX tri-screen min=[-0.83,0.9733,-1.4357] max=[0.83,1.2867,-1.4043]
+BOX gauge-screen min=[-0.91,1.0355,-1.436] max=[-0.53,1.2345,-1.416]
+ALL DONE
+GOTO http://localhost:4317/preview.html#assembled MODE=meshes
+READY
+MESH 玻璃舱环 comp=greenhouse-glass mat=glass-dark vis=true inst=false tris=100 wmin=[-0.962,1.101,-1.615] wmax=[0.962,1.762,2.82]
+MESH 前挡玻璃 comp=windshield mat=glass-clear vis=true inst=false tris=76 wmin=[-0.75,1.108,-1.631] wmax=[0.75,1.827,-1.117]
+MESH 四座豪华舱 comp=cabin-interior mat=leather-warm vis=false inst=false tris=76 wmin=[-0.5,-0.5,-1] wmax=[0.5,0.5,0]
+MESH 仪表台上层（深棕皮革） comp=dash-upper mat=leather-dark vis=true inst=false tris=76 wmin=[-0.89,0.815,-2.014] wmax=[0.89,1.012,-1.545]
+MESH 三辐双色方向盘 comp=steering mat=wood vis=true inst=false tris=1152 wmin=[-0.751,0.787,-1.388] wmax=[-0.329,1.173,-1.212]
+MESH 方向盘气囊盖+盾标 comp=steering-hub mat=leather-ivory vis=true inst=false tris=792 wmin=[-0.64,0.88,-1.361] wmax=[-0.44,1.08,-1.239]
+MESH steering-spokes comp= mat=leather-ivory vis=true inst=true tris=192 wmin=[-1.04,0.32,-1.96] wmax=[-0.04,1.64,-0.64]
+MESH 零重力座椅扶手控制屏（l） comp=seat-rear-l-screen mat=screen-ui vis=true inst=false tris=288 wmin=[-0.535,0.954,0.11] wmax=[-0.465,0.962,0.159]
+MESH 零重力座椅扶手控制屏（r） comp=seat-rear-r-screen mat=screen-ui vis=true inst=false tris=288 wmin=[0.465,0.954,0.11] wmax=[0.535,0.962,0.159]
+MESH 顶棚前段（麂皮星空顶） comp=headliner-front mat=headliner-suede vis=true inst=false tris=76 wmin=[-0.76,1.69,-1.55] wmax=[0.76,1.71,-0.1]
+MESH 门板水晶装饰件（fl） comp=door-panel-fl-crystal mat=crystal vis=true inst=false tris=792 wmin=[-0.913,0.835,-1.23] wmax=[-0.883,0.965,-1.2]
+MESH 门板水晶装饰件（fr） comp=door-panel-fr-crystal mat=crystal vis=true inst=false tris=792 wmin=[0.883,0.835,-1.23] wmax=[0.913,0.965,-1.2]
+MESH 门板水晶装饰件（rl） comp=door-panel-rl-crystal mat=crystal vis=true inst=false tris=792 wmin=[-0.913,0.835,0.24] wmax=[-0.883,0.965,0.27]
+MESH 门板水晶装饰件（rr） comp=door-panel-rr-crystal mat=crystal vis=true inst=false tris=792 wmin=[0.883,0.835,0.24] wmax=[0.913,0.965,0.27]
+MESH 星空顶内衬板 comp=starlight-headliner mat=starlight vis=true inst=false tris=76 wmin=[-0.68,1.709,-1.63] wmax=[0.68,1.716,-0.3]
+MESH 水晶旋钮底座 comp=console-island-knob-base mat=crystal vis=true inst=false tris=792 wmin=[-0.047,0.788,-1.327] wmax=[0.047,0.824,-1.233]
+MESH 水晶旋钮滚花环 comp=console-island-knob-ring mat=crystal vis=true inst=false tris=1152 wmin=[-0.052,0.813,-1.332] wmax=[0.052,0.823,-1.228]
+MESH 贯穿三联屏 comp=tri-screen mat=screen-ui vis=true inst=false tris=288 wmin=[-0.83,0.973,-1.436] wmax=[0.83,1.287,-1.404]
+MESH 悬浮仪表屏 comp=gauge-screen mat=gauge-ui vis=true inst=false tris=288 wmin=[-0.91,1.035,-1.436] wmax=[-0.53,1.235,-1.416]
+MESH 后排控制屏 comp=rear-control-screen mat=screen-ui vis=true inst=false tris=288 wmin=[-0.12,0.76,-1.176] wmax=[0.12,0.9,-1.124]
+MESH batch/carpet comp= mat=carpet vis=true inst=false tris=152 wmin=[-0.83,0.282,-1.65] wmax=[0.83,0.317,1.95]
+MESH welcome-carpet comp= mat=MeshBasicMaterial vis=true inst=false tris=8 wmin=[-1.12,0.018,-1.12] wmax=[1.12,0.018,1.22]
+ALL DONE
+GOTO #assembled
+READY
+SHOT d0_baseline bytes=318829
+ALL DONE
+GOTO #assembled
+READY
+HIDEMAT(before) glass-clear meshes=1
+HIDEMAT(before) glass-dark meshes=1
+SHOT d1_noglass bytes=319673
+ALL DONE
+GOTO #assembled
+READY
+HIDEMAT(before) glass-clear meshes=1
+HIDEMAT(before) glass-dark meshes=1
+HIDEMAT(before) screen-ui meshes=4
+HIDEMAT(before) gauge-ui meshes=1
+SHOT d2_noscreens bytes=302461
+ALL DONE
+GOTO #assembled
+READY
+HIDEMAT(before) glass-clear meshes=1
+HIDEMAT(before) glass-dark meshes=1
+HIDEMAT(before) screen-ui meshes=4
+HIDEMAT(before) gauge-ui meshes=1
+HIDEMAT(before) leather-dark meshes=1
+SHOT d3_nodashupper bytes=302461
+ALL DONE
+GOTO http://localhost:4317/preview.html#assembled MODE=meshes
+READY
+MESH 玻璃舱环 comp=greenhouse-glass mat=glass-dark vis=true inst=false tris=100 wmin=[-0.962,1.101,-1.615] wmax=[0.962,1.762,2.82]
+MESH 前挡玻璃 comp=windshield mat=glass-clear vis=true inst=false tris=76 wmin=[-0.75,1.108,-1.631] wmax=[0.75,1.827,-1.117]
+MESH 四座豪华舱 comp=cabin-interior mat=leather-warm vis=false inst=false tris=76 wmin=[-0.5,-0.5,-1] wmax=[0.5,0.5,0]
+MESH 仪表台上层（深棕皮革） comp=dash-upper mat=leather-dark vis=true inst=false tris=76 wmin=[-0.89,0.815,-2.014] wmax=[0.89,1.012,-1.545]
+MESH 三辐双色方向盘 comp=steering mat=wood vis=true inst=false tris=1152 wmin=[-0.751,0.787,-1.388] wmax=[-0.329,1.173,-1.212]
+MESH 方向盘气囊盖+盾标 comp=steering-hub mat=leather-ivory vis=true inst=false tris=792 wmin=[-0.64,0.88,-1.361] wmax=[-0.44,1.08,-1.239]
+MESH steering-spokes comp= mat=leather-ivory vis=true inst=true tris=192 wmin=[-1.04,0.32,-1.96] wmax=[-0.04,1.64,-0.64]
+MESH 零重力座椅扶手控制屏（l） comp=seat-rear-l-screen mat=screen-ui vis=true inst=false tris=288 wmin=[-0.535,0.954,0.11] wmax=[-0.465,0.962,0.159]
+MESH 零重力座椅扶手控制屏（r） comp=seat-rear-r-screen mat=screen-ui vis=true inst=false tris=288 wmin=[0.465,0.954,0.11] wmax=[0.535,0.962,0.159]
+MESH 顶棚前段（麂皮星空顶） comp=headliner-front mat=headliner-suede vis=true inst=false tris=76 wmin=[-0.76,1.69,-1.55] wmax=[0.76,1.71,-0.1]
+MESH 门板水晶装饰件（fl） comp=door-panel-fl-crystal mat=crystal vis=true inst=false tris=792 wmin=[-0.913,0.835,-1.23] wmax=[-0.883,0.965,-1.2]
+MESH 门板水晶装饰件（fr） comp=door-panel-fr-crystal mat=crystal vis=true inst=false tris=792 wmin=[0.883,0.835,-1.23] wmax=[0.913,0.965,-1.2]
+MESH 门板水晶装饰件（rl） comp=door-panel-rl-crystal mat=crystal vis=true inst=false tris=792 wmin=[-0.913,0.835,0.24] wmax=[-0.883,0.965,0.27]
+MESH 门板水晶装饰件（rr） comp=door-panel-rr-crystal mat=crystal vis=true inst=false tris=792 wmin=[0.883,0.835,0.24] wmax=[0.913,0.965,0.27]
+MESH 星空顶内衬板 comp=starlight-headliner mat=starlight vis=true inst=false tris=76 wmin=[-0.68,1.709,-1.63] wmax=[0.68,1.716,-0.3]
+MESH 水晶旋钮底座 comp=console-island-knob-base mat=crystal vis=true inst=false tris=792 wmin=[-0.047,0.788,-1.327] wmax=[0.047,0.824,-1.233]
+MESH 水晶旋钮滚花环 comp=console-island-knob-ring mat=crystal vis=true inst=false tris=1152 wmin=[-0.052,0.813,-1.332] wmax=[0.052,0.823,-1.228]
+MESH 贯穿三联屏 comp=tri-screen mat=screen-ui vis=true inst=false tris=288 wmin=[-0.83,0.973,-1.436] wmax=[0.83,1.287,-1.404]
+MESH 悬浮仪表屏 comp=gauge-screen mat=gauge-ui vis=true inst=false tris=288 wmin=[-0.91,1.035,-1.436] wmax=[-0.53,1.235,-1.416]
+MESH 后排控制屏 comp=rear-control-screen mat=screen-ui vis=true inst=false tris=288 wmin=[-0.12,0.76,-1.176] wmax=[0.12,0.9,-1.124]
+MESH batch/carpet comp= mat=carpet vis=true inst=false tris=152 wmin=[-0.83,0.282,-1.65] wmax=[0.83,0.317,1.95]
+MESH welcome-carpet comp= mat=MeshBasicMaterial vis=true inst=false tris=8 wmin=[-1.12,0.018,-1.12] wmax=[1.12,0.018,1.22]
+ALL DONE
+GOTO #assembled
+READY
+HIDEMAT(before) glass-clear meshes=1
+HIDEMAT(before) glass-dark meshes=1
+HIDEMAT(before) screen-ui meshes=4
+HIDEMAT(before) gauge-ui meshes=1
+HIDEMAT(before) leather-warm meshes=3
+SHOT d6_noleatherwarm bytes=290648
+ALL DONE
+GOTO #assembled
+READY
+HIDEMAT(before) glass-clear meshes=1
+HIDEMAT(before) glass-dark meshes=1
+HIDEMAT(before) screen-ui meshes=4
+HIDEMAT(before) gauge-ui meshes=1
+HIDEMAT(before) leather-ivory meshes=3
+SHOT d7_noleatherivory bytes=294473
+ALL DONE
+GOTO #assembled
+READY
+HIDEMAT(before) glass-clear meshes=1
+HIDEMAT(before) glass-dark meshes=1
+HIDEMAT(before) screen-ui meshes=4
+HIDEMAT(before) gauge-ui meshes=1
+HIDEMAT(before) matte-black meshes=1
+SHOT d8_nomatteblack bytes=281926
+ALL DONE
+GOTO #assembled
+READY
+HIDEMAT(before) glass-clear meshes=1
+HIDEMAT(before) glass-dark meshes=1
+HIDEMAT(before) screen-ui meshes=4
+HIDEMAT(before) gauge-ui meshes=1
+HIDEMAT(before) paint-lower meshes=1
+HIDEMAT(before) paint-upper meshes=2
+SHOT d9_nopaint bytes=260477
+ALL DONE
+GOTO #assembled
+READY
+HIDEMAT(before) glass-clear meshes=1
+HIDEMAT(before) glass-dark meshes=1
+HIDEMAT(before) screen-ui meshes=4
+HIDEMAT(before) gauge-ui meshes=1
+HIDEMAT(before) paint-lower meshes=1
+SHOT d10_nopaintlower bytes=302461
+ALL DONE
+GOTO #assembled
+READY
+HIDEMAT(before) glass-clear meshes=1
+HIDEMAT(before) glass-dark meshes=1
+HIDEMAT(before) paint-upper meshes=2
+SHOT d11_hidepaintupper bytes=305012
+ALL DONE
+GOTO http://localhost:4317/preview.html#assembled MODE=boxes
+READY
+BOX dash-upper min=[-0.89,0.8152,-2.0143] max=[0.89,1.0124,-1.5449]
+BOX steering min=[-0.7508,0.7865,-1.3883] max=[-0.3292,1.1735,-1.2117]
+BOX steering-hub min=[-0.64,0.8795,-1.3613] max=[-0.44,1.0805,-1.2387]
+BOX door-panel-fl-crystal min=[-0.9127,0.835,-1.23] max=[-0.8827,0.965,-1.2]
+BOX door-panel-fr-crystal min=[0.8827,0.835,-1.23] max=[0.9127,0.965,-1.2]
+BOX door-panel-rl-crystal min=[-0.9127,0.835,0.24] max=[-0.8827,0.965,0.27]
+BOX door-panel-rr-crystal min=[0.8827,0.835,0.24] max=[0.9127,0.965,0.27]
+BOX console-island-knob-base min=[-0.0475,0.7885,-1.3275] max=[0.0475,0.8235,-1.2325]
+BOX console-island-knob-ring min=[-0.052,0.8126,-1.332] max=[0.052,0.8234,-1.228]
+BOX tri-screen min=[-0.83,0.9733,-1.4357] max=[0.83,1.2867,-1.4043]
+BOX gauge-screen min=[-0.91,1.0355,-1.436] max=[-0.53,1.2345,-1.416]
+BOX rear-control-screen min=[-0.12,0.7595,-1.1757] max=[0.12,0.9005,-1.1243]
+ALL DONE
+GOTO http://localhost:4317/preview.html#assembled MODE=boxes
+READY
+BOX dash-upper min=[-0.89,0.8152,-2.0143] max=[0.89,1.0124,-1.5449]
+BOX steering min=[-0.7508,0.7865,-1.3883] max=[-0.3292,1.1735,-1.2117]
+BOX steering-hub min=[-0.64,0.8795,-1.3613] max=[-0.44,1.0805,-1.2387]
+BOX tri-screen min=[-0.76,0.9845,-1.4306] max=[0.76,1.1955,-1.4094]
+BOX gauge-screen min=[-0.9,1.0184,-1.4335] max=[-0.54,1.1676,-1.4185]
+ALL DONE

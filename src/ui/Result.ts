@@ -4,6 +4,7 @@
  * 曲线图移植原版 $g（新增距离曲线）。
  */
 import { BRAKE } from '../config/physics';
+import { getVehicleProfile, resolveVehicleId, type VehicleId } from '../config/vehicles';
 import type { RunResult } from '../core/StateMachine';
 import { byId, el, setVisible } from './dom';
 
@@ -14,6 +15,13 @@ const COLOR_LINE = 'rgba(255,255,255,0.08)';
 const COLOR_LABEL = 'rgba(245,239,230,0.55)';
 
 const BEST_KEY = 'brake-v800:best';
+/**
+ * 本机最佳成绩按车型分桶（R15-4）：V800 沿用原 key 保住历史记录，
+ * R7 物理完全不同（60 倍以上的制动距离差），混在一张榜上没有可比性。
+ */
+export function bestKeyFor(id: VehicleId): string {
+  return id === 'v800' ? BEST_KEY : `${BEST_KEY}:${id}`;
+}
 
 /** 网格步长（原版 Qg） */
 function niceStep(range: number, targetTicks: number): number {
@@ -140,11 +148,14 @@ export class Result {
   private chartCanvas: HTMLCanvasElement;
   private bestLabel: HTMLElement;
   private retryButton: HTMLButtonElement;
+  /** 当前车型（结算文案 + 最佳成绩分桶） */
+  readonly vehicleId: VehicleId;
   /** 窗口事件句柄（dispose 时统一解绑，避免 HMR 累积泄漏——审查 B-2） */
   private readonly onResize = (): void => this.redraw();
 
   constructor(onRetry: () => void, onClick: () => void) {
     this.root = byId('result');
+    this.vehicleId = resolveVehicleId();
     const panel = el('div', 'panel result-panel');
     this.title = el('h2', 'result-title', '');
     this.subtitle = el('div', 'result-sub', '');
@@ -174,10 +185,11 @@ export class Result {
 
   show(result: RunResult): void {
     this.lastResult = result;
+    const carName = getVehicleProfile(this.vehicleId).name;
     if (result.success) {
       this.title.textContent = '刹停成功';
       this.title.className = 'result-title ok';
-      this.subtitle.textContent = '稳稳停住，尊界V800 毫发无损';
+      this.subtitle.textContent = `稳稳停住，${carName} 毫发无损`;
     } else if (result.reason === 'brake_pedal_failed') {
       // 决策①：冗余刹停 = 判负（制动系统已失效，「侥幸逃生」≠ 成功刹停）
       this.title.textContent = '踏板断裂 · 冗余刹停';
@@ -213,16 +225,17 @@ export class Result {
     }
 
     // 本机最佳（仅成功计）。localStorage 容错：Safari 无痕/禁用存储时静默降级不崩结算
+    const key = bestKeyFor(this.vehicleId);
     const readBest = (): number => {
       try {
-        return Number(window.localStorage.getItem(BEST_KEY) ?? 0);
+        return Number(window.localStorage.getItem(key) ?? 0);
       } catch {
         return 0;
       }
     };
     const writeBest = (v: number): void => {
       try {
-        window.localStorage.setItem(BEST_KEY, `${v}`);
+        window.localStorage.setItem(key, `${v}`);
       } catch {
         /* 存储不可用时忽略 */
       }

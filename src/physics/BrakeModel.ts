@@ -31,15 +31,23 @@ export function createPedalState(): PedalState {
  * - 新版：断裂 → 踏板力归零（踩空）+ 冗余建压接管，车辆继续行驶直至停下。
  *   是否判负由上层决定：冗余刹停 = 判负（制动系统已失效），撞路障 = 判负（翻滚）。
  *
+ * 档位开关 `breakable`（R15-4 双车玩法）：
+ * - true（V800，默认，语义与 R15 之前完全一致）：达到 breakForceN → snapped
+ * - false（智界R7）：踏板力**钳在 breakForceN 不再断裂**，过载爬升语义保留
+ *   （b=1.0 依然以 rampBase + 2×rampGrowth×holdTime 的速率冲到满力 ≈1.77s），
+ *   但 snapped 恒为 false ⇒ 上层不会派发 pedal_snap、结算 degraded 恒为 false。
+ *
  * @param brake 刹车滑条 0~1
  * @param elapsed 刹车段已用时 s（记录断裂时刻）
+ * @param breakable 踏板是否可能机械断裂（VehicleProfile.brakeBreakable）
  * @returns 本步是否**新**触发断裂（已断裂时返回 false，避免重复派发事件）
  */
 export function stepPedal(
   state: PedalState,
   dt: number,
   brake: number,
-  elapsed = 0
+  elapsed = 0,
+  breakable = true
 ): boolean {
   if (state.snapped) {
     // 踏板已脱开：踏板力保持 0，冗余制动持续建压直至满压
@@ -58,6 +66,11 @@ export function stepPedal(
     } else {
       state.pedalForce = Math.min(target, state.pedalForce + delta);
     }
+  }
+  if (!breakable) {
+    // 不可断裂档位：过载爬升到满力后钳住（HUD 力条贴顶），既不断也不下滑
+    if (state.pedalForce > BRAKE.breakForceN) state.pedalForce = BRAKE.breakForceN;
+    return false;
   }
   if (state.pedalForce >= BRAKE.breakForceN) {
     // 断裂瞬间：峰值由上层记录（peakForce = breakForceN），此处踏板力归零

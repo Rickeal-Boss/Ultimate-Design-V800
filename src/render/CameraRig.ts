@@ -10,12 +10,42 @@
  * 切换通过指数阻尼做 0.4~0.6s 的位置/朝向插值，不瞬跳。
  */
 import * as THREE from 'three';
+import type { InteriorViews } from '../config/vehicles';
 import { clamp } from '../util/math';
 
-export type CameraMode = 'orbit' | 'chase' | 'hood' | 'cabin' | 'side' | 'crash';
+export type CameraMode =
+  | 'orbit'
+  | 'chase'
+  | 'hood'
+  | 'cabin'
+  | 'cabinDriver'
+  | 'cabinPassenger'
+  | 'cabinRear'
+  | 'side'
+  | 'crash';
 
 /** V 键在 ACCEL/BRAKE 段可循环的视角（orbit 仅供菜单/结算） */
 export const CYCLE_VIEWS: readonly CameraMode[] = ['chase', 'hood', 'cabin', 'side'];
+
+/** 车内机位集合（前挡遮挡件要在这些模式下隐藏；自由视角走「转头」而非「环绕」） */
+const INTERIOR_MODES: ReadonlySet<CameraMode> = new Set<CameraMode>([
+  'cabin',
+  'cabinDriver',
+  'cabinPassenger',
+  'cabinRear'
+]);
+
+/** 是否车内机位（前挡从内部看是一块灰板，需隐藏；拖拽=转头而非环绕） */
+export function isInteriorMode(mode: CameraMode): boolean {
+  return INTERIOR_MODES.has(mode);
+}
+
+/** 按车型生成 V 键循环表：V800 5 档（含 orbit）；R7 7 档（三内饰机位） */
+export function cycleViewsFor(hasInteriorViews: boolean): readonly CameraMode[] {
+  return hasInteriorViews
+    ? ['chase', 'hood', 'cabinDriver', 'cabinPassenger', 'cabinRear', 'orbit', 'side']
+    : ['chase', 'hood', 'cabin', 'orbit', 'side'];
+}
 
 interface ModePose {
   offset: THREE.Vector3;
@@ -40,6 +70,17 @@ const POSE: ModePose = {
   near: 0.1,
   local: false
 };
+
+/**
+ * 内置车内机位（未注入 interiorViews 时的统一回退 = 原 cabin 偏移）
+ *
+ * R15 实证：原眼点 (−0.55, 1.33, −0.58) 落在**第一排靠背前方 12cm**——
+ * leather-warm 合批（含菱格座椅）世界 z 从 −0.456 起，眼点 −0.58 正好贴着靠背，
+ * 车里看到的那块「中央隔板实体模块」就是它（挂上参考图后被读成一面绗缝大墙）。
+ * 眼点前移 27cm 到 −0.85 越过靠背，并略降 5cm，正前方视野才落到仪表台+路面上。
+ */
+const CABIN_EYE: readonly [number, number, number] = [-0.55, 1.28, -0.85];
+const CABIN_TARGET: readonly [number, number, number] = [-0.42, 1.02, -9];
 
 const MODES: Record<CameraMode, (speed: number, portrait: boolean, time: number) => void> = {
   orbit: (_speed, portrait, time) => {
@@ -82,13 +123,16 @@ const MODES: Record<CameraMode, (speed: number, portrait: boolean, time: number)
     // 且眼点 z=-0.45 落在驾驶座靠背实体内部 → 半屏被一块皮革/台面大板占满）。
     // 现眼点前移到座椅壳外（射线扫描 minDist 0.15m 只碰到透明的侧窗玻璃），
     // 抬高到 1.27 使台面只压住画面底部约 1/4，注视点略下压看前方路面。
-    POSE.offset.set(-0.55, 1.33, -0.58);
-    POSE.look.set(-0.42, 1.04, -10);
+    POSE.offset.set(...CABIN_EYE);
+    POSE.look.set(...CABIN_TARGET);
     POSE.fov = 68;
     POSE.k = 4;
     POSE.near = 0.05;
     POSE.local = true;
   },
+  cabinDriver: () => setInteriorPose('driver'),
+  cabinPassenger: () => setInteriorPose('passenger'),
+  cabinRear: () => setInteriorPose('rear'),
   side: () => {
     // 车侧平行跟拍机位
     POSE.offset.set(4.6, 1.5, 0.6);
@@ -110,6 +154,30 @@ const MODES: Record<CameraMode, (speed: number, portrait: boolean, time: number)
 
 const IDENT = new THREE.Quaternion();
 const UP = new THREE.Vector3(0, 1, 0);
+
+/**
+ * 装配注入的内饰三机位（模块级单例：进程内只有一个 rig，见 Game）。
+ * 未注入时各槽位回退到内置 cabin 偏移（CABIN_EYE/CABIN_TARGET）。
+ */
+let INTERIOR_VIEWS: InteriorViews | null = null;
+
+function setInteriorPose(slot: keyof InteriorViews): void {
+  const v = INTERIOR_VIEWS?.[slot];
+  if (!v) {
+    POSE.offset.set(...CABIN_EYE);
+    POSE.look.set(...CABIN_TARGET);
+  } else {
+    // 装配层给的是**装配局部坐标**（spec 口径：+Z 车头）。运行时 POSE 是**世界偏移**
+    // （Game 传入的 carQuat 取 root.quaternion = 恒等，车身 π 偏航在 body 内部），
+    // 两者差一个绕 Y 的 180°：x、z 全部取反。内置 CABIN_EYE 已是反好的世界值。
+    POSE.offset.set(-v.eye[0], v.eye[1], -v.eye[2]);
+    POSE.look.set(-v.target[0], v.target[1], -v.target[2]);
+  }
+  POSE.fov = 68;
+  POSE.k = 4;
+  POSE.near = 0.05;
+  POSE.local = true;
+}
 /** 自由视角限位：偏航 ±225°（可绕到车后再多半圈）、俯仰 ±63°（防过顶翻转/钻地） */
 const YAW_LIMIT = Math.PI * 1.25;
 const PITCH_LIMIT = 1.1;
@@ -131,10 +199,25 @@ export class CameraRig {
   private dragging = false;
   private tmpSph = new THREE.Spherical();
   private tmpRight = new THREE.Vector3();
+  /** 车型视距微调（profile.cameraScale ?? 1），只作用于外部机位 */
+  private viewScale = 1;
 
   constructor(aspect: number) {
     this.camera = new THREE.PerspectiveCamera(55, aspect, 0.1, 12000);
     this.camera.position.copy(this.offset);
+  }
+
+  /**
+   * 注入装配局部坐标的三个内饰机位（CarLike.interiorViews?）。
+   * 传 null / 未调用 → cabinDriver/Passenger/Rear 退回内置 cabin 偏移（不会白屏）。
+   */
+  setInteriorViews(views: InteriorViews | null): void {
+    INTERIOR_VIEWS = views;
+  }
+
+  /** 车型视距微调（profile.cameraScale；默认 1 = 原机位距离） */
+  setViewScale(scale: number): void {
+    this.viewScale = scale > 0 ? scale : 1;
   }
 
   setMode(mode: CameraMode): void {
@@ -186,15 +269,18 @@ export class CameraRig {
     MODES[this.mode](speed, portrait, this.time);
     const pose = POSE;
 
-    // 局部视角（hood/cabin/side）偏移随车体朝向旋转
+    // 局部视角（hood/cabin*/side）偏移随车体朝向旋转
     const q = pose.local ? carQuat : IDENT;
     const off = this.tmpOffset.copy(pose.offset).applyQuaternion(q);
     const look = this.tmpLook.copy(pose.look).applyQuaternion(q);
+    // 车型视距微调（profile.cameraScale，默认 1）：只作用于**外部**机位的机位距离，
+    // 车内机位不动 —— 眼点是装配给的实测坐标，缩放会把相机塞进座椅/台面里。
+    if (this.viewScale !== 1 && !isInteriorMode(this.mode)) off.multiplyScalar(this.viewScale);
 
-    // 自由视角覆盖层：第一人称（hood/cabin）偏转视线方向；外部机位绕锚点环绕 + 缩放。
+    // 自由视角覆盖层：第一人称（hood/cabin*）偏转视线方向；外部机位绕锚点环绕 + 缩放。
     // 叠加在既有阻尼机位系统之上，不改动任何原插值逻辑（每帧零分配）。
     if (this.userYaw !== 0 || this.userPitch !== 0 || this.userZoom !== 1) {
-      if (this.mode === 'hood' || this.mode === 'cabin') {
+      if (isInteriorMode(this.mode) || this.mode === 'hood') {
         if (this.userYaw !== 0) look.applyAxisAngle(UP, this.userYaw);
         if (this.userPitch !== 0) {
           const right = this.tmpRight.copy(look).cross(UP).normalize();

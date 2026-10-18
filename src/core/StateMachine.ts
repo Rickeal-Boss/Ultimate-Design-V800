@@ -8,7 +8,8 @@
  * `brake_pedal_failed`；翻滚演出只保留给撞路障。
  * 物理推进全部委托 physics/ 纯函数。
  */
-import { BRAKE, MS_TO_KMH, TRACK, VEHICLE, calcScore } from '../config/physics';
+import { BRAKE, MS_TO_KMH, TRACK, calcScore } from '../config/physics';
+import { VEHICLE_PROFILES, type VehicleProfile } from '../config/vehicles';
 import {
   createPedalState,
   redundancyDecel,
@@ -77,6 +78,8 @@ export class StateMachine {
   phase: Phase = 'menu';
   vehicle: VehicleState = createVehicleState();
   pedal: PedalState = createPedalState();
+  /** 当前档位（默认 V800 —— 不传时全部行为与 R15 之前逐位一致） */
+  profile: VehicleProfile = VEHICLE_PROFILES.v800;
 
   brakeElapsed = 0;
   v0Kmh = 0;
@@ -100,6 +103,15 @@ export class StateMachine {
   private samples: Sample[] = [];
   private sampleTimer = 0;
 
+  constructor(profile: VehicleProfile = VEHICLE_PROFILES.v800) {
+    this.profile = profile;
+  }
+
+  /** 切档位（选车后重建会话前调用；不复位行驶状态） */
+  configure(profile: VehicleProfile = VEHICLE_PROFILES.v800): void {
+    this.profile = profile;
+  }
+
   get speedKmh(): number {
     return this.vehicle.speed * MS_TO_KMH;
   }
@@ -111,7 +123,7 @@ export class StateMachine {
 
   /** 是否已达电子限速稳态（自动切入刹车用，留 0.5% 余量防抖） */
   get atLimiter(): boolean {
-    return this.speedKmh >= VEHICLE.maxSpeedKmh * 0.995;
+    return this.speedKmh >= this.profile.maxSpeedKmh * 0.995;
   }
 
   get distanceToBarrier(): number {
@@ -206,16 +218,29 @@ export class StateMachine {
   }
 
   private stepBraking(dt: number, input: SessionInput, events: GameEvent[]): void {
-    // 踏板断裂后驾驶员踩空：刹车输入失效，制动力全部来自冗余回路
+    // 踏板断裂后驾驶员踩空：刹车输入失效，制动力全部来自冗余回路。
+    // R7 档位（brakeBreakable=false）永远不会 snapped ⇒ driverBrake 恒为输入值，
+    // stepPedal 也不会返回 true ⇒ 不派发 pedal_snap、结算 degraded 恒为 false。
     const driverBrake = this.pedal.snapped ? 0 : Math.max(0, Math.min(1, input.brake));
-    const justSnapped = stepPedal(this.pedal, dt, driverBrake, this.brakeElapsed);
-    stepVehicle(this.vehicle, dt, {
-      throttle: 0, // 刹车段油门锁定 0
-      brake: driverBrake,
-      powerCut: true,
-      pedalForce: this.pedal.pedalForce,
-      redundancyDecel: redundancyDecel(this.pedal)
-    });
+    const justSnapped = stepPedal(
+      this.pedal,
+      dt,
+      driverBrake,
+      this.brakeElapsed,
+      this.profile.brakeBreakable
+    );
+    stepVehicle(
+      this.vehicle,
+      dt,
+      {
+        throttle: 0, // 刹车段油门锁定 0
+        brake: driverBrake,
+        powerCut: true,
+        pedalForce: this.pedal.pedalForce,
+        redundancyDecel: redundancyDecel(this.pedal)
+      },
+      this.profile
+    );
     this.brakeElapsed += dt;
     // 峰值力在断裂瞬间达到 breakForceN（此后踏板力归零，故断裂后须显式取满值）
     this.peakForce = Math.max(
@@ -271,6 +296,8 @@ export class StateMachine {
     if (this.v0Kmh > 0) this.recordSample();
     const stopSeconds = Math.round(this.brakeElapsed * 1000) / 1000;
     const v0Kmh = Math.round(this.v0Kmh * 10) / 10;
+    // R7（brakeBreakable=false）踏板永不断裂 ⇒ snapped 恒 false ⇒ degraded 恒 false，
+    // 结算永远走成功分支；V800 语义不变。
     const degraded = this.pedal.snapped;
     this.lastResult = {
       success,

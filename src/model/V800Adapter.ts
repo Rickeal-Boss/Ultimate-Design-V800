@@ -10,6 +10,7 @@ import { carTextureSizeFor, type QualityTier } from '../config/quality';
 import { damp, makeLcg } from '../util/math';
 import { mergeSafe } from '../util/geo';
 import { batchMergeStatic, UV_CONTENT_MATERIAL_IDS } from './batchMerge';
+import { applyReferenceTextures } from './refTextures';
 import {
   createZunjieV800LuxuryMPVModel,
   type ProceduralModelRuntime,
@@ -45,6 +46,16 @@ export interface CarLike {
   resetPedal(): void;
   update(camera: THREE.Camera, dt: number): void;
   dispose(): void;
+  /**
+   * 【可选】装配局部坐标（= spec 坐标，未含 body.rotation.y=π）下的内饰机位。
+   * R7 提供 driver/passenger/rear 三处（Game → CameraRig.setInteriorViews 消费）；
+   * V800 不提供 → CameraRig 只走内置 `cabin` 单机位。
+   * 结构型声明（不 import config/vehicles）避免装配层反向依赖运行时配置。
+   */
+  readonly interiorViews?: Record<
+    'driver' | 'passenger' | 'rear',
+    { eye: [number, number, number]; target: [number, number, number] }
+  >;
 }
 
 const MS_TO_RPM_SCALE = 2.6; // 视觉轮速系数（车轮半径 0.382，弧度 = dist/r，视觉略放大）
@@ -3255,6 +3266,23 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
       hubMat.map = hubTex;
       hubMat.needsUpdate = true;
       hubMesh.material = hubMat;
+    }
+  }
+
+  // ---- R15 参考图贴图接线（src/assets/ref/*.jpg）----
+  // 三重顺序契约（违反任一条都会静默失效）：
+  //  ① 必须在「R12b 内饰材质纯化」之后 —— 纯化层会撤 map/normalMap 回策展纯色，
+  //     且 applySurface 的 `!mat.map` 守卫会把工厂图集重新挂回去，只有在这之后
+  //     挂的贴图才是最终态；
+  //  ② 必须在 batchMergeStatic **之前** —— 贴图按 userData.sculptComponent.id
+  //     定位 mesh，合批后组件身份丢失（只剩材质），函数会直接拒动；
+  //  ③ 必须在 R13 程序化内饰贴图之后 —— 两者写同一批材质（座椅/门板/仪表台），
+  //     参考图是「实拍优先」的终局层，顺序反了会被程序化菱格覆盖。
+  // 贴图异步解码：未就绪时保持程序化纹理并在图到后补挂（优雅降级，绝不黑屏）。
+  {
+    const mounted = applyReferenceTextures(model, { tier, verbose: false });
+    if (mounted.length > 0) {
+      console.info('[V800Adapter] 参考图贴图挂载材质：', mounted.join(', '));
     }
   }
 

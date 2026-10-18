@@ -3,6 +3,7 @@
  * 得分预览 / 切入刹车按钮 / 5 视角切换按钮组 / 倒计时 / Toast。
  */
 import { BRAKE, VEHICLE } from '../config/physics';
+import { resolveVehicleId, type VehicleId } from '../config/vehicles';
 import type { CameraMode } from '../render/CameraRig';
 import { byId, el, setVisible } from './dom';
 
@@ -34,7 +35,8 @@ export interface HudCallbacks {
 }
 
 /**
- * HUD 视角按钮组（5 视角，crash 为自动机位不设按钮）
+ * HUD 视角按钮组（5 视角，crash 为自动机位不设按钮）。
+ * V800：追随 / 机盖 / 车内 / 环绕 / 侧跟。
  */
 const VIEW_BUTTONS: ReadonlyArray<readonly [CameraMode, string]> = [
   ['chase', '追随'],
@@ -43,6 +45,27 @@ const VIEW_BUTTONS: ReadonlyArray<readonly [CameraMode, string]> = [
   ['orbit', '环绕'],
   ['side', '侧跟']
 ];
+
+/**
+ * R7 追加三个内饰机位（智界R7 装配提供 driver/passenger/rear 眼点）。
+ * 「切车不存在的按钮不渲染」：V800 下这三个按钮根本不会进 DOM，
+ * 避免用户点到一台不存在的机位（CameraRig 会退回 cabin 偏移 ≡「看到 V800 车内」，
+ * 那属于误导）。
+ */
+const VIEW_BUTTONS_R7: ReadonlyArray<readonly [CameraMode, string]> = [
+  ['chase', '追随'],
+  ['hood', '机盖'],
+  ['cabinDriver', '主驾'],
+  ['cabinPassenger', '副驾'],
+  ['cabinRear', '后排'],
+  ['orbit', '环绕'],
+  ['side', '侧跟']
+];
+
+/** 纯函数（可单测）：按车型给出该渲染哪些视角按钮 */
+export function viewButtonsFor(id: VehicleId): ReadonlyArray<readonly [CameraMode, string]> {
+  return id === 'r7' ? VIEW_BUTTONS_R7 : VIEW_BUTTONS;
+}
 
 /**
  * 热保护提示文案（纯函数，可单测）。
@@ -149,6 +172,8 @@ export class Hud {
    *  按「值未变则跳过」门控（静态相位/稳态时几乎零 DOM 写入） */
   private textCache = new Map<HTMLElement, string>();
   private lastForceHeight = '';
+  /** 当前车型（决定渲染哪些视角按钮；一局内不变） */
+  readonly vehicleId: VehicleId;
 
   private setText(node: HTMLElement, text: string): void {
     if (this.textCache.get(node) !== text) {
@@ -159,6 +184,7 @@ export class Hud {
 
   constructor(callbacks: HudCallbacks = {}) {
     this.root = byId('hud');
+    this.vehicleId = resolveVehicleId();
 
     const left = el('div', 'hud-left');
     this.speed = el('div', 'hud-speed mono', '0');
@@ -193,9 +219,9 @@ export class Hud {
     forceWrap.append(forceLabel, track, this.forceValue);
     this.forceBox = forceWrap;
 
-    // 视角按钮组（顶部居中）
+    // 视角按钮组（顶部居中）；V800 5 个 / R7 7 个（多三个内饰机位）
     const viewGroup = el('div', 'view-group');
-    for (const [mode, label] of VIEW_BUTTONS) {
+    for (const [mode, label] of viewButtonsFor(this.vehicleId)) {
       const btn = el('button', 'view-btn') as HTMLButtonElement;
       btn.type = 'button';
       btn.textContent = label;

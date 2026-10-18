@@ -1,0 +1,29 @@
+GOTO http://[::1]:4317/preview.html#assembled&vehicle=r7 MODE=meshes
+READY
+MESH 座舱容器（macro，几何退化为 2cm 薄片） comp=cabin-interior mat=matte-black vis=false inst=false tris=288 wmin=[-0.01,-0.01,0] wmax=[0.01,0.01,0]
+MESH 15.6 寸悬浮中控屏 comp=center-screen mat=screen-ui vis=true inst=false tris=288 wmin=[-0.172,0.941,-0.73] wmax=[0.172,1.139,-0.702]
+MESH 10.25 寸仪表屏 comp=cluster-screen mat=gauge-ui vis=true inst=false tris=288 wmin=[-0.473,0.905,-0.803] wmax=[-0.247,1.031,-0.781]
+MESH 后排控制屏 comp=rear-screen mat=screen-ui vis=true inst=false tris=288 wmin=[-0.1,0.703,0.582] wmax=[0.1,0.817,0.594]
+MESH 双辐方向盘（紫真皮） comp=steering mat=leather-plum vis=true inst=false tris=1152 wmin=[-0.576,0.716,-0.719] wmax=[-0.144,1.134,-0.561]
+MESH 方向盘中央板（米白） comp=steering-hub mat=leather-ivory vis=true inst=false tris=240 wmin=[-0.46,0.822,-0.697] wmax=[-0.26,1.026,-0.591]
+MESH 方向盘盾形标 comp=steering-badge mat=chrome vis=true inst=false tris=288 wmin=[-0.391,0.909,-0.621] wmax=[-0.329,0.983,-0.597]
+MESH batch/matte-black comp= mat=matte-black vis=true inst=false tris=4952 wmin=[-0.99,0.178,-2.483] wmax=[0.99,1.566,2.48]
+MESH batch/leather-plum comp= mat=leather-plum vis=true inst=false tris=880 wmin=[-0.896,0.7,-0.995] wmax=[0.896,1.052,1.28]
+MESH batch/leather-ivory comp= mat=leather-ivory vis=true inst=false tris=3256 wmin=[-0.903,0.3,-1] wmax=[0.903,1.515,1.28]
+ALL DONE
+GOTO http://[::1]:4317/preview.html#assembled&vehicle=r7 MODE=rayfan
+READY
+RAY eye=[-0.36,1.225,-0.02] -> road=[-0.16,0.03,-30.02] dir=[0.0067,-0.0398,-0.9992]
+  HIT d=0.688 id=windshield|glass-clear p=[-0.355,1.198,-0.707]
+  HIT d=0.738 id=windshield|glass-clear p=[-0.355,1.196,-0.757]
+PITCHFAN (0°=水平, 负=向下): pitch | nearest hit | dist | hitY
+  pitch=12° windshield|glass-clear@0.48m hitY=1.324
+  pitch=-9° steering|leather-plum@0.69m hitY=1.117
+  pitch=-13° batch/paint-green|paint-green@0.65m hitY=1.08
+ANGLES: (相对水平线, 正=向下俯角)
+  注视点 tgt俯角=7.2°
+  tri-screen顶沿(1.2875,z-1.42)俯角=-2.56°  底沿(0.9725)俯角=10.22°
+  dash-upper顶面(0.985,前缘z-1.32)俯角=10.46°  后缘(z-1.78)俯角=7.77°
+  dash-lower底(0.67,z-1.45)俯角=21.21°
+  FOV=68 半垂直FOV=34.0° 注视俯角含在内
+ALL DONE
