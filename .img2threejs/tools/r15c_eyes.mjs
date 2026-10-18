@@ -23,7 +23,8 @@ for (const x of XS) {
   for (const z of EYES) {
     const page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 760, deviceScaleFactor: 1 });
-    const hash = `#vehicle=v800&eye=${x},1.26,${z},${TGT}`;
+    page.on('console', (m) => { const t = m.text(); if (/cabin|batch|refTextures|Adapter/.test(t)) log('  ' + t.slice(0, 160)); });
+    const hash = `#vehicle=v800&eye=${x},${process.env.EY || '1.26'},${z},${TGT}`;
     await page.goto(URLB + hash, { waitUntil: 'domcontentloaded', timeout: 90000 });
     await page.waitForFunction(() => !!document.querySelector('.btn.primary'), { timeout: 120000, polling: 400 });
     await page.evaluate(() => document.querySelector('.btn.primary')?.click());

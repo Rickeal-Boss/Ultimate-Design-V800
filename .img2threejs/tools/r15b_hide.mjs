@@ -14,9 +14,13 @@ fs.mkdirSync(OUT, { recursive: true });
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const log = (s) => console.log(s);
 
+const VEH = process.env.VEH || 'v800';
+const VIEW = process.env.VIEW || (VEH === 'r7' ? 'cabinDriver' : 'cabin');
 const CASES = (process.env.CASES || 'base,leather-warm,leather-dark,leather-ivory')
   .split(',')
-  .map((s) => (s === 'base' ? { name: 'cab_base', hash: '#vehicle=v800' } : { name: `cab_no_${s}`, hash: `#vehicle=v800&hidemat=${s}` }));
+  .map((s) => (s === 'base'
+    ? { name: `${VEH}_base`, hash: `#vehicle=${VEH}` }
+    : { name: `${VEH}_no_${s}`, hash: `#vehicle=${VEH}&hidemat=${s}` }));
 
 const browser = await puppeteer.connect({ browserURL: `http://127.0.0.1:${CDP}`, defaultViewport: null });
 
@@ -37,11 +41,11 @@ for (const c of CASES) {
     { timeout: 90000, polling: 400 }
   );
   await wait(1200);
-  const ok = await page.evaluate(() => {
-    const b = document.querySelector('.view-btn[data-view="cabin"]');
+  const ok = await page.evaluate((viewSel) => {
+    const b = document.querySelector(`.view-btn[data-view="${viewSel}"]`);
     if (b) { b.click(); return true; }
     return false;
-  });
+  }, (process.env.VIEW || 'cabin'));
   await wait(2000);
   const f = path.join(OUT, c.name + '.png');
   fs.writeFileSync(f, await page.screenshot({ type: 'png' }));

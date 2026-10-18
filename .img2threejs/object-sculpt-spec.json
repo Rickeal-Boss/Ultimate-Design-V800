@@ -18797,6 +18797,431 @@
    }
   },
   {
+   "id": "console-riser",
+   "name": "中控台隆起（扶手前段）",
+   "level": "meso",
+   "role": "detail",
+   "importance": 0.8,
+   "confidence": 0.85,
+   "primitive": "extrude",
+   "topologyClass": "assembled-solid",
+   "topologyRationale": "box 适合该部件的可展拓扑",
+   "geometryDescriptor": {
+    "topologyIntent": "rounded-rectangle extrusion: perimeter corners radiused with 4-facet arcs (22.5deg per facet) instead of hard 90deg box edges",
+    "edgeTreatment": {
+     "type": "rounded",
+     "bevelRadius": 0.035,
+     "segments": 4
+    },
+    "deformationStack": [],
+    "uvStrategy": "generated procedural coordinates",
+    "normalStrategy": "vertex normals from generated geometry",
+    "profile2D": {
+     "points": [
+      [
+       0.416667,
+       -0.5
+      ],
+      [
+       0.448557,
+       -0.492164
+      ],
+      [
+       0.475592,
+       -0.469849
+      ],
+      [
+       0.493657,
+       -0.436453
+      ],
+      [
+       0.5,
+       -0.397059
+      ],
+      [
+       0.5,
+       0.397059
+      ],
+      [
+       0.493657,
+       0.436453
+      ],
+      [
+       0.475592,
+       0.469849
+      ],
+      [
+       0.448557,
+       0.492164
+      ],
+      [
+       0.416667,
+       0.5
+      ],
+      [
+       -0.416667,
+       0.5
+      ],
+      [
+       -0.448557,
+       0.492164
+      ],
+      [
+       -0.475592,
+       0.469849
+      ],
+      [
+       -0.493657,
+       0.436453
+      ],
+      [
+       -0.5,
+       0.397059
+      ],
+      [
+       -0.5,
+       -0.397059
+      ],
+      [
+       -0.493657,
+       -0.436453
+      ],
+      [
+       -0.475592,
+       -0.469849
+      ],
+      [
+       -0.448557,
+       -0.492164
+      ],
+      [
+       -0.416667,
+       -0.5
+      ]
+     ],
+     "depth": 1
+    }
+   },
+   "parent": "cabin-interior",
+   "attachment": null,
+   "dimensions": {
+    "width": 0.36,
+    "height": 0.16,
+    "depth": 0.52,
+    "units": "meters",
+    "confidence": 0.85
+   },
+   "transform": {
+    "position": [
+     0,
+     0.86,
+     1.26
+    ],
+    "rotation": [
+     0,
+     0,
+     0
+    ],
+    "scale": [
+     0.36,
+     0.16,
+     0.52
+    ]
+   },
+   "actionProfile": {
+    "animationRole": "static",
+    "pivot": {
+     "mode": "center",
+     "localPosition": [
+      0,
+      0,
+      0
+     ],
+     "axis": [
+      0,
+      1,
+      0
+     ],
+     "confidence": 0.92
+    },
+    "transformChannels": {
+     "translate": false,
+     "rotate": false,
+     "scale": false,
+     "bend": false,
+     "twist": false,
+     "detach": false,
+     "visibility": true,
+     "materialState": true
+    },
+    "sockets": [],
+    "collider": {
+     "type": "box",
+     "offset": [
+      0,
+      0,
+      0
+     ],
+     "scale": [
+      1,
+      1,
+      1
+     ],
+     "isTrigger": false,
+     "notes": ""
+    },
+    "constraints": [],
+    "destruction": {
+     "breakable": false,
+     "fractureGroup": "root",
+     "seamRefs": [],
+     "detachableFragments": [],
+     "breakImpulse": 0,
+     "debrisMaterial": "base"
+    }
+   },
+   "material": "wood",
+   "materialLayers": [
+    "wood"
+   ],
+   "deformations": [],
+   "joints": [],
+   "seams": [],
+   "localFeatures": [],
+   "surfaceDetail": {
+    "macroRoughness": 0,
+    "microRoughness": 0,
+    "bumpAmplitude": 0,
+    "normalPattern": "",
+    "displacementPattern": "",
+    "occlusionPattern": "",
+    "edgeWearPattern": "",
+    "notes": ""
+   },
+   "evidenceRefs": [
+    "img-dash",
+    "img-popup1"
+   ],
+   "details": [
+    "d-crystal-shift"
+   ],
+   "fidelityTier": "hero",
+   "colorMaterialRecipe": {
+    "dominantAlbedo": "rgba(107, 52, 24, 1.0)",
+    "secondaryAlbedo": "rgba(138, 74, 34, 1.0)",
+    "materialClass": "wood",
+    "materialClassConfidence": 0.9
+   }
+  },
+  {
+   "id": "dash-vent-center",
+   "name": "中央圆形出风口",
+   "level": "micro",
+   "role": "detail",
+   "importance": 0.7,
+   "confidence": 0.85,
+   "primitive": "lathe",
+   "topologyClass": "assembled-solid",
+   "topologyRationale": "薄板/回转体，硬表面可展拓扑",
+   "geometryDescriptor": {
+    "topologyIntent": "lathe cylinder with filleted end rims; sidewall-to-face transition radiused so no hard 90deg shoulder remains",
+    "edgeTreatment": {
+     "type": "rounded",
+     "bevelRadius": 0.0063,
+     "segments": 4
+    },
+    "deformationStack": [],
+    "uvStrategy": "generated procedural coordinates",
+    "normalStrategy": "vertex normals from generated geometry",
+    "latheProfile": {
+     "points": [
+      [
+       0.0002,
+       -0.5
+      ],
+      [
+       0.4336842105263158,
+       -0.5
+      ],
+      [
+       0.459062,
+       -0.486298
+      ],
+      [
+       0.480577,
+       -0.447279
+      ],
+      [
+       0.494952,
+       -0.388883
+      ],
+      [
+       0.5,
+       -0.32
+      ],
+      [
+       0.5,
+       0.32
+      ],
+      [
+       0.494952,
+       0.388883
+      ],
+      [
+       0.480577,
+       0.447279
+      ],
+      [
+       0.459062,
+       0.486298
+      ],
+      [
+       0.433684,
+       0.5
+      ],
+      [
+       0.0002,
+       0.5
+      ]
+     ],
+     "segments": 36
+    }
+   },
+   "parent": "cabin-interior",
+   "attachment": {
+    "parentSocket": "tunnel-front.top",
+    "localStart": [
+     0,
+     0,
+     2.1
+    ],
+    "localEnd": [
+     0,
+     0,
+     2.1
+    ],
+    "contactType": "flush",
+    "embedDepth": 0.006,
+    "gapTolerance": 0.002
+   },
+   "dimensions": {
+    "width": 0.18,
+    "height": 0.05,
+    "depth": 0.18,
+    "units": "meters",
+    "confidence": 0.85
+   },
+   "transform": {
+    "position": [
+     0,
+     0.99,
+     1.33
+    ],
+    "rotation": [
+     0,
+     0,
+     0
+    ],
+    "scale": [
+     0.18,
+     0.05,
+     0.18
+    ]
+   },
+   "actionProfile": {
+    "animationRole": "counter-rotate-lock",
+    "pivot": {
+     "mode": "center",
+     "localPosition": [
+      0,
+      0,
+      0
+     ],
+     "axis": [
+      0,
+      0,
+      1
+     ],
+     "confidence": 0.9
+    },
+    "transformChannels": {
+     "translate": false,
+     "rotate": true,
+     "scale": false,
+     "bend": false,
+     "twist": false,
+     "detach": false,
+     "visibility": true,
+     "materialState": false
+    },
+    "sockets": [],
+    "collider": {
+     "type": "box",
+     "offset": [
+      0,
+      0,
+      0
+     ],
+     "scale": [
+      1,
+      1,
+      1
+     ],
+     "isTrigger": false,
+     "notes": "集成层令其世界朝向恒定（悬浮标）"
+    },
+    "constraints": [],
+    "destruction": {
+     "breakable": false,
+     "fractureGroup": "root",
+     "seamRefs": [],
+     "detachableFragments": [],
+     "breakImpulse": 0,
+     "debrisMaterial": "base"
+    }
+   },
+   "material": "chrome",
+   "materialLayers": [
+    "chrome"
+   ],
+   "deformations": [],
+   "joints": [],
+   "seams": [],
+   "localFeatures": [
+    {
+     "name": "圆柱水晶底座",
+     "kind": "crystal",
+     "note": "P1_中岛-中控旋钮.webp：旋钮下为短圆柱水晶底座（transmission 材质），承托球体旋钮"
+    }
+   ],
+   "surfaceDetail": {
+    "macroRoughness": 0,
+    "microRoughness": 0,
+    "bumpAmplitude": 0,
+    "normalPattern": "",
+    "displacementPattern": "",
+    "occlusionPattern": "",
+    "edgeWearPattern": "",
+    "notes": "补齐 crystal-shifter 球体下方底座，消除悬浮"
+   },
+   "evidenceRefs": [
+    "img-console-island",
+    "img-cutaway"
+   ],
+   "details": [
+    "d-crystal-shift"
+   ],
+   "fidelityTier": "hero",
+   "colorMaterialRecipe": {
+    "dominantAlbedo": "rgba(244, 239, 232, 1.0)",
+    "secondaryAlbedo": "rgba(244, 239, 232, 1.0)",
+    "materialClass": "glass",
+    "materialClassConfidence": 0.9,
+    "note": "补齐 crystal-shifter 球体下方底座，消除悬浮"
+   },
+   "notes": "IN-37/L1/L2：B柱/侧壁垂直多面晶体柱，暖光内透；x=±0.875（门内饰板内表面 0.905 以内）、y 1.11–1.45、z=0.42（B柱位）。 [复测 x→±0.870] 环带外径 0.031，与门内饰板内表面 0.905 留 4mm 间隙。"
+  },
+  {
    "id": "crystal-shifter",
    "name": "水晶换挡旋钮",
    "level": "micro",

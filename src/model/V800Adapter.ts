@@ -57,10 +57,10 @@ export interface CarLike {
     { eye: [number, number, number]; target: [number, number, number] }
   >;
   /**
-   * 【可选】车内机位专用遮挡件（第一排靠背/头枕）。Game 在 cabin 系机位期间隐藏它们，
-   * 让驾驶视野不被自家座椅挡死（座舱机位通行做法）。合批时必须排除，否则身份丢失。
+   * 【可选】车内机位专用遮挡**材质**（第一排座椅独占克隆）。Game 在 cabin 系机位期间
+   * 把它 `visible=false`，整批不画 —— 与合批实现解耦（按对象隐藏会被合批吞并）。
    */
-  readonly cabinOccluders?: readonly THREE.Object3D[];
+  readonly cabinOccluderMaterials?: readonly THREE.Material[];
 }
 
 const MS_TO_RPM_SCALE = 2.6; // 视觉轮速系数（车轮半径 0.382，弧度 = dist/r，视觉略放大）
@@ -3291,35 +3291,43 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
     }
   }
 
-  // ---- R15：车内机位遮挡件保留可寻址（座椅靠背/头枕） ----
-  // 消去法实证（`#hidemat=leather-warm` 前后对照，verify/r15b/）：cabin 机位正前方
-  // 那两块「绗缝大板」就是第一排靠背+头枕（材质 leather-warm）。它们合批后组件身份
-  // 丢失，无法按组件单独隐藏 —— 只有把它们排除在合批之外，运行时才能按机位切换可见性。
-  // 代价：多 ~4 个 draw call（4 件各成一组），换来「车内视角看得到路面与三联屏」。
-  // 整组第一排座椅（坐垫+靠背+头枕都是 leather-warm 绗缝大件）—— 座舱机位通行做法：
-  // 车内视角不画自己的座椅，否则左右两块靠背永远把画面下半切开。
-  const CABIN_OCCLUDER_IDS = [
-    'seat-driver',
-    'seat-passenger',
-    'seat-driver-back',
-    'seat-driver-headrest',
-    'seat-passenger-back',
-    'seat-passenger-headrest',
-  ] as const;
-  const cabinOccluders: THREE.Object3D[] = [];
-  for (const id of CABIN_OCCLUDER_IDS) {
-    const node = byId.get(id);
-    if (node) cabinOccluders.push(node);
-  }
+  // ---- R15c：第一排座椅专属材质实例（车内机位遮挡件的可靠开关）----
+  // 消去法实证（`#hidemat=leather-warm`，verify/r15b/）：cabin 机位正前方那两块「绗缝大板」
+  // 就是第一排座椅（坐垫+靠背+头枕）。座舱机位通行做法是**不画自己的座椅**。
+  //
+  // 为什么不用「排除合批 + visible=false」：合批器按对象列表跳过时仍会把子树 mesh 烘进
+  // 其它批次（R15 首版实测 = 隐藏无效，eye 后移到 −0.58 时座椅又冒出来）。
+  // 改用**材质身份**：给第一排座椅一个独占的材质克隆，合批必然把它分到独立 batch，
+  // 运行时 `material.visible = false` 这一批整体不画 —— 与合批实现解耦，稳定可靠。
+  // 代价：+1 draw call（三种机位共用一个专属 batch）。
+  const cabinSeatMat = (() => {
+    const src = (meshOf('seat-driver')?.material ?? meshOf('seat-passenger')?.material) as
+      | THREE.MeshPhysicalMaterial
+      | undefined;
+    if (!src) return null;
+    const clone = src.clone() as THREE.MeshPhysicalMaterial;
+    clone.userData.cabinHidable = true;
+    let assigned = 0;
+    for (const id of ['seat-driver', 'seat-passenger'] as const) {
+      const node = byId.get(id);
+      if (!node) {
+        console.warn('[V800Adapter] cabin occluder 组件缺失：', id);
+        continue;
+      }
+      node.traverse((o) => {
+        const mesh = o as THREE.Mesh;
+        if (mesh.isMesh) {
+          mesh.material = clone;
+          assigned++;
+        }
+      });
+    }
+    console.info(`[V800Adapter] cabin occluder 材质克隆 → ${assigned} 个 mesh`);
+    return clone;
+  })();
 
   const batchStats = batchMergeStatic(model, {
-    excludeObjects: [
-      ...wheels.map((w) => w.spin),
-      ...caps,
-      ...(gaugeMesh ? [gaugeMesh] : []),
-      pedal,
-      ...cabinOccluders,
-    ],
+    excludeObjects: [...wheels.map((w) => w.spin), ...caps, ...(gaugeMesh ? [gaugeMesh] : []), pedal],
     excludeMaterialIds: UV_CONTENT_MATERIAL_IDS
   });
   if (batchStats.problems.length > 0) {
@@ -3713,7 +3721,7 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
     root,
     body,
     wheels,
-    cabinOccluders,
+    cabinOccluderMaterials: cabinSeatMat ? [cabinSeatMat] : [],
     get currentHeat() {
       return heat;
     },

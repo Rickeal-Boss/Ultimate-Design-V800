@@ -79,8 +79,8 @@ const POSE: ModePose = {
  * 车里看到的那块「中央隔板实体模块」就是它（挂上参考图后被读成一面绗缝大墙）。
  * 眼点前移 27cm 到 −0.85 越过靠背，并略降 5cm，正前方视野才落到仪表台+路面上。
  */
-const CABIN_EYE: readonly [number, number, number] = [-0.55, 1.28, -0.85];
-const CABIN_TARGET: readonly [number, number, number] = [-0.42, 1.02, -9];
+const CABIN_EYE: readonly [number, number, number] = [-0.40, 1.32, -0.66];
+const CABIN_TARGET: readonly [number, number, number] = [-0.30, 1.02, -9];
 
 /**
  * QA 机位标定钩子：`#eye=x,y,z,tx,ty,tz` 覆盖内建 cabin 机位（世界坐标）。

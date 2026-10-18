@@ -137,8 +137,8 @@ export class Game {
   private probeTicks = 0;
   /** cabin 机位专用遮挡件（前挡玻璃），进入/离开车内视角时切换可见性 */
   private readonly windshieldMeshes: THREE.Mesh[] = [];
-  /** cabin 机位专用遮挡件（第一排靠背/头枕）—— 不进合批，可按机位单独隐藏 */
-  private readonly cabinOccluders: readonly THREE.Object3D[];
+  /** cabin 机位专用遮挡材质（第一排座椅独占克隆）—— 按材质开关，与合批解耦 */
+  private readonly cabinOccluderMaterials: readonly THREE.Material[];
   private windshieldHidden = false;
   /**
    * 复用同一份 HUD 载荷对象（perf-r14 热点分配清扫）：原先每帧 `hud.update({...})`
@@ -178,7 +178,10 @@ export class Game {
     this.waterway = new Waterway(this.scene);
     this.car = this.createCar();
     this.interiorViews = this.readInteriorViews();
-    this.cabinOccluders = this.car.cabinOccluders ?? [];
+    this.cabinOccluderMaterials = this.car.cabinOccluderMaterials ?? [];
+    if (import.meta.env.DEV) {
+      console.info(`[cabin] 遮挡材质 ${this.cabinOccluderMaterials.length} 个`);
+    }
     this.scene.add(this.car.root);
     // R14 座舱机位：从车内看，前挡（glass-clear，全车唯一）会糊成一块灰板
     // （env 反射 + 单面材质从背面看 = 半透明灰皮），驾驶视野被吃掉。
@@ -645,9 +648,9 @@ export class Game {
     if (wantHide !== this.windshieldHidden) {
       this.windshieldHidden = wantHide;
       for (const m of this.windshieldMeshes) m.visible = !wantHide;
-      // 第一排靠背/头枕：车内视角必须让开，否则驾驶视野正前方是两块绗缝大板
-      // （R15 消去法实证，见 verify/r15b/）。车外机位原样保留。
-      for (const o of this.cabinOccluders) o.visible = !wantHide;
+      // 第一排座椅：车内视角不画自己的座椅（否则正前方是两块绗缝大板）。
+      // R15c 实证：按对象隐藏会被合批吞并 → 走独占材质，整批开关。
+      for (const m of this.cabinOccluderMaterials) m.visible = !wantHide;
     }
     const speedBlur =
       pedaling && this.sm.phase !== 'countdown' ? Math.min(1, vehicle.speed / 72) ** 1.6 * 0.07 : 0;

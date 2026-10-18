@@ -724,7 +724,7 @@ C("cabin-floor", "座舱地板", "meso", "extrude", "cabin-interior", (0.890, 0,
 
 DASH_UPPER = ccw([(0.995, 0.955), (0.995, 1.070), (0.960, 1.112), (0.780, 1.122),
                   (0.716, 1.062), (0.716, 0.955)])
-C("dash-upper", "上仪表台（紫灰）", "meso", "extrude", "cabin-interior", (0.890, -0.110, 0),
+C("dash-upper", "上仪表台（紫灰）", "meso", "extrude", "cabin-interior", (0.890, -0.160, 0),
   dims=(1.78, 0.167, 0.279), rot=SIDE_ROT, mat="leather-plum", imp=0.95, conf=0.92, role="interior",
   topo="conforming-shell", topoR="仪表台上体侧视断面挤出（横贯 1.78m），上缘带 12mm 圆角",
   desc=extrude_desc(DASH_UPPER, 1.78, bevel=0.010, seg=2, intent="upper dash pad"),
@@ -733,7 +733,7 @@ C("dash-upper", "上仪表台（紫灰）", "meso", "extrude", "cabin-interior",
   evidence=["img-r7-dash", "img-r7-pass"], det=["d-dash-two-tone"])
 DASH_LOWER = ccw([(0.995, 0.955), (0.716, 0.955), (0.700, 0.900), (0.716, 0.740),
                   (0.995, 0.740)])
-C("dash-lower", "下仪表台（米白）", "meso", "extrude", "cabin-interior", (0.890, -0.110, 0),
+C("dash-lower", "下仪表台（米白）", "meso", "extrude", "cabin-interior", (0.890, -0.160, 0),
   dims=(1.78, 0.215, 0.295), rot=SIDE_ROT, mat="leather-ivory", imp=0.9, conf=0.9, role="interior",
   topo="conforming-shell", topoR="仪表台下体侧视断面挤出，膝部空间留 y0.74 以下",
   desc=extrude_desc(DASH_LOWER, 1.78, bevel=0.010, seg=2, intent="lower dash"),

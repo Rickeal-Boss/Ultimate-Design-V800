@@ -35,12 +35,12 @@ export const R7_BASE_YAW = Math.PI;
  */
 export const R7_INTERIOR_VIEWS = {
   driver: {
-    eye: [0.300, 1.240, 0.060] as [number, number, number],
-    target: [0.150, 0.985, 1.950] as [number, number, number],
+    eye: [0.300, 1.285, -0.090] as [number, number, number],
+    target: [0.150, 1.020, 1.950] as [number, number, number],
   },
   passenger: {
-    eye: [-0.300, 1.240, 0.060] as [number, number, number],
-    target: [-0.140, 0.985, 1.750] as [number, number, number],
+    eye: [-0.300, 1.285, -0.090] as [number, number, number],
+    target: [-0.140, 1.020, 1.750] as [number, number, number],
   },
   rear: {
     eye: [0.0, 1.230, -0.700] as [number, number, number],
@@ -588,23 +588,38 @@ export function createR7CarAdapter(tier: QualityTier = 'high'): CarLike {
     const node = byId.get(id);
     if (node) dynamicNodes.push(node);
   }
-  // R15：第一排靠背/头枕不进合批 —— 车内机位要按机位隐藏它们（否则主驾视野被自家靠背挡死）
-  const R7_CABIN_OCCLUDERS = [
-    'seat-driver-cushion',
-    'seat-driver-back',
-    'seat-driver-headrest',
-    'seat-passenger-cushion',
-    'seat-passenger-back',
-    'seat-passenger-headrest',
-  ] as const;
-  const cabinOccluders: THREE.Object3D[] = [];
-  for (const id of R7_CABIN_OCCLUDERS) {
-    const node = byId.get(id);
-    if (node) {
-      cabinOccluders.push(node);
-      dynamicNodes.push(node);
+  // R15c：第一排座椅独占材质 —— 车内机位按材质隐藏（按对象隐藏会被合批吞并）
+  const cabinSeatMat = (() => {
+    // 第一排座椅 + 前门内饰板：车内机位相机距门板仅 0.5m，而 R7 门板是素面 box，
+    // 在画面左侧读作一面白墙（参考图 6/8 的门板有紫色上沿+网罩+扶手，缺细节）。
+    // 座舱机位通行做法：近场门板不画，只留 A 柱与顶棚勾出座舱轮廓。
+    const ids = [
+      'seat-driver-cushion',
+      'seat-driver-back',
+      'seat-driver-headrest',
+      'seat-passenger-cushion',
+      'seat-passenger-back',
+      'seat-passenger-headrest',
+      'door-card-front-l',
+      'door-card-front-r',
+      'door-trim-front-l',
+      'door-trim-front-r',
+      'door-speaker-front-l',
+      'door-speaker-front-r',
+    ] as const;
+    const first = byId.get('seat-driver-cushion') as THREE.Mesh | undefined;
+    const src = (first?.material ?? null) as THREE.MeshPhysicalMaterial | null;
+    if (!src || !first?.isMesh) return null;
+    const clone = src.clone() as THREE.MeshPhysicalMaterial;
+    clone.userData.cabinHidable = true;
+    for (const id of ids) {
+      byId.get(id)?.traverse((o) => {
+        const mesh = o as THREE.Mesh;
+        if (mesh.isMesh) mesh.material = clone;
+      });
     }
-  }
+    return clone;
+  })();
   const mergeResult = batchMergeStatic(model, {
     excludeObjects: dynamicNodes,
     excludeMaterialIds: UV_CONTENT_MATERIAL_IDS,
@@ -629,7 +644,7 @@ export function createR7CarAdapter(tier: QualityTier = 'high'): CarLike {
     wheels,
     // R15：内饰三机位（装配局部坐标），由 Game → CameraRig.setInteriorViews 消费
     interiorViews: R7_INTERIOR_VIEWS,
-    cabinOccluders,
+    cabinOccluderMaterials: cabinSeatMat ? [cabinSeatMat] : [],
     get currentHeat(): number {
       return heat;
     },
