@@ -1,0 +1,345 @@
+VITE up
+EDGE spawned
+CDP up
+GOTO...
+SHOT hide0-none bytes=118341
+DONE
+WATCHDOG timeout
+VITE up
+EDGE spawned
+CDP up
+GOTO...
+SHOT hide0-none bytes=118341
+SHOT hide-lamp-white bytes=118341
+HIDEMAT lamp-white meshes=2
+SHOT hide-cowl-panel bytes=118341
+HIDEMAT cowl-panel meshes=0
+SHOT hide-hood-panel bytes=118341
+HIDEMAT hood-panel meshes=0
+SHOT hide-shield-emblem-panel bytes=118341
+HIDEMAT shield-emblem-panel meshes=0
+SHOT hide-leather-ivory bytes=119706
+HIDEMAT leather-ivory meshes=3
+SHOT hide-chrome-brow bytes=118341
+HIDEMAT chrome-brow meshes=0
+SHOT hide-maextro-mark bytes=118341
+HIDEMAT maextro-mark meshes=0
+ALL DONE
+VITE up
+EDGE spawned
+CDP up
+GOTO...
+SHOT hide0-none bytes=118341
+SHOT hidec-front-end bytes=118341
+HIDECOMP front-end meshes=0
+SHOT hidec-hood-panel bytes=118341
+HIDECOMP hood-panel meshes=0
+SHOT hidec-cowl-panel bytes=118341
+HIDECOMP cowl-panel meshes=0
+SHOT hidec-windshield bytes=118866
+HIDECOMP windshield meshes=1
+SHOT hidec-shield-emblem-panel bytes=118341
+HIDECOMP shield-emblem-panel meshes=0
+SHOT hidec-front-light-bar bytes=118341
+HIDECOMP front-light-bar meshes=1
+SHOT hidec-chrome-brow bytes=118341
+HIDECOMP chrome-brow meshes=0
+SHOT hidec-bumper-lower bytes=118341
+HIDECOMP bumper-lower meshes=0
+ALL DONE
+VITE up
+EDGE spawned
+CDP up
+GOTO...
+MESH Zunjie V800 整车 comp=root mat=paint-upper vis=false tris=192 wmin=[-1.003,-0.89,-2.72] wmax=[1.003,0.89,2.72]
+MESH 玻璃舱环 comp=greenhouse-glass mat=glass-dark vis=true tris=80 wmin=[-0.93,1.101,-1.615] wmax=[0.93,1.762,2.77]
+MESH 前挡玻璃 comp=windshield mat=glass-clear vis=true tris=76 wmin=[-0.75,1.108,-1.631] wmax=[0.75,1.827,-1.117]
+MESH MAEXTRO 发光字标 comp=maextro-mark mat=lamp-mark vis=true tris=288 wmin=[-0.4,0.626,-2.424] wmax=[0.4,0.685,-2.417]
+MESH 前脸贯穿细白光带 comp=front-light-bar mat=lamp-white vis=true tris=76 wmin=[-0.9,0.921,-2.455] wmax=[0.9,0.937,-2.434]
+MESH 车轮 fl comp=wheel-fl mat=tire vis=false tris=92 wmin=[-0.982,0,-2.097] wmax=[-0.728,0.764,-1.333]
+MESH 轮胎 fl comp=tire-fl mat=tire vis=true tris=1056 wmin=[-0.983,0,-2.097] wmax=[-0.727,0.764,-1.333]
+MESH 大饼轮圈 fl comp=rim-fl mat=wheel-alloy vis=true tris=1056 wmin=[-0.99,0.082,-2.027] wmax=[-0.72,0.682,-1.427]
+MESH rim-spokes-fl comp= mat=wheel-alloy vis=true tris=192 wmin=[-1.355,-0.118,-2.227] wmax=[-0.355,0.882,-1.227]
+MESH 轮心滚花齿环 fl comp=cap-fl mat=chrome vis=true tris=256 wmin=[-0.994,0.234,-1.863] wmax=[-0.986,0.53,-1.567]
+MESH 车轮 fr comp=wheel-fr mat=tire vis=false tris=92 wmin=[0.728,0,-2.097] wmax=[0.982,0.764,-1.333]
+MESH 轮胎 fr comp=tire-fr mat=tire vis=true tris=1056 wmin=[0.727,0,-2.097] wmax=[0.983,0.764,-1.333]
+MESH 大饼轮圈 fr comp=rim-fr mat=wheel-alloy vis=true tris=1056 wmin=[0.72,0.082,-2.027] wmax=[0.99,0.682,-1.427]
+MESH rim-spokes-fr comp= mat=wheel-alloy vis=true tris=192 wmin=[0.355,-0.118,-2.227] wmax=[1.355,0.882,-1.227]
+MESH 轮心滚花齿环 fr comp=cap-fr mat=chrome vis=true tris=256 wmin=[0.986,0.234,-1.863] wmax=[0.994,0.53,-1.567]
+MESH 车轮 rl comp=wheel-rl mat=tire vis=false tris=92 wmin=[-0.982,0,1.333] wmax=[-0.728,0.764,2.097]
+MESH 轮胎 rl comp=tire-rl mat=tire vis=true tris=1056 wmin=[-0.983,0,1.333] wmax=[-0.727,0.764,2.097]
+MESH 大饼轮圈 rl comp=rim-rl mat=wheel-alloy vis=true tris=1056 wmin=[-0.99,0.082,1.403] wmax=[-0.72,0.682,2.003]
+MESH rim-spokes-rl comp= mat=wheel-alloy vis=true tris=192 wmin=[-1.355,-0.118,1.203] wmax=[-0.355,0.882,2.203]
+MESH 轮心滚花齿环 rl comp=cap-rl mat=chrome vis=true tris=256 wmin=[-0.994,0.234,1.567] wmax=[-0.986,0.53,1.863]
+MESH 车轮 rr comp=wheel-rr mat=tire vis=false tris=92 wmin=[0.728,0,1.333] wmax=[0.982,0.764,2.097]
+MESH 轮胎 rr comp=tire-rr mat=tire vis=true tris=1056 wmin=[0.727,0,1.333] wmax=[0.983,0.764,2.097]
+MESH 大饼轮圈 rr comp=rim-rr mat=wheel-alloy vis=true tris=1056 wmin=[0.72,0.082,1.403] wmax=[0.99,0.682,2.003]
+MESH rim-spokes-rr comp= mat=wheel-alloy vis=true tris=192 wmin=[0.355,-0.118,1.203] wmax=[1.355,0.882,2.203]
+MESH 轮心滚花齿环 rr comp=cap-rr mat=chrome vis=true tris=256 wmin=[0.986,0.234,1.567] wmax=[0.994,0.53,1.863]
+MESH 四座豪华舱 comp=cabin-interior mat=leather-warm vis=false tris=76 wmin=[-0.5,-0.5,-1] wmax=[0.5,0.5,0]
+MESH 刹车踏板臂 comp=pedal-brake-arm mat=plate vis=true tris=60 wmin=[-0.547,0.423,-1.692] wmax=[-0.493,0.668,-1.652]
+MESH 仪表台上层（深棕皮革） comp=dash-upper mat=leather-dark vis=true tris=76 wmin=[-0.89,0.815,-2.014] wmax=[0.89,1.012,-1.545]
+MESH 三辐双色方向盘 comp=steering mat=wood vis=true tris=1152 wmin=[-0.751,0.787,-1.388] wmax=[-0.329,1.173,-1.212]
+MESH 方向盘气囊盖+盾标 comp=steering-hub mat=leather-ivory vis=true tris=792 wmin=[-0.64,0.88,-1.361] wmax=[-0.44,1.08,-1.239]
+MESH steering-spokes comp= mat=leather-ivory vis=true tris=192 wmin=[-1.04,0.32,-1.96] wmax=[-0.04,1.64,-0.64]
+MESH 水晶换挡旋钮 comp=crystal-shifter mat=crystal vis=true tris=1216 wmin=[-0.043,0.802,-1.323] wmax=[0.043,0.888,-1.237]
+MESH 零重力座椅扶手控制屏（l） comp=seat-rear-l-screen mat=screen-ui vis=true tris=288 wmin=[-0.535,0.954,0.11] wmax=[-0.465,0.962,0.159]
+MESH 零重力座椅扶手控制屏（r） comp=seat-rear-r-screen mat=screen-ui vis=true tris=288 wmin=[0.465,0.954,0.11] wmax=[0.535,0.962,0.159]
+MESH 顶棚前段（麂皮星空顶） comp=headliner-front mat=headliner-suede vis=true tris=76 wmin=[-0.76,1.69,-1.55] wmax=[0.76,1.71,-0.1]
+MESH 门板水晶装饰件（fl） comp=door-panel-fl-crystal mat=crystal vis=true tris=792 wmin=[-0.913,0.835,-1.23] wmax=[-0.883,0.965,-1.2]
+MESH 门板水晶装饰件（fr） comp=door-panel-fr-crystal mat=crystal vis=true tris=792 wmin=[0.883,0.835,-1.23] wmax=[0.913,0.965,-1.2]
+MESH 门板水晶装饰件（rl） comp=door-panel-rl-crystal mat=crystal vis=true tris=792 wmin=[-0.913,0.835,0.24] wmax=[-0.883,0.965,0.27]
+MESH 门板水晶装饰件（rr） comp=door-panel-rr-crystal mat=crystal vis=true tris=792 wmin=[0.883,0.835,0.24] wmax=[0.913,0.965,0.27]
+MESH 星空顶内衬板 comp=starlight-headliner mat=starlight vis=true tris=76 wmin=[-0.68,1.798,-1.63] wmax=[0.68,1.804,-0.3]
+MESH B柱水晶壁灯柱 L comp=crystal-sconce-l mat=crystal vis=true tris=792 wmin=[-0.895,1.11,-0.445] wmax=[-0.845,1.45,-0.395]
+MESH 水晶壁灯镀铬环带 L comp=crystal-sconce-band-l mat=chrome vis=true tris=792 wmin=[-0.901,1.262,-0.451] wmax=[-0.839,1.298,-0.389]
+MESH B柱水晶壁灯柱 R comp=crystal-sconce-r mat=crystal vis=true tris=792 wmin=[0.845,1.11,-0.445] wmax=[0.895,1.45,-0.395]
+MESH 水晶壁灯镀铬环带 R comp=crystal-sconce-band-r mat=chrome vis=true tris=792 wmin=[0.839,1.262,-0.451] wmax=[0.901,1.298,-0.389]
+MESH 水晶旋钮底座 comp=console-island-knob-base mat=crystal vis=true tris=792 wmin=[-0.047,0.788,-1.327] wmax=[0.047,0.824,-1.233]
+MESH 水晶旋钮滚花环 comp=console-island-knob-ring mat=crystal vis=true tris=1152 wmin=[-0.052,0.813,-1.332] wmax=[0.052,0.823,-1.228]
+MESH 悬浮轮标 FL comp=wheel-cap-fl mat=lamp-mark vis=true tris=792 wmin=[-0.998,0.312,-1.785] wmax=[-0.986,0.452,-1.645]
+MESH 悬浮轮标 FR comp=wheel-cap-fr mat=lamp-mark vis=true tris=792 wmin=[0.986,0.312,-1.785] wmax=[0.998,0.452,-1.645]
+MESH 悬浮轮标 RL comp=wheel-cap-rl mat=lamp-mark vis=true tris=792 wmin=[-0.998,0.312,1.645] wmax=[-0.986,0.452,1.785]
+MESH 悬浮轮标 RR comp=wheel-cap-rr mat=lamp-mark vis=true tris=792 wmin=[0.986,0.312,1.645] wmax=[0.998,0.452,1.785]
+MESH 贯穿三联屏 comp=tri-screen mat=screen-ui vis=true tris=288 wmin=[-0.83,0.973,-1.436] wmax=[0.83,1.287,-1.404]
+MESH 悬浮仪表屏 comp=gauge-screen mat=gauge-ui vis=true tris=288 wmin=[-0.91,1.035,-1.436] wmax=[-0.53,1.235,-1.416]
+MESH 后排控制屏 comp=rear-control-screen mat=screen-ui vis=true tris=288 wmin=[-0.12,0.76,-1.176] wmax=[0.12,0.9,-1.124]
+MESH batch/paint-upper comp= mat=paint-upper vis=true tris=2004 wmin=[-1.21,0.2,-2.438] wmax=[1.21,1.857,2.848]
+MESH batch/matte-black comp= mat=matte-black vis=true tris=5072 wmin=[-1.045,0.22,-1.99] wmax=[1.045,1.869,2.45]
+MESH batch/chrome comp= mat=chrome vis=true tris=4324 wmin=[-1.212,0.273,-2.497] wmax=[1.212,1.5,2.89]
+MESH batch/bronze-dark comp= mat=bronze-dark vis=true tris=172 wmin=[-0.525,0.661,-2.506] wmax=[0.525,1.391,0.318]
+MESH batch/housing-dark comp= mat=housing-dark vis=true tris=304 wmin=[-0.93,0.627,-2.458] wmax=[0.93,1.16,2.885]
+MESH batch/lamp-head comp= mat=lamp-head vis=true tris=512 wmin=[-0.893,0.708,-2.441] wmax=[0.893,0.981,-2.316]
+MESH batch/lamp-star comp= mat=lamp-star vis=true tris=880 wmin=[-1.035,0.68,-2.453] wmax=[1.035,1.031,0.56]
+MESH batch/paint-lower comp= mat=paint-lower vis=true tris=152 wmin=[-1.012,0.245,-2.337] wmax=[0.96,1.06,1.345]
+MESH batch/lamp-white comp= mat=lamp-white vis=true tris=152 wmin=[-0.725,0.505,-2.445] wmax=[0.725,0.977,-2.303]
+MESH batch/lamp-red comp= mat=lamp-red vis=true tris=456 wmin=[-0.914,0.681,2.879] wmax=[0.914,1.119,2.889]
+MESH batch/lamp-gold comp= mat=lamp-gold vis=true tris=3768 wmin=[-0.908,0.832,-1.56] wmax=[0.908,1.16,2.888]
+MESH batch/carpet comp= mat=carpet vis=true tris=152 wmin=[-0.83,0.282,-1.65] wmax=[0.83,0.317,1.95]
+MESH batch/leather-ivory comp= mat=leather-ivory vis=true tris=228 wmin=[-0.89,0.67,-1.9] wmax=[0.89,1.857,0.025]
+MESH batch/wood comp= mat=wood vis=true tris=152 wmin=[-0.22,0.44,-2.2] wmax=[0.22,0.8,-0.9]
+MESH batch/leather-warm comp= mat=leather-warm vis=true tris=3132 wmin=[-0.975,0.49,-2.17] wmax=[0.975,1.435,1.391]
+MESH batch/leather-warm comp= mat=leather-warm vis=true tris=1744 wmin=[-0.78,0.545,-0.3] wmax=[0.78,1.309,0.277]
+MESH batch/leather-warm comp= mat=leather-warm vis=true tris=152 wmin=[-0.63,1.285,0.214] wmax=[0.63,1.435,0.314]
+MESH batch/lamp-amber comp= mat=lamp-amber vis=true tris=2688 wmin=[-0.802,1.633,-1.351] wmax=[0.802,1.677,2.251]
+MESH batch/curtain comp= mat=curtain vis=true tris=576 wmin=[-0.89,1.06,-0.55] wmax=[0.89,1.695,-0.55]
+MESH batch/lamp-red comp= mat=lamp-red vis=true tris=152 wmin=[-0.89,0.301,2.48] wmax=[0.89,0.319,2.5]
+MESH brake-pedal comp= mat=MeshPhysicalMaterial vis=false tris=60 wmin=[-0.55,0.275,-1.438] wmax=[-0.45,0.62,-1.305]
+MESH welcome-carpet comp= mat=MeshBasicMaterial vis=true tris=8 wmin=[-1.12,0.018,-1.12] wmax=[1.12,0.018,1.22]
+MESH tailgate-badge comp= mat=MeshBasicMaterial vis=true tris=2 wmin=[-0.28,1.049,2.905] wmax=[0.28,1.159,2.905]
+MESH tailgate-maextro comp= mat=MeshBasicMaterial vis=true tris=2 wmin=[-0.23,1.38,2.905] wmax=[0.23,1.416,2.905]
+MESH wheel-arch-liner comp= mat=MeshStandardMaterial vis=true tris=112 wmin=[-1.105,0.382,-2.155] wmax=[1.105,0.822,2.155]
+MESH  comp= mat=MeshStandardMaterial vis=true tris=48 wmin=[-9,-0.889,-9] wmax=[9,-0.889,9]
+MESH contact-shadow comp= mat=MeshBasicMaterial vis=true tris=2 wmin=[-1.2,0.02,-2.875] wmax=[1.2,0.02,2.875]
+ALL DONE
+VITE up
+EDGE spawned
+CDP up
+GOTO...
+PICK {"fx":0.5,"fy":0.35,"hex":"2c2b29","hit":"wheel-cap-rr|lamp-mark"}
+PICK {"fx":0.5,"fy":0.45,"hex":"2c2b29","hit":"wheel-cap-rr|lamp-mark"}
+PICK {"fx":0.5,"fy":0.55,"hex":"2b2a28","hit":"wheel-cap-rl|lamp-mark"}
+PICK {"fx":0.4,"fy":0.45,"hex":"2c2b29","hit":"wheel-cap-rr|lamp-mark"}
+PICK {"fx":0.6,"fy":0.45,"hex":"2c2b29","hit":"wheel-cap-rr|lamp-mark"}
+PICK {"fx":0.5,"fy":0.3,"hex":"121210","hit":"rim-rr|wheel-alloy"}
+PICK {"fx":0.5,"fy":0.25,"hex":"171715","hit":"steering|wood"}
+PICK {"fx":0.5,"fy":0.62,"hex":"31302e","hit":"batch/matte-black|matte-black"}
+PICK {"fx":0.35,"fy":0.5,"hex":"2c2b29","hit":"wheel-cap-rr|lamp-mark"}
+PICK {"fx":0.65,"fy":0.5,"hex":"2c2b29","hit":"wheel-cap-rr|lamp-mark"}
+ALL DONE
+VITE up
+EDGE spawned
+CDP up
+GOTO...
+RAY {"ndc":[0,0.15],"hit":"starlight-headliner|starlight@7.55"}
+RAY {"ndc":[0,0.3],"hit":"MISS"}
+RAY {"ndc":[0,0.42],"hit":"MISS"}
+RAY {"ndc":[0,0.55],"hit":"MISS"}
+RAY {"ndc":[0,0.68],"hit":"MISS"}
+RAY {"ndc":[-0.15,0.42],"hit":"MISS"}
+RAY {"ndc":[0.15,0.42],"hit":"MISS"}
+RAY {"ndc":[-0.25,0.5],"hit":"MISS"}
+RAY {"ndc":[0.25,0.5],"hit":"MISS"}
+RAY {"ndc":[0,0.05],"hit":"windshield|glass-clear@7.53"}
+RAY {"ndc":[0,-0.05],"hit":"batch/chrome|chrome@6.56"}
+ALL DONE
+VITE up
+EDGE spawned
+CDP up
+GOTO...
+RAY {"ndc":[-0.3,-0.3],"hit":"batch/chrome|chrome@6.65@0.89,0.82,-2.48"}
+RAY {"ndc":[-0.15,-0.3],"hit":"batch/chrome|chrome@6.60@0.44,0.82,-2.48"}
+RAY {"ndc":[0,-0.3],"hit":"batch/bronze-dark|bronze-dark@6.58@0,0.82,-2.49"}
+RAY {"ndc":[0.15,-0.3],"hit":"batch/chrome|chrome@6.60@-0.44,0.82,-2.48"}
+RAY {"ndc":[0.3,-0.3],"hit":"batch/chrome|chrome@6.65@-0.89,0.82,-2.48"}
+RAY {"ndc":[-0.3,-0.2],"hit":"batch/chrome|chrome@6.63@0.89,0.99,-2.46"}
+RAY {"ndc":[-0.15,-0.2],"hit":"batch/chrome|chrome@6.59@0.44,0.99,-2.46"}
+RAY {"ndc":[0,-0.2],"hit":"batch/chrome|chrome@6.57@0,0.99,-2.46"}
+RAY {"ndc":[0.15,-0.2],"hit":"batch/chrome|chrome@6.59@-0.44,0.99,-2.46"}
+RAY {"ndc":[0.3,-0.2],"hit":"batch/chrome|chrome@6.63@-0.89,0.99,-2.46"}
+RAY {"ndc":[-0.3,-0.1],"hit":"batch/chrome|chrome@6.62@0.89,1.17,-2.44"}
+RAY {"ndc":[-0.15,-0.1],"hit":"batch/chrome|chrome@6.58@0.44,1.17,-2.44"}
+RAY {"ndc":[0,-0.1],"hit":"batch/chrome|chrome@6.56@0,1.17,-2.44"}
+RAY {"ndc":[0.15,-0.1],"hit":"batch/chrome|chrome@6.58@-0.44,1.17,-2.44"}
+RAY {"ndc":[0.3,-0.1],"hit":"batch/chrome|chrome@6.62@-0.89,1.17,-2.44"}
+RAY {"ndc":[-0.3,0],"hit":"batch/chrome|chrome@6.62@0.89,1.34,-2.42"}
+RAY {"ndc":[-0.15,0],"hit":"batch/chrome|chrome@6.57@0.44,1.34,-2.42"}
+RAY {"ndc":[0,0],"hit":"batch/chrome|chrome@6.56@0,1.34,-2.42"}
+RAY {"ndc":[0.15,0],"hit":"batch/chrome|chrome@6.57@-0.44,1.34,-2.42"}
+RAY {"ndc":[0.3,0],"hit":"batch/chrome|chrome@6.62@-0.89,1.34,-2.42"}
+RAY {"ndc":[-0.3,0.1],"hit":"MISS"}
+RAY {"ndc":[-0.15,0.1],"hit":"windshield|glass-clear@7.54@0.51,1.4,-1.43"}
+RAY {"ndc":[0,0.1],"hit":"windshield|glass-clear@7.53@0,1.4,-1.43"}
+RAY {"ndc":[0.15,0.1],"hit":"steering-spokes|leather-ivory@7.43@-0.5,1.42,-1.55"}
+RAY {"ndc":[0.3,0.1],"hit":"steering-spokes|leather-ivory@7.48@-1,1.42,-1.55"}
+RAY {"ndc":[-0.3,0.2],"hit":"MISS"}
+RAY {"ndc":[-0.15,0.2],"hit":"windshield|glass-clear@7.66@0.52,1.6,-1.3"}
+RAY {"ndc":[0,0.2],"hit":"windshield|glass-clear@7.64@0,1.6,-1.3"}
+RAY {"ndc":[0.15,0.2],"hit":"windshield|glass-clear@7.66@-0.52,1.6,-1.3"}
+RAY {"ndc":[0.3,0.2],"hit":"MISS"}
+RAY {"ndc":[-0.3,0.3],"hit":"MISS"}
+RAY {"ndc":[-0.15,0.3],"hit":"starlight-headliner|starlight@7.57@0.51,1.8,-1.37"}
+RAY {"ndc":[0,0.3],"hit":"starlight-headliner|starlight@7.55@0,1.8,-1.37"}
+RAY {"ndc":[0.15,0.3],"hit":"starlight-headliner|starlight@7.57@-0.51,1.8,-1.37"}
+RAY {"ndc":[0.3,0.3],"hit":"MISS"}
+ALL DONE
+VITE up
+EDGE spawned
+CDP up
+GOTO...
+SHOT r13b_rear bytes=147112
+SHOT r13b_rear34 bytes=286727
+SHOT r13b_front bytes=135728
+SHOT r13b_side bytes=241502
+SHOT r13b_tailclose bytes=205329
+INFO {"tris":49102,"calls":55,"box":[2.424999952316285,2.7589999437332153,5.569999933242798]}
+ALL DONE
+VITE up
+EDGE spawned
+CDP up
+GOTO...
+INFO {"tris":62800,"calls":72,"box":[2.424999952316285,2.7589999437332153,5.569999933242798]}
+ALL DONE
+VITE up
+EDGE spawned
+CDP up
+GOTO...
+INFO {"tris":62800,"calls":72,"box":[2.424999952316285,2.7589999437332153,5.569999933242798]}
+ALL DONE
+--- CONSOLE ---
+[V800Adapter] #batchmerge：mesh 188 → 73，可见 182 → 67，Draw Call −115
+[V800Adapter] #uvassert：全部三角形 UV 落在合法分区内，无串味
+[V800Adapter] #uvassert 密度判据：图案分区无 > 8x 的各向异性拉伸（世界面积 > 0.1cm² 口径）
+VITE up
+EDGE spawned
+CDP up
+GOTO...
+SHOT r13_nose_close bytes=239924
+SHOT r13_tail_close bytes=418187
+SHOT r13_tail_top bytes=179905
+ALL DONE
+VITE up
+EDGE spawned
+CDP up
+GOTO...
+MAT {"id":"maextro-mark","matId":"lamp-mark","emissive":[1,1,1],"emissiveIntensity":2.2,"hasEmissiveMap":true,"hasMap":false,"visible":true,"worldMin":[-0.4,-0.03,0]}
+ALL DONE
+VITE up
+EDGE spawned
+CDP up
+GOTO...
+SHOT r13c_nose_close bytes=244505
+SHOT r13c_nose_hi bytes=214197
+ALL DONE
+VITE up
+EDGE spawned
+CDP up
+GOTO...
+SHOT r13c_front bytes=133860
+SHOT r13c_rear34 bytes=287152
+INFO {"tris":62800,"calls":72,"box":[2.424999952316285,2.7589999437332153,5.871424674987793]}
+ALL DONE
+VITE up
+EDGE spawned
+CDP up
+GOTO...
+INFO {"tris":62800,"calls":72,"box":[2.424999952316285,2.7589999437332153,5.871424674987793]}
+ALL DONE
+VITE up
+EDGE spawned
+CDP up
+GOTO...
+RAY {"ndc":[-0.45,-0.1],"hit":"MISS"}
+RAY {"ndc":[-0.35,-0.1],"hit":"MISS"}
+RAY {"ndc":[-0.25,-0.1],"hit":"batch/paint-upper|paint-upper@7.18@0.8,1.07,-1.88"}
+RAY {"ndc":[0,-0.1],"hit":"batch/paint-upper|paint-upper@7.13@0,1.07,-1.88"}
+RAY {"ndc":[0.25,-0.1],"hit":"steering-spokes|leather-ivory@7.17@-0.8,1.07,-1.89"}
+RAY {"ndc":[0.35,-0.1],"hit":"MISS"}
+RAY {"ndc":[0.45,-0.1],"hit":"MISS"}
+RAY {"ndc":[-0.45,0],"hit":"MISS"}
+RAY {"ndc":[-0.35,0],"hit":"MISS"}
+RAY {"ndc":[-0.25,0],"hit":"greenhouse-glass|glass-dark@7.48@0.84,1.22,-1.55"}
+RAY {"ndc":[0,0],"hit":"windshield|glass-clear@7.42@0,1.22,-1.56"}
+RAY {"ndc":[0.25,0],"hit":"steering-spokes|leather-ivory@7.14@-0.8,1.27,-1.89"}
+RAY {"ndc":[0.35,0],"hit":"MISS"}
+RAY {"ndc":[0.45,0],"hit":"MISS"}
+RAY {"ndc":[-0.45,0.05],"hit":"MISS"}
+RAY {"ndc":[-0.35,0.05],"hit":"MISS"}
+RAY {"ndc":[-0.25,0.05],"hit":"greenhouse-glass|glass-dark@7.54@0.84,1.31,-1.48"}
+RAY {"ndc":[0,0.05],"hit":"windshield|glass-clear@7.47@0,1.31,-1.5"}
+RAY {"ndc":[0.25,0.05],"hit":"steering-spokes|leather-ivory@7.30@-0.82,1.34,-1.72"}
+RAY {"ndc":[0.35,0.05],"hit":"MISS"}
+RAY {"ndc":[0.45,0.05],"hit":"MISS"}
+RAY {"ndc":[-0.45,0.1],"hit":"MISS"}
+RAY {"ndc":[-0.35,0.1],"hit":"MISS"}
+RAY {"ndc":[-0.25,0.1],"hit":"greenhouse-glass|glass-dark@7.59@0.85,1.4,-1.42"}
+RAY {"ndc":[0,0.1],"hit":"windshield|glass-clear@7.53@0,1.4,-1.43"}
+RAY {"ndc":[0.25,0.1],"hit":"steering-spokes|leather-ivory@7.46@-0.84,1.42,-1.55"}
+RAY {"ndc":[0.35,0.1],"hit":"MISS"}
+RAY {"ndc":[0.45,0.1],"hit":"MISS"}
+RAY {"ndc":[-0.45,0.15],"hit":"MISS"}
+RAY {"ndc":[-0.35,0.15],"hit":"MISS"}
+RAY {"ndc":[-0.25,0.15],"hit":"greenhouse-glass|glass-dark@7.64@0.86,1.5,-1.36"}
+RAY {"ndc":[0,0.15],"hit":"windshield|glass-clear@7.58@0,1.5,-1.37"}
+RAY {"ndc":[0.25,0.15],"hit":"steering-spokes|leather-ivory@7.63@-0.86,1.5,-1.36"}
+RAY {"ndc":[0.35,0.15],"hit":"MISS"}
+RAY {"ndc":[0.45,0.15],"hit":"MISS"}
+ALL DONE
+VITE up
+EDGE spawned
+CDP up
+GOTO...
+SHOT r13d_top bytes=176760
+SHOT r13d_front45 bytes=173799
+ALL DONE
+VITE up
+EDGE spawned
+CDP up
+GOTO...
+MAT {"id":"greenhouse-glass","matId":"glass-dark","emissive":[0,0,0],"emissiveIntensity":1,"opacity":0.6392,"transmission":0,"color":[0.005,0.007,0.011],"hasEmissiveMap":false,"hasMap":false,"visible":true,"worldMin":[-2.82,1.101,0]}
+MAT {"id":"windshield","matId":"glass-clear","emissive":[0,0,0],"emissiveIntensity":1,"opacity":0.34,"transmission":0,"color":[0.246,0.279,0.323],"hasEmissiveMap":false,"hasMap":false,"visible":true,"worldMin":[-0.75,-0.013,0]}
+MAT {"id":"maextro-mark","matId":"lamp-mark","emissive":[1,1,1],"emissiveIntensity":2.2,"opacity":1,"transmission":0,"color":[0.807,0.776,0.716],"hasEmissiveMap":true,"hasMap":false,"visible":true,"worldMin":[-0.4,-0.03,0]}
+ALL DONE
+VITE up
+EDGE spawned
+WATCHDOG timeout
+VITE up
+EDGE spawned
+CDP up
+GOTO...
+SHOT r13e_front bytes=132833
+SHOT r13e_rear bytes=147069
+SHOT r13e_rear34 bytes=286644
+SHOT r13e_side bytes=241895
+INFO {"tris":62800,"calls":72,"box":[2.424999952316285,2.7589999437332153,5.569999933242798]}
+ALL DONE
+VITE up
+EDGE spawned
+CDP up
+GOTO...
+INFO {"tris":62800,"calls":72,"box":[2.424999952316285,2.7589999437332153,5.569999933242798]}
+ALL DONE
+--- CONSOLE ---
+[V800Adapter] #batchmerge：mesh 188 → 73，可见 182 → 67，Draw Call −115
+[V800Adapter] #uvassert：全部三角形 UV 落在合法分区内，无串味
+[V800Adapter] #uvassert 密度判据：图案分区无 > 8x 的各向异性拉伸（世界面积 > 0.1cm² 口径）

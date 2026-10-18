@@ -74,7 +74,9 @@ export function rollForce(): number {
 
 /** 电机驱动力 N（恒扭矩→恒功率），v≈0 时用微小下限防除零 */
 export function motorForce(speed: number, throttle: number): number {
-  if (throttle <= 0 || speed >= MAX_SPEED_MS) return 0;
+  // 不做 speed >= MAX 早退：电子限速只钳速度、动力保持（见 stepVehicle 钳位分支），
+  // 限速处油门仍有劲（G 表/俯仰/电机音持续），只是速度被钉住。
+  if (throttle <= 0) return 0;
   const v = Math.max(0.5, speed);
   const fPower = POWER_WATT / v;
   return throttle * Math.min(FORCE_TORQUE_MAX, fPower);
@@ -96,8 +98,9 @@ export function regenDecel(brake: number): number {
 
 /**
  * 单固定步长推进（dt = 1/120s）。
- * 电子限速在函数内消化：钳位生效时 state.accel 归零（真实车限速处动力主动退出），
- * 避免「速度钉在 200 但 G 表/俯仰/电机音仍呈全力加速」的表现失真。
+ * 电子限速只钳速度、动力保持（2026-10-18 玩法改版）：被钳住时 speed 钉在 200 km/h，
+ * state.accel 保留计算值——油门继续有劲、G 表/俯仰/电机音持续，
+ * 表现为「速度被电子限速钉住」而非「动力主动退出」。
  */
 export function stepVehicle(state: VehicleState, dt: number, input: VehicleInput): void {
   const speed = state.speed;
@@ -152,12 +155,11 @@ export function stepVehicle(state: VehicleState, dt: number, input: VehicleInput
   }
 
   state.accel = accel;
-  // 电子限速：被上限钳住的这一步加速度归零——真实限速是动力主动退出，
-  // 而非剩余驱动力被强行抹掉（后者会让 G 表/俯仰/电机音呈现「钉速却全油门」）。
+  // 电子限速：只钳速度、不动 accel——油门下的驱动力照常输出（G 表/俯仰/电机音
+  // 持续），速度被电子限速钉在 200 km/h。松油门/滑行不受影响。
   const nextSpeed = speed + accel * dt;
   if (nextSpeed >= MAX_SPEED_MS) {
     state.speed = MAX_SPEED_MS;
-    state.accel = 0;
   } else {
     state.speed = Math.max(0, nextSpeed);
   }

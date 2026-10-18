@@ -49,6 +49,45 @@ describe('纵向动力学', () => {
     expect(v.speed * MS_TO_KMH).toBeGreaterThan(VEHICLE.maxSpeedKmh * 0.9);
   });
 
+  it('限速处动力保持：满油门到限速后持续满油门 5s，速度恒 200、accel>0、距离持续增长', () => {
+    const v = createVehicleState();
+    // 先全油门到限速（钳位生效：speed 钉在 MAX_SPEED_MS）
+    let t = 0;
+    while (t < 60 && v.speed < VEHICLE.maxSpeedKmh / MS_TO_KMH - 1e-9) {
+      stepVehicle(v, DT, { throttle: 1, brake: 0, powerCut: false, pedalForce: 0 });
+      t += DT;
+    }
+    expect(t).toBeLessThan(60);
+    // 持续满油门 5s：速度钉在 200、动力不断（accel>0）、里程持续增长
+    let lastDist = v.distance;
+    for (let i = 0; i < 120 * 5; i++) {
+      stepVehicle(v, DT, { throttle: 1, brake: 0, powerCut: false, pedalForce: 0 });
+      expect(v.speed * MS_TO_KMH).toBeCloseTo(VEHICLE.maxSpeedKmh, 6);
+      expect(v.accel).toBeGreaterThan(0); // 动力保持，不被限速归零
+      expect(v.distance).toBeGreaterThan(lastDist); // 持续行驶
+      lastDist = v.distance;
+    }
+    // 5s 内持续前进量合理（≈200km/h × 5s ≈ 277m）
+    expect(v.distance).toBeGreaterThan((VEHICLE.maxSpeedKmh / MS_TO_KMH) * 5 * 0.99);
+  });
+
+  it('限速处松油门：速度单调下降、不超 200（限速钳制不影响滑行语义）', () => {
+    const v = createVehicleState();
+    let t = 0;
+    while (t < 60 && v.speed * MS_TO_KMH < VEHICLE.maxSpeedKmh * 0.995) {
+      stepVehicle(v, DT, { throttle: 1, brake: 0, powerCut: false, pedalForce: 0 });
+      t += DT;
+    }
+    // 松油门后滑行：速度永不超 200 且单调不增
+    let last = v.speed;
+    for (let i = 0; i < 120 * 5; i++) {
+      stepVehicle(v, DT, { throttle: 0, brake: 0, powerCut: false, pedalForce: 0 });
+      expect(v.speed * MS_TO_KMH).toBeLessThanOrEqual(VEHICLE.maxSpeedKmh + 1e-9);
+      expect(v.speed).toBeLessThanOrEqual(last + 1e-9);
+      last = v.speed;
+    }
+  });
+
   it('0-100km/h 落在 3~8s（3300kg / 390kW 的合理区间）', () => {
     const v = createVehicleState();
     let t = 0;

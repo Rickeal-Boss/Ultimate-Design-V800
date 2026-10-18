@@ -1874,64 +1874,48 @@
        1.0898
       ],
       [
-       -2.4906,
-       1.0505
+       -2.77,
+       1.035
       ],
       [
-       -2.4953,
-       1.0502
+       -2.7891,
+       1.0312
       ],
       [
-       -2.4999,
-       1.0496
+       -2.8054,
+       1.0204
       ],
       [
-       -2.5046,
-       1.0487
+       -2.8162,
+       1.0041
       ],
       [
-       -2.5091,
-       1.0477
+       -2.82,
+       0.985
       ],
       [
-       -2.7364,
-       0.9909
+       -2.82,
+       0.625
       ],
       [
-       -2.7554,
-       0.9835
+       -2.82,
+       0.625
       ],
       [
-       -2.7719,
-       0.9715
+       -2.817,
+       0.6097
       ],
       [
-       -2.7849,
-       0.9557
+       -2.8083,
+       0.5967
       ],
       [
-       -2.7934,
-       0.9371
+       -2.7953,
+       0.588
       ],
       [
-       -2.8159,
-       0.8652
-      ],
-      [
-       -2.8205,
-       0.8432
-      ],
-      [
-       -2.821,
-       0.8207
-      ],
-      [
-       -2.8173,
-       0.7985
-      ],
-      [
-       -2.8095,
-       0.7773
+       -2.78,
+       0.585
       ],
       [
        -2.7072,
@@ -2128,7 +2112,7 @@
       }
      }
     },
-    "topologyIntent": "lofted side-profile shell with large-radius silhouette fillets",
+    "topologyIntent": "连续车身侧面轮廓挤出体；R13 尾部立直：后脸 z=-2.82 垂直平面（y0.625–0.985），顶角 r0.05、底角 r0.04，尾缘侧视接近铅垂线",
     "edgeTreatment": {
      "type": "rounded",
      "bevelRadius": 0.12,
@@ -2501,7 +2485,7 @@
     "materialClass": "metal",
     "materialClassConfidence": 0.9
    },
-   "notes": " | 2026-10-17 第四轮几何改造：长度 1.3→0.95（前缘保持实测格栅顶 2.57，后缘落到 cowl z1.62），rotX 0.083 使前后缘均贴合 body-lower 腰线（1.079→1.0）。hood-blister 已砍除。"
+   "notes": "| 2026-10-17 第四轮几何改造：长度 1.3→0.95（前缘保持实测格栅顶 2.57，后缘落到 cowl z1.62），rotX 0.083 使前后缘均贴合 body-lower 腰线（1.079→1.0）。hood-blister 已砍除。"
   },
   {
    "id": "greenhouse-glass",
@@ -2561,28 +2545,52 @@
        1.762
       ],
       [
-       -2.6,
+       -2.77,
        1.758
       ],
       [
-       -2.715,
-       1.75
+       -2.7891,
+       1.7542
       ],
       [
-       -2.762,
-       1.733
+       -2.8054,
+       1.7434
+      ],
+      [
+       -2.8162,
+       1.7271
+      ],
+      [
+       -2.82,
+       1.708
+      ],
+      [
+       -2.82,
+       1.21
+      ],
+      [
+       -2.82,
+       1.21
+      ],
+      [
+       -2.8162,
+       1.1909
+      ],
+      [
+       -2.8054,
+       1.1746
+      ],
+      [
+       -2.7891,
+       1.1638
       ],
       [
        -2.77,
-       1.71
+       1.16
       ],
       [
-       -2.77,
-       1.205
-      ],
-      [
-       -2.762,
-       1.183
+       -2.6,
+       1.152
       ],
       [
        -2.73,
@@ -2611,7 +2619,7 @@
       }
      }
     },
-    "topologyIntent": "continuous dark DLO band, A/D-pillar roots filleted",
+    "topologyIntent": "continuous dark DLO band；R13 后缘立直：玻璃带后缘 z=-2.82 垂直（与 body-lower 尾面齐平），顶/底角 r0.05",
     "edgeTreatment": {
      "type": "rounded",
      "bevelRadius": 0.06,
@@ -2829,23 +2837,27 @@
        1.848
       ],
       [
-       -2.7342,
-       1.8402
+       -2.785,
+       1.848
       ],
       [
-       -2.7587,
-       1.8235
+       -2.8003,
+       1.845
       ],
       [
-       -2.7725,
-       1.7998
+       -2.8133,
+       1.8363
       ],
       [
-       -2.778,
-       1.7725
+       -2.822,
+       1.8233
       ],
       [
-       -2.778,
+       -2.825,
+       1.808
+      ],
+      [
+       -2.825,
        1.64
       ],
       [
@@ -2887,7 +2899,7 @@
      ],
      "depth": 1.94
     },
-    "topologyIntent": "roof shell with raised rear tier (EX-15); rear edge now runs back to z=-2.778 (flush with tailgate) with a 4-facet r0.038 corner instead of the 0.45m forward-stepped shelf",
+    "topologyIntent": "roof shell；R13 后缘外扩至 z=-2.825（覆盖玻璃后缘上沿），顶角 r0.04",
     "edgeTreatment": {
      "type": "rounded",
      "bevelRadius": 0.05,
@@ -3364,7 +3376,7 @@
    "dimensions": {
     "width": 0.2,
     "height": 0.56,
-    "depth": 0.34,
+    "depth": 0.46,
     "units": "meters",
     "confidence": 0.92
    },
@@ -3372,7 +3384,7 @@
     "position": [
      0.885,
      1.4375,
-     -2.45
+     -2.55
     ],
     "rotation": [
      0,
@@ -3382,7 +3394,7 @@
     "scale": [
      0.13,
      0.675,
-     0.34
+     0.46
     ]
    },
    "actionProfile": {
@@ -3467,7 +3479,8 @@
     "secondaryAlbedo": "rgba(216, 217, 220, 1.0)",
     "materialClass": "metal",
     "materialClassConfidence": 0.9
-   }
+   },
+   "notes": "| R13：z -2.45→-2.55、深 0.34→0.46，银白包边后缘跟随立直后的玻璃尾面（z=-2.82）"
   },
   {
    "id": "bpillar-l",
@@ -4008,7 +4021,7 @@
    "dimensions": {
     "width": 0.2,
     "height": 0.56,
-    "depth": 0.34,
+    "depth": 0.46,
     "units": "meters",
     "confidence": 0.92
    },
@@ -4016,7 +4029,7 @@
     "position": [
      -0.885,
      1.4375,
-     -2.45
+     -2.55
     ],
     "rotation": [
      0,
@@ -4026,7 +4039,7 @@
     "scale": [
      0.13,
      0.675,
-     0.34
+     0.46
     ]
    },
    "actionProfile": {
@@ -4111,7 +4124,8 @@
     "secondaryAlbedo": "rgba(216, 217, 220, 1.0)",
     "materialClass": "metal",
     "materialClassConfidence": 0.9
-   }
+   },
+   "notes": "| R13：z -2.45→-2.55、深 0.34→0.46，银白包边后缘跟随立直后的玻璃尾面（z=-2.82）"
   },
   {
    "id": "bpillar-r",
@@ -4875,7 +4889,7 @@
     ],
     "scale": [
      1.84,
-     0.82,
+     0.09,
      0.06
     ]
    },
@@ -4961,7 +4975,8 @@
     "secondaryAlbedo": "rgba(232, 233, 236, 1.0)",
     "materialClass": "metal",
     "materialClassConfidence": 0.9
-   }
+   },
+   "notes": "| R13：scale.y 0.82→0.09（dims.height=0.09 为真值；0.82 系历史误写，导致 1.84×0.82m 铬板盖满前脸并吞掉 maextro-mark/shield-logo 下半）。"
   },
   {
    "id": "maextro-mark",
@@ -6989,19 +7004,19 @@
    "topologyClass": "assembled-solid",
    "topologyRationale": "box 适合该部件的可展拓扑",
    "geometryDescriptor": {
-    "topologyIntent": "flat vertical tailgate panel with rounded corners (MPV straight tail)",
+    "topologyIntent": "flat vertical tailgate panel (MPV straight tail); R13 尾门面 -2.883→-2.825（body 尾面 +5mm），四角 r0.05",
     "edgeTreatment": {
      "type": "rounded",
-     "bevelRadius": 0.14,
+     "bevelRadius": 0.05,
      "segments": 2
     },
     "deformationStack": [
      {
       "type": "fillet",
       "axis": "profile-x-y",
-      "radius": 0.14,
+      "radius": 0.05,
       "segments": 2,
-      "notes": "尾门四角 r0.14 圆角，尾部门板不再是直棱矩形"
+      "notes": "R13 尾门四角 r0.05（原 r0.14 弧角与「后角≤5cm」要求冲突）"
      }
     ],
     "uvStrategy": "generated procedural coordinates",
@@ -7010,51 +7025,35 @@
      "points": [
       [
        -0.93,
-       -0.42
+       -0.475
       ],
       [
-       -0.86,
-       -0.5
-      ],
-      [
-       -0.78,
+       -0.88,
        -0.525
       ],
       [
-       0.78,
+       0.88,
        -0.525
       ],
       [
-       0.86,
-       -0.5
+       0.93,
+       -0.475
       ],
       [
        0.93,
-       -0.42
+       0.475
       ],
       [
-       0.93,
-       0.42
-      ],
-      [
-       0.86,
-       0.5
-      ],
-      [
-       0.78,
+       0.88,
        0.525
       ],
       [
-       -0.78,
+       -0.88,
        0.525
-      ],
-      [
-       -0.86,
-       0.5
       ],
       [
        -0.93,
-       0.42
+       0.475
       ]
      ],
      "depth": 0.07,
@@ -7063,7 +7062,7 @@
       "nodeOffset": [
        0,
        1.02,
-       -2.848
+       -2.79
       ],
       "planTaperTail": {
        "zFrom": -1.95,
@@ -7088,7 +7087,7 @@
     "position": [
      0,
      1.02,
-     -2.848
+     -2.79
     ],
     "rotation": [
      0,
@@ -31916,7 +31915,7 @@
     "position": [
      0,
      1.32,
-     -2.835
+     -2.83
     ],
     "rotation": [
      0,

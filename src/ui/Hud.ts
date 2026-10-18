@@ -58,6 +58,7 @@ export class Hud {
   private toastTimer = 0;
   private lastSpeedText = '';
   private lastTempText = '';
+  private lastTempWidth = '';
   /** P4 性能：无门控的 textContent/style 写入会让浏览器做无效排版，
    *  按「值未变则跳过」门控（静态相位/稳态时几乎零 DOM 写入） */
   private textCache = new Map<HTMLElement, string>();
@@ -189,7 +190,13 @@ export class Hud {
 
     // 制动温度条
     const tempRatio = Math.min(1, data.brakeTemp / 1.5);
-    this.tempFill.style.width = `${tempRatio * 100}%`;
+    // perf-r13：style 写入同样按「值未变则跳过」门控（加速段温度恒 0，
+    // 原先每帧无条件写 width 是整条 HUD 唯一漏网的逐帧 CSSOM 写入）
+    const tempWidth = `${tempRatio * 100}%`;
+    if (tempWidth !== this.lastTempWidth) {
+      this.tempFill.style.width = tempWidth;
+      this.lastTempWidth = tempWidth;
+    }
     this.tempBox.classList.toggle('hot', data.overheat);
     const tempText = data.overheat ? '制动衰减' : '';
     if (tempText !== this.lastTempText) {

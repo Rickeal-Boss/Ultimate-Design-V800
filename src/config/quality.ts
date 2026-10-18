@@ -84,13 +84,25 @@ export function createQualitySettings(overrideTier?: QualityTier): QualitySettin
 
 /**
  * 运行时自适应降档（原版 B_ 逻辑移植）：
- * 每 2s 统计帧率，<45 降 pixelRatio，连续 3 个窗口 >58 缓慢回升（不超过初始上限）。
+ * 每 2s 统计帧率，<42 降 pixelRatio，连续 3 个窗口 >58 缓慢回升（不超过初始上限）。
+ *
+ * perf-r13 迟滞改造（2026-10-18，治「加速段顿挫」）：
+ * 每次变更 pixelRatio 都触发 renderer+composer 全部 RT 重建（一次性大 hitch）
+ * 并伴随肉眼可辨的分辨率跳变。原实现在 45~58 无死区保护下，核显机加速段
+ * 负载升高会 2s 一档连降到下限（1.5→1.25→1.0 只隔 2s，两连 hitch 落在加速段内），
+ * 负载回落又 2 窗一档升回 —— 仿真实测 54s 内 8 次 RT 重建且与加速段强相关，
+ * 表现为周期性顿挫 + 画面清晰度泵动。加固三道闸：
+ * 1. 降档阈值 45 → 42：45~58 之间本就是「不动」死区，收紧后进一步避开 vsync 失步抖动带；
+ * 2. 任何变更后 8s 冷却（4 个统计窗）：强制把 RT 重建 hitch 拉开，杜绝级联连跳与快速震荡；
+ * 3. 回升条件不变（>58 且连续 3 窗），同样受冷却约束 —— 只会影响回升速度，不影响收敛方向。
  */
 export class AdaptiveQuality {
   private frames = 0;
   private time = 0;
   private fastStreak = 0;
   private currentRatio: number;
+  /** 距上次 pixelRatio 变更的冷却计时（s） */
+  private cooldown = 0;
 
   constructor(private settings: QualitySettings) {
     this.currentRatio = settings.pixelRatio;
@@ -104,19 +116,23 @@ export class AdaptiveQuality {
   update(dt: number): number {
     this.frames++;
     this.time += dt;
+    if (this.cooldown > 0) this.cooldown -= dt;
     if (this.time < 2) return 0;
     const fps = this.frames / this.time;
     this.frames = 0;
     this.time = 0;
     const before = this.currentRatio;
     const floor = this.settings.minPixelRatio;
-    if (fps < 45 && this.currentRatio > floor) {
+    if (this.cooldown > 0) return 0; // 冷却期内不做任何变更（RT 重建 hitch 代价高，必须拉开间隔）
+    if (fps < 42 && this.currentRatio > floor) {
       this.currentRatio = Math.max(floor, this.currentRatio - 0.25);
+      this.cooldown = 8;
       this.fastStreak = 0;
     } else if (fps > 58 && this.currentRatio < this.settings.pixelRatio) {
       this.fastStreak++;
       if (this.fastStreak >= 3) {
         this.currentRatio = Math.min(this.settings.pixelRatio, this.currentRatio + 0.25);
+        this.cooldown = 8;
         this.fastStreak = 0;
       }
     } else {

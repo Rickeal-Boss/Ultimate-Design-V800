@@ -14,6 +14,12 @@ import {
   createZunjieV800LuxuryMPVModel,
   type ProceduralModelRuntime,
 } from './createV800Model';
+import {
+  createBrakePedalTexture,
+  createSeatQuiltTexture,
+  createSteeringHubTexture,
+  createSteeringWheelTexture
+} from './interiorTextures';
 
 export interface WheelPivot {
   /** 滚动旋转对象（绕 X 轴） */
@@ -921,54 +927,6 @@ function createNameplateTexture(): THREE.CanvasTexture {
 }
 
 /**
- * P1-6 尾门镀铬字标「尊界 V800」（1024×200，透明底）。
- * 对标报告 ④ 号差距：尾门缺独立 chrome 字母件。与 EX-26 车名牌（黑底铭牌）
- * 不同：尾门字标直接贴车漆，画布必须透明底（透明贴花），字面复用同一套
- * 五段铬渐变 + 细暗描边；运行时叠加面片承载（挂 body 下、不进合批）。
- * R12-T1 修正：原拼音「Zunjie V800」与参考图 C3（尾部-纵向尾灯.jpg）实锤的
- * 尾门铭牌「尊界 V800」不符 —— 改中文，字体栈/挤压侧壁/铬渐变/描边全部
- * 对齐 EX-26 车名牌既有实现（createNameplateTexture 同款五段铬）。
- * 文字性商标引用，同 MAEXTRO / 尊界 V800 nameplate 免责先例。
- */
-function createTailBadgeTexture(): THREE.CanvasTexture {
-  const W = 1024;
-  const H = 200;
-  const canvas = document.createElement('canvas');
-  canvas.width = W;
-  canvas.height = H;
-  const ctx = canvas.getContext('2d')!;
-  ctx.clearRect(0, 0, W, H); // 透明底
-  const text = '尊界 V800';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  // 中文字体栈与 EX-26 车名牌一致（拼音 Segoe UI 栈渲染不了「尊界」）
-  ctx.font = '700 124px "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", "Source Han Sans SC", sans-serif';
-  const natural = ctx.measureText(text).width;
-  const scale = Math.min(1, (W * 0.86) / natural);
-  ctx.save();
-  ctx.translate(W / 2, H / 2);
-  ctx.scale(scale, 1);
-  // ① 挤压侧壁：向下偏移的两层暗字，模拟字厚（同 EX-26 立体手法，透明贴花上用低透明度防脏底）
-  ctx.fillStyle = 'rgba(28, 31, 36, 0.85)';
-  ctx.fillText(text, 2.5, 6);
-  ctx.fillStyle = 'rgba(40, 44, 50, 0.6)';
-  ctx.fillText(text, 1.5, 3.5);
-  // ② 铬面：天光白 → 亮银 → 暗银 → 地平反光 → 暗银（同 EX-26 铬渐变）
-  const mid = H * 0.42;
-  const chrome = ctx.createLinearGradient(0, -mid, 0, mid);
-  chrome.addColorStop(0, 'rgb(250, 252, 255)');
-  chrome.addColorStop(0.34, 'rgb(206, 212, 222)');
-  chrome.addColorStop(0.52, 'rgb(112, 120, 132)');
-  chrome.addColorStop(0.56, 'rgb(236, 240, 246)');
-  chrome.addColorStop(1, 'rgb(96, 104, 116)');
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 4;
-  tex.needsUpdate = true;
-  return tex;
-}
-
-/**
  * R12-T1 尾门顶部 MAEXTRO 贯通小字（1024×80，透明底）。
  * 参考图 C3：真车尾门顶沿一行宽字距 MAEXTRO 细铬字。同尾标贴花先例：
  * 五段铬渐变 + 细暗描边，字距用 canvas letterSpacing 拉宽（细体大写字）。
@@ -1840,10 +1798,13 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
       if (id === 'glass-clear') {
         // 前挡用低反射：软光箱下 1.6 会把整块玻璃读成白板（r12e 实证），
         // 0.7 + 低不透明度才能既透出座舱又不糊成墙。
+        // R13：opacity 0.34→0.66 —— 0.34 时从正/侧前方直接看穿风挡，米白
+        // 仪表台顶 + 顶棚内饰透出，被用户指认「奶白色面板/白板」的一部分；
+        // 参考图 A1-A8/bilibili 正面风挡均为深色隐私玻璃观感。
         mat.metalness = 0.02;
         mat.roughness = 0.03;
         mat.envMapIntensity = 0.7;
-        mat.opacity = Math.min(mat.opacity, 0.34);
+        mat.opacity = Math.min(Math.max(mat.opacity, 0.66), 0.72);
       }
       mat.needsUpdate = true;
     }
@@ -1984,8 +1945,13 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
   const PEDAL_FALL_FLOOR = -0.3;
   /** 断裂瞬间绕顶端转轴甩向驾驶者的角度 */
   const PEDAL_FLING_RAD = (40 * Math.PI) / 180;
+  // R13：踏板贴图（上 38% 橡胶防滑垫 + 下拉丝不锈钢，程序化 Canvas）。
+  // color 放白防「贴图 × 深色底」双重压暗；盒体各面 UV 0-1，踏板面整贴单面图。
+  const pedalTex = createBrakePedalTexture();
+  pedalTex.anisotropy = 4;
   const pedalMat = new THREE.MeshPhysicalMaterial({
-    color: 0x16181c,
+    color: 0xffffff,
+    map: pedalTex,
     roughness: 0.78,
     metalness: 0.12,
     clearcoat: 0.2,
@@ -2654,13 +2620,15 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
     }
   }
 
-  // ---- P1-6 尾门镀铬字标（运行时叠加面片，挂 body 下、不进合批）----
-  // 对标报告 ④ 号差距。位置实测：tailgate 组件世界 bbox（工厂坐标车尾 -Z 面），
-  // 必须在 batchMergeStatic **之前**测 —— 合并会把 tailgate 子树的 leaf mesh 摘掉，
-  // 之后 setFromObject 得到空盒。字牌挂 body（不在 model 子树）→ 合并器遍历不到，
-  // 但 bbox 数据此刻有效。面朝车尾（body 局部 -Z = 世界 +Z），离尾门面外偏
-  // 1.5cm + 匹配尾门 rotation.x 倾角，防 z-fight。透明贴花 depthWrite:false，
-  // MeshBasic + 铬渐变贴图（无光照贴花，同迎宾光毯先例）。+1 draw call。
+  // ---- 尾门 MAEXTRO 贯通小字（运行时叠加面片，挂 body 下、不进合批）----
+  // R13 用户裁决：车尾只保留 MAEXTRO 贯通小字，「尊界 V800」镀铬字牌（P1-6
+  // tailgate-badge）整块移除 —— 参考图 C3 实锤真车尾门无中文铭牌。位置实测：
+  // tailgate 组件世界 bbox（工厂坐标车尾 -Z 面），必须在 batchMergeStatic **之前**
+  // 测 —— 合并会把 tailgate 子树的 leaf mesh 摘掉，之后 setFromObject 得到空盒。
+  // 字牌挂 body（不在 model 子树）→ 合并器遍历不到，但 bbox 数据此刻有效。
+  // 面朝车尾（body 局部 -Z = 世界 +Z），离尾门面外偏 1.5cm + 匹配尾门 rotation.x
+  // 倾角，防 z-fight。透明贴花 depthWrite:false，MeshBasic + 透明底贴图
+  // （无光照贴花，同迎宾光毯先例）。+1 draw call。
   if (typeof document !== 'undefined') {
     const tgNode = byId.get('tailgate');
     if (tgNode) {
@@ -2671,29 +2639,6 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
         const tgSize = tgBox.getSize(new THREE.Vector3());
         // 世界 → body 局部（body rotY(π)：车尾世界 +Z ↔ body 局部 -Z）
         const centerLocal = body.worldToLocal(tgCenter.clone());
-        const badgeTex = createTailBadgeTexture();
-        ownedTextures.push(badgeTex);
-        const badgeGeo = new THREE.PlaneGeometry(0.56, 0.11);
-        const badgeMat = new THREE.MeshBasicMaterial({
-          map: badgeTex,
-          transparent: true,
-          depthWrite: false
-        });
-        const badge = new THREE.Mesh(badgeGeo, badgeMat);
-        badge.name = 'tailgate-badge';
-        badge.castShadow = false;
-        badge.receiveShadow = false;
-        // 车尾面外偏 1.5cm（body 局部 -Z 方向），y 取 bbox 中点略上（尾灯带下方高度），
-        // 宽度 0.56 ≈ 尾门宽的 ~52%（细长字牌，与贯穿灯带留间隙）
-        badge.position.set(
-          centerLocal.x,
-          centerLocal.y + tgSize.y * 0.08,
-          centerLocal.z - tgSize.z / 2 - 0.015
-        );
-        badge.rotation.y = Math.PI; // 面朝 body 局部 -Z（车尾）
-        badge.rotation.x = 0; // R12b：尾门已直立（rotX 0），字标同步回正
-        body.add(badge);
-
         // R12-T1：尾门上部 MAEXTRO 贯通小字（参考图 C3 实锤：真车尾门顶沿有一行
         // 宽字距 MAEXTRO 铬字）。承载面实证：尾门上部贯穿红带（y≈1.12 世界）与
         // 顶沿饰条之间有一整段干净漆面（r12_mat/tail_view.png）。同 badge 先例：
@@ -3017,7 +2962,7 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
       { 灯组: '头灯 3-LED 点阵灯珠(EX-08)', 期望: 'led-dot×6', 命中: ledDotCount > 0 ? `remapped×${ledDotCount}` : '(无)' },
       // R11b 工厂（22:00 版）front-plate 组件被移除，plate 材质零 mesh 引用 ——
       // matById 永远收不到，(无) 是 spec 正确状态而非断链；EX-26 名牌贴图逻辑
-      // 因 plateMat null 跳过（尾门另有 P1-6 tailgate-badge 承担镀铬字职责）
+      // 因 plateMat null 跳过（R13 尾门镀铬字牌 tailgate-badge 已按用户裁决移除）
       { 灯组: '车名牌镀铬字', 期望: 'plate（spec 已移除引用）', 命中: plateMat ? 'plate' : '(无·spec 移除)' },
       { 灯组: '盾徽面板分区贴图', 期望: 'lamp-white', 命中: whiteMat ? 'lamp-white' : '(无)' },
       { 灯组: '皮革图集(素面+菱格)', 期望: 'leather-warm', 命中: leatherWarmMat ? 'leather-warm' : '(无)' },
@@ -3027,7 +2972,7 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
       { 灯组: '后保反光条分段(EX-31)', 期望: 'lamp-red 克隆', 命中: reflectorMat ? 'reflector-clone' : '(无)' },
       { 灯组: '轮心黑底盾徽(EX-33)', 期望: 'lamp-mark 克隆', 命中: wheelCapMat ? 'wheel-badge' : '(无)' },
       { 灯组: '迎宾光毯(EX-09)', 期望: 'welcome-carpet', 命中: welcomeMesh ? 'welcome-carpet' : '(无)' },
-      { 灯组: '尾门镀铬字标(P1-6)', 期望: 'tailgate-badge', 命中: body.children.some((c) => c.name === 'tailgate-badge') ? 'tailgate-badge' : '(无)' },
+      { 灯组: '尾门 MAEXTRO 小字(R12-T1)', 期望: 'tailgate-maextro', 命中: body.children.some((c) => c.name === 'tailgate-maextro') ? 'tailgate-maextro' : '(无)' },
       { 灯组: '屏幕家族UI(三联/后排/扶手)', 期望: 'screen-ui', 命中: matById.has('screen-ui') ? 'screen-ui' : '(无)' },
       { 灯组: '深棕皮革粒面', 期望: 'leather-dark', 命中: leatherDarkMat ? 'leather-dark' : '(无)' },
       { 灯组: '米白皮革粒面', 期望: 'leather-ivory', 命中: leatherIvoryMat ? 'leather-ivory' : '(无)' },
@@ -3228,6 +3173,89 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
         mat.needsUpdate = true;
       }
     });
+  }
+
+  // ---------------------------------------------------------------------------
+  // R13 内饰质感贴图（纯化后接线）
+  // 顺序契约：必须在本文件「R12b 内饰材质纯化（终局覆盖）」之后执行——
+  // 该块会整体撤 map/normal 回策展纯色；这里把 R13 新程序化贴图
+  // （src/model/interiorTextures.ts，固定种子 LCG、零外部图片）重新挂上，
+  // 仅限用户指认三件：方向盘（木纹+真皮轮缘）、刹车踏板（已在创建处接线）、
+  // 座椅（菱格绗缝）。克隆材质令合批独立成组（+1~2 DC），color 放白防双重压暗。
+  // ---------------------------------------------------------------------------
+  {
+    const SEAT_WARM_IDS = [
+      'seat-driver',
+      'seat-driver-back',
+      'seat-driver-headrest',
+      'seat-passenger',
+      'seat-passenger-back',
+      'seat-passenger-headrest',
+      'seat-rear-l',
+      'seat-rear-l-back',
+      'seat-rear-l-headrest',
+      'seat-rear-l-legrest',
+      'seat-rear-l-armrest',
+      'seat-rear-r',
+      'seat-rear-r-back',
+      'seat-rear-r-headrest',
+      'seat-rear-r-legrest',
+      'seat-rear-r-armrest',
+      'seat-third-row',
+      'seat-third-row-back',
+      'seat-third-row-headrest'
+    ] as const;
+    // 座椅菱格：基色取纯化层的策展色（warm=#6B4437 Cognac），贴图承载颜色、材质 color 放白
+    const quiltWarmTex = createSeatQuiltTexture('#6B4437');
+    quiltWarmTex.anisotropy = 4;
+    ownedTextures.push(quiltWarmTex, pedalTex);
+    const quiltSeatMat = leatherWarmMat
+      ? (leatherWarmMat.clone() as THREE.MeshPhysicalMaterial)
+      : null;
+    if (quiltSeatMat) {
+      quiltSeatMat.color.set(0xffffff);
+      quiltSeatMat.map = quiltWarmTex;
+      quiltSeatMat.userData.quiltTiled = true; // #uvassert 跳过图集分区判据（整幅菱格）
+      quiltSeatMat.needsUpdate = true;
+      for (const id of SEAT_WARM_IDS) {
+        const mesh = meshOf(id);
+        if (mesh) {
+          mesh.material = quiltSeatMat;
+          remapUVQuiltTriplanar(mesh);
+        }
+      }
+    }
+    // 方向盘：轮缘环展图（深咖真皮+胡桃木饰段+缝线），克隆 wood 材质
+    const steeringTex = createSteeringWheelTexture();
+    steeringTex.anisotropy = 8;
+    ownedTextures.push(steeringTex);
+    const steeringMesh = meshOf('steering');
+    if (steeringMesh) {
+      const srcMat = Array.isArray(steeringMesh.material)
+        ? (steeringMesh.material[0] as THREE.MeshPhysicalMaterial)
+        : (steeringMesh.material as THREE.MeshPhysicalMaterial);
+      const steerMat = (srcMat?.clone() ?? new THREE.MeshPhysicalMaterial()) as THREE.MeshPhysicalMaterial;
+      steerMat.color.set(0xffffff);
+      steerMat.map = steeringTex;
+      steerMat.roughness = 0.45;
+      steerMat.needsUpdate = true;
+      steeringMesh.material = steerMat;
+    }
+    // 方向盘气囊盖：米白真皮盘面 + 亮铬环 + 徽标底座，克隆 leather-ivory
+    const hubTex = createSteeringHubTexture();
+    hubTex.anisotropy = 4;
+    ownedTextures.push(hubTex);
+    const hubMesh = meshOf('steering-hub');
+    if (hubMesh) {
+      const srcMat = Array.isArray(hubMesh.material)
+        ? (hubMesh.material[0] as THREE.MeshPhysicalMaterial)
+        : (hubMesh.material as THREE.MeshPhysicalMaterial);
+      const hubMat = (srcMat?.clone() ?? new THREE.MeshPhysicalMaterial()) as THREE.MeshPhysicalMaterial;
+      hubMat.color.set(0xffffff);
+      hubMat.map = hubTex;
+      hubMat.needsUpdate = true;
+      hubMesh.material = hubMat;
+    }
   }
 
   const batchStats = batchMergeStatic(model, {

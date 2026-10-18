@@ -25,6 +25,9 @@ export class Sliders {
   /** 阻尼平滑后的输出值（~10Hz） */
   private smoothThrottle = 0;
   private smoothBrake = 0;
+  /** perf-r13：填充高度按「值未变则跳过」门控（稳态时避免逐帧无效 CSSOM 写入） */
+  private lastThrottleH = '';
+  private lastBrakeH = '';
   private keyThrottle = 0; // 0/1 键盘油门
   private keyBrake = 0; // 0/1 键盘刹车
   private cutInButton: HTMLButtonElement;
@@ -156,8 +159,16 @@ export class Sliders {
   render(dt: number): void {
     this.smoothThrottle = damp(this.smoothThrottle, this.throttleValue, 10, dt);
     this.smoothBrake = damp(this.smoothBrake, this.brakeValue, 10, dt);
-    this.throttleFill.style.height = `${this.smoothThrottle * 100}%`;
-    this.brakeFill.style.height = `${this.smoothBrake * 100}%`;
+    const th = `${this.smoothThrottle * 100}%`;
+    if (th !== this.lastThrottleH) {
+      this.throttleFill.style.height = th;
+      this.lastThrottleH = th;
+    }
+    const bh = `${this.smoothBrake * 100}%`;
+    if (bh !== this.lastBrakeH) {
+      this.brakeFill.style.height = bh;
+      this.lastBrakeH = bh;
+    }
     const tPct = `${Math.round(this.smoothThrottle * 100)}%`;
     if (this.throttlePct.textContent !== tPct) this.throttlePct.textContent = tPct;
     const bN = `${Math.round(this.smoothBrake * BRAKE.breakForceN)} N`;

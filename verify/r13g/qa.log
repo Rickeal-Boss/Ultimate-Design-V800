@@ -1,0 +1,11 @@
+VITE up
+EDGE spawned
+FAIL-EXIT
+VITE up
+EDGE spawned
+CDP up
+GOTO...
+SHOT t_front bytes=132095
+SHOT t_rear bytes=123166
+INFO {"tris":62802,"calls":73,"box":[2.424999952316285,2.7589999437332153,5.569999933242798]}
+ALL DONE

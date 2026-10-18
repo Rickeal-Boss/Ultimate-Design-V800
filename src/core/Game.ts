@@ -19,6 +19,7 @@ import { ContactShadow } from '../render/scene/ContactShadow';
 import { Lighting } from '../render/scene/Lighting';
 import { Road } from '../render/scene/Road';
 import { Terrain } from '../render/scene/Terrain';
+import { Waterway } from '../render/scene/Waterway';
 import { clamp, damp, lerp } from '../util/math';
 import { Hud } from '../ui/Hud';
 import { Menu } from '../ui/Menu';
@@ -51,6 +52,7 @@ export class Game {
   private readonly lighting: Lighting;
   private readonly contactShadow: ContactShadow;
   private readonly road: Road;
+  private readonly waterway: Waterway;
   private readonly car: CarLike;
   private readonly fx: FxSystems;
   private readonly crashWorld: World;
@@ -103,6 +105,7 @@ export class Game {
     this.contactShadow = new ContactShadow(this.scene);
     this.road = new Road(this.scene, this.renderer.capabilities.getMaxAnisotropy());
     new Terrain(this.scene);
+    this.waterway = new Waterway(this.scene);
     this.car = createV800CarAdapter(quality.tier);
     this.scene.add(this.car.root);
     this.fx = new FxSystems(this.scene, quality.tier);
@@ -278,8 +281,8 @@ export class Game {
 
   /** 固定步长物理推进（1/120s） */  private tick(step: number): void {
     this.prevDistance = this.sm.vehicle.distance;
-    // 自动切入：加速段达到电子限速稳态
-    if (this.sm.phase === 'accel' && this.sm.atLimiter) this.forceBrakeTick = true;
+    // 自动切入：加速段达到电子限速稳态（仅 #autodrive；正常玩法限速只钳速不断动力）
+    if (this.autoDrive && this.sm.phase === 'accel' && this.sm.atLimiter) this.forceBrakeTick = true;
     const phase = this.sm.phase;
     const autoThrottle = this.autoDrive && phase === 'accel' ? 1 : 0;
     // 0.9：低于断裂阈值，验证成功刹停路径；#snapdrive 时拉满 1.0 验证断裂→冗余路径
@@ -433,6 +436,7 @@ export class Game {
     this.contactShadow.update(this.car.body);
     this.env.update(this.rig.camera.position);
     this.road.update(this.time);
+    this.waterway.update(this.time);
 
     // ---- 内饰仪表 ----
     this.car.updateCluster(
@@ -481,10 +485,7 @@ export class Game {
 
     // ---- 音效（电机 / 风噪 / 胎啸 / 回收提示）----
     // 冗余制动段胎啸按固定 1/4 力度给（比静默滑行更有「电子泵介入」的听感）
-    // 电子限速处动力主动退出（B-1）：电机音从「满载」降为滑行档，
-    // 与 G 表/俯仰归零保持一致，避免「钉速却全油门」的失真。
-    const atLimiter = vehicle.speed * MS_TO_KMH >= VEHICLE.maxSpeedKmh - 0.05;
-    this.sfx.updateEngine(this.sm.speedKmh, pedaling && !braking && !atLimiter);
+    this.sfx.updateEngine(this.sm.speedKmh, pedaling && !braking);
     this.sfx.updateWind(vehicle.speed / (VEHICLE.maxSpeedKmh / MS_TO_KMH));
     this.sfx.updateSqueal(
       braking
@@ -570,6 +571,7 @@ export class Game {
     this.sliders.dispose();
     this.postfx.dispose();
     this.contactShadow.dispose();
+    this.waterway.dispose();
     this.crashWorld.dispose();
     this.car.dispose();
     this.result.destroy();

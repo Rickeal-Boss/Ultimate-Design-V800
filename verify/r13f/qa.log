@@ -1,0 +1,21 @@
+VITE up
+EDGE spawned
+CDP up
+GOTO...
+SHOT f_front bytes=123662
+SHOT f_rear bytes=140848
+SHOT f_rear34 bytes=282789
+SHOT f_side bytes=262020
+SHOT f_cabin bytes=30509
+SHOT f_wheel bytes=38733
+INFO {"tris":48,"calls":1,"box":[2.424999952316285,2.7589999437332153,5.569999933242798]}
+ALL DONE
+VITE up
+EDGE spawned
+CDP up
+GOTO...
+SHOT cu_steer bytes=644643
+SHOT cu_dash bytes=568055
+SHOT cu_rear_seat bytes=518187
+SHOT cu_rear bytes=448401
+ALL DONE
