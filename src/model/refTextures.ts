@@ -325,6 +325,11 @@ const REF_RULES: readonly RefRule[] = [
       'taillamp-bar-top-r',
       'taillamp-bar-bottom-l',
       'taillamp-bar-bottom-r',
+      // R7（智界R7）贯穿尾灯带 + 侧段
+      'tail-light-bar',
+      'tail-light-split-l',
+      'tail-light-split-r',
+      'tail-lamp-band',
     ],
     uv: 'triplanar',
     tileWorld: 0.05, // 图幅 1:2 → 单元 3.5×7.1cm，灯带 ≈2.4×0.4 个单元

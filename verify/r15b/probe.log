@@ -1,0 +1,19 @@
+GOTO http://[::1]:4317/preview.html#assembled MODE=rayfan
+READY
+RAY eye=[-0.55,1.28,-0.85] -> road=[-0.42,0.03,-30.85] dir=[0.0043,-0.0416,-0.9991]
+  HIT d=0.659 id=windshield|glass-clear p=[-0.547,1.253,-1.509]
+  HIT d=0.674 id=greenhouse-glass|glass-dark p=[-0.547,1.252,-1.524]
+  HIT d=0.691 id=windshield|glass-clear p=[-0.547,1.251,-1.54]
+PITCHFAN (0°=水平, 负=向下): pitch | nearest hit | dist | hitY
+  pitch=12° windshield|glass-clear@0.57m hitY=1.398
+  pitch=-9° tri-screen|screen-ui@0.57m hitY=1.191
+  pitch=-12° steering|wood@0.54m hitY=1.167
+  pitch=-16° tri-screen|screen-ui@0.59m hitY=1.117
+  pitch=-18° greenhouse-glass|glass-dark@0.57m hitY=1.103
+ANGLES: (相对水平线, 正=向下俯角)
+  注视点 tgt俯角=1.83°
+  tri-screen顶沿(1.2875,z-1.42)俯角=-0.75°  底沿(0.9725)俯角=28.35°
+  dash-upper顶面(0.985,前缘z-1.32)俯角=32.11°  后缘(z-1.78)俯角=17.6°
+  dash-lower底(0.67,z-1.45)俯角=45.47°
+  FOV=68 半垂直FOV=34.0° 注视俯角含在内
+ALL DONE

@@ -1,0 +1,19 @@
+GOTO http://[::1]:4317/#vehicle=v800
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r15e\v800_menu.png
+MENU_SUB[v800] 尊界V800 · 行政旗舰 MPV · 390kW 双电机 · 计算质量 3300kg
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r15e\v800_cabin.png btn=true active=cabin
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r15e\v800_chase.png btn=true active=chase
+VIEWBTNS[v800] chase|追随 , hood|机盖 , cabin|车内 , orbit|环绕 , side|侧跟
+--- TEX ---
+info: [V800Adapter] 参考图贴图挂载材质： lamp-red, leather-dark, leather-ivory, leather-warm, screen-ui
+GOTO http://[::1]:4317/#vehicle=r7
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r15e\r7_menu.png
+MENU_SUB[r7] 智界R7 · 轿跑 SUV · 2300kg · 极速 200km/h
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r15e\r7_cabinDriver.png btn=true active=cabinDriver
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r15e\r7_cabinPassenger.png btn=true active=cabinPassenger
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r15e\r7_cabinRear.png btn=true active=cabinRear
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r15e\r7_chase.png btn=true active=chase
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r15e\r7_orbit.png btn=true active=orbit
+VIEWBTNS[r7] chase|追随 , hood|机盖 , cabinDriver|主驾 , cabinPassenger|副驾 , cabinRear|后排 , orbit|环绕 , side|侧跟
+--- TEX ---
+info: [R7Adapter] 参考图贴图挂载材质： leather-ivory, leather-plum, screen-ui

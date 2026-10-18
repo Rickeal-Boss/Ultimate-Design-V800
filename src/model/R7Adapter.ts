@@ -588,6 +588,23 @@ export function createR7CarAdapter(tier: QualityTier = 'high'): CarLike {
     const node = byId.get(id);
     if (node) dynamicNodes.push(node);
   }
+  // R15：第一排靠背/头枕不进合批 —— 车内机位要按机位隐藏它们（否则主驾视野被自家靠背挡死）
+  const R7_CABIN_OCCLUDERS = [
+    'seat-driver-cushion',
+    'seat-driver-back',
+    'seat-driver-headrest',
+    'seat-passenger-cushion',
+    'seat-passenger-back',
+    'seat-passenger-headrest',
+  ] as const;
+  const cabinOccluders: THREE.Object3D[] = [];
+  for (const id of R7_CABIN_OCCLUDERS) {
+    const node = byId.get(id);
+    if (node) {
+      cabinOccluders.push(node);
+      dynamicNodes.push(node);
+    }
+  }
   const mergeResult = batchMergeStatic(model, {
     excludeObjects: dynamicNodes,
     excludeMaterialIds: UV_CONTENT_MATERIAL_IDS,
@@ -612,6 +629,7 @@ export function createR7CarAdapter(tier: QualityTier = 'high'): CarLike {
     wheels,
     // R15：内饰三机位（装配局部坐标），由 Game → CameraRig.setInteriorViews 消费
     interiorViews: R7_INTERIOR_VIEWS,
+    cabinOccluders,
     get currentHeat(): number {
       return heat;
     },

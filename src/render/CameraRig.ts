@@ -82,6 +82,28 @@ const POSE: ModePose = {
 const CABIN_EYE: readonly [number, number, number] = [-0.55, 1.28, -0.85];
 const CABIN_TARGET: readonly [number, number, number] = [-0.42, 1.02, -9];
 
+/**
+ * QA 机位标定钩子：`#eye=x,y,z,tx,ty,tz` 覆盖内建 cabin 机位（世界坐标）。
+ * 用途：车内视角「被某块面挡住」时，沿纵深逐点扫描找可行的眼点，
+ * 比反复改源码再重启快一个数量级。仅在 hash 显式给出时生效。
+ */
+const CABIN_EYE_OVERRIDE: readonly [number, number, number] | null = (() => {
+  if (typeof window === 'undefined') return null;
+  const m = /[#&]eye=(-?[\d.]+),(-?[\d.]+),(-?[\d.]+)(?:,(-?[\d.]+),(-?[\d.]+),(-?[\d.]+))?/.exec(
+    window.location.hash
+  );
+  if (!m) return null;
+  return [Number(m[1]), Number(m[2]), Number(m[3])];
+})();
+const CABIN_TARGET_OVERRIDE: readonly [number, number, number] | null = (() => {
+  if (typeof window === 'undefined') return null;
+  const m = /[#&]eye=(-?[\d.]+),(-?[\d.]+),(-?[\d.]+)(?:,(-?[\d.]+),(-?[\d.]+),(-?[\d.]+))?/.exec(
+    window.location.hash
+  );
+  if (!m || m[4] === undefined) return null;
+  return [Number(m[4]), Number(m[5]), Number(m[6])];
+})();
+
 const MODES: Record<CameraMode, (speed: number, portrait: boolean, time: number) => void> = {
   orbit: (_speed, portrait, time) => {
     // 相位 3π/4：t=0 机位落在右前 45°（游戏里车头朝 -Z，无相位时 t=0 正对车尾，
@@ -123,8 +145,8 @@ const MODES: Record<CameraMode, (speed: number, portrait: boolean, time: number)
     // 且眼点 z=-0.45 落在驾驶座靠背实体内部 → 半屏被一块皮革/台面大板占满）。
     // 现眼点前移到座椅壳外（射线扫描 minDist 0.15m 只碰到透明的侧窗玻璃），
     // 抬高到 1.27 使台面只压住画面底部约 1/4，注视点略下压看前方路面。
-    POSE.offset.set(...CABIN_EYE);
-    POSE.look.set(...CABIN_TARGET);
+    POSE.offset.set(...(CABIN_EYE_OVERRIDE ?? CABIN_EYE));
+    POSE.look.set(...(CABIN_TARGET_OVERRIDE ?? CABIN_TARGET));
     POSE.fov = 68;
     POSE.k = 4;
     POSE.near = 0.05;
