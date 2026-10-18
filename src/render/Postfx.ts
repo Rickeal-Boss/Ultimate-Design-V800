@@ -95,6 +95,10 @@ export class Postfx {
   private blurPass: ShaderPass;
   private bloomPass: UnrealBloomPass | null = null;
   private pixelRatio: number;
+  /** bloom 分辨率系数（perf-r14：核显 0.5 = 在 UnrealBloom 自带 1/2 基础上再减半） */
+  private readonly bloomScale: number;
+  private width = 1;
+  private height = 1;
 
   constructor(
     renderer: THREE.WebGLRenderer,
@@ -103,7 +107,10 @@ export class Postfx {
     quality: QualitySettings
   ) {
     this.pixelRatio = quality.pixelRatio;
+    this.bloomScale = quality.bloomScale;
     const size = renderer.getDrawingBufferSize(new THREE.Vector2());
+    this.width = window.innerWidth;
+    this.height = window.innerHeight;
     const target = new THREE.WebGLRenderTarget(size.x, size.y, {
       type: THREE.HalfFloatType,
       samples: quality.msaaSamples
@@ -112,12 +119,14 @@ export class Postfx {
     this.composer.addPass(new RenderPass(scene, camera));
     if (quality.bloom) {
       this.bloomPass = new UnrealBloomPass(
-        new THREE.Vector2(window.innerWidth, window.innerHeight),
+        new THREE.Vector2(size.x * this.bloomScale, size.y * this.bloomScale),
         0.38, // strength
         0.6, // radius
         0.72 // threshold
       );
       this.composer.addPass(this.bloomPass);
+      // composer.setSize 会把 pass 尺寸重置为全分辨率，构造后立即拉回缩放尺寸
+      this.applyBloomSize();
     }
     // 质量档开关：low 档用 6 tap 无色差简化版，high/medium 用增强版
     this.blurPass = new ShaderPass(
@@ -125,6 +134,14 @@ export class Postfx {
     );
     this.composer.addPass(this.blurPass);
     this.composer.addPass(new OutputPass());
+  }
+
+  /** bloom 走缩放分辨率：每级 mip 面积按 scale² 缩小（0.5 → 1/4 面积） */
+  private applyBloomSize(): void {
+    if (!this.bloomPass) return;
+    const w = Math.max(2, Math.round(this.width * this.pixelRatio * this.bloomScale));
+    const h = Math.max(2, Math.round(this.height * this.pixelRatio * this.bloomScale));
+    this.bloomPass.setSize(w, h);
   }
 
   setSpeedBlur(strength: number): void {
@@ -136,13 +153,16 @@ export class Postfx {
   }
 
   resize(width: number, height: number): void {
+    this.width = width;
+    this.height = height;
     this.composer.setSize(width, height);
-    this.bloomPass?.setSize(width, height);
+    this.applyBloomSize();
   }
 
   setPixelRatio(ratio: number): void {
     this.pixelRatio = ratio;
     this.composer.setPixelRatio(ratio);
+    this.applyBloomSize();
   }
 
   get currentPixelRatio(): number {

@@ -92,13 +92,33 @@ export const BRAKE = {
    * 热衰减（审查修复 A-5/G-2，改为摩擦功物理）：
    * 温度按 F_mech × v 的时间积分累积，与「是否超过抓地上限 93%」无关——
    * 原 onset 门槛 + 0.063/s 速率上限使系统永不可触发（8s 满踩只攒 ~0.5）。
-   * 标定：一次 200→0 满刹摩擦功 ≈ 10.79×3300×143 ≈ 5.09 MJ → ΔT ≈ 0.60；
-   * 连续第二把满刹末累计 ≈1.2 → 触发 ×0.85 衰减（HUD 温度条同步变「制动衰减」）。
+   *
+   * 2026-10-18 R14 用户指令「升温加强到 4 倍」：0.6 → **2.4** / 5.09e6。
+   * 标定：一次 200→0 满刹摩擦功 ≈10.79×3300×143 ≈ 5.09 MJ → ΔT ≈ 2.4
+   * （旧 0.6 时单车满刹根本摸不到阈值，热保护形同虚设）。
+   * 因此单次满刹必然越过红区：实测 **46% 行程 / 2.2~2.4s / v≈133km/h**
+   * （纯摩擦功口径的估算是 42%，差额是回收+风阻分走约 22% 动能）
+   * → 触发 2s 热保护切断，见 thermalHoldSeconds。
    */
-  brakeTempGain: 0.6 / 5.09e6,
+  brakeTempGain: 2.4 / 5.09e6,
   brakeTempThreshold: 1.0,
   brakeTempEfficiency: 0.85,
-  brakeTempCoolRate: 0.25
+  brakeTempCoolRate: 0.5,
+  /**
+   * 热保护（R14 用户指令）：制动盘到红区 → 机械制动力被切断 N 秒，
+   * 期间踏板力不产生任何机械制动（回收保留，见 Vehicle.stepVehicle 注释）。
+   * 2s 后恢复；必须重新越过 thermalTriggerTemp 才会再次触发（thermalRearmTemp 迟滞），
+   * 不允许「贴着阈值抖动式反复锁」。
+   */
+  thermalHoldSeconds: 2,
+  /** 触发温度（红区）。默认与 brakeTempThreshold 同值：越过即切断 + 衰减 */
+  thermalTriggerTemp: 1.0,
+  /**
+   * 重新布防温度：锁定期内摩擦功归零、盘温按 brakeTempCoolRate 下降，
+   * 降到 0.6 以下才允许下一次触发。取值越低 → 两次锁之间需要更多摩擦功，
+   * 锁定次数更少、惩罚更轻（标定见 docs/wip-play-r14.md）。
+   */
+  thermalRearmTemp: 0.6
 } as const;
 
 /**

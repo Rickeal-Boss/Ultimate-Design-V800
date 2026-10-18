@@ -22,6 +22,7 @@ import { Terrain } from '../render/scene/Terrain';
 import { Waterway } from '../render/scene/Waterway';
 import { clamp, damp, lerp } from '../util/math';
 import { Hud } from '../ui/Hud';
+import type { HudInput } from '../ui/Hud';
 import { Menu } from '../ui/Menu';
 import { Result } from '../ui/Result';
 import { Sliders } from '../ui/Sliders';
@@ -42,6 +43,27 @@ const REDUNDANT_BRAKE_LIGHT = 4.5;
  * 都必须保留该偏航、只清俯仰/横滚——清零即整车调头（2026-10-17 外部审查实锤）。
  */
 const MODEL_BASE_YAW = Math.PI;
+
+/** 帧探针记录（perf-r14，字段全部是原始量，判据在离线脚本里算） */
+interface FrameProbeRecord {
+  t: number;
+  dt: number;
+  alpha: number;
+  ticks: number;
+  distance: number;
+  prevDistance: number;
+  carZ: number;
+  carX: number;
+  camZ: number;
+  camX: number;
+  anchorZ: number;
+  speed: number;
+  fov: number;
+  dpr: number;
+  calls: number;
+  tris: number;
+  phase: number;
+}
 
 export class Game {
   private readonly scene = new THREE.Scene();
@@ -90,6 +112,35 @@ export class Game {
   private snapCamReturn: CameraMode | null = null;
   /** 自由视角输入解绑器（与 Sliders 同模式：一次性 AbortController） */
   private lookAbort: AbortController | null = null;
+  /**
+   * perf-r14 帧探针（仅 DEV + URL hash 含 `fprobe` 时启用，构建产物为死代码）：
+   * 逐帧记录 {dt, alpha, ticks, distance, carZ, camZ, anchorZ, speed} ——
+   * 「前后抽搐」是位置序列问题，必须看原始数值序列而非体感。
+   */
+  private probeFrames: FrameProbeRecord[] | null = null;
+  private probeTicks = 0;
+  /** cabin 机位专用遮挡件（前挡玻璃），进入/离开车内视角时切换可见性 */
+  private readonly windshieldMeshes: THREE.Mesh[] = [];
+  private windshieldHidden = false;
+  /**
+   * 复用同一份 HUD 载荷对象（perf-r14 热点分配清扫）：原先每帧 `hud.update({...})`
+   * 要新建一个 12 字段对象字面量（60 fps × 12 字段 = 纯垃圾），Hud.update 只同步读、
+   * 不持有引用，故可安全原地改写。
+   */
+  private readonly hudInput: HudInput = {    speedKmh: 0,
+    brakeSeconds: 0,
+    distanceToBarrier: 0,
+    pedalForce: 0,
+    regenPowerKw: 0,
+    brakeTemp: 0,
+    overheat: false,
+    thermalHold: 0,
+    scorePreview: 0,
+    canBrake: false,
+    braking: false,
+    atLimiter: false,
+    redundancy: false
+  };
 
   constructor(
     container: HTMLElement,
@@ -108,6 +159,21 @@ export class Game {
     this.waterway = new Waterway(this.scene);
     this.car = createV800CarAdapter(quality.tier);
     this.scene.add(this.car.root);
+    // R14 座舱机位：从车内看，前挡（glass-clear，全车唯一）会糊成一块灰板
+    // （env 反射 + 单面材质从背面看 = 半透明灰皮），驾驶视野被吃掉。
+    // 只在 cabin 机位期间隐藏前挡，其余机位原样保留 —— 只影响玻璃网格本身。
+    this.car.root.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      const mats = Array.isArray(m.material) ? m.material : [m.material];
+      for (const mt of mats) {
+        const id = (mt as THREE.MeshPhysicalMaterial)?.userData?.sculptMaterial?.id;
+        if (id === 'glass-clear') {
+          this.windshieldMeshes.push(m);
+          break;
+        }
+      }
+    });
     this.fx = new FxSystems(this.scene, quality.tier);
 
     this.postfx = new Postfx(this.renderer, this.scene, this.rig.camera, quality);
@@ -152,6 +218,20 @@ export class Game {
       this.autoDrive ? 0.35 : 0.1
     );
     this.loop.start();
+    // 帧探针（perf-r14）：必须在 loop.start 之后挂 window，但 buffer 已就绪，
+    // 漏掉的前 1~2 帧不影响统计口径。
+    if (import.meta.env.DEV && window.location.hash.includes('fprobe')) {
+      this.renderer.info.autoReset = false;
+      // QA：`#noshadowupd` 冻结阴影贴图更新 = 精确量出「每帧重绘 2048² 阴影」的单价
+      if (window.location.hash.includes('noshadowupd')) this.renderer.shadowMap.autoUpdate = false;
+      this.probeFrames = [];
+      (window as unknown as { __v800Probe: unknown }).__v800Probe = {
+        frames: this.probeFrames,
+        clear: (): void => {
+          this.probeFrames!.length = 0;
+        }
+      };
+    }
     // 首帧后回调（隐藏加载屏）
     requestAnimationFrame(() => onFirstFrame());
 
@@ -280,6 +360,7 @@ export class Game {
   }
 
   /** 固定步长物理推进（1/120s） */  private tick(step: number): void {
+    if (this.probeFrames !== null) this.probeTicks++;
     this.prevDistance = this.sm.vehicle.distance;
     // 自动切入：加速段达到电子限速稳态（仅 #autodrive；正常玩法限速只钳速不断动力）
     if (this.autoDrive && this.sm.phase === 'accel' && this.sm.atLimiter) this.forceBrakeTick = true;
@@ -477,6 +558,12 @@ export class Game {
 
     // ---- 相机与后处理 ----
     this.rig.update(dt, focus, vehicle.speed, this.car.root.quaternion);
+    // 车内机位遮挡切换（前挡从内部看是灰板）：仅在模式变化时写，零每帧开销
+    const wantHide = this.rig.mode === 'cabin';
+    if (wantHide !== this.windshieldHidden) {
+      this.windshieldHidden = wantHide;
+      for (const m of this.windshieldMeshes) m.visible = !wantHide;
+    }
     const speedBlur =
       pedaling && this.sm.phase !== 'countdown' ? Math.min(1, vehicle.speed / 72) ** 1.6 * 0.07 : 0;
     this.postfx.setSpeedBlur(speedBlur);
@@ -488,7 +575,8 @@ export class Game {
     this.sfx.updateEngine(this.sm.speedKmh, pedaling && !braking);
     this.sfx.updateWind(vehicle.speed / (VEHICLE.maxSpeedKmh / MS_TO_KMH));
     this.sfx.updateSqueal(
-      braking
+      // 热保护锁定期间机械制动力被切断 → 不应有胎啸（否则「没刹车却在尖叫」露馅）
+      braking && vehicle.thermalHold <= 0
         ? redundant
           ? REDUNDANCY.forceRatio
           : Math.min(1, this.sm.pedal.pedalForce / BRAKE.breakForceN)
@@ -520,21 +608,22 @@ export class Game {
       }
     }
 
-    // ---- HUD ----
-    this.hud.update({
-      speedKmh: this.sm.phase === 'crashed' ? this.crashWorld.carSpeed * MS_TO_KMH : this.sm.speedKmh,
-      brakeSeconds: this.sm.brakeElapsed,
-      distanceToBarrier: this.sm.distanceToBarrier,
-      pedalForce: this.sm.pedal.pedalForce,
-      regenPowerKw: vehicle.regenPowerKw,
-      brakeTemp: vehicle.brakeTemp,
-      overheat: vehicle.overheat,
-      scorePreview: this.sm.scorePreview,
-      canBrake: this.sm.canBrake,
-      braking,
-      atLimiter: this.sm.atLimiter,
-      redundancy: redundant
-    });
+    // ---- HUD（复用载荷对象，避免每帧字面量分配）----
+    const h = this.hudInput;
+    h.speedKmh = this.sm.phase === 'crashed' ? this.crashWorld.carSpeed * MS_TO_KMH : this.sm.speedKmh;
+    h.brakeSeconds = this.sm.brakeElapsed;
+    h.distanceToBarrier = this.sm.distanceToBarrier;
+    h.pedalForce = this.sm.pedal.pedalForce;
+    h.regenPowerKw = vehicle.regenPowerKw;
+    h.brakeTemp = vehicle.brakeTemp;
+    h.overheat = vehicle.overheat;
+    h.thermalHold = vehicle.thermalHold;
+    h.scorePreview = this.sm.scorePreview;
+    h.canBrake = this.sm.canBrake;
+    h.braking = braking;
+    h.atLimiter = this.sm.atLimiter;
+    h.redundancy = redundant;
+    this.hud.update(h);
     this.sliders.setCutInEnabled(this.sm.canBrake || braking, this.sm.canBrake && !braking);
     this.sliders.render(dt);
 
@@ -548,6 +637,35 @@ export class Game {
       this.postfx.setPixelRatio(this.qualityGovernor.pixelRatio);
     }
     void this.lastImpactStrength;
+
+    // ---- perf-r14 帧探针（DEV only；读后清零 info 保证读数是整帧累计）----
+    if (this.probeFrames !== null) {
+      const info = this.renderer.info;
+      const cam = this.rig.camera;
+      this.probeFrames.push({
+        t: performance.now(),
+        dt,
+        alpha,
+        ticks: this.probeTicks,
+        distance: vehicle.distance,
+        prevDistance: this.prevDistance,
+        carZ: this.car.root.position.z,
+        carX: this.car.root.position.x,
+        camZ: cam.position.z,
+        camX: cam.position.x,
+        anchorZ: this.rig.anchorView.z,
+        speed: vehicle.speed,
+        fov: cam.fov,
+        dpr: this.renderer.getPixelRatio(),
+        calls: info.render.calls,
+        tris: info.render.triangles,
+        phase: { menu: 0, countdown: 1, accel: 2, brake: 3, stopped: 4, crashed: 5 }[
+          this.sm.phase
+        ]
+      });
+      this.probeTicks = 0;
+      info.reset();
+    }
   }
 
   resize(): void {

@@ -20,6 +20,12 @@ export interface VehicleState {
   overheat: boolean;
   /** 当前机械制动减速度需求（ABS 判定前），诊断用 */
   mechDecelDemand: number;
+  /** 热保护剩余锁定秒数（>0 = 机械制动力被切断，踏板踩了也无效） */
+  thermalHold: number;
+  /** 热保护累计触发次数，诊断/测试用 */
+  thermalLocks: number;
+  /** 迟滞布防位：true = 可触发；触发后置 false，盘温降到 thermalRearmTemp 以下才复位 */
+  thermalArmed: boolean;
 }
 
 export interface VehicleInput {
@@ -47,7 +53,10 @@ export function createVehicleState(): VehicleState {
     regenPowerKw: 0,
     brakeTemp: 0,
     overheat: false,
-    mechDecelDemand: 0
+    mechDecelDemand: 0,
+    thermalHold: 0,
+    thermalLocks: 0,
+    thermalArmed: true
   };
 }
 
@@ -116,8 +125,22 @@ export function stepVehicle(state: VehicleState, dt: number, input: VehicleInput
     //   ① 摩擦圆精确成立：任意时刻 mech+regen ≤ μg（旧实现只钳机械项，深踩 11.6~11.9 违规）；
     //   ② 「踩得越深刹停用时不增」精确成立：总减速 = min(demand+regenReq, μg)，
     //      对 demand 处处单调不减，且与 b 的分配方式无关；
+    //      R14 热保护加入后：时间口径仍严格不增（b=0.86~0.97 停在同一次 2s 断力上），
+    //      距离口径在 0.86 以上是平台（深踩锁得更早 → 2s 滑行时车速更高，+0.5%）；
     //   ③ 回收退让仍然可见：深踩段 HUD 回收功率随机械占比上升而回落（b=1.0 时归零）。
     const redundant = Math.max(0, input.redundancyDecel ?? 0);
+    // ---- 热保护计时（R14）----
+    // 冗余为独立液压回路（heatless），接管瞬间解除热保护锁——否则「已被判负的局」
+    // 会再叠一层无意义的 2s 断力。锁定期间照常倒计时，归零当步即恢复制动。
+    if (redundant > 0) {
+      state.thermalHold = 0;
+      state.thermalArmed = true;
+    }
+    // 先判定本步是否受锁（保证 thermalHoldSeconds/dt = 240 步被切断），再倒计时
+    const thermalLocked = state.thermalHold > 0 && redundant <= 0;
+    if (thermalLocked) {
+      state.thermalHold = Math.max(0, state.thermalHold - dt);
+    }
     const regenRequest = redundant > 0
       ? (REDUNDANCY.includeRegen ? regenDecel(input.brake) : 0)
       : input.brake > 0
@@ -126,14 +149,19 @@ export function stepVehicle(state: VehicleState, dt: number, input: VehicleInput
     const demand = redundant > 0 ? redundant : input.pedalForce * BRAKE.decelPerNewton;
     state.mechDecelDemand = demand;
     // ABS 拟真：机械制动减速度 clamp 至 μg（冗余 2.70 m/s² 远低于上限，不触发钳制）
-    mechDecel = Math.min(demand, BRAKE.absMaxDecel);
+    // 热保护切断只作用于机械制动：踏板力仍在（demand 照记，HUD 可显示「踩了但没力」），
+    // 电回收保留（电机侧制动，不产生摩擦热）——1.47 m/s² 让车不至于完全失控，
+    // 也不会让玩家用「踩空两秒」把车直接送进路障。
+    mechDecel = thermalLocked ? 0 : Math.min(demand, BRAKE.absMaxDecel);
     regen = Math.min(regenRequest, Math.max(0, BRAKE.absMaxDecel - mechDecel));
     // 热衰减：温度按摩擦功（F_mech × v）的时间积分累积——真实热衰减只认摩擦功，
     // 与「是否逼近抓地上限」无关（一次 200→0 满刹就应明显升温）。
-    // 标定：brakeTempGain 使一次满刹（≈5.09 MJ）ΔT≈0.6，连续第二把触发 ×0.85。
+    // 标定（R14）：brakeTempGain = 2.4/5.09e6 → 单次满刹的理论 ΔT≈2.4
+    // （摩擦功口径；实测 ~1.6~1.9，因为回收/风阻分走约 22% 动能），
+    // 200 km/h 满刹在 46%±（108~113m，v≈133km/h）进红区。
     // 冗余回路为独立液压回路且力度仅 1/4，默认不计热（heatless），
     // 避免「已被判负」的局再叠加一层热衰减惩罚。
-    // 松滑条/轻踩（mechDecel ≤ 0.5 m/s²）转为缓慢降温，温度不会无限累积。
+    // 松滑条/轻踩（mechDecel ≤ 0.5 m/s²）与热保护锁定期转为降温。
     const heating = mechDecel > 0.5 && !(redundant > 0 && REDUNDANCY.heatless);
     if (heating) {
       state.brakeTemp = Math.min(
@@ -143,6 +171,17 @@ export function stepVehicle(state: VehicleState, dt: number, input: VehicleInput
     } else {
       state.brakeTemp = Math.max(0, state.brakeTemp - BRAKE.brakeTempCoolRate * dt);
     }
+    // 热保护触发 / 迟滞重布防（集中在纯函数里，可单测）。
+    // 触发条件用「>=」：单步温升可能一次跨过阈值，等号侧留给标定表取整。
+    if (redundant <= 0) {
+      if (state.thermalArmed && state.brakeTemp >= BRAKE.thermalTriggerTemp) {
+        state.thermalHold = BRAKE.thermalHoldSeconds;
+        state.thermalArmed = false;
+        state.thermalLocks += 1;
+      } else if (!state.thermalArmed && state.brakeTemp < BRAKE.thermalRearmTemp) {
+        state.thermalArmed = true;
+      }
+    }
     state.overheat = state.brakeTemp > BRAKE.brakeTempThreshold;
     const eff = state.overheat ? BRAKE.brakeTempEfficiency : 1;
     accel = (-regen - mechDecel * eff) - (dragForce(speed) + rollForce()) / MASS;
@@ -150,6 +189,8 @@ export function stepVehicle(state: VehicleState, dt: number, input: VehicleInput
     // 加速段
     state.brakeTemp = Math.max(0, state.brakeTemp - BRAKE.brakeTempCoolRate * dt);
     state.overheat = false;
+    state.thermalHold = 0;
+    if (state.brakeTemp < BRAKE.thermalRearmTemp) state.thermalArmed = true;
     const fMotor = motorForce(speed, input.throttle);
     accel = (fMotor - dragForce(speed) - rollForce()) / MASS;
   }

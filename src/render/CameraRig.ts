@@ -21,10 +21,8 @@ interface ModePose {
   offset: THREE.Vector3;
   look: THREE.Vector3;
   fov: number;
-  /** 偏移追踪刚度 */
+  /** 偏移追踪刚度（仅用于机位切换的位姿过渡） */
   k: number;
-  /** 锚点跟随刚度（车内/机盖需要紧贴车体） */
-  anchorK: number;
   near: number;
   /** true = 偏移在车体局部坐标系（随车头朝向旋转） */
   local: boolean;
@@ -39,7 +37,6 @@ const POSE: ModePose = {
   look: new THREE.Vector3(),
   fov: 55,
   k: 2,
-  anchorK: 5,
   near: 0.1,
   local: false
 };
@@ -54,18 +51,20 @@ const MODES: Record<CameraMode, (speed: number, portrait: boolean, time: number)
     POSE.look.set(0, portrait ? -1.6 : 0.85, 0);
     POSE.fov = portrait ? 58 : 42;
     POSE.k = 2;
-    POSE.anchorK = 5;
     POSE.near = 0.1;
     POSE.local = false;
   },
   chase: (speed) => {
     // 动态 FOV：55 → 68 随速度
     const e = Math.min(speed / 72, 1);
-    POSE.offset.set(1.6 - e * 1.2, 2.2 - e * 0.5, 8.2 - e * 1.4);
+    // 车距 = 基准 8.2 − 1.4e + 显式速度回拉 speed/5。
+    // 最后这项是把旧 anchor 阻尼（anchorK=5）的**稳态**滞后 v/5 显式搬到姿态里：
+    // 构图与 R13 完全一致（55 m/s 时相机在车后 17.9 m），但它现在是确定性的
+    // 速度函数，不再由 dt 逐帧积分 —— 既不抖，也不会把 dt 尖刺写进相对位移。
+    POSE.offset.set(1.6 - e * 1.2, 2.2 - e * 0.5, 8.2 - e * 1.4 + speed / 5);
     POSE.look.set(0, 1, -6);
     POSE.fov = 55 + e * 13;
     POSE.k = 2.5;
-    POSE.anchorK = 5;
     POSE.near = 0.1;
     POSE.local = false;
   },
@@ -75,17 +74,18 @@ const MODES: Record<CameraMode, (speed: number, portrait: boolean, time: number)
     POSE.look.set(0, 0.95, -16);
     POSE.fov = 66;
     POSE.k = 4;
-    POSE.anchorK = 30;
     POSE.near = 0.1;
     POSE.local = true;
   },
   cabin: () => {
-    // 驾驶位头枕前方（左舵 x=-0.55），目高 1.15m；视野覆盖三联屏/方向盘/星环/中岛
-    POSE.offset.set(-0.55, 1.16, -0.45);
-    POSE.look.set(-0.42, 1.12, -10);
+    // 驾驶位头枕前方，目高 1.27m（R14：原 1.16 只比仪表台顶 1.012 高 15cm，
+    // 且眼点 z=-0.45 落在驾驶座靠背实体内部 → 半屏被一块皮革/台面大板占满）。
+    // 现眼点前移到座椅壳外（射线扫描 minDist 0.15m 只碰到透明的侧窗玻璃），
+    // 抬高到 1.27 使台面只压住画面底部约 1/4，注视点略下压看前方路面。
+    POSE.offset.set(-0.55, 1.33, -0.58);
+    POSE.look.set(-0.42, 1.04, -10);
     POSE.fov = 68;
     POSE.k = 4;
-    POSE.anchorK = 30;
     POSE.near = 0.05;
     POSE.local = true;
   },
@@ -95,7 +95,6 @@ const MODES: Record<CameraMode, (speed: number, portrait: boolean, time: number)
     POSE.look.set(0, 0.85, -0.6);
     POSE.fov = 45;
     POSE.k = 3;
-    POSE.anchorK = 8;
     POSE.near = 0.1;
     POSE.local = true;
   },
@@ -104,7 +103,6 @@ const MODES: Record<CameraMode, (speed: number, portrait: boolean, time: number)
     POSE.look.set(0, 0, 0);
     POSE.fov = 55;
     POSE.k = 2.2;
-    POSE.anchorK = 5;
     POSE.near = 0.1;
     POSE.local = false;
   }
@@ -124,7 +122,6 @@ export class CameraRig {
   private offset = new THREE.Vector3(6, 1.6, 6);
   private lookOffset = new THREE.Vector3(0, 0.85, 0);
   private anchor = new THREE.Vector3();
-  private anchorReady = false;
   private tmpOffset = new THREE.Vector3();
   private tmpLook = new THREE.Vector3();
   /** 自由视角：用户拖拽产生的偏航/俯仰偏移与缩放（双击或切机位复位） */
@@ -177,6 +174,11 @@ export class CameraRig {
     return this.dragging;
   }
 
+  /** 只读锚点（perf-r14 帧探针判定相机-车相对位移用；外部勿写） */
+  get anchorView(): THREE.Vector3 {
+    return this.anchor;
+  }
+
   update(dt: number, target: THREE.Vector3, speed: number, carQuat: THREE.Quaternion = IDENT): void {
     const cam = this.camera;
     const portrait = cam.aspect < 1;
@@ -206,12 +208,13 @@ export class CameraRig {
       }
     }
 
-    if (!this.anchorReady || this.mode === 'crash') {
-      this.anchor.copy(target);
-      this.anchorReady = true;
-    } else {
-      this.anchor.lerp(target, 1 - Math.exp(-dt * pose.anchorK));
-    }
+    // 锚点**直接跟随**（perf-r14）：原实现 anchor.lerp(target, 1-exp(-dt*anchorK))
+    // 在 anchorK=5 下形成 v/5 的稳态滞后（30 m/s → 6 m、55 m/s → 11 m），
+    // 且滞后量随加速持续漂移 = 相机-车相对位移单向拉长（仿真实测 3s 内 3.0 m /
+    // 满载 11 m）。这层二次阻尼没有任何构图收益（构图由 pose.offset 决定），
+    // 却让「车距」变成速度的函数、并把任何 dt 抖动直接写进相对位移。
+    // 改为刚性跟随：机位切换的平滑仍由下面的 offset/lookOffset 指数阻尼负责。
+    this.anchor.copy(target);
     // 指数阻尼 → 模式切换约 0.4~0.6s 内收敛，不瞬跳
     const s = 1 - Math.exp(-dt * pose.k);
     this.offset.lerp(off, s);

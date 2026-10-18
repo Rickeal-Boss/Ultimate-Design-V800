@@ -9,6 +9,7 @@ import { BRAKE, MS_TO_KMH, TRACK, VEHICLE, calcScore } from '../src/config/physi
 import { createPedalState, resetPedal, stepPedal } from '../src/physics/BrakeModel';
 import { createVehicleState, dragForce, regenDecel, rollForce, stepVehicle } from '../src/physics/Vehicle';
 import { StateMachine } from '../src/core/StateMachine';
+import { THERMAL_BANNER_HINT, thermalBannerText } from '../src/ui/Hud';
 
 const DT = 1 / 120;
 
@@ -225,19 +226,176 @@ describe('制动平衡性（核心契约）', () => {
     expect(regenAt(0.97)).toBeLessThan(0.45);
   });
 
-  it('一次 200→0 满刹的制动温升 < 过热阈值（不惩罚正确的满刹操作）', () => {
+  it('一次 200→0 满刹的摩擦功标定：brakeTempGain × 5.09MJ = 2.4（R14 ×4 指令）', () => {
+    // R14 前的旧斜率 0.6/5.09e6 下单次满刹最高只攒到 ~0.6，永远摸不到红区；
+    // 用户指令「升温加强到 4 倍」后标定为 2.4/5.09e6。这里锁两件事：
+    // ① 单步温升斜率严格是旧常量的 4 倍（回归网，谁把 2.4 改回 0.6 会立刻红）；
+    // ② 一次满刹的理论 ΔT ≈ 5.09MJ × gain = 2.4，必然越过阈值 1.0。
+    const LEGACY_GAIN = 0.6 / 5.09e6;
+    const v = createVehicleState();
+    v.speed = 200 / MS_TO_KMH;
+    stepVehicle(v, DT, {
+      throttle: 0,
+      brake: 1,
+      powerCut: true,
+      pedalForce: BRAKE.breakForceN
+    });
+    const legacyDelta =
+      BRAKE.absMaxDecel * VEHICLE.totalMassKg * (200 / MS_TO_KMH) * DT * LEGACY_GAIN;
+    expect(v.brakeTemp / legacyDelta).toBeCloseTo(4, 6);
+    expect(BRAKE.brakeTempGain * 5.09e6).toBeCloseTo(2.4, 6);
+  });
+});
+
+describe('制动盘热保护（R14：红区 2s 断力 + 迟滞重布防）', () => {
+  /**
+   * 从 200km/h 以滑条 b 刹到停，记录每次热保护触发的时刻/里程/车速。
+   * 注意 b=1.0 会在 ~1.77s 踏板断裂（走冗余回路、不计热），不属于本组语义。
+   */
+  function brakeWithThermal(b: number) {
     const v = createVehicleState();
     v.speed = 200 / MS_TO_KMH;
     const p = createPedalState();
+    const d0 = v.distance;
+    const locks: { t: number; dist: number; speedKmh: number }[] = [];
     let t = 0;
-    while (v.speed > BRAKE.stopSpeed && t < 30) {
+    let seen = 0;
+    let maxTemp = 0;
+    while (v.speed > BRAKE.stopSpeed && t < 60) {
+      stepPedal(p, DT, b);
+      stepVehicle(v, DT, { throttle: 0, brake: b, powerCut: true, pedalForce: p.pedalForce });
+      t += DT;
+      maxTemp = Math.max(maxTemp, v.brakeTemp);
+      if (v.thermalLocks > seen) {
+        seen = v.thermalLocks;
+        locks.push({ t, dist: v.distance - d0, speedKmh: v.speed * MS_TO_KMH });
+      }
+    }
+    return { t, dist: v.distance - d0, maxTemp, locks, snapped: p.snapped, state: v };
+  }
+
+  it('单次 200→0 满刹必然越过红区：约 46% 行程触发且每次仅锁一次', () => {
+    for (const b of [0.8, 0.9, 0.97]) {
+      const r = brakeWithThermal(b);
+      expect(r.snapped).toBe(false);
+      expect(r.maxTemp).toBeGreaterThanOrEqual(BRAKE.brakeTempThreshold);
+      expect(r.locks.length).toBe(1); // 冷却速率 0.5/s×2s 恰好清空热量 → 无二次锁
+      const fraction = r.locks[0].dist / r.dist;
+      // 42%（纯摩擦功口径）实测受回收分流影响 → 46%±6%
+      expect(fraction).toBeGreaterThan(0.4);
+      expect(fraction).toBeLessThan(0.52);
+      expect(r.locks[0].speedKmh).toBeGreaterThan(120);
+    }
+  });
+
+  it('触顶锁定：2.0s 内机械制动力严格为 0（踏板力仍在，电回收保留）', () => {
+    const v = createVehicleState();
+    v.speed = 200 / MS_TO_KMH;
+    const p = createPedalState();
+    let guard = 0;
+    while (v.thermalLocks === 0 && guard++ < 120 * 20) {
       stepPedal(p, DT, 0.97);
       stepVehicle(v, DT, { throttle: 0, brake: 0.97, powerCut: true, pedalForce: p.pedalForce });
-      t += DT;
     }
-    expect(v.brakeTemp).toBeGreaterThan(0.3); // 确实在升温（摩擦功模型生效）
-    expect(v.brakeTemp).toBeLessThan(BRAKE.brakeTempThreshold);
-    expect(v.overheat).toBe(false);
+    expect(v.thermalHold).toBeCloseTo(BRAKE.thermalHoldSeconds, 9);
+    expect(v.thermalLocks).toBe(1);
+
+    let steps = 0;
+    while (v.thermalHold > 0 && steps < 600) {
+      const prevSpeed = v.speed;
+      stepPedal(p, DT, 0.97);
+      stepVehicle(v, DT, { throttle: 0, brake: 0.97, powerCut: true, pedalForce: p.pedalForce });
+      const resist = (dragForce(prevSpeed) + rollForce()) / VEHICLE.totalMassKg;
+      const brakeTotal = -v.accel - resist;
+      // 驾驶员明明还踩着（需求照记），但机械制动力被切断：只剩回收 0.15g
+      expect(v.mechDecelDemand).toBeGreaterThan(9);
+      expect(brakeTotal).toBeCloseTo(BRAKE.regenMaxDecel, 9);
+      steps++;
+    }
+    // 240 步（dt=1/120 → 2.0s）；浮点累减可能多挂一步 1e-16 的尾巴，宽 1 步
+    const exact = Math.round(BRAKE.thermalHoldSeconds / DT);
+    expect(steps).toBeGreaterThanOrEqual(exact);
+    expect(steps).toBeLessThanOrEqual(exact + 1);
+    expect(v.regenPowerKw).toBeGreaterThan(0); // 回收未被切断
+  });
+
+  it('2.0s 后恢复：制动力回到满值，且不会立即二次锁定', () => {
+    const r = brakeWithThermal(0.97);
+    // 全程只有 1 次锁：冷却 0.5/s×2s 把盘温清到 0，重新攒到 1.0 需要 2.12MJ，
+    // 而解锁后剩余动能不足 → 不会出现「贴阈值抖动式反复锁」。
+    expect(r.locks.length).toBe(1);
+    // 恢复后仍有足够的机械制动力（不是 0 也不是衰减后的 0.85 值）
+    const v = r.state;
+    expect(v.thermalHold).toBe(0);
+    expect(v.speed).toBeLessThanOrEqual(BRAKE.stopSpeed);
+    expect(v.thermalLocks).toBe(1);
+
+    // 白盒：锁定计时归零当步仍断力，下一步机械制动立刻回来（不是衰减后的 0.85 值）
+    const v2 = createVehicleState();
+    v2.speed = 40;
+    v2.brakeTemp = BRAKE.thermalTriggerTemp + 0.2; // 仍过热 → 恢复后走 ×0.85 衰减
+    v2.thermalArmed = false; // 不重新布防，避免本步立刻二次锁
+    v2.thermalHold = DT;
+    const forceIn = {
+      throttle: 0,
+      brake: 0.97,
+      powerCut: true,
+      pedalForce: BRAKE.breakForceN
+    };
+    stepVehicle(v2, DT, forceIn);
+    expect(v2.thermalHold).toBe(0); // 最后一步仍被切断
+    const prevSpeed = v2.speed;
+    stepVehicle(v2, DT, forceIn);
+    const resist = (dragForce(prevSpeed) + rollForce()) / VEHICLE.totalMassKg;
+    expect(-v2.accel - resist).toBeGreaterThan(
+      BRAKE.absMaxDecel * 0.9 * BRAKE.brakeTempEfficiency
+    );
+  });
+
+  it('迟滞：未重新布防时盘温高于阈值也不触发；降到 rearm 以下才重新布防', () => {
+    const v = createVehicleState();
+    v.speed = 30;
+    // 人为构造「刚刚触发完、盘温仍在阈值上」的边角：armed=false
+    v.brakeTemp = BRAKE.thermalTriggerTemp + 0.2;
+    v.thermalArmed = false;
+    stepVehicle(v, DT, { throttle: 0, brake: 0.97, powerCut: true, pedalForce: BRAKE.breakForceN });
+    expect(v.thermalLocks).toBe(0);
+    expect(v.thermalHold).toBe(0);
+
+    // 冷却到 rearm 以下 → 重新布防
+    let guard = 0;
+    while (!v.thermalArmed && guard++ < 120 * 30) {
+      stepVehicle(v, DT, { throttle: 0, brake: 0, powerCut: true, pedalForce: 0 });
+    }
+    expect(v.thermalArmed).toBe(true);
+    expect(v.brakeTemp).toBeLessThan(BRAKE.thermalRearmTemp);
+
+    // 再踩满：必须重新越过阈值才触发
+    v.speed = 30;
+    guard = 0;
+    while (v.thermalLocks === 0 && guard++ < 120 * 30) {
+      stepVehicle(v, DT, { throttle: 0, brake: 0.97, powerCut: true, pedalForce: BRAKE.breakForceN });
+    }
+    expect(v.thermalLocks).toBe(1);
+    expect(v.thermalHold).toBeCloseTo(BRAKE.thermalHoldSeconds, 9);
+  });
+
+  it('冗余回路接管时解除热保护（独立液压回路 + heatless，不叠加惩罚）', () => {
+    const v = createVehicleState();
+    v.speed = 40;
+    v.brakeTemp = 1.4;
+    v.thermalHold = 1.5;
+    v.thermalArmed = false;
+    stepVehicle(v, DT, {
+      throttle: 0,
+      brake: 0,
+      powerCut: true,
+      pedalForce: 0,
+      redundancyDecel: 2.7
+    });
+    expect(v.thermalHold).toBe(0);
+    expect(v.thermalArmed).toBe(true);
+    expect(v.brakeTemp).toBeLessThan(1.4); // 不计热
   });
 });
 
@@ -294,5 +452,14 @@ describe('赛道与计分', () => {
     expect(accelDist + brakeDist).toBeLessThan(TRACK.barrierDistance);
     // 且留有余量（≥300m），保证正常打法安全
     expect(TRACK.barrierDistance - accelDist - brakeDist).toBeGreaterThan(300);
+  });
+});
+
+describe('HUD 热保护文案（不依赖 DOM 的纯函数）', () => {
+  it('倒计时文案 = 「制动盘过热 · 冷却中 N.Ns」，负值归零', () => {
+    expect(thermalBannerText(2)).toBe('制动盘过热 · 冷却中 2.0s');
+    expect(thermalBannerText(1.24)).toBe('制动盘过热 · 冷却中 1.2s');
+    expect(thermalBannerText(-1)).toBe('制动盘过热 · 冷却中 0.0s');
+    expect(THERMAL_BANNER_HINT).toContain('踏板暂时无效');
   });
 });

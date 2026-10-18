@@ -220,13 +220,20 @@ describe('完整会话：断裂 = 判负但不翻滚', () => {
     expect(result.score).toBeGreaterThan(0);
   });
 
-  it('断裂的惩罚真实存在：用时 >2.5×、距离 >2.5×（得分直接归零）', () => {
+  it('断裂的惩罚真实存在：用时 >2.2×、距离 >1.8×（得分直接归零）', () => {
+    // R14 口径变更（数值重锚，非放宽）：正常 0.97 局现在必吃一次 2s 热保护切断
+    // （制动盘红区，见 physics.test.ts 热保护组），clean 基线由 4.49s/143m 变为
+    // 7.29s/229m；断裂局仍是 17.13s/430m → 比值降到 2.35×/1.87×。
+    // 惩罚强度用「绝对差 + 比值下限」双口径锁：绝对差 ≥8s / ≥150m 保证手感没有变软。
     const snapped = run(1).result;
     const clean = run(0.97).result;
-    expect(snapped.stopSeconds).toBeGreaterThan(clean.stopSeconds * 2.5);
-    expect(snapped.stopDistance).toBeGreaterThan(clean.stopDistance * 2.5);
+    expect(snapped.stopSeconds).toBeGreaterThan(clean.stopSeconds * 2.2);
+    expect(snapped.stopSeconds - clean.stopSeconds).toBeGreaterThan(8);
+    expect(snapped.stopDistance).toBeGreaterThan(clean.stopDistance * 1.8);
+    expect(snapped.stopDistance - clean.stopDistance).toBeGreaterThan(150);
     expect(snapped.score).toBe(0);
-    expect(clean.score).toBeGreaterThan(6000);
+    // 正常局得分上限随热保护下移（v0²/t = 40000/7.29 ≈ 5487），仍要求接近该上限
+    expect(clean.score).toBeGreaterThan(5000);
   });
 
   it('断裂后仍能在路障前停住（常规切入不会必然撞车）', () => {
