@@ -1,0 +1,98 @@
+GOTO #assembled
+READY
+MESH 仪表台上层（深棕皮革） comp=dash-upper mat=leather-dark vis=true tris=76 wmin=[-0.89,0.815,-2.014] wmax=[0.89,1.012,-1.545]
+MESH 三辐双色方向盘 comp=steering mat=wood vis=true tris=1152 wmin=[-0.751,0.787,-1.388] wmax=[-0.329,1.173,-1.212]
+MESH 方向盘气囊盖+盾标 comp=steering-hub mat=leather-ivory vis=true tris=792 wmin=[-0.64,0.88,-1.361] wmax=[-0.44,1.08,-1.239]
+MESH steering-spokes comp= mat=leather-ivory vis=true tris=192 wmin=[-1.04,0.32,-1.96] wmax=[-0.04,1.64,-0.64]
+MESH 零重力座椅扶手控制屏（l） comp=seat-rear-l-screen mat=screen-ui vis=true tris=288 wmin=[-0.535,0.954,0.11] wmax=[-0.465,0.962,0.159]
+MESH 零重力座椅扶手控制屏（r） comp=seat-rear-r-screen mat=screen-ui vis=true tris=288 wmin=[0.465,0.954,0.11] wmax=[0.535,0.962,0.159]
+MESH 水晶旋钮底座 comp=console-island-knob-base mat=crystal vis=true tris=792 wmin=[-0.047,0.788,-1.327] wmax=[0.047,0.824,-1.233]
+MESH 水晶旋钮滚花环 comp=console-island-knob-ring mat=crystal vis=true tris=1152 wmin=[-0.052,0.813,-1.332] wmax=[0.052,0.823,-1.228]
+MESH 贯穿三联屏 comp=tri-screen mat=screen-ui vis=true tris=288 wmin=[-0.83,0.973,-1.436] wmax=[0.83,1.287,-1.404]
+MESH 悬浮仪表屏 comp=gauge-screen mat=gauge-ui vis=true tris=288 wmin=[-0.91,1.035,-1.436] wmax=[-0.53,1.235,-1.416]
+MESH 后排控制屏 comp=rear-control-screen mat=screen-ui vis=true tris=288 wmin=[-0.12,0.76,-1.176] wmax=[0.12,0.9,-1.124]
+ALL DONE
+GOTO #assembled
+READY
+PICK ndcY=1.00 batch/leather-warm|leather-warm@0.13 | batch/leather-warm|leather-warm@0.12 | batch/leather-warm|leather-warm@0.11 | batch/leather-warm|leather-warm@0.10 | batch/leather-warm|leather-warm@0.10 | batch/leather-warm|leather-warm@0.10 | batch/leather-warm|leather-warm@0.10 | batch/leather-warm|leather-warm@0.10 | batch/leather-warm|leather-warm@0.11 | batch/leather-warm|leather-warm@0.12 | batch/leather-warm|leather-warm@0.13
+PICK ndcY=0.86 batch/leather-warm|leather-warm@0.12 | batch/leather-warm|leather-warm@0.11 | batch/leather-warm|leather-warm@0.11 | batch/leather-warm|leather-warm@0.10 | batch/leather-warm|leather-warm@0.10 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.10 | batch/leather-warm|leather-warm@0.10 | batch/leather-warm|leather-warm@0.11 | batch/leather-warm|leather-warm@0.12 | batch/leather-warm|leather-warm@0.13
+PICK ndcY=0.71 batch/leather-warm|leather-warm@0.12 | batch/leather-warm|leather-warm@0.11 | batch/leather-warm|leather-warm@0.10 | batch/leather-warm|leather-warm@0.10 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.10 | batch/leather-warm|leather-warm@0.10 | batch/leather-warm|leather-warm@0.11 | batch/leather-warm|leather-warm@0.12
+PICK ndcY=0.57 batch/leather-warm|leather-warm@0.12 | batch/leather-warm|leather-warm@0.11 | batch/leather-warm|leather-warm@0.10 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.10 | batch/leather-warm|leather-warm@0.10 | batch/leather-warm|leather-warm@0.11 | batch/leather-warm|leather-warm@0.12
+PICK ndcY=0.43 batch/leather-warm|leather-warm@0.12 | batch/leather-warm|leather-warm@0.11 | batch/leather-warm|leather-warm@0.10 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.10 | batch/leather-warm|leather-warm@0.11 | batch/leather-warm|leather-warm@0.12
+PICK ndcY=0.29 batch/leather-warm|leather-warm@0.12 | batch/leather-warm|leather-warm@0.11 | batch/leather-warm|leather-warm@0.10 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.10 | batch/leather-warm|leather-warm@0.11 | batch/leather-warm|leather-warm@0.12
+PICK ndcY=0.14 batch/leather-warm|leather-warm@0.12 | batch/leather-warm|leather-warm@0.11 | batch/leather-warm|leather-warm@0.10 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.10 | batch/leather-warm|leather-warm@0.11 | batch/leather-warm|leather-warm@0.12
+PICK ndcY=0.00 batch/leather-warm|leather-warm@0.12 | batch/leather-warm|leather-warm@0.11 | batch/leather-warm|leather-warm@0.10 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.10 | batch/leather-warm|leather-warm@0.11 | batch/leather-warm|leather-warm@0.12
+PICK ndcY=-0.14 batch/leather-warm|leather-warm@0.12 | batch/leather-warm|leather-warm@0.11 | batch/leather-warm|leather-warm@0.10 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.10 | batch/leather-warm|leather-warm@0.11 | batch/leather-warm|leather-warm@0.12
+PICK ndcY=-0.29 batch/leather-warm|leather-warm@0.12 | batch/leather-warm|leather-warm@0.11 | batch/leather-warm|leather-warm@0.10 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.10 | batch/leather-warm|leather-warm@0.11 | batch/leather-warm|leather-warm@0.12
+PICK ndcY=-0.43 batch/leather-warm|leather-warm@0.12 | batch/leather-warm|leather-warm@0.11 | batch/leather-warm|leather-warm@0.10 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.10 | batch/leather-warm|leather-warm@0.11 | batch/leather-warm|leather-warm@0.12
+PICK ndcY=-0.57 batch/leather-warm|leather-warm@0.12 | batch/leather-warm|leather-warm@0.11 | batch/leather-warm|leather-warm@0.10 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.10 | batch/leather-warm|leather-warm@0.11 | batch/leather-warm|leather-warm@0.12
+PICK ndcY=-0.71 batch/leather-warm|leather-warm@0.12 | batch/leather-warm|leather-warm@0.11 | batch/leather-warm|leather-warm@0.10 | batch/leather-warm|leather-warm@0.10 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.10 | batch/leather-warm|leather-warm@0.10 | batch/leather-warm|leather-warm@0.11 | batch/leather-warm|leather-warm@0.12
+PICK ndcY=-0.86 batch/leather-warm|leather-warm@0.12 | batch/leather-warm|leather-warm@0.11 | batch/leather-warm|leather-warm@0.10 | batch/leather-warm|leather-warm@0.10 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.09 | batch/leather-warm|leather-warm@0.10 | batch/leather-warm|leather-warm@0.11 | batch/leather-warm|leather-warm@0.11 | batch/leather-warm|leather-warm@0.12
+PICK ndcY=-1.00 batch/leather-warm|leather-warm@0.12 | batch/leather-warm|leather-warm@0.11 | batch/leather-warm|leather-warm@0.11 | batch/leather-warm|leather-warm@0.10 | batch/leather-warm|leather-warm@0.10 | batch/leather-warm|leather-warm@0.10 | batch/leather-warm|leather-warm@0.10 | batch/leather-warm|leather-warm@0.10 | batch/leather-warm|leather-warm@0.11 | batch/leather-warm|leather-warm@0.12 | batch/leather-warm|leather-warm@0.13
+ALL DONE
+GOTO #assembled
+READY
+CAM eye=[-0.55,1.16,-0.45] center=batch/leather-warm|leather-warm@0.09 minDist=0.09 kinds=1 {batch/leather-warm|leather-warm}
+CAM eye=[-0.55,1.16,-0.65] center=steering-spokes|leather-ivory@0.18 minDist=0.11 kinds=2 {greenhouse-glass|glass-dark, steering-spokes|leather-ivory}
+CAM eye=[-0.55,1.16,-0.80] center=steering-spokes|leather-ivory@0.03 minDist=0.03 kinds=1 {steering-spokes|leather-ivory}
+CAM eye=[-0.55,1.22,-0.80] center=steering-spokes|leather-ivory@0.06 minDist=0.05 kinds=1 {steering-spokes|leather-ivory}
+CAM eye=[-0.55,1.22,-0.95] center=tri-screen|screen-ui@0.46 minDist=0.25 kinds=5 {greenhouse-glass|glass-dark, batch/leather-warm|leather-warm, tri-screen|screen-ui, batch/matte-black|matte-black, windshield|glass-clear}
+CAM eye=[-0.55,1.10,-0.95] center=tri-screen|screen-ui@0.47 minDist=0.02 kinds=5 {batch/paint-upper|paint-upper, batch/leather-warm|leather-warm, tri-screen|screen-ui, steering|wood, greenhouse-glass|glass-dark}
+CAM eye=[-0.50,1.20,-1.10] center=tri-screen|screen-ui@0.31 minDist=0.21 kinds=4 {greenhouse-glass|glass-dark, tri-screen|screen-ui, steering|wood, windshield|glass-clear}
+CAM eye=[-0.55,1.28,-0.85] center=steering-spokes|leather-ivory@0.04 minDist=0.03 kinds=1 {steering-spokes|leather-ivory}
+ALL DONE
+GOTO #assembled
+READY
+MESH 方向盘气囊盖+盾标 comp=steering-hub mat=leather-ivory vis=true tris=792 wmin=[-0.64,0.88,-1.361] wmax=[-0.44,1.08,-1.239]
+MESH steering-spokes comp= mat=leather-ivory vis=true tris=192 wmin=[-1.04,0.32,-1.96] wmax=[-0.04,1.64,-0.64]
+MESH batch/paint-upper comp= mat=paint-upper vis=true tris=1744 wmin=[-1.21,0.2,-2.438] wmax=[1.21,1.857,2.83]
+MESH batch/matte-black comp= mat=matte-black vis=true tris=5072 wmin=[-1.045,0.22,-1.99] wmax=[1.045,1.869,2.55]
+MESH batch/chrome comp= mat=chrome vis=true tris=4364 wmin=[-1.212,0.273,-2.453] wmax=[1.212,1.337,2.838]
+MESH batch/bronze-dark comp= mat=bronze-dark vis=true tris=172 wmin=[-0.525,0.661,-2.506] wmax=[0.525,1.391,0.318]
+MESH batch/housing-dark comp= mat=housing-dark vis=true tris=304 wmin=[-0.93,0.627,-2.458] wmax=[0.93,1.13,2.834]
+MESH batch/lamp-head comp= mat=lamp-head vis=true tris=512 wmin=[-0.893,0.708,-2.441] wmax=[0.893,0.981,-2.316]
+MESH batch/lamp-star comp= mat=lamp-star vis=true tris=880 wmin=[-1.035,0.68,-2.453] wmax=[1.035,1.031,0.56]
+MESH batch/paint-lower comp= mat=paint-lower vis=true tris=152 wmin=[-1.012,0.245,-2.337] wmax=[0.96,1.06,1.345]
+MESH batch/lamp-white comp= mat=lamp-white vis=true tris=152 wmin=[-0.725,0.505,-2.445] wmax=[0.725,0.977,-2.303]
+MESH batch/lamp-red comp= mat=lamp-red vis=true tris=456 wmin=[-0.888,0.719,2.835] wmax=[0.888,1.063,2.838]
+MESH batch/lamp-amber comp= mat=lamp-amber vis=true tris=2840 wmin=[-0.883,0.8,-1.351] wmax=[0.883,1.677,2.836]
+MESH batch/carpet comp= mat=carpet vis=true tris=152 wmin=[-0.83,0.282,-1.65] wmax=[0.83,0.317,1.95]
+MESH batch/leather-ivory comp= mat=leather-ivory vis=true tris=228 wmin=[-0.89,0.67,-2.425] wmax=[0.89,1.857,0.925]
+MESH batch/lamp-gold comp= mat=lamp-gold vis=true tris=3616 wmin=[-0.908,0.862,-1.56] wmax=[0.908,1.16,0.488]
+MESH batch/wood comp= mat=wood vis=true tris=152 wmin=[-0.22,0.44,-2.2] wmax=[0.22,0.8,-0.9]
+MESH batch/leather-warm comp= mat=leather-warm vis=true tris=4724 wmin=[-0.8,0.54,-0.92] wmax=[0.8,1.435,1.391]
+MESH batch/leather-warm comp= mat=leather-warm vis=true tris=304 wmin=[-0.975,0.49,-2.17] wmax=[0.975,1.11,0.45]
+MESH batch/curtain comp= mat=curtain vis=true tris=576 wmin=[-0.89,1.06,-0.55] wmax=[0.89,1.695,-0.55]
+MESH batch/lamp-red comp= mat=lamp-red vis=true tris=152 wmin=[-0.89,0.411,2.812] wmax=[0.89,0.429,2.832]
+ALL DONE
+GOTO #assembled
+READY
+CAM eye=[-0.55,1.12,-0.45] center=batch/leather-warm|leather-warm@0.08 minDist=0.02 kinds=2 {greenhouse-glass|glass-dark, batch/leather-warm|leather-warm}
+CAM eye=[-0.55,1.18,-0.45] center=batch/leather-warm|leather-warm@0.09 minDist=0.09 kinds=1 {batch/leather-warm|leather-warm}
+CAM eye=[-0.55,1.24,-0.45] center=batch/leather-warm|leather-warm@0.09 minDist=0.09 kinds=1 {batch/leather-warm|leather-warm}
+CAM eye=[-0.55,1.30,-0.45] center=batch/leather-warm|leather-warm@0.09 minDist=0.02 kinds=1 {batch/leather-warm|leather-warm}
+CAM eye=[-0.55,1.12,-0.55] center=steering-spokes|leather-ivory@0.26 minDist=0.02 kinds=2 {greenhouse-glass|glass-dark, steering-spokes|leather-ivory}
+CAM eye=[-0.55,1.18,-0.55] center=steering-spokes|leather-ivory@0.29 minDist=0.15 kinds=2 {greenhouse-glass|glass-dark, steering-spokes|leather-ivory}
+CAM eye=[-0.55,1.24,-0.55] center=steering-spokes|leather-ivory@0.32 minDist=0.28 kinds=2 {greenhouse-glass|glass-dark, steering-spokes|leather-ivory}
+CAM eye=[-0.55,1.30,-0.55] center=steering-spokes|leather-ivory@0.34 minDist=0.32 kinds=1 {steering-spokes|leather-ivory}
+CAM eye=[-0.55,1.12,-0.60] center=steering-spokes|leather-ivory@0.21 minDist=0.02 kinds=2 {greenhouse-glass|glass-dark, steering-spokes|leather-ivory}
+CAM eye=[-0.55,1.18,-0.60] center=steering-spokes|leather-ivory@0.24 minDist=0.15 kinds=2 {greenhouse-glass|glass-dark, steering-spokes|leather-ivory}
+CAM eye=[-0.55,1.24,-0.60] center=steering-spokes|leather-ivory@0.27 minDist=0.25 kinds=1 {steering-spokes|leather-ivory}
+CAM eye=[-0.55,1.30,-0.60] center=steering-spokes|leather-ivory@0.29 minDist=0.27 kinds=1 {steering-spokes|leather-ivory}
+CAM eye=[-0.55,1.12,-0.65] center=steering-spokes|leather-ivory@0.16 minDist=0.02 kinds=2 {greenhouse-glass|glass-dark, steering-spokes|leather-ivory}
+CAM eye=[-0.55,1.18,-0.65] center=steering-spokes|leather-ivory@0.19 minDist=0.16 kinds=2 {greenhouse-glass|glass-dark, steering-spokes|leather-ivory}
+CAM eye=[-0.55,1.24,-0.65] center=steering-spokes|leather-ivory@0.22 minDist=0.20 kinds=1 {steering-spokes|leather-ivory}
+CAM eye=[-0.55,1.30,-0.65] center=steering-spokes|leather-ivory@0.24 minDist=0.22 kinds=1 {steering-spokes|leather-ivory}
+CAM eye=[-0.55,1.12,-0.70] center=steering-spokes|leather-ivory@0.11 minDist=0.02 kinds=2 {greenhouse-glass|glass-dark, steering-spokes|leather-ivory}
+CAM eye=[-0.55,1.18,-0.70] center=steering-spokes|leather-ivory@0.14 minDist=0.13 kinds=1 {steering-spokes|leather-ivory}
+CAM eye=[-0.55,1.24,-0.70] center=steering-spokes|leather-ivory@0.17 minDist=0.15 kinds=1 {steering-spokes|leather-ivory}
+CAM eye=[-0.55,1.30,-0.70] center=steering-spokes|leather-ivory@0.19 minDist=0.18 kinds=1 {steering-spokes|leather-ivory}
+CAM eye=[-0.55,1.12,-0.75] center=steering-spokes|leather-ivory@0.06 minDist=0.03 kinds=2 {greenhouse-glass|glass-dark, steering-spokes|leather-ivory}
+CAM eye=[-0.55,1.18,-0.75] center=steering-spokes|leather-ivory@0.09 minDist=0.08 kinds=1 {steering-spokes|leather-ivory}
+CAM eye=[-0.55,1.24,-0.75] center=steering-spokes|leather-ivory@0.12 minDist=0.11 kinds=1 {steering-spokes|leather-ivory}
+CAM eye=[-0.55,1.30,-0.75] center=steering-spokes|leather-ivory@0.14 minDist=0.13 kinds=1 {steering-spokes|leather-ivory}
+CAM eye=[-0.55,1.12,-0.80] center=steering-spokes|leather-ivory@0.01 minDist=0.01 kinds=1 {steering-spokes|leather-ivory}
+CAM eye=[-0.55,1.18,-0.80] center=steering-spokes|leather-ivory@0.04 minDist=0.04 kinds=1 {steering-spokes|leather-ivory}
+CAM eye=[-0.55,1.24,-0.80] center=steering-spokes|leather-ivory@0.07 minDist=0.06 kinds=1 {steering-spokes|leather-ivory}
+CAM eye=[-0.55,1.30,-0.80] center=steering-spokes|leather-ivory@0.09 minDist=0.09 kinds=1 {steering-spokes|leather-ivory}
+ALL DONE

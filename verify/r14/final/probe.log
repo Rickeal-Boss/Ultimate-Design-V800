@@ -1,0 +1,13 @@
+GOTO #assembled,uvassert,batchmerge,lightassert
+READY
+SHOT rear bytes=125465
+SHOT tail34 bytes=243790
+SHOT side bytes=256510
+SHOT front bytes=134992
+SHOT tail10 bytes=192625
+INFO {"tris":36842,"calls":44,"box":[2.424999952316285,2.7589999437332153,5.5730000288002195]}
+ALL DONE
+--- CONSOLE ---
+[V800Adapter] #batchmerge：mesh 188 → 72，可见 182 → 66，Draw Call −116
+[V800Adapter] #uvassert：全部三角形 UV 落在合法分区内，无串味
+[V800Adapter] #uvassert 密度判据：图案分区无 > 8x 的各向异性拉伸（世界面积 > 0.1cm² 口径）

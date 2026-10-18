@@ -1,0 +1,59 @@
+VITE up 5217
+EDGE spawned
+CDP up
+GOTO #assembled
+READY
+SHOT rear bytes=125216
+SHOT tail34 bytes=243483
+SHOT side bytes=256510
+SHOT front bytes=134992
+INFO {"tris":62672,"calls":71,"box":[2.424999952316285,2.7589999437332153,5.5730000288002195]}
+ALL DONE
+VITE up 5221
+EDGE spawned
+CDP up
+GOTO #assembled,uvassert,batchmerge,lightassert
+READY
+SHOT qa_rear bytes=125216
+INFO {"tris":62672,"calls":71,"box":[2.424999952316285,2.7589999437332153,5.5730000288002195]}
+ALL DONE
+--- CONSOLE ---
+[V800Adapter] #batchmerge：mesh 188 → 72，可见 182 → 66，Draw Call −116
+[V800Adapter] #uvassert：全部三角形 UV 落在合法分区内，无串味
+[V800Adapter] #uvassert 密度判据：图案分区无 > 8x 的各向异性拉伸（世界面积 > 0.1cm² 口径）
+VITE up 5225
+EDGE spawned
+CDP up
+GOTO #assembled,lightassert
+READY
+SHOT qa_front bytes=134992
+INFO {"tris":62672,"calls":71,"box":[2.424999952316285,2.7589999437332153,5.5730000288002195]}
+ALL DONE
+--- CONSOLE ---
+[vite] connecting...
+[vite] connected.
+[array Array]
+[preview] #assembled：已加载适配层整车（车头朝 −Z，capture azimuth 语义见 preview.ts 注释）；__v800Parts/#cabin 等依赖工厂组件索引的钩子在合并后为降级行为
+[.WebGL-0x5d9c004d6200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
+Failed to load resource: the server responded with a status of 404 (Not Found)
+[.WebGL-0x5d9c004d6200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
+[.WebGL-0x5d9c004d6200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
+VITE up 5229
+EDGE spawned
+CDP up
+GOTO #xxx
+READY
+SHOT bare_rear180 bytes=61187
+SHOT bare_rear34 bytes=157978
+INFO {"tris":117648,"calls":361,"box":[2.4249999940395357,2.758999985575676,5.558000028800219]}
+ALL DONE
+VITE up 5233
+EDGE spawned
+CDP up
+GOTO #assembled
+READY
+SHOT f_hipcorner bytes=445361
+ALL DONE
+VITE up 5237
+EDGE spawned
+CDP up
