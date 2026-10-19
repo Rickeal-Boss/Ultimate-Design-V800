@@ -41,7 +41,7 @@ export interface VehicleProfile {
   subtitle: string;
   /** 踏板是否可能机械断裂（V800 true / R7 false） */
   brakeBreakable: boolean;
-  /** 制动盘升温倍率（相对 BRAKE.brakeTempGain；V800 = 1 / R7 = 50） */
+  /** 制动盘升温倍率（相对 BRAKE.brakeTempGain；V800 = 1 / R7 = 100） */
   brakeTempGainScale: number;
   massKg: number;
   maxSpeedKmh: number;
@@ -71,9 +71,11 @@ export const VEHICLE_PROFILES: Record<VehicleId, VehicleProfile> = {
     name: '智界R7',
     subtitle: '轿跑 SUV · 2300kg · 极速 200km/h',
     brakeBreakable: false,
-    // R7 档位的核心：**踏板永不断裂**，代价是制动盘升温 ×50 —— 满踩约 0.46s 就顶到红区
+    // R7 档位的核心：**踏板永不断裂**，代价是制动盘升温 ×100 —— 满踩约 0.46s 就顶到红区
     // （冷却 0.5/s ⇒ 每次红区要 ~2s 才重新布防），必须改打脉冲点刹。
-    brakeTempGainScale: 50,
+    // R17 基座减半（BRAKE.brakeTempGain 2.4→1.2）后倍率 50→100 补偿：
+    // 有效升温 100×1.2 = 50×2.4 与改前逐位一致，R7 既有手感标定不变。
+    brakeTempGainScale: 100,
     massKg: 2300,
     maxSpeedKmh: 200,
     lengthM: 4.956,

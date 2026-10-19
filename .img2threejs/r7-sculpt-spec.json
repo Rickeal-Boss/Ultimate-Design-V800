@@ -149,7 +149,7 @@
      "id": "d-arch-cladding",
      "kind": "hole",
      "zone": "exterior",
-     "note": "轮拱黑色包边半圆带",
+     "note": "轮拱真开口（无包边件，R17 去除围边）",
      "mapsTo": {
       "ref": "d-arch-cladding"
      }
@@ -385,7 +385,7 @@
     "name": "溜背 SUV 轮廓与比例",
     "required": true,
     "qualityCriteria": [
-     "侧视：长 4.956 / 高 1.634 / 轴距 2.95 的比例可量；车顶后段从 -1.0 起持续下压到尾部 y≈1.25"
+     "侧视：长 4.956 / 高 1.634 / 轴距 2.95 的比例可量；车顶后段从 -0.7 起持续下压到尾部 y≈1.18"
     ],
     "evidenceRefs": [
      "img-r7-side",
@@ -455,14 +455,14 @@
     "qualityCriteria": [
      "20 根辐条开窗可透光",
      "卡钳在轮辐开窗后可见",
-     "轮眉黑色包边只在拱口上半"
+     "轮拱为车身钣金开口，无外围包边件"
     ],
     "evidenceRefs": [
      "img-r7-34"
     ],
     "failureModes": [
      "轮圈读作实心黑饼",
-     "整圆轮眉穿地"
+     "轮拱外加包边/围边件"
     ]
    }
   ],
@@ -477,7 +477,7 @@
   "mustNotDo": [
    "不得把玻璃改成 transmission（整帧 DC 翻倍）",
    "不得用实心盒当 macro 容器后忘记隐藏",
-   "不得让轮眉包边成为整圆环（整圆会穿地读作轮底皮带）"
+   "不得重新加入轮拱外围包边/围边件（R17 用户明确要求去除，曾产生车轮旁白色异物）"
   ]
  },
  "qualityTargets": {
@@ -655,7 +655,7 @@
   },
   {
    "id": "r7-wheel-identity",
-   "name": "21 寸双十辐轮圈 + 红卡钳 + 黑色轮眉",
+   "name": "21 寸双十辐轮圈 + 红卡钳 + 轮拱开口",
    "tier": "critical",
    "passIds": [
     "material-pass"
@@ -665,7 +665,6 @@
    "componentRefs": [
     "wheel-face-fl",
     "caliper-fl",
-    "arch-fl",
     "rim-fl"
    ],
    "evidenceRefs": [
@@ -823,7 +822,7 @@
   }
  },
  "assumptions": [
-  "车宽 1.981 含轮眉包边（|x|=0.990），不含展开的后视镜",
+  "车宽 1.981 由后视镜外缘 |x|=0.986 决定；轮拱包边已按用户要求去除（胎外缘 |x|=0.968），不含展开的后视镜",
   "单视角无法确证底盘/后备箱内部，按同级 SUV 典型值推断"
  ],
  "coordinateFrame": {
@@ -837,7 +836,7 @@
    "track": 1.68,
    "tire": "255/45 R21 (r=0.383)",
    "units": "m",
-   "note": "与尊界 V800 spec 完全同源；车宽口径含轮眉包边 (|x|=0.990)，不含后视镜"
+   "note": "与尊界 V800 spec 完全同源；车宽口径由后视镜外缘 |x|=0.986 决定（轮拱包边已按用户要求去除，胎外缘 |x|=0.968），不含后视镜展开"
   },
   "units": "meters",
   "note": "左舵驾驶位在 +X 侧（+Z 朝前时左侧为 +X）；集成层 body.rotation.y=π 适配游戏 -Z 前进方向"
@@ -864,7 +863,7 @@
    },
    "observations": [
     "墨绿金属漆在侧面出青绿 flop",
-    "黑色轮眉包边",
+    "轮拱开口即车身钣金（无外围包边件）",
     "21 寸黑双十辐 + 红卡钳",
     "隐藏式门把手",
     "镀铬窗框",
@@ -1520,7 +1519,7 @@
      "id": "d-arch-cladding",
      "name": "轮拱真开口",
      "kind": "hole",
-     "note": "前后轮拱按 r0.438 上半圆开挖，脚点落 y0.18 底边；黑色包边另件覆盖拱口"
+     "note": "前后轮拱按 r0.438 上半圆开挖，脚点落 y0.18 底边；开口边缘即车身钣金断面，无额外包边件（R17 用户要求去除）"
     }
    ],
    "surfaceDetail": {
@@ -3456,83 +3455,83 @@
      "points": [
       [
        0.61,
-       -0.15
+       -0.115
       ],
       [
        0.62913,
-       -0.14619
+       -0.11119
       ],
       [
        0.64536,
-       -0.13536
+       -0.10036
       ],
       [
        0.65619,
-       -0.11913
+       -0.08413
       ],
       [
        0.66,
-       -0.1
+       -0.065
       ],
       [
        0.66,
-       0.1
+       0.065
       ],
       [
        0.65619,
-       0.11913
+       0.08413
       ],
       [
        0.64536,
-       0.13536
+       0.10036
       ],
       [
        0.62913,
-       0.14619
+       0.11119
       ],
       [
        0.61,
-       0.15
+       0.115
       ],
       [
        -0.61,
-       0.15
+       0.115
       ],
       [
        -0.62913,
-       0.14619
+       0.11119
       ],
       [
        -0.64536,
-       0.13536
+       0.10036
       ],
       [
        -0.65619,
-       0.11913
+       0.08413
       ],
       [
        -0.66,
-       0.1
+       0.065
       ],
       [
        -0.66,
-       -0.1
+       -0.065
       ],
       [
        -0.65619,
-       -0.11913
+       -0.08413
       ],
       [
        -0.64536,
-       -0.13536
+       -0.10036
       ],
       [
        -0.62913,
-       -0.14619
+       -0.11119
       ],
       [
        -0.61,
-       -0.15
+       -0.115
       ]
      ],
      "depth": 0.055,
@@ -3557,7 +3556,7 @@
    "attachment": null,
    "dimensions": {
     "width": 1.32,
-    "height": 0.3,
+    "height": 0.23,
     "depth": 0.055,
     "units": "meters",
     "confidence": 0.9
@@ -3565,7 +3564,7 @@
    "transform": {
     "position": [
      0,
-     0.455,
+     0.5,
      2.428
     ],
     "rotation": [
@@ -3643,7 +3642,7 @@
      "id": "d-intake-three-part",
      "name": "三段式进气分隔",
      "kind": "groove",
-     "note": "中部横梁 + 两侧竖向鳍片把进气口切成三段"
+     "note": "中部横梁 + 两侧竖向鳍片把进气口切成三段；R17 收窄至 23cm 高并上移，为下方牌照位让位"
     }
    ],
    "surfaceDetail": {
@@ -4137,7 +4136,7 @@
    "attachment": null,
    "dimensions": {
     "width": 0.44,
-    "height": 0.14,
+    "height": 0.13,
     "depth": 0.004,
     "units": "meters",
     "confidence": 0.9
@@ -4145,7 +4144,7 @@
    "transform": {
     "position": [
      0,
-     0.545,
+     0.295,
      2.47
     ],
     "rotation": [
@@ -4155,7 +4154,7 @@
     ],
     "scale": [
      0.44,
-     0.14,
+     0.13,
      0.004
     ]
    },
@@ -4223,7 +4222,7 @@
      "id": "d-plate-text",
      "name": "牌照字样",
      "kind": "decal",
-     "note": "「智界 R7」由适配层 Canvas 绘制"
+     "note": "「智界 R7」由适配层 Canvas 绘制；R17 复位至下进气口下方（原位置被进气口实体掩埋）"
     }
    ],
    "surfaceDetail": {
@@ -4264,84 +4263,84 @@
     "profile2D": {
      "points": [
       [
-       0.82,
-       -0.035
+       0.8255,
+       -0.025
       ],
       [
-       0.83148,
-       -0.03272
+       0.83488,
+       -0.02314
       ],
       [
-       0.84121,
-       -0.02621
+       0.84282,
+       -0.01782
       ],
       [
-       0.84772,
-       -0.01648
-      ],
-      [
-       0.85,
-       -0.005
+       0.84814,
+       -0.00988
       ],
       [
        0.85,
-       0.005
+       -0.0005
       ],
       [
-       0.84772,
-       0.01648
+       0.85,
+       0.0005
       ],
       [
-       0.84121,
-       0.02621
+       0.84814,
+       0.00988
       ],
       [
-       0.83148,
-       0.03272
+       0.84282,
+       0.01782
       ],
       [
-       0.82,
-       0.035
+       0.83488,
+       0.02314
       ],
       [
-       -0.82,
-       0.035
+       0.8255,
+       0.025
       ],
       [
-       -0.83148,
-       0.03272
+       -0.8255,
+       0.025
       ],
       [
-       -0.84121,
-       0.02621
+       -0.83488,
+       0.02314
       ],
       [
-       -0.84772,
-       0.01648
+       -0.84282,
+       0.01782
+      ],
+      [
+       -0.84814,
+       0.00988
       ],
       [
        -0.85,
-       0.005
+       0.0005
       ],
       [
        -0.85,
-       -0.005
+       -0.0005
       ],
       [
-       -0.84772,
-       -0.01648
+       -0.84814,
+       -0.00988
       ],
       [
-       -0.84121,
-       -0.02621
+       -0.84282,
+       -0.01782
       ],
       [
-       -0.83148,
-       -0.03272
+       -0.83488,
+       -0.02314
       ],
       [
-       -0.82,
-       -0.035
+       -0.8255,
+       -0.025
       ]
      ],
      "depth": 0.07,
@@ -4366,7 +4365,7 @@
    "attachment": null,
    "dimensions": {
     "width": 1.7,
-    "height": 0.07,
+    "height": 0.05,
     "depth": 0.07,
     "units": "meters",
     "confidence": 0.88
@@ -4374,7 +4373,7 @@
    "transform": {
     "position": [
      0,
-     0.27,
+     0.175,
      2.41
     ],
     "rotation": [
@@ -4724,7 +4723,7 @@
    "attachment": null,
    "dimensions": {
     "width": 1.7,
-    "height": 0.108,
+    "height": 0.185,
     "depth": 0.02,
     "units": "meters",
     "confidence": 0.92
@@ -4732,8 +4731,8 @@
    "transform": {
     "position": [
      0,
-     1.055,
-     -2.47
+     1.072,
+     -2.486
     ],
     "rotation": [
      0,
@@ -4742,7 +4741,7 @@
     ],
     "scale": [
      1.7,
-     0.108,
+     0.185,
      0.02
     ]
    },
@@ -4805,7 +4804,14 @@
    "deformations": [],
    "joints": [],
    "seams": [],
-   "localFeatures": [],
+   "localFeatures": [
+    {
+     "id": "d-tail-band",
+     "name": "烟熏灯带承托 LUXEED 字标",
+     "kind": "linework",
+     "note": "R17：暗场带加高至 18.5cm 并外凸出尾门面，LUXEED 字标嵌在带内（参考正后图层次）"
+    }
+   ],
    "surfaceDetail": {
     "macroRoughness": 0,
     "microRoughness": 0,
@@ -4819,7 +4825,9 @@
    "evidenceRefs": [
     "img-r7-rear"
    ],
-   "details": [],
+   "details": [
+    "d-tail-band"
+   ],
    "fidelityTier": "hero",
    "colorMaterialRecipe": {
     "dominantAlbedo": "rgba(18, 19, 22, 1.0)",
@@ -4861,8 +4869,8 @@
    "transform": {
     "position": [
      0,
-     1.055,
-     -2.484
+     1.1,
+     -2.5
     ],
     "rotation": [
      0,
@@ -4939,7 +4947,7 @@
      "id": "d-tail-bar-red",
      "name": "贯穿红光标线",
      "kind": "emissive",
-     "note": "全宽 1.66m 红光带 + 中央一道更亮的红线，刹车时整条加亮"
+     "note": "全宽 1.66m 红光带位于烟熏暗场带上沿，刹车时整条加亮"
     }
    ],
    "surfaceDetail": {
@@ -4999,7 +5007,7 @@
    "transform": {
     "position": [
      0.79,
-     1.058,
+     1.1,
      -2.372
     ],
     "rotation": [
@@ -5128,7 +5136,7 @@
    "transform": {
     "position": [
      -0.79,
-     1.058,
+     1.1,
      -2.372
     ],
     "rotation": [
@@ -5257,8 +5265,8 @@
    "transform": {
     "position": [
      0,
-     0.995,
-     -2.484
+     1.022,
+     -2.5
     ],
     "rotation": [
      0,
@@ -5335,7 +5343,7 @@
      "id": "d-luxeed-lettering",
      "name": "L U X E E D 宽间距字标",
      "kind": "decal",
-     "note": "6 字母宽字距排列，位于贯穿尾灯正下方（适配层 Canvas 绘制，仅文字性引用）"
+     "note": "6 字母宽字距排列，嵌于烟熏暗场带内、贯穿红光带正下方（适配层 Canvas 绘制，仅文字性引用）"
     }
    ],
    "surfaceDetail": {
@@ -6102,7 +6110,7 @@
    "transform": {
     "position": [
      0.625,
-     0.318,
+     0.26,
      -2.492
     ],
     "rotation": [
@@ -6231,7 +6239,7 @@
    "transform": {
     "position": [
      -0.625,
-     0.318,
+     0.26,
      -2.492
     ],
     "rotation": [
@@ -6342,27 +6350,27 @@
      "points": [
       [
        -2.27,
-       1.322
+       1.237
       ],
       [
        -2.41,
-       1.3
+       1.215
       ],
       [
        -2.432,
-       1.262
+       1.177
       ],
       [
        -2.33,
-       1.246
+       1.161
       ],
       [
        -2.24,
-       1.258
+       1.173
       ],
       [
        -2.245,
-       1.3
+       1.215
       ]
      ],
      "depth": 1.34,
@@ -6473,7 +6481,7 @@
      "id": "d-spoiler-lip",
      "name": "鸭尾上翘",
      "kind": "ridge",
-     "note": "尾端 y1.32 上翘唇口，后视图中尾门上方那道横向亮棱"
+     "note": "尾端 y1.24 上翘唇口（R17 随溜背线下压），后视图中尾门上方那道横向亮棱"
     }
    ],
    "surfaceDetail": {
@@ -6534,8 +6542,8 @@
    "transform": {
     "position": [
      0,
-     1.315,
-     -2.352
+     1.195,
+     -2.484
     ],
     "rotation": [
      0,
@@ -6838,40 +6846,56 @@
        1.598
       ],
       [
-       -0.6,
+       -0.45,
+       1.628
+      ],
+      [
+       -0.7,
        1.622
       ],
       [
-       -1.0,
-       1.618
+       -0.95,
+       1.601
       ],
       [
-       -1.35,
-       1.588
+       -1.2,
+       1.563
       ],
       [
-       -1.7,
-       1.52
+       -1.42,
+       1.518
       ],
       [
-       -1.69428,
-       1.49055
+       -1.55,
+       1.484
       ],
       [
-       -1.34584,
-       1.55829
+       -1.54241,
+       1.45498
       ],
       [
-       -0.99864,
-       1.58803
+       -1.41339,
+       1.48874
       ],
       [
-       -0.60075,
-       1.59201
+       -1.19478,
+       1.53346
       ],
       [
-       -0.20282,
-       1.56813
+       -0.94648,
+       1.57121
+      ],
+      [
+       -0.69838,
+       1.59204
+      ],
+      [
+       -0.45144,
+       1.59803
+      ],
+      [
+       -0.20389,
+       1.56825
       ],
       [
        0.09464,
@@ -7044,40 +7068,56 @@
        1.594
       ],
       [
-       -0.6,
+       -0.45,
+       1.624
+      ],
+      [
+       -0.7,
        1.618
       ],
       [
-       -1.0,
-       1.614
+       -0.95,
+       1.597
       ],
       [
-       -1.35,
-       1.584
+       -1.2,
+       1.559
       ],
       [
-       -1.7,
-       1.516
+       -1.42,
+       1.514
       ],
       [
-       -1.69085,
-       1.46888
+       -1.55,
+       1.48
       ],
       [
-       -1.34334,
-       1.53646
+       -1.53785,
+       1.43356
       ],
       [
-       -0.99783,
-       1.56605
+       -1.40943,
+       1.46718
       ],
       [
-       -0.6012,
-       1.57001
+       -1.19165,
+       1.51173
       ],
       [
-       -0.20451,
-       1.54621
+       -0.94438,
+       1.54933
+      ],
+      [
+       -0.69741,
+       1.57007
+      ],
+      [
+       -0.4523,
+       1.57606
+      ],
+      [
+       -0.20623,
+       1.54641
       ],
       [
        0.09143,
@@ -7237,40 +7277,56 @@
        1.50477
       ],
       [
-       0.20451,
-       1.54621
+       0.20623,
+       1.54641
       ],
       [
-       0.6012,
-       1.57001
+       0.4523,
+       1.57606
       ],
       [
-       0.99783,
-       1.56605
+       0.69741,
+       1.57007
       ],
       [
-       1.34334,
-       1.53646
+       0.94438,
+       1.54933
       ],
       [
-       1.69085,
-       1.46888
+       1.19165,
+       1.51173
       ],
       [
-       1.7,
-       1.516
+       1.40943,
+       1.46718
       ],
       [
-       1.35,
-       1.584
+       1.53785,
+       1.43356
       ],
       [
-       1.0,
-       1.614
+       1.55,
+       1.48
       ],
       [
-       0.6,
+       1.42,
+       1.514
+      ],
+      [
+       1.2,
+       1.559
+      ],
+      [
+       0.95,
+       1.597
+      ],
+      [
+       0.7,
        1.618
+      ],
+      [
+       0.45,
+       1.624
       ],
       [
        0.2,
@@ -7550,49 +7606,57 @@
    "confidence": 0.92,
    "primitive": "extrude",
    "topologyClass": "conforming-shell",
-   "topologyRationale": "溜背斜面薄壳带挤出，后挡与尾门夹角约 42°",
+   "topologyRationale": "溜背斜面薄壳带挤出，后挡相对水平面约 19°（R17 按参考图压俯冲线）",
    "geometryDescriptor": {
     "profile2D": {
      "points": [
       [
-       -1.66,
-       1.522
+       -1.55,
+       1.484
       ],
       [
-       -1.9,
-       1.462
+       -1.75,
+       1.42
       ],
       [
-       -2.12,
-       1.392
+       -1.95,
+       1.34
       ],
       [
-       -2.3,
-       1.316
+       -2.15,
+       1.258
       ],
       [
-       -2.4,
-       1.246
+       -2.32,
+       1.196
       ],
       [
-       -2.38509,
-       1.2247
+       -2.42,
+       1.18
       ],
       [
-       -2.28798,
-       1.29295
+       -2.41589,
+       1.15433
       ],
       [
-       -2.11109,
-       1.36758
+       -2.31278,
+       1.17102
       ],
       [
-       -1.89293,
-       1.43698
+       -2.14057,
+       1.23377
       ],
       [
-       -1.65369,
-       1.49678
+       -1.94024,
+       1.3159
+      ],
+      [
+       -1.74119,
+       1.39554
+      ],
+      [
+       -1.54208,
+       1.45924
       ]
      ],
      "depth": 1.78,
@@ -7618,7 +7682,7 @@
    "dimensions": {
     "width": 1.78,
     "height": 0.3,
-    "depth": 0.76,
+    "depth": 0.89,
     "units": "meters",
     "confidence": 0.92
    },
@@ -7703,7 +7767,7 @@
      "id": "d-fastback-rear",
      "name": "溜背后挡",
      "kind": "contour",
-     "note": "车顶 -1.66 起以 42° 斜落至尾门 y1.25，与侧视参考一致"
+     "note": "车顶 -0.7 起持续下压，-1.55 后斜落至尾门 y1.18，与侧视参考一致"
     }
    ],
    "surfaceDetail": {
@@ -7766,19 +7830,19 @@
       ],
       [
        -0.7,
-       1.582
+       1.578
       ],
       [
        -1.1,
-       1.566
+       1.542
       ],
       [
        -1.48,
-       1.502
+       1.46
       ],
       [
        -1.76,
-       1.386
+       1.39
       ],
       [
        -1.88,
@@ -8503,19 +8567,19 @@
       ],
       [
        1.76,
-       1.386
+       1.39
       ],
       [
        1.48,
-       1.502
+       1.46
       ],
       [
        1.1,
-       1.566
+       1.542
       ],
       [
        0.7,
-       1.582
+       1.578
       ],
       [
        0.2,
@@ -9212,7 +9276,7 @@
      "points": [
       [
        -1.76,
-       1.386
+       1.39
       ],
       [
        -1.88,
@@ -9232,7 +9296,7 @@
       ],
       [
        -1.6,
-       1.33
+       1.445
       ]
      ],
      "depth": 1.78,
@@ -10599,9 +10663,9 @@
    },
    "transform": {
     "position": [
-     0.944,
-     0.988,
-     0.56
+     0.949,
+     1.01,
+     0.5
     ],
     "rotation": [
      0,
@@ -10678,7 +10742,7 @@
      "id": "d-flush-handle-fl",
      "name": "隐藏式门把手",
      "kind": "seam",
-     "note": "与车身齐平的细长把手槽，凸出仅 6mm"
+     "note": "与车身齐平的细长把手槽，外凸约 6mm；R17 按参考图复位（前把手 z0.50 / 后把手 z-0.69，齐腰线 y1.01）"
     }
    ],
    "surfaceDetail": {
@@ -10738,9 +10802,9 @@
    },
    "transform": {
     "position": [
-     -0.944,
-     0.988,
-     0.56
+     -0.949,
+     1.01,
+     0.5
     ],
     "rotation": [
      0,
@@ -10817,7 +10881,7 @@
      "id": "d-flush-handle-fr",
      "name": "隐藏式门把手",
      "kind": "seam",
-     "note": "与车身齐平的细长把手槽，凸出仅 6mm"
+     "note": "与车身齐平的细长把手槽，外凸约 6mm；R17 按参考图复位（前把手 z0.50 / 后把手 z-0.69，齐腰线 y1.01）"
     }
    ],
    "surfaceDetail": {
@@ -10877,9 +10941,9 @@
    },
    "transform": {
     "position": [
-     0.944,
-     0.988,
-     -0.76
+     0.949,
+     1.01,
+     -0.69
     ],
     "rotation": [
      0,
@@ -11008,9 +11072,9 @@
    },
    "transform": {
     "position": [
-     -0.944,
-     0.988,
-     -0.76
+     -0.949,
+     1.01,
+     -0.69
     ],
     "rotation": [
      0,
@@ -11104,1058 +11168,6 @@
     "dominantAlbedo": "rgba(232, 233, 236, 1.0)",
     "secondaryAlbedo": "rgba(232, 233, 236, 0.85)",
     "materialClass": "metal",
-    "materialClassConfidence": 0.9
-   }
-  },
-  {
-   "id": "arch-fl",
-   "name": "前轮拱包边（左）",
-   "level": "meso",
-   "role": "trim",
-   "importance": 0.85,
-   "confidence": 0.92,
-   "primitive": "extrude",
-   "topologyClass": "conforming-shell",
-   "topologyRationale": "半圆拱带（200°→-20°，内 r0.44 外 r0.50）挤出 55mm，只覆盖拱口上半，脚点 y0.17 不穿地",
-   "geometryDescriptor": {
-    "profile2D": {
-     "points": [
-      [
-       1.06154,
-       0.23251
-      ],
-      [
-       1.03623,
-       0.35012
-      ],
-      [
-       1.04372,
-       0.47018
-      ],
-      [
-       1.08346,
-       0.58373
-      ],
-      [
-       1.15246,
-       0.68228
-      ],
-      [
-       1.24557,
-       0.75845
-      ],
-      [
-       1.35583,
-       0.80655
-      ],
-      [
-       1.475,
-       0.823
-      ],
-      [
-       1.59417,
-       0.80655
-      ],
-      [
-       1.70443,
-       0.75845
-      ],
-      [
-       1.79754,
-       0.68228
-      ],
-      [
-       1.86654,
-       0.58373
-      ],
-      [
-       1.90628,
-       0.47018
-      ],
-      [
-       1.91377,
-       0.35012
-      ],
-      [
-       1.88846,
-       0.23251
-      ],
-      [
-       1.94485,
-       0.21199
-      ],
-      [
-       1.9736,
-       0.34563
-      ],
-      [
-       1.96509,
-       0.48207
-      ],
-      [
-       1.91994,
-       0.61111
-      ],
-      [
-       1.84153,
-       0.72309
-      ],
-      [
-       1.73572,
-       0.80965
-      ],
-      [
-       1.61042,
-       0.86431
-      ],
-      [
-       1.475,
-       0.883
-      ],
-      [
-       1.33958,
-       0.86431
-      ],
-      [
-       1.21428,
-       0.80965
-      ],
-      [
-       1.10847,
-       0.72309
-      ],
-      [
-       1.03006,
-       0.61111
-      ],
-      [
-       0.98491,
-       0.48207
-      ],
-      [
-       0.9764,
-       0.34563
-      ],
-      [
-       1.00515,
-       0.21199
-      ]
-     ],
-     "depth": 0.055,
-     "bevel": {
-      "thickness": 0.006,
-      "size": 0.006,
-      "offset": -0.006,
-      "segments": 2
-     }
-    },
-    "topologyIntent": "wheel arch cladding half-arc",
-    "edgeTreatment": {
-     "type": "rounded",
-     "bevelRadius": 0.006,
-     "segments": 2
-    },
-    "deformationStack": [],
-    "uvStrategy": "generated procedural coordinates",
-    "normalStrategy": "vertex normals"
-   },
-   "parent": "root",
-   "attachment": null,
-   "dimensions": {
-    "width": 0.055,
-    "height": 0.36,
-    "depth": 0.98,
-    "units": "meters",
-    "confidence": 0.92
-   },
-   "transform": {
-    "position": [
-     0.99,
-     0,
-     0
-    ],
-    "rotation": [
-     0,
-     -1.5708,
-     0
-    ],
-    "scale": [
-     1,
-     1,
-     1
-    ]
-   },
-   "actionProfile": {
-    "animationRole": "static",
-    "pivot": {
-     "mode": "center",
-     "localPosition": [
-      0,
-      0,
-      0
-     ],
-     "axis": [
-      0,
-      1,
-      0
-     ],
-     "confidence": 0.92
-    },
-    "transformChannels": {
-     "translate": false,
-     "rotate": false,
-     "scale": false,
-     "bend": false,
-     "twist": false,
-     "detach": false,
-     "visibility": true,
-     "materialState": true
-    },
-    "sockets": [],
-    "collider": {
-     "type": "box",
-     "offset": [
-      0,
-      0,
-      0
-     ],
-     "scale": [
-      1,
-      1,
-      1
-     ],
-     "isTrigger": false,
-     "notes": ""
-    },
-    "constraints": [],
-    "destruction": {
-     "breakable": false,
-     "fractureGroup": "root",
-     "seamRefs": [],
-     "detachableFragments": [],
-     "breakImpulse": 0,
-     "debrisMaterial": "base"
-    }
-   },
-   "material": "matte-black",
-   "materialLayers": [
-    "matte-black"
-   ],
-   "deformations": [],
-   "joints": [],
-   "seams": [],
-   "localFeatures": [],
-   "surfaceDetail": {
-    "macroRoughness": 0,
-    "microRoughness": 0,
-    "bumpAmplitude": 0,
-    "normalPattern": "",
-    "displacementPattern": "",
-    "occlusionPattern": "",
-    "edgeWearPattern": "",
-    "notes": ""
-   },
-   "evidenceRefs": [
-    "img-r7-34",
-    "img-r7-side"
-   ],
-   "details": [
-    "d-arch-cladding"
-   ],
-   "fidelityTier": "hero",
-   "colorMaterialRecipe": {
-    "dominantAlbedo": "rgba(18, 19, 22, 1.0)",
-    "secondaryAlbedo": "rgba(18, 19, 22, 0.85)",
-    "materialClass": "plastic",
-    "materialClassConfidence": 0.9
-   }
-  },
-  {
-   "id": "arch-fr",
-   "name": "前轮拱包边（右）",
-   "level": "meso",
-   "role": "trim",
-   "importance": 0.85,
-   "confidence": 0.92,
-   "primitive": "extrude",
-   "topologyClass": "conforming-shell",
-   "topologyRationale": "半圆拱带（200°→-20°，内 r0.44 外 r0.50）挤出 55mm，只覆盖拱口上半，脚点 y0.17 不穿地",
-   "geometryDescriptor": {
-    "profile2D": {
-     "points": [
-      [
-       -1.00515,
-       0.21199
-      ],
-      [
-       -0.9764,
-       0.34563
-      ],
-      [
-       -0.98491,
-       0.48207
-      ],
-      [
-       -1.03006,
-       0.61111
-      ],
-      [
-       -1.10847,
-       0.72309
-      ],
-      [
-       -1.21428,
-       0.80965
-      ],
-      [
-       -1.33958,
-       0.86431
-      ],
-      [
-       -1.475,
-       0.883
-      ],
-      [
-       -1.61042,
-       0.86431
-      ],
-      [
-       -1.73572,
-       0.80965
-      ],
-      [
-       -1.84153,
-       0.72309
-      ],
-      [
-       -1.91994,
-       0.61111
-      ],
-      [
-       -1.96509,
-       0.48207
-      ],
-      [
-       -1.9736,
-       0.34563
-      ],
-      [
-       -1.94485,
-       0.21199
-      ],
-      [
-       -1.88846,
-       0.23251
-      ],
-      [
-       -1.91377,
-       0.35012
-      ],
-      [
-       -1.90628,
-       0.47018
-      ],
-      [
-       -1.86654,
-       0.58373
-      ],
-      [
-       -1.79754,
-       0.68228
-      ],
-      [
-       -1.70443,
-       0.75845
-      ],
-      [
-       -1.59417,
-       0.80655
-      ],
-      [
-       -1.475,
-       0.823
-      ],
-      [
-       -1.35583,
-       0.80655
-      ],
-      [
-       -1.24557,
-       0.75845
-      ],
-      [
-       -1.15246,
-       0.68228
-      ],
-      [
-       -1.08346,
-       0.58373
-      ],
-      [
-       -1.04372,
-       0.47018
-      ],
-      [
-       -1.03623,
-       0.35012
-      ],
-      [
-       -1.06154,
-       0.23251
-      ]
-     ],
-     "depth": 0.055,
-     "bevel": {
-      "thickness": 0.006,
-      "size": 0.006,
-      "offset": -0.006,
-      "segments": 2
-     }
-    },
-    "topologyIntent": "wheel arch cladding half-arc",
-    "edgeTreatment": {
-     "type": "rounded",
-     "bevelRadius": 0.006,
-     "segments": 2
-    },
-    "deformationStack": [],
-    "uvStrategy": "generated procedural coordinates",
-    "normalStrategy": "vertex normals"
-   },
-   "parent": "root",
-   "attachment": null,
-   "dimensions": {
-    "width": 0.055,
-    "height": 0.36,
-    "depth": 0.98,
-    "units": "meters",
-    "confidence": 0.92
-   },
-   "transform": {
-    "position": [
-     -0.99,
-     0,
-     0
-    ],
-    "rotation": [
-     0,
-     1.5708,
-     0
-    ],
-    "scale": [
-     1,
-     1,
-     1
-    ]
-   },
-   "actionProfile": {
-    "animationRole": "static",
-    "pivot": {
-     "mode": "center",
-     "localPosition": [
-      0,
-      0,
-      0
-     ],
-     "axis": [
-      0,
-      1,
-      0
-     ],
-     "confidence": 0.92
-    },
-    "transformChannels": {
-     "translate": false,
-     "rotate": false,
-     "scale": false,
-     "bend": false,
-     "twist": false,
-     "detach": false,
-     "visibility": true,
-     "materialState": true
-    },
-    "sockets": [],
-    "collider": {
-     "type": "box",
-     "offset": [
-      0,
-      0,
-      0
-     ],
-     "scale": [
-      1,
-      1,
-      1
-     ],
-     "isTrigger": false,
-     "notes": ""
-    },
-    "constraints": [],
-    "destruction": {
-     "breakable": false,
-     "fractureGroup": "root",
-     "seamRefs": [],
-     "detachableFragments": [],
-     "breakImpulse": 0,
-     "debrisMaterial": "base"
-    }
-   },
-   "material": "matte-black",
-   "materialLayers": [
-    "matte-black"
-   ],
-   "deformations": [],
-   "joints": [],
-   "seams": [],
-   "localFeatures": [],
-   "surfaceDetail": {
-    "macroRoughness": 0,
-    "microRoughness": 0,
-    "bumpAmplitude": 0,
-    "normalPattern": "",
-    "displacementPattern": "",
-    "occlusionPattern": "",
-    "edgeWearPattern": "",
-    "notes": ""
-   },
-   "evidenceRefs": [
-    "img-r7-34",
-    "img-r7-side"
-   ],
-   "details": [
-    "d-arch-cladding"
-   ],
-   "fidelityTier": "hero",
-   "colorMaterialRecipe": {
-    "dominantAlbedo": "rgba(18, 19, 22, 1.0)",
-    "secondaryAlbedo": "rgba(18, 19, 22, 0.85)",
-    "materialClass": "plastic",
-    "materialClassConfidence": 0.9
-   }
-  },
-  {
-   "id": "arch-rl",
-   "name": "后轮拱包边（左）",
-   "level": "meso",
-   "role": "trim",
-   "importance": 0.85,
-   "confidence": 0.92,
-   "primitive": "extrude",
-   "topologyClass": "conforming-shell",
-   "topologyRationale": "半圆拱带（200°→-20°，内 r0.44 外 r0.50）挤出 55mm，只覆盖拱口上半，脚点 y0.17 不穿地",
-   "geometryDescriptor": {
-    "profile2D": {
-     "points": [
-      [
-       -1.88846,
-       0.23251
-      ],
-      [
-       -1.91377,
-       0.35012
-      ],
-      [
-       -1.90628,
-       0.47018
-      ],
-      [
-       -1.86654,
-       0.58373
-      ],
-      [
-       -1.79754,
-       0.68228
-      ],
-      [
-       -1.70443,
-       0.75845
-      ],
-      [
-       -1.59417,
-       0.80655
-      ],
-      [
-       -1.475,
-       0.823
-      ],
-      [
-       -1.35583,
-       0.80655
-      ],
-      [
-       -1.24557,
-       0.75845
-      ],
-      [
-       -1.15246,
-       0.68228
-      ],
-      [
-       -1.08346,
-       0.58373
-      ],
-      [
-       -1.04372,
-       0.47018
-      ],
-      [
-       -1.03623,
-       0.35012
-      ],
-      [
-       -1.06154,
-       0.23251
-      ],
-      [
-       -1.00515,
-       0.21199
-      ],
-      [
-       -0.9764,
-       0.34563
-      ],
-      [
-       -0.98491,
-       0.48207
-      ],
-      [
-       -1.03006,
-       0.61111
-      ],
-      [
-       -1.10847,
-       0.72309
-      ],
-      [
-       -1.21428,
-       0.80965
-      ],
-      [
-       -1.33958,
-       0.86431
-      ],
-      [
-       -1.475,
-       0.883
-      ],
-      [
-       -1.61042,
-       0.86431
-      ],
-      [
-       -1.73572,
-       0.80965
-      ],
-      [
-       -1.84153,
-       0.72309
-      ],
-      [
-       -1.91994,
-       0.61111
-      ],
-      [
-       -1.96509,
-       0.48207
-      ],
-      [
-       -1.9736,
-       0.34563
-      ],
-      [
-       -1.94485,
-       0.21199
-      ]
-     ],
-     "depth": 0.055,
-     "bevel": {
-      "thickness": 0.006,
-      "size": 0.006,
-      "offset": -0.006,
-      "segments": 2
-     }
-    },
-    "topologyIntent": "wheel arch cladding half-arc",
-    "edgeTreatment": {
-     "type": "rounded",
-     "bevelRadius": 0.006,
-     "segments": 2
-    },
-    "deformationStack": [],
-    "uvStrategy": "generated procedural coordinates",
-    "normalStrategy": "vertex normals"
-   },
-   "parent": "root",
-   "attachment": null,
-   "dimensions": {
-    "width": 0.055,
-    "height": 0.36,
-    "depth": 0.98,
-    "units": "meters",
-    "confidence": 0.92
-   },
-   "transform": {
-    "position": [
-     0.99,
-     0,
-     0
-    ],
-    "rotation": [
-     0,
-     -1.5708,
-     0
-    ],
-    "scale": [
-     1,
-     1,
-     1
-    ]
-   },
-   "actionProfile": {
-    "animationRole": "static",
-    "pivot": {
-     "mode": "center",
-     "localPosition": [
-      0,
-      0,
-      0
-     ],
-     "axis": [
-      0,
-      1,
-      0
-     ],
-     "confidence": 0.92
-    },
-    "transformChannels": {
-     "translate": false,
-     "rotate": false,
-     "scale": false,
-     "bend": false,
-     "twist": false,
-     "detach": false,
-     "visibility": true,
-     "materialState": true
-    },
-    "sockets": [],
-    "collider": {
-     "type": "box",
-     "offset": [
-      0,
-      0,
-      0
-     ],
-     "scale": [
-      1,
-      1,
-      1
-     ],
-     "isTrigger": false,
-     "notes": ""
-    },
-    "constraints": [],
-    "destruction": {
-     "breakable": false,
-     "fractureGroup": "root",
-     "seamRefs": [],
-     "detachableFragments": [],
-     "breakImpulse": 0,
-     "debrisMaterial": "base"
-    }
-   },
-   "material": "matte-black",
-   "materialLayers": [
-    "matte-black"
-   ],
-   "deformations": [],
-   "joints": [],
-   "seams": [],
-   "localFeatures": [],
-   "surfaceDetail": {
-    "macroRoughness": 0,
-    "microRoughness": 0,
-    "bumpAmplitude": 0,
-    "normalPattern": "",
-    "displacementPattern": "",
-    "occlusionPattern": "",
-    "edgeWearPattern": "",
-    "notes": ""
-   },
-   "evidenceRefs": [
-    "img-r7-34",
-    "img-r7-side"
-   ],
-   "details": [
-    "d-arch-cladding"
-   ],
-   "fidelityTier": "hero",
-   "colorMaterialRecipe": {
-    "dominantAlbedo": "rgba(18, 19, 22, 1.0)",
-    "secondaryAlbedo": "rgba(18, 19, 22, 0.85)",
-    "materialClass": "plastic",
-    "materialClassConfidence": 0.9
-   }
-  },
-  {
-   "id": "arch-rr",
-   "name": "后轮拱包边（右）",
-   "level": "meso",
-   "role": "trim",
-   "importance": 0.85,
-   "confidence": 0.92,
-   "primitive": "extrude",
-   "topologyClass": "conforming-shell",
-   "topologyRationale": "半圆拱带（200°→-20°，内 r0.44 外 r0.50）挤出 55mm，只覆盖拱口上半，脚点 y0.17 不穿地",
-   "geometryDescriptor": {
-    "profile2D": {
-     "points": [
-      [
-       1.94485,
-       0.21199
-      ],
-      [
-       1.9736,
-       0.34563
-      ],
-      [
-       1.96509,
-       0.48207
-      ],
-      [
-       1.91994,
-       0.61111
-      ],
-      [
-       1.84153,
-       0.72309
-      ],
-      [
-       1.73572,
-       0.80965
-      ],
-      [
-       1.61042,
-       0.86431
-      ],
-      [
-       1.475,
-       0.883
-      ],
-      [
-       1.33958,
-       0.86431
-      ],
-      [
-       1.21428,
-       0.80965
-      ],
-      [
-       1.10847,
-       0.72309
-      ],
-      [
-       1.03006,
-       0.61111
-      ],
-      [
-       0.98491,
-       0.48207
-      ],
-      [
-       0.9764,
-       0.34563
-      ],
-      [
-       1.00515,
-       0.21199
-      ],
-      [
-       1.06154,
-       0.23251
-      ],
-      [
-       1.03623,
-       0.35012
-      ],
-      [
-       1.04372,
-       0.47018
-      ],
-      [
-       1.08346,
-       0.58373
-      ],
-      [
-       1.15246,
-       0.68228
-      ],
-      [
-       1.24557,
-       0.75845
-      ],
-      [
-       1.35583,
-       0.80655
-      ],
-      [
-       1.475,
-       0.823
-      ],
-      [
-       1.59417,
-       0.80655
-      ],
-      [
-       1.70443,
-       0.75845
-      ],
-      [
-       1.79754,
-       0.68228
-      ],
-      [
-       1.86654,
-       0.58373
-      ],
-      [
-       1.90628,
-       0.47018
-      ],
-      [
-       1.91377,
-       0.35012
-      ],
-      [
-       1.88846,
-       0.23251
-      ]
-     ],
-     "depth": 0.055,
-     "bevel": {
-      "thickness": 0.006,
-      "size": 0.006,
-      "offset": -0.006,
-      "segments": 2
-     }
-    },
-    "topologyIntent": "wheel arch cladding half-arc",
-    "edgeTreatment": {
-     "type": "rounded",
-     "bevelRadius": 0.006,
-     "segments": 2
-    },
-    "deformationStack": [],
-    "uvStrategy": "generated procedural coordinates",
-    "normalStrategy": "vertex normals"
-   },
-   "parent": "root",
-   "attachment": null,
-   "dimensions": {
-    "width": 0.055,
-    "height": 0.36,
-    "depth": 0.98,
-    "units": "meters",
-    "confidence": 0.92
-   },
-   "transform": {
-    "position": [
-     -0.99,
-     0,
-     0
-    ],
-    "rotation": [
-     0,
-     1.5708,
-     0
-    ],
-    "scale": [
-     1,
-     1,
-     1
-    ]
-   },
-   "actionProfile": {
-    "animationRole": "static",
-    "pivot": {
-     "mode": "center",
-     "localPosition": [
-      0,
-      0,
-      0
-     ],
-     "axis": [
-      0,
-      1,
-      0
-     ],
-     "confidence": 0.92
-    },
-    "transformChannels": {
-     "translate": false,
-     "rotate": false,
-     "scale": false,
-     "bend": false,
-     "twist": false,
-     "detach": false,
-     "visibility": true,
-     "materialState": true
-    },
-    "sockets": [],
-    "collider": {
-     "type": "box",
-     "offset": [
-      0,
-      0,
-      0
-     ],
-     "scale": [
-      1,
-      1,
-      1
-     ],
-     "isTrigger": false,
-     "notes": ""
-    },
-    "constraints": [],
-    "destruction": {
-     "breakable": false,
-     "fractureGroup": "root",
-     "seamRefs": [],
-     "detachableFragments": [],
-     "breakImpulse": 0,
-     "debrisMaterial": "base"
-    }
-   },
-   "material": "matte-black",
-   "materialLayers": [
-    "matte-black"
-   ],
-   "deformations": [],
-   "joints": [],
-   "seams": [],
-   "localFeatures": [],
-   "surfaceDetail": {
-    "macroRoughness": 0,
-    "microRoughness": 0,
-    "bumpAmplitude": 0,
-    "normalPattern": "",
-    "displacementPattern": "",
-    "occlusionPattern": "",
-    "edgeWearPattern": "",
-    "notes": ""
-   },
-   "evidenceRefs": [
-    "img-r7-34",
-    "img-r7-side"
-   ],
-   "details": [
-    "d-arch-cladding"
-   ],
-   "fidelityTier": "hero",
-   "colorMaterialRecipe": {
-    "dominantAlbedo": "rgba(18, 19, 22, 1.0)",
-    "secondaryAlbedo": "rgba(18, 19, 22, 0.85)",
-    "materialClass": "plastic",
     "materialClassConfidence": 0.9
    }
   },
@@ -21981,35 +20993,35 @@
       ],
       [
        -0.2,
-       1.58
+       1.565
       ],
       [
        -0.7,
-       1.585
+       1.573
       ],
       [
        -1.24,
-       1.545
+       1.522
       ],
       [
        -1.56,
-       1.492
+       1.462
       ],
       [
        -1.56,
-       1.47
+       1.44
       ],
       [
        -1.26,
-       1.52
+       1.5
       ],
       [
        -0.7,
-       1.56
+       1.548
       ],
       [
        -0.2,
-       1.556
+       1.54
       ],
       [
        0.34,
@@ -24226,10 +23238,6 @@
     "handle-front-r",
     "handle-rear-l",
     "handle-rear-r",
-    "arch-fl",
-    "arch-fr",
-    "arch-rl",
-    "arch-rr",
     "wheel-fl",
     "rim-fl",
     "wheel-face-fl",
@@ -24420,10 +23428,6 @@
     "handle-front-r",
     "handle-rear-l",
     "handle-rear-r",
-    "arch-fl",
-    "arch-fr",
-    "arch-rl",
-    "arch-rr",
     "wheel-fl",
     "rim-fl",
     "wheel-face-fl",

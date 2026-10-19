@@ -1,0 +1,24 @@
+
+===== v800 =====
+[V800Adapter] 参考图贴图挂载材质： lamp-red, leather-dark, leather-ivory, leather-warm, screen-ui
+[V800Adapter] cabin occluder 座椅材质克隆 → 10 个 mesh
+[V800Adapter] cabin occluder 中控材质克隆 → 2 个 mesh
+[V800Adapter] #batchmerge：mesh 190 → 78，可见 184 → 72，Draw Call −112
+[V800Adapter] #uvassert：384 个三角形 UV 越出图集分区（串味）
+[V800Adapter] #uvassert 密度判据：图案分区无 > 8x 的各向异性拉伸（世界面积 > 0.1cm² 口径）
+
+===== r7 =====
+[R7Adapter] 参考图贴图挂载材质： lamp-red, leather-ivory, leather-plum, screen-ui
+[R7Adapter] cabin occluder 材质克隆 × 3
+
+===== v800 =====
+[V800Adapter] 参考图贴图挂载材质： lamp-red, leather-dark, leather-ivory, leather-warm, screen-ui
+[V800Adapter] cabin occluder 座椅材质克隆 → 10 个 mesh
+[V800Adapter] cabin occluder 中控材质克隆 → 2 个 mesh
+[V800Adapter] #batchmerge：mesh 190 → 78，可见 184 → 72，Draw Call −112
+[V800Adapter] #uvassert：全部三角形 UV 落在合法分区内，无串味
+[V800Adapter] #uvassert 密度判据：图案分区无 > 8x 的各向异性拉伸（世界面积 > 0.1cm² 口径）
+
+===== r7 =====
+[R7Adapter] 参考图贴图挂载材质： lamp-red, leather-ivory, leather-plum, screen-ui
+[R7Adapter] cabin occluder 材质克隆 × 3

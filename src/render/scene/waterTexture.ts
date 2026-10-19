@@ -66,11 +66,14 @@ export function createWaterBasinTexture(): THREE.CanvasTexture {
   const random = makeLcg(246813);
 
   const grad = ctx.createLinearGradient(0, 0, 0, h);
-  grad.addColorStop(0, '#4a7d78');
-  grad.addColorStop(0.18, '#2f6266');
-  grad.addColorStop(0.5, '#173a42');
-  grad.addColorStop(0.82, '#2f6266');
-  grad.addColorStop(1, '#4a7d78');
+  // R17：提亮加饱和（暗青 #173a42/#4a7d78 在黄昏暖光下被洗成沙色——消去法实证
+  // verify/r17/water/w_00 红探针：能存活的是高饱和色）。青绿亮度抬一档、饱和度加倍，
+  // 暖光 × 青绿 = 仍读得出「水」。
+  grad.addColorStop(0, '#5FB8AE');
+  grad.addColorStop(0.18, '#3A8F94');
+  grad.addColorStop(0.5, '#1E7585');
+  grad.addColorStop(0.82, '#3A8F94');
+  grad.addColorStop(1, '#5FB8AE');
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, w, h);
 
@@ -79,8 +82,8 @@ export function createWaterBasinTexture(): THREE.CanvasTexture {
     const y = random() * h;
     const x = random() * w;
     const len = 40 + random() * 180;
-    const a = 0.03 + random() * 0.07;
-    ctx.fillStyle = `rgba(126,178,176,${a.toFixed(3)})`;
+    const a = 0.04 + random() * 0.09;
+    ctx.fillStyle = `rgba(150,215,212,${a.toFixed(3)})`;
     ctx.beginPath();
     ctx.ellipse(x, y, len / 2, 0.8 + random() * 1.8, 0, 0, Math.PI * 2);
     ctx.fill();

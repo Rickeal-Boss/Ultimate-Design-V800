@@ -37,9 +37,9 @@ export class Waterway {
 
   constructor(scene: THREE.Scene) {
     this.basinTex = createWaterBasinTexture();
-    // 水面尺度：280×140 → 单格约 15.6m×15.6m，近岸碎波才读得出流向
+    // 水面尺度：280×140 → 单格约 3.3m×3.3m（R17 由 5m 加密：掠射角镜像要靠高频波纹打碎）
     this.normalTex = createWaterNormalTexture();
-    this.normalTex.repeat.set(56, 28);
+    this.normalTex.repeat.set(84, 42);
     this.textures.push(this.basinTex, this.normalTex);
     this.buildValley(scene);
     this.buildWater(scene);
@@ -120,21 +120,25 @@ export class Waterway {
 
   /**
    * 水面：单张非重复「河心深/近岸浅」渐变贴图 + 可平铺法线流动。
-   * 低 roughness（0.13）+ envMapIntensity 1.35 → 黄昏天空在水面上的镜面高光；
-   * 半透明让河床透出一点，避免整块塑料板观感。
    */
   private buildWater(scene: THREE.Scene): void {
-    const material = new THREE.MeshStandardMaterial({
+    // R17 定罪（消去法 verify/r17/water/w_00 红探针）：水面几何/位置正确（右侧红实证），
+    // 病根是**黄昏暖光 + 太阳掠射高光把暗青 basin 图整片洗成沙色**。三层修：
+    //   ① MeshPhysicalMaterial + specularIntensity 0.35 —— 压掉掠射太阳高光的整片泛白
+    //   ② emissive 青绿 1.0 —— 水体自带「这是水」的色相信号，不随场景光色漂移
+    //   ③ basin 图源提亮加饱和（waterTexture.ts）+ 法线加密打碎镜像
+    const material = new THREE.MeshPhysicalMaterial({
       map: this.basinTex,
+      emissive: 0x18707c,
+      emissiveIntensity: 1.0,
       normalMap: this.normalTex,
-      normalScale: new THREE.Vector2(0.55, 0.55),
-      roughness: 0.19,
-      metalness: 0.55,
-      // 低角度司机视角下 Fresnel 会把整片水变成天空的银色镜子（与远处地面分不开）；
-      // env 压到 0.5 让水体的青绿色重新主导，太阳路径光保留在直射高光里
-      envMapIntensity: 0.75,
+      normalScale: new THREE.Vector2(1.1, 1.1),
+      roughness: 0.22,
+      metalness: 0.1,
+      specularIntensity: 0.35,
+      envMapIntensity: 0.12,
       transparent: true,
-      opacity: 0.94
+      opacity: 0.97
     });
     this.materials.push(material);
 

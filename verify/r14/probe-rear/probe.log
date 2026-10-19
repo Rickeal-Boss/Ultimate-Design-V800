@@ -82,3 +82,11 @@ VSCAN X=0.6 Y=1.820 batch/paint-upper@2.823
 VSCAN X=0.6 Y=1.840 batch/paint-upper@2.808
 VSCAN X=0.6 Y=1.860 batch/matte-black@1.665
 ALL DONE
+GOTO #assembled
+READY
+SHOT rear bytes=125621
+SHOT tail34 bytes=246294
+SHOT side bytes=256969
+SHOT front bytes=139522
+INFO {"tris":63540,"calls":76,"box":[2.424999952316285,2.7589999437332153,5.5730000288002195]}
+ALL DONE

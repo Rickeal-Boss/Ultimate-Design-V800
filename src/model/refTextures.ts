@@ -29,6 +29,7 @@ import leatherPlainUrl from '../assets/ref/leather-plain.jpg';
 import headlinerStarUrl from '../assets/ref/headliner-star.jpg';
 import screenCockpitUrl from '../assets/ref/screen-cockpit.jpg';
 import tailLampUrl from '../assets/ref/tail-lamp.jpg';
+import triScreenUiUrl from '../assets/ref/tri-screen-ui.jpg';
 
 /* ================================================================
  * 0. 类型
@@ -40,7 +41,8 @@ export type RefImageId =
   | 'leather-plain'
   | 'headliner-star'
   | 'screen-cockpit'
-  | 'tail-lamp';
+  | 'tail-lamp'
+  | 'tri-screen-ui';
 
 export type RefTier = 'high' | 'medium' | 'low';
 
@@ -120,6 +122,9 @@ const REF_IMAGE_META: Record<RefImageId, RefImageMeta> = {
   'headliner-star': { id: 'headliner-star', url: headlinerStarUrl, width: 1024, height: 512 },
   'screen-cockpit': { id: 'screen-cockpit', url: screenCockpitUrl, width: 512, height: 256 },
   'tail-lamp': { id: 'tail-lamp', url: tailLampUrl, width: 256, height: 512 },
+  // R17：真车三联屏正视裁剪（087Z 参考图屏体区域，790×110 ≈ 7.18:1 与 tri-screen
+  // 1.52×0.212 的 7.17:1 同比）——整幅铺满一屏，forced repeat [1,1] 零拉伸。
+  'tri-screen-ui': { id: 'tri-screen-ui', url: triScreenUiUrl, width: 790, height: 110 },
 };
 
 export const REF_IMAGE_IDS: readonly RefImageId[] = Object.keys(REF_IMAGE_META) as RefImageId[];
@@ -230,6 +235,10 @@ const REF_RULES: readonly RefRule[] = [
     materials: ['leather-warm', 'leather-ivory'],
     components: [...SEAT_QUILT_COMPONENTS, ...SEAT_QUILT_COMPONENTS_R7],
     uv: 'triplanar',
+    // R17：密度不动（0.24 → 椅面单元格 ~2cm，实测与真车 087Z 参考同级）。
+    // 原图「方块化」的病因是**对比度**：实拍被强光照渐变（边缘亮度 94→130）压制，
+    // ~2px 细缝线在 mip 下糊成大平面块。已用 tools/r17_requilt.py 重 author 图源：
+    // 平场（flat-field）去渐变 + unsharp 强化缝线，四边亮度差 35→9.3 可平铺。
     tileWorld: 0.24, // 座面 0.52m → ≈2.2 次（R12b 要求座椅 2~3 次）
     channels: ['map'],
     tintTarget: CURATED['leather-warm'],
@@ -287,7 +296,13 @@ const REF_RULES: readonly RefRule[] = [
   {
     image: 'headliner-star',
     materials: ['starlight', 'headliner-suede', 'leather-ivory'],
-    components: ['starlight-headliner', 'headliner-front', 'headliner-rear', 'headliner'],
+    // R17：收紧范围 —— 原表含 headliner-rear（1.52×0.02×3.35 巨板，spec z -2.6~0.75，
+    // world z -0.75~2.6），其**顶面** y1.726+0.02=1.746 是全车最高面，机盖相机
+    // （hood，world (0,1.45,-1.45) 前俯）最先命中的就是它伸到风挡上沿的前缘条带
+    // —— 星点图三平面世界锚定撒满整块板，机盖视角正上方就读出一片星（用户截图
+    // 089Z「星空顶错位至引擎盖上方」）。星图只留顶棚本体两件；headliner-rear
+    // 回归 R12b 素色（leather-ivory 策展底），车内后排顶棚为素面、机盖视角无星点外溢。
+    components: ['starlight-headliner', 'headliner-front'],
     uv: 'triplanar',
     tileWorld: 1.05, // 图幅 2:1 → 单元 1.49×0.74m，顶棚 ≈1×2 个单元（盒投影薄侧面 5.4x，故走三平面）
     channels: ['map'],
@@ -300,19 +315,38 @@ const REF_RULES: readonly RefRule[] = [
     note: '星空顶 → 顶棚。只挂 albedo：starlight 的程序化 emissiveMap 星点阵保留做叠层发光。',
   },
   {
+    // R17 三联屏专规：真车正视裁剪（tri-screen-ui.jpg，790×110）整幅铺满一块屏，
+    // forced repeat [1,1]。旧 screen-cockpit 规则把 512×256 通用座舱截图 [3,1] 平铺
+    // 三次 = 三段重复 UI + 竖向压扁（用户「三联屏贴图退化」）。tri-screen 从旧规则
+    // 移除，只留后排/中控小屏继续用通用截图。
+    image: 'tri-screen-ui',
+    materials: ['screen-ui'],
+    components: ['tri-screen'],
+    uv: 'planar',
+    tileWorld: 1.52, // 实际尺寸 1.52×0.212；repeat 强制 [1,1]，此值仅作 fallback
+    repeat: [1, 1],
+    channels: ['map', 'emissiveMap'],
+    emissiveWhite: true,
+    emissiveIntensity: 0.9,
+    tintTarget: '#4A5568',
+    tiers: ['high', 'medium', 'low'],
+    note: '真车三联屏正视裁剪 → 三联屏整幅一图（零平铺零拉伸）。',
+  },
+  {
     image: 'screen-cockpit',
     materials: ['screen-ui'],
     // ⚠️ gauge-screen 刻意排除：适配器运行时用 CanvasTexture 逐帧画速度/踏板力，
     //    覆盖 map 会打死仪表（材质 gauge-ui，与本规则 screen-ui 不同 id）。
-    components: ['tri-screen', 'rear-control-screen', 'center-screen', 'rear-screen'],
+    // ⚠️ tri-screen 移交上面的 tri-screen-ui 专规（R17），本规则只管小屏。
+    components: ['rear-control-screen', 'center-screen', 'rear-screen'],
     uv: 'planar',
-    tileWorld: 0.45, // 三联屏 1.66×0.315 → [3,1]（三段 UI，恰好对应三联分区）
+    tileWorld: 0.45, // 小屏 0.24~0.345 宽 → [1,1] 单幅
     channels: ['map', 'emissiveMap'],
     emissiveWhite: true,
     emissiveIntensity: 0.85,
     tintTarget: '#4A5568',
     tiers: ['high', 'medium', 'low'],
-    note: '中控/后排屏 UI 截屏 → 三联屏 + 后排控制屏。albedo 压暗、emissive 承担亮屏观感。',
+    note: '中控/后排屏 UI 截屏 → 后排控制屏 + R7 中控/后排屏。albedo 压暗、emissive 承担亮屏观感。',
   },
   {
     image: 'tail-lamp',

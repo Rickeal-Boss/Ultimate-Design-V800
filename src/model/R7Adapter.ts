@@ -17,6 +17,7 @@ import type { CarLike, WheelPivot } from './V800Adapter';
 import { createLuxeedR7Model, type ProceduralModelRuntime } from './createR7Model';
 import { batchMergeStatic, UV_CONTENT_MATERIAL_IDS } from './batchMerge';
 import { applyReferenceTextures } from './refTextures';
+import { mountLicensePlate } from './plateTexture';
 import { carTextureSizeFor, type QualityTier } from '../config/quality';
 import { damp } from '../util/math';
 
@@ -589,37 +590,124 @@ export function createR7CarAdapter(tier: QualityTier = 'high'): CarLike {
     if (node) dynamicNodes.push(node);
   }
   // R15c：第一排座椅独占材质 —— 车内机位按材质隐藏（按对象隐藏会被合批吞并）
-  const cabinSeatMat = (() => {
-    // 第一排座椅 + 前门内饰板：车内机位相机距门板仅 0.5m，而 R7 门板是素面 box，
-    // 在画面左侧读作一面白墙（参考图 6/8 的门板有紫色上沿+网罩+扶手，缺细节）。
-    // 座舱机位通行做法：近场门板不画，只留 A 柱与顶棚勾出座舱轮廓。
-    const ids = [
-      'seat-driver-cushion',
-      'seat-driver-back',
-      'seat-driver-headrest',
-      'seat-passenger-cushion',
-      'seat-passenger-back',
-      'seat-passenger-headrest',
-      'door-card-front-l',
-      'door-card-front-r',
-      'door-trim-front-l',
-      'door-trim-front-r',
-      'door-speaker-front-l',
-      'door-speaker-front-r',
-    ] as const;
-    const first = byId.get('seat-driver-cushion') as THREE.Mesh | undefined;
-    const src = (first?.material ?? null) as THREE.MeshPhysicalMaterial | null;
-    if (!src || !first?.isMesh) return null;
-    const clone = src.clone() as THREE.MeshPhysicalMaterial;
-    clone.userData.cabinHidable = true;
-    for (const id of ids) {
-      byId.get(id)?.traverse((o) => {
+  // R17：中央隔板实体模块（center-console 中岛 / console-armrest 扶手）纳入遮挡 ——
+  // 用户截图 verify/r16f/r7_cabinPassenger.png：cabinPassenger 机位被中控台挡死。
+  // ⚠️ 但**不能**并进坐垫克隆：refTextures 给中岛挂的是素皮图（leather-plain
+  // tileWorld 0.6）、扶手是 leather-plum 无图、坐垫是菱格图（seat-quilt
+  // tileWorld 0.24）—— 混克隆会让车外机位（风挡/侧窗可见中岛）读出错误纹理。
+  // 因此按「贴图态材质」分三个克隆，各自 hidden 时整批不画、显示时逐像素不变。
+  const cabinOccluderMats: THREE.MeshPhysicalMaterial[] = [];
+  {
+    // R7 的 byId「先序先命中 = 外层 pivot」：seat-driver-cushion 等命中是 Group，
+    // mesh 是其子节点。R15c 旧代码直接 `byId.get(id) as THREE.Mesh` + isMesh 判据
+    // 恒为 false → 遮挡克隆从未创建（verify/r16f/r7_cabinDriver.png 主驾座椅 +
+    // 中控全裸露即为实证）。取源材质必须先下沉到 mesh（与 V800 meshOf 同语义）。
+    const meshOf = (id: string): THREE.Mesh | null => {
+      const node = byId.get(id);
+      if (!node) return null;
+      if ((node as THREE.Mesh).isMesh) return node as THREE.Mesh;
+      let found: THREE.Mesh | null = null;
+      node.traverse((o) => {
+        if (!found && (o as THREE.Mesh).isMesh) found = o as THREE.Mesh;
+      });
+      return found;
+    };
+    // ① 第一排座椅 6 件 + 前门内饰板：车内机位相机距门板仅 0.5m，而 R7 门板是
+    //    素面 box，在画面左侧读作一面白墙（参考图 6/8 的门板有紫色上沿+网罩+
+    //    扶手，缺细节）。座舱机位通行做法：近场门板不画，只留 A 柱与顶棚勾出轮廓。
+    const seatSrc = meshOf('seat-driver-cushion');
+    const seatMat = (seatSrc?.material ?? null) as THREE.MeshPhysicalMaterial | null;
+    if (seatMat) {
+      const clone = seatMat.clone();
+      clone.userData.cabinHidable = true;
+      for (const id of [
+        'seat-driver-cushion',
+        'seat-driver-back',
+        'seat-driver-headrest',
+        'seat-passenger-cushion',
+        'seat-passenger-back',
+        'seat-passenger-headrest',
+        'door-card-front-l',
+        'door-card-front-r',
+        'door-trim-front-l',
+        'door-trim-front-r',
+        'door-speaker-front-l',
+        'door-speaker-front-r',
+      ] as const) {
+        byId.get(id)?.traverse((o) => {
+          const mesh = o as THREE.Mesh;
+          if (mesh.isMesh) mesh.material = clone;
+        });
+      }
+      cabinOccluderMats.push(clone);
+    } else {
+      console.warn('[R7Adapter] cabin occluder 座椅源缺失：seat-driver-cushion');
+    }
+    // ② 中央模块：每件克隆自身材质（保留各自贴图/染色），互不串味
+    for (const id of ['center-console', 'console-armrest'] as const) {
+      const node = byId.get(id);
+      const srcMesh = meshOf(id);
+      const mat = (srcMesh?.material ?? null) as THREE.MeshPhysicalMaterial | null;
+      if (!mat || !node) {
+        console.warn('[R7Adapter] cabin occluder 组件缺失：', id);
+        continue;
+      }
+      const clone = mat.clone();
+      clone.userData.cabinHidable = true;
+      node.traverse((o) => {
         const mesh = o as THREE.Mesh;
         if (mesh.isMesh) mesh.material = clone;
       });
+      cabinOccluderMats.push(clone);
     }
-    return clone;
-  })();
+    console.info(`[R7Adapter] cabin occluder 材质克隆 × ${cabinOccluderMats.length}`);
+  }
+
+  // ---- R17 绿色新能源车牌（前后各一）----
+  // 同 V800 tailgate-maextro 先例：bbox 实测必须在 batchMergeStatic 之前；面片挂 body 下
+  // 不进合批。后牌位 = 尾门中央 LUXEED 字带（y0.98~1.06）下方（用户参考图 100Z 鸿蒙智行
+  // 牌位）；前牌位 = spec front-plate 组件面（y0.23~0.36 / z2.47，dev-spec-r7 R17 刚修出
+  // 进气口的那块板）。文字「智界R7」（纯文字性引用）。
+  if (typeof document !== 'undefined') {
+    model.updateMatrixWorld(true);
+    const tgNodeR = byId.get('tailgate');
+    if (tgNodeR) {
+      const tgBox = new THREE.Box3().setFromObject(tgNodeR);
+      if (!tgBox.isEmpty()) {
+        const c = tgBox.getCenter(new THREE.Vector3());
+        const s = tgBox.getSize(new THREE.Vector3());
+        const cl = body.worldToLocal(c.clone());
+        mountLicensePlate({
+          body,
+          name: 'license-plate-rear',
+          text: '智界R7',
+          size: [0.42, 0.12],
+          // LUXEED 字带下、两灯之间：y = 中心 - 14% 门高
+          position: [cl.x, cl.y - s.y * 0.14, cl.z - s.z / 2 - 0.02],
+          faceRear: true,
+          ownedTextures: decalTextures
+        });
+      }
+    }
+    const fpNode = byId.get('front-plate') ?? byId.get('front-fascia');
+    if (fpNode) {
+      const bBox = new THREE.Box3().setFromObject(fpNode);
+      if (!bBox.isEmpty()) {
+        const c = bBox.getCenter(new THREE.Vector3());
+        const s = bBox.getSize(new THREE.Vector3());
+        const cl = body.worldToLocal(c.clone());
+        mountLicensePlate({
+          body,
+          name: 'license-plate-front',
+          text: '智界R7',
+          size: [0.42, 0.12],
+          position: [cl.x, cl.y + s.y * 0.15, cl.z + s.z / 2 + 0.02],
+          faceRear: false,
+          ownedTextures: decalTextures
+        });
+      }
+    }
+  }
   const mergeResult = batchMergeStatic(model, {
     excludeObjects: dynamicNodes,
     excludeMaterialIds: UV_CONTENT_MATERIAL_IDS,
@@ -644,7 +732,7 @@ export function createR7CarAdapter(tier: QualityTier = 'high'): CarLike {
     wheels,
     // R15：内饰三机位（装配局部坐标），由 Game → CameraRig.setInteriorViews 消费
     interiorViews: R7_INTERIOR_VIEWS,
-    cabinOccluderMaterials: cabinSeatMat ? [cabinSeatMat] : [],
+    cabinOccluderMaterials: cabinOccluderMats,
     get currentHeat(): number {
       return heat;
     },

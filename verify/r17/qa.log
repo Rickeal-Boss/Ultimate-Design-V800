@@ -1,0 +1,107 @@
+GOTO http://127.0.0.1:5194/preview.html#vehicle=v800
+GOTO http://[::1]:4317/#vehicle=v800
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\v800_menu.png
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\v800_cabin.png btn=true active=cabin
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\v800_chase.png btn=true active=chase
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\v800_hood.png btn=true active=hood
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\v800_orbit.png btn=true active=orbit
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\v800_side.png btn=true active=side
+  LOG info: [V800Adapter] 参考图贴图挂载材质： lamp-red, leather-dark, leather-ivory, leather-warm, screen-ui
+  LOG info: [V800Adapter] cabin occluder 座椅材质克隆 → 10 个 mesh
+  LOG info: [V800Adapter] cabin occluder 中控材质克隆 → 2 个 mesh
+GOTO http://[::1]:4317/#vehicle=r7
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\r7_menu.png
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\r7_cabinDriver.png btn=true active=cabinDriver
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\r7_cabinPassenger.png btn=true active=cabinPassenger
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\r7_cabinRear.png btn=true active=cabinRear
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\r7_chase.png btn=true active=chase
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\r7_orbit.png btn=true active=orbit
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\r7_side.png btn=true active=side
+  LOG info: [R7Adapter] 参考图贴图挂载材质： lamp-red, leather-ivory, leather-plum, screen-ui
+  LOG warn: [R7Adapter] cabin occluder 座椅源缺失：seat-driver-cushion
+  LOG warn: [R7Adapter] cabin occluder 组件缺失： center-console
+  LOG warn: [R7Adapter] cabin occluder 组件缺失： console-armrest
+  LOG info: [R7Adapter] cabin occluder 材质克隆 × 0
+GOTO http://[::1]:4317/#vehicle=v800
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\v800_menu.png
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\v800_cabin.png btn=true active=cabin
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\v800_chase.png btn=true active=chase
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\v800_hood.png btn=true active=hood
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\v800_orbit.png btn=true active=orbit
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\v800_side.png btn=true active=side
+  LOG info: [V800Adapter] 参考图贴图挂载材质： lamp-red, leather-dark, leather-ivory, leather-warm, screen-ui
+  LOG info: [V800Adapter] cabin occluder 座椅材质克隆 → 10 个 mesh
+  LOG info: [V800Adapter] cabin occluder 中控材质克隆 → 2 个 mesh
+GOTO http://[::1]:4317/#vehicle=r7
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\r7_menu.png
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\r7_cabinDriver.png btn=true active=cabinDriver
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\r7_cabinPassenger.png btn=true active=cabinPassenger
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\r7_cabinRear.png btn=true active=cabinRear
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\r7_chase.png btn=true active=chase
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\r7_orbit.png btn=true active=orbit
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\r7_side.png btn=true active=side
+  LOG info: [R7Adapter] 参考图贴图挂载材质： lamp-red, leather-ivory, leather-plum, screen-ui
+  LOG warn: [R7Adapter] cabin occluder 座椅源缺失：seat-driver-cushion
+  LOG warn: [R7Adapter] cabin occluder 组件缺失： center-console
+  LOG warn: [R7Adapter] cabin occluder 组件缺失： console-armrest
+  LOG info: [R7Adapter] cabin occluder 材质克隆 × 0
+GOTO http://[::1]:4317/#vehicle=v800
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\v800_menu.png
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\v800_cabin.png btn=true active=cabin
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\v800_chase.png btn=true active=chase
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\v800_hood.png btn=true active=hood
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\v800_orbit.png btn=true active=orbit
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\v800_side.png btn=true active=side
+  LOG info: [V800Adapter] 参考图贴图挂载材质： lamp-red, leather-dark, leather-ivory, leather-warm, screen-ui
+  LOG info: [V800Adapter] cabin occluder 座椅材质克隆 → 10 个 mesh
+  LOG info: [V800Adapter] cabin occluder 中控材质克隆 → 2 个 mesh
+GOTO http://[::1]:4317/#vehicle=r7
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\r7_menu.png
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\r7_cabinDriver.png btn=true active=cabinDriver
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\r7_cabinPassenger.png btn=true active=cabinPassenger
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\r7_cabinRear.png btn=true active=cabinRear
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\r7_chase.png btn=true active=chase
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\r7_orbit.png btn=true active=orbit
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\r7_side.png btn=true active=side
+  LOG info: [R7Adapter] 参考图贴图挂载材质： lamp-red, leather-ivory, leather-plum, screen-ui
+  LOG info: [R7Adapter] cabin occluder 材质克隆 × 3
+GOTO http://[::1]:4317/#vehicle=v800
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\v800_menu.png
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\v800_cabin.png btn=true active=cabin
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\v800_chase.png btn=true active=chase
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\v800_hood.png btn=true active=hood
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\v800_orbit.png btn=true active=orbit
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\v800_side.png btn=true active=side
+  LOG info: [V800Adapter] 参考图贴图挂载材质： lamp-red, leather-dark, leather-ivory, leather-warm, screen-ui
+  LOG info: [V800Adapter] cabin occluder 座椅材质克隆 → 10 个 mesh
+  LOG info: [V800Adapter] cabin occluder 中控材质克隆 → 2 个 mesh
+GOTO http://[::1]:4317/#vehicle=r7
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\r7_menu.png
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\r7_cabinDriver.png btn=true active=cabinDriver
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\r7_cabinPassenger.png btn=true active=cabinPassenger
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\r7_cabinRear.png btn=true active=cabinRear
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\r7_chase.png btn=true active=chase
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\r7_orbit.png btn=true active=orbit
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\r7_side.png btn=true active=side
+  LOG info: [R7Adapter] 参考图贴图挂载材质： lamp-red, leather-ivory, leather-plum, screen-ui
+  LOG info: [R7Adapter] cabin occluder 材质克隆 × 3
+GOTO http://[::1]:4317/#vehicle=v800
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\v800_menu.png
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\v800_cabin.png btn=true active=cabin
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\v800_chase.png btn=true active=chase
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\v800_hood.png btn=true active=hood
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\v800_orbit.png btn=true active=orbit
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\v800_side.png btn=true active=side
+  LOG info: [V800Adapter] 参考图贴图挂载材质： lamp-red, leather-dark, leather-ivory, leather-warm, screen-ui
+  LOG info: [V800Adapter] cabin occluder 座椅材质克隆 → 10 个 mesh
+  LOG info: [V800Adapter] cabin occluder 中控材质克隆 → 2 个 mesh
+GOTO http://[::1]:4317/#vehicle=r7
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\r7_menu.png
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\r7_cabinDriver.png btn=true active=cabinDriver
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\r7_cabinPassenger.png btn=true active=cabinPassenger
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\r7_cabinRear.png btn=true active=cabinRear
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\r7_chase.png btn=true active=chase
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\r7_orbit.png btn=true active=orbit
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\r7_side.png btn=true active=side
+  LOG info: [R7Adapter] 参考图贴图挂载材质： lamp-red, leather-ivory, leather-plum, screen-ui
+  LOG info: [R7Adapter] cabin occluder 材质克隆 × 3

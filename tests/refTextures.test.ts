@@ -159,12 +159,15 @@ describe('applyReferenceTextures', () => {
         expect(Number.isFinite(m.uvRange[3])).toBe(true);
       }
     }
-    // 三联屏应被切成多段 UI（1.66m 宽 / 0.45m 单元 / 图幅 2:1）
+    // R17 三联屏整幅一图（tri-screen-ui 专规，790×110 与屏同比 → forced [1,1] 零平铺）
+    // 旧 [3,1] 平铺通用截图 = 三段重复 UI + 竖向压扁（用户「三联屏贴图退化」退回）
     const tri = report
-      .find((r) => r.image === 'screen-cockpit')
+      .find((r) => r.image === 'tri-screen-ui')
       ?.meshes.find((m) => m.componentId === 'tri-screen');
     expect(tri).toBeTruthy();
-    expect(tri!.repeat[0]).toBeGreaterThanOrEqual(2);
+    expect(tri!.repeat[0]).toBe(1);
+    expect(tri!.repeat[1]).toBe(1);
+    expect(tri!.distortion).toBeLessThanOrEqual(8);
   });
 
   it('computeUvAspect：三平面重建后逐三角形各向同性', () => {

@@ -374,7 +374,7 @@ C("body-lower", "车身下半壳体", "macro", "extrude", "root", (0.965, 0, 0),
       {"id": "d-beltline-rise", "name": "腰线后扬", "kind": "contour",
        "note": "腰线 y 1.074@z0.86 → 1.093@z-0.9 → 1.076@z-2.05，后段微扬"},
       {"id": "d-arch-cladding", "name": "轮拱真开口", "kind": "hole",
-       "note": "前后轮拱按 r0.438 上半圆开挖，脚点落 y0.18 底边；黑色包边另件覆盖拱口"},
+       "note": "前后轮拱按 r0.438 上半圆开挖，脚点落 y0.18 底边；开口边缘即车身钣金断面，无额外包边件（R17 用户要求去除）"},
   ],
   evidence=["img-r7-34", "img-r7-side", "img-r7-rear"], det=["d-beltline-rise", "d-arch-cladding"])
 
@@ -433,12 +433,12 @@ C("logo-shield", "车头盾形车标座", "micro", "extrude", "root", (0, 0.905,
   feats=[{"id": "d-shield-badge", "name": "盾形车标", "kind": "bevel",
           "note": "宽 5.8cm 高 9.8cm 的盾形座，内部菱格由适配层贴图"}],
   evidence=["img-r7-front"], det=["d-shield-badge"])
-C("front-intake", "三段式下进气口", "meso", "extrude", "root", (0, 0.455, 2.428),
-  dims=(1.32, 0.300, 0.055), mat="matte-black", imp=0.9, conf=0.9, role="grille",
+C("front-intake", "三段式下进气口", "meso", "extrude", "root", (0, 0.500, 2.428),
+  dims=(1.32, 0.230, 0.055), mat="matte-black", imp=0.9, conf=0.9, role="grille",
   topo="conforming-shell", topoR="圆角矩形沿 +Z 挤出 55mm 的黑色进气框",
-  desc=extrude_desc(rrect(1.32, 0.30, 0.05), 0.055, bevel=0.008, seg=2, intent="lower intake frame"),
+  desc=extrude_desc(rrect(1.32, 0.23, 0.05), 0.055, bevel=0.008, seg=2, intent="lower intake frame"),
   feats=[{"id": "d-intake-three-part", "name": "三段式进气分隔", "kind": "groove",
-          "note": "中部横梁 + 两侧竖向鳍片把进气口切成三段"}],
+          "note": "中部横梁 + 两侧竖向鳍片把进气口切成三段；R17 收窄至 23cm 高并上移，为下方牌照位让位"}],
   evidence=["img-r7-front"], det=["d-intake-three-part"])
 for s, side in ((1, "l"), (-1, "r")):
     C(f"duct-{side}", f"侧导流口（{'左' if s > 0 else '右'}）", "meso", "extrude", "root",
@@ -447,15 +447,15 @@ for s, side in ((1, "l"), (-1, "r")):
       topo="conforming-shell", topoR="竖向圆角长孔沿 +Z 挤出的侧导流槽",
       desc=extrude_desc(rrect(0.13, 0.30, 0.045), 0.050, bevel=0.006, seg=2, intent="air curtain duct"),
       evidence=["img-r7-front", "img-r7-34"])
-C("front-plate", "前牌照板（智界 R7）", "micro", "plane-card", "root", (0, 0.545, 2.470),
-  dims=(0.440, 0.140, 0.004), mat="plate", imp=0.7, conf=0.9, role="badge",
+C("front-plate", "前牌照板（智界 R7）", "micro", "plane-card", "root", (0, 0.295, 2.470),
+  dims=(0.440, 0.130, 0.004), mat="plate", imp=0.7, conf=0.9, role="badge",
   feats=[{"id": "d-plate-text", "name": "牌照字样", "kind": "decal",
-          "note": "「智界 R7」由适配层 Canvas 绘制"}],
+          "note": "「智界 R7」由适配层 Canvas 绘制；R17 复位至下进气口下方（原位置被进气口实体掩埋）"}],
   evidence=["img-r7-front"], det=["d-plate-text"])
-C("front-lip", "前唇下扰流", "meso", "extrude", "root", (0, 0.270, 2.410),
-  dims=(1.70, 0.070, 0.070), mat="matte-black", imp=0.7, conf=0.88, role="trim",
+C("front-lip", "前唇下扰流", "meso", "extrude", "root", (0, 0.175, 2.410),
+  dims=(1.70, 0.050, 0.070), mat="matte-black", imp=0.7, conf=0.88, role="trim",
   topo="conforming-shell", topoR="横贯前保下沿的黑色唇板",
-  desc=extrude_desc(rrect(1.70, 0.07, 0.03), 0.070, bevel=0.006, seg=2, intent="front lip blade"),
+  desc=extrude_desc(rrect(1.70, 0.05, 0.03), 0.070, bevel=0.006, seg=2, intent="front lip blade"),
   evidence=["img-r7-front"])
 
 # ---- 尾部 ----
@@ -466,22 +466,24 @@ C("tailgate", "尾门板", "meso", "extrude", "root", (0, 0.905, -2.400),
   feats=[{"id": "d-tail-shoulder", "name": "尾部肩线折面", "kind": "contour",
           "note": "尾门左右肩部各一道 r0.08 折面，参考正后图的两道竖向反光棱"}],
   evidence=["img-r7-rear"], det=["d-tail-shoulder"])
-C("tail-lamp-band", "尾灯暗场带（全宽烟熏）", "meso", "box", "root", (0, 1.055, -2.470),
-  dims=(1.700, 0.108, 0.020), mat="matte-black", imp=0.9, conf=0.92, role="lamp",
-  evidence=["img-r7-rear"])
-C("tail-light-bar", "贯穿式尾灯（全宽红光）", "meso", "box", "root", (0, 1.055, -2.484),
+C("tail-lamp-band", "尾灯暗场带（全宽烟熏）", "meso", "box", "root", (0, 1.072, -2.486),
+  dims=(1.700, 0.185, 0.020), mat="matte-black", imp=0.9, conf=0.92, role="lamp",
+  feats=[{"id": "d-tail-band", "name": "烟熏灯带承托 LUXEED 字标", "kind": "linework",
+          "note": "R17：暗场带加高至 18.5cm 并外凸出尾门面，LUXEED 字标嵌在带内（参考正后图层次）"}],
+  evidence=["img-r7-rear"], det=["d-tail-band"])
+C("tail-light-bar", "贯穿式尾灯（全宽红光）", "meso", "box", "root", (0, 1.100, -2.500),
   dims=(1.660, 0.030, 0.014), mat="lamp-red", imp=1.0, conf=0.95, role="lamp",
   feats=[{"id": "d-tail-bar-red", "name": "贯穿红光标线", "kind": "emissive",
-          "note": "全宽 1.66m 红光带 + 中央一道更亮的红线，刹车时整条加亮"}],
+          "note": "全宽 1.66m 红光带位于烟熏暗场带上沿，刹车时整条加亮"}],
   evidence=["img-r7-rear"], det=["d-tail-bar-red"])
 for s, side in ((1, "l"), (-1, "r")):
     C(f"tail-light-split-{side}", f"尾灯侧段（{'左' if s > 0 else '右'}）", "micro", "box", "root",
-      (s * 0.790, 1.058, -2.372), dims=(0.085, 0.052, 0.230), mat="lamp-red",
+      (s * 0.790, 1.100, -2.372), dims=(0.085, 0.052, 0.230), mat="lamp-red",
       imp=0.85, conf=0.9, role="lamp", evidence=["img-r7-rear"])
-C("lettering-luxeed", "LUXEED 字标", "micro", "plane-card", "root", (0, 0.995, -2.484),
+C("lettering-luxeed", "LUXEED 字标", "micro", "plane-card", "root", (0, 1.022, -2.500),
   dims=(0.620, 0.078, 0.004), rot=(0, 3.14159, 0), mat="plate-mark", imp=0.9, conf=0.95, role="badge",
   feats=[{"id": "d-luxeed-lettering", "name": "L U X E E D 宽间距字标", "kind": "decal",
-          "note": "6 字母宽字距排列，位于贯穿尾灯正下方（适配层 Canvas 绘制，仅文字性引用）"}],
+          "note": "6 字母宽字距排列，嵌于烟熏暗场带内、贯穿红光带正下方（适配层 Canvas 绘制，仅文字性引用）"}],
   evidence=["img-r7-rear"], det=["d-luxeed-lettering"])
 for s, side, text in ((1, "l", "奇瑞汽车"), (-1, "r", "智界R7")):
     C(f"badge-{side}", f"尾部铭牌（{text}）", "micro", "plane-card", "root",
@@ -502,18 +504,18 @@ C("rear-diffuser", "后扩散器", "meso", "extrude", "root", (0, 0.245, -2.404)
   evidence=["img-r7-rear"])
 for s, side in ((1, "l"), (-1, "r")):
     C(f"rear-reflector-{side}", f"后反光条（{'左' if s > 0 else '右'}）", "micro", "box", "root",
-      (s * 0.625, 0.318, -2.492), dims=(0.240, 0.030, 0.010), mat="lamp-red",
+      (s * 0.625, 0.260, -2.492), dims=(0.240, 0.030, 0.010), mat="lamp-red",
       imp=0.7, conf=0.9, role="lamp", evidence=["img-r7-rear"])
 C("spoiler", "尾翼（鸭尾扰流板）", "meso", "extrude", "root", (0.67, 0, 0),
   dims=(1.34, 0.09, 0.20), rot=SIDE_ROT, mat="paint-green", imp=0.9, conf=0.9, role="body",
   topo="conforming-shell", topoR="侧视楔形薄板挤出，贴合溜背尾端",
-  desc=extrude_desc(ccw([(-2.270, 1.322), (-2.410, 1.300), (-2.432, 1.262), (-2.330, 1.246),
-                         (-2.240, 1.258), (-2.245, 1.300)]), 1.34, bevel=0.008, seg=2,
+  desc=extrude_desc(ccw([(-2.270, 1.237), (-2.410, 1.215), (-2.432, 1.177), (-2.330, 1.161),
+                         (-2.240, 1.173), (-2.245, 1.215)]), 1.34, bevel=0.008, seg=2,
                     intent="duck-tail spoiler blade"),
   feats=[{"id": "d-spoiler-lip", "name": "鸭尾上翘", "kind": "ridge",
-          "note": "尾端 y1.32 上翘唇口，后视图中尾门上方那道横向亮棱"}],
+          "note": "尾端 y1.24 上翘唇口（R17 随溜背线下压），后视图中尾门上方那道横向亮棱"}],
   evidence=["img-r7-rear", "img-r7-34"], det=["d-spoiler-lip"])
-C("high-mount-brake", "高位刹车灯", "micro", "box", "root", (0, 1.315, -2.352),
+C("high-mount-brake", "高位刹车灯", "micro", "box", "root", (0, 1.195, -2.484),
   dims=(0.480, 0.016, 0.020), mat="lamp-red", imp=0.8, conf=0.9, role="lamp",
   evidence=["img-r7-rear"])
 
@@ -527,8 +529,8 @@ C("windshield", "前挡玻璃", "meso", "extrude", "root", (0.89, 0, 0), dims=(1
           "note": "下沿 z0.98 y1.06 → 上沿 z0.34 y1.45，倾角约 30°，敞篷感舱口"}],
   evidence=["img-r7-front", "img-r7-top"], det=["d-windshield-rake"])
 
-ROOF_TOP = [(0.340, 1.500), (0.100, 1.556), (-0.200, 1.598), (-0.600, 1.622),
-            (-1.000, 1.618), (-1.350, 1.588), (-1.700, 1.520)]
+ROOF_TOP = [(0.340, 1.500), (0.100, 1.556), (-0.200, 1.598), (-0.450, 1.628), (-0.700, 1.622),
+            (-0.950, 1.601), (-1.200, 1.563), (-1.420, 1.518), (-1.550, 1.484)]
 C("roof-glass", "全景天幕玻璃", "meso", "extrude", "root", (0.89, 0, 0), dims=(1.78, 0.16, 2.06),
   rot=SIDE_ROT, mat="glass-dark", imp=0.95, conf=0.92, role="glass",
   topo="conforming-shell", topoR="侧视拱形薄壳带挤出，表达天幕的纵向弧面",
@@ -547,19 +549,19 @@ for s, side in ((1, "l"), (-1, "r")):
 C("roof-header", "前顶横梁", "meso", "box", "root", (0, 1.496, 0.330),
   dims=(1.792, 0.046, 0.090), mat="paint-green", imp=0.75, conf=0.9, role="body",
   evidence=["img-r7-top"])
-REAR_GLASS_TOP = [(-1.660, 1.522), (-1.900, 1.462), (-2.120, 1.392), (-2.300, 1.316), (-2.400, 1.246)]
-C("rear-glass", "后挡玻璃（溜背斜面）", "meso", "extrude", "root", (0.89, 0, 0), dims=(1.78, 0.30, 0.76),
+REAR_GLASS_TOP = [(-1.550, 1.484), (-1.750, 1.420), (-1.950, 1.340), (-2.150, 1.258), (-2.320, 1.196), (-2.420, 1.180)]
+C("rear-glass", "后挡玻璃（溜背斜面）", "meso", "extrude", "root", (0.89, 0, 0), dims=(1.78, 0.30, 0.89),
   rot=SIDE_ROT, mat="glass-dark", imp=0.95, conf=0.92, role="glass",
-  topo="conforming-shell", topoR="溜背斜面薄壳带挤出，后挡与尾门夹角约 42°",
+  topo="conforming-shell", topoR="溜背斜面薄壳带挤出，后挡相对水平面约 19°（R17 按参考图压俯冲线）",
   desc=extrude_desc(band(REAR_GLASS_TOP, 0.026), 1.78, bevel=0.004, seg=1, intent="fastback rear glass shell"),
   feats=[{"id": "d-fastback-rear", "name": "溜背后挡", "kind": "contour",
-          "note": "车顶 -1.66 起以 42° 斜落至尾门 y1.25，与侧视参考一致"}],
+          "note": "车顶 -0.7 起持续下压，-1.55 后斜落至尾门 y1.18，与侧视参考一致"}],
   evidence=["img-r7-rear", "img-r7-side"], det=["d-fastback-rear"])
 
 SIDE_GLASS = ccw([
     (0.965, 1.094), (0.700, 1.250), (0.430, 1.412), (0.330, 1.466),
-    (-0.200, 1.556), (-0.700, 1.582), (-1.100, 1.566), (-1.480, 1.502),
-    (-1.760, 1.386), (-1.880, 1.262), (-1.880, 1.150), (-1.600, 1.108),
+    (-0.200, 1.556), (-0.700, 1.578), (-1.100, 1.542), (-1.480, 1.460),
+    (-1.760, 1.390), (-1.880, 1.262), (-1.880, 1.150), (-1.600, 1.108),
     (-0.900, 1.100), (-0.100, 1.098), (0.600, 1.096),
 ])
 for s, side in ((1, "l"), (-1, "r")):
@@ -591,8 +593,8 @@ for s, side in ((1, "l"), (-1, "r")):
 C("dpillar", "D 柱（溜背尾柱，车漆）", "meso", "extrude", "root", (0.89, 0, 0),
   dims=(1.78, 0.46, 0.50), rot=SIDE_ROT, mat="paint-green", imp=0.85, conf=0.88, role="body",
   topo="conforming-shell", topoR="侧视楔形薄壳挤出，封住后挡玻璃与侧窗之间的 D 柱面",
-  desc=extrude_desc(ccw([(-1.760, 1.386), (-1.880, 1.262), (-1.880, 1.150), (-1.700, 1.108),
-                         (-1.560, 1.180), (-1.600, 1.330)]), 1.78, bevel=0.008, seg=2,
+  desc=extrude_desc(ccw([(-1.760, 1.390), (-1.880, 1.262), (-1.880, 1.150), (-1.700, 1.108),
+                         (-1.560, 1.180), (-1.600, 1.445)]), 1.78, bevel=0.008, seg=2,
                     intent="D-pillar wedge shell"),
   evidence=["img-r7-side", "img-r7-rear"])
 
@@ -623,35 +625,21 @@ for s, side in ((1, "l"), (-1, "r")):
     C(f"mirror-glass-{side}", f"后视镜镜片（{'左' if s > 0 else '右'}）", "micro", "box", "root",
       (s * 0.916, 1.108, 0.632), dims=(0.126, 0.092, 0.010), mat="chrome",
       imp=0.7, conf=0.88, role="glass", evidence=["img-r7-34"])
-for s, side, zpos in ((1, "l", 0.560), (-1, "r", 0.560)):
+for s, side, zpos in ((1, "l", 0.500), (-1, "r", 0.500)):
     C(f"handle-front-{side}", f"隐藏式前门把手（{'左' if s > 0 else '右'}）", "micro", "box", "root",
-      (s * 0.944, 0.988, zpos), dims=(0.014, 0.026, 0.190), mat="chrome",
+      (s * 0.949, 1.010, zpos), dims=(0.014, 0.026, 0.190), mat="chrome",
       imp=0.7, conf=0.9, role="trim",
       feats=[{"id": f"d-flush-handle-f{side}", "name": "隐藏式门把手", "kind": "seam",
-              "note": "与车身齐平的细长把手槽，凸出仅 6mm"}],
+              "note": "与车身齐平的细长把手槽，外凸约 6mm；R17 按参考图复位（前把手 z0.50 / 后把手 z-0.69，齐腰线 y1.01）"}],
       evidence=["img-r7-34", "img-r7-side"], det=[f"d-flush-handle-f{side}"])
-for s, side, zpos in ((1, "l", -0.760), (-1, "r", -0.760)):
+for s, side, zpos in ((1, "l", -0.690), (-1, "r", -0.690)):
     C(f"handle-rear-{side}", f"隐藏式后门把手（{'左' if s > 0 else '右'}）", "micro", "box", "root",
-      (s * 0.944, 0.988, zpos), dims=(0.014, 0.026, 0.185), mat="chrome",
+      (s * 0.949, 1.010, zpos), dims=(0.014, 0.026, 0.185), mat="chrome",
       imp=0.7, conf=0.9, role="trim",
       evidence=["img-r7-side"], det=[f"d-flush-handle-f{'l' if s > 0 else 'r'}"])
 
-# ---- 轮拱黑色包边（半圆拱带，绝不整圆：整圆穿地会读作"轮底皮带"）----
-for zc, tag in ((WHEEL_Z, "f"), (-WHEEL_Z, "r")):
-    for s, side in ((1, "l"), (-1, "r")):
-        outer_arc = arc(zc, WHEEL_Y, 0.500, 200, -20, 14)
-        inner_arc = arc(zc, WHEEL_Y, 0.440, 200, -20, 14)
-        cladding = outer_arc + list(reversed(inner_arc))
-        _ax, _arot, _aprof = side_part(s, 0.990, 0.055, cladding)
-        C(f"arch-{tag}{side}", f"{'前' if tag == 'f' else '后'}轮拱包边（{'左' if s > 0 else '右'}）",
-          "meso", "extrude", "root", (_ax, 0, 0),
-          dims=(0.055, 0.360, 0.980), rot=_arot, mat="matte-black",
-          imp=0.85, conf=0.92, role="trim",
-          topo="conforming-shell",
-          topoR="半圆拱带（200°→-20°，内 r0.44 外 r0.50）挤出 55mm，只覆盖拱口上半，脚点 y0.17 不穿地",
-          desc=extrude_desc(_aprof, 0.055, bevel=0.006, seg=2, intent="wheel arch cladding half-arc"),
-          evidence=["img-r7-34", "img-r7-side"],
-          det=["d-arch-cladding"])
+# ---- 轮拱包边：R17 用户明确要求去除（四个 arch-* 围边件已删，勿再外移/重加）----
+# 轮拱开口由 body-lower 侧视轮廓按 r0.438 上半圆开挖表达，开口边缘即车身钣金断面。
 
 # ---- 车轮总成 ----
 TIRE_PROFILE = [(0.348, -0.500), (0.400, -0.498), (0.462, -0.470), (0.492, -0.420),
@@ -915,9 +903,9 @@ for s, side in ((1, "l"), (-1, "r")):
 C("headliner", "顶棚（米白麂皮）", "meso", "extrude", "cabin-interior", (0.860, 0, 0),
   dims=(1.72, 0.030, 2.10), rot=SIDE_ROT, mat="suede-ivory", imp=0.8, conf=0.9, role="interior",
   topo="conforming-shell", topoR="顶棚薄板挤出，跟随天幕下表面（y1.52-1.56）",
-  desc=extrude_desc(ccw([(0.340, 1.470), (-0.200, 1.556), (-0.700, 1.560), (-1.260, 1.520),
-                         (-1.560, 1.470), (-1.560, 1.492), (-1.240, 1.545), (-0.700, 1.585),
-                         (-0.200, 1.580), (0.340, 1.494)]), 1.72, bevel=0.006, seg=1,
+  desc=extrude_desc(ccw([(0.340, 1.470), (-0.200, 1.540), (-0.700, 1.548), (-1.260, 1.500),
+                         (-1.560, 1.440), (-1.560, 1.462), (-1.240, 1.522), (-0.700, 1.573),
+                         (-0.200, 1.565), (0.340, 1.494)]), 1.72, bevel=0.006, seg=1,
                     intent="headliner panel"),
   evidence=["img-r7-pass", "img-r7-rearseat"])
 for s, side in ((1, "l"), (-1, "r")):
@@ -972,7 +960,7 @@ spec["coordinateFrame"] = {
     "scaleReference": {
         "length": 4.956, "width": 1.981, "height": 1.634, "wheelbase": 2.950,
         "track": 1.680, "tire": "255/45 R21 (r=0.383)", "units": "m",
-        "note": "与尊界 V800 spec 完全同源；车宽口径含轮眉包边 (|x|=0.990)，不含后视镜",
+        "note": "与尊界 V800 spec 完全同源；车宽口径由后视镜外缘 |x|=0.986 决定（轮拱包边已按用户要求去除，胎外缘 |x|=0.968），不含后视镜展开",
     },
     "units": "meters",
     "note": "左舵驾驶位在 +X 侧（+Z 朝前时左侧为 +X）；集成层 body.rotation.y=π 适配游戏 -Z 前进方向",
@@ -981,7 +969,7 @@ spec["viewEvidence"] = [
     {"id": "img-r7-34", "view": "front-34-left",
      "sourceImage": "<clipboard>/clipboard-2026-10-18T16-36-37-110Z-ed6b05ea.jpg",
      "imageRegion": {"x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0, "units": "normalized"},
-     "observations": ["墨绿金属漆在侧面出青绿 flop", "黑色轮眉包边", "21 寸黑双十辐 + 红卡钳",
+     "observations": ["墨绿金属漆在侧面出青绿 flop", "轮拱开口即车身钣金（无外围包边件）", "21 寸黑双十辐 + 红卡钳",
                       "隐藏式门把手", "镀铬窗框", "溜背 SUV 比例（长悬/低顶/尾段下压）"],
      "confidence": 0.92},
     {"id": "img-r7-rear", "view": "rear",
@@ -1042,9 +1030,9 @@ spec["featureReviewTargets"] = [
      "componentRefs": ["tailgate", "tail-light-bar", "lettering-luxeed", "rear-bumper",
                        "rear-diffuser", "spoiler", "high-mount-brake"],
      "evidenceRefs": ["img-r7-rear"]},
-    {"id": "r7-wheel-identity", "name": "21 寸双十辐轮圈 + 红卡钳 + 黑色轮眉",
+    {"id": "r7-wheel-identity", "name": "21 寸双十辐轮圈 + 红卡钳 + 轮拱开口", 
      "tier": "critical", "passIds": ["material-pass"], "minimumScore": 0.78, "mustPass": True,
-     "componentRefs": ["wheel-face-fl", "caliper-fl", "arch-fl", "rim-fl"],
+     "componentRefs": ["wheel-face-fl", "caliper-fl", "rim-fl"],
      "evidenceRefs": ["img-r7-34"]},
     {"id": "r7-interior-two-tone", "name": "双色内饰：紫灰上体 / 米白下体 + 横置悬浮屏 + 双辐方向盘",
      "tier": "critical", "passIds": ["lighting-pass"], "minimumScore": 0.78, "mustPass": True,
@@ -1085,7 +1073,7 @@ spec["qualityContract"]["minimumSpecDepth"] = {
 spec["qualityContract"]["qualityBar"] = "complex"
 spec["qualityContract"]["featureGroups"] = [
     {"id": "fastback-silhouette", "name": "溜背 SUV 轮廓与比例", "required": True,
-     "qualityCriteria": ["侧视：长 4.956 / 高 1.634 / 轴距 2.95 的比例可量；车顶后段从 -1.0 起持续下压到尾部 y≈1.25"],
+     "qualityCriteria": ["侧视：长 4.956 / 高 1.634 / 轴距 2.95 的比例可量；车顶后段从 -0.7 起持续下压到尾部 y≈1.18"],
      "evidenceRefs": ["img-r7-side", "img-r7-34"], "failureModes": ["读作方正 MPV", "车顶后段不下压"]},
     {"id": "front-identity", "name": "前脸身份包（贯穿饰条/C 形大灯/盾标）", "required": True,
      "qualityCriteria": ["全宽镀铬饰条与两侧 LED 光带同高（y≈0.86）", "每侧大灯内 3 颗投影镜芯", "盾形标居中于机盖前缘"],
@@ -1098,13 +1086,13 @@ spec["qualityContract"]["featureGroups"] = [
                          "方向盘双辐 + 米白中央板"],
      "evidenceRefs": ["img-r7-dash", "img-r7-pass"], "failureModes": ["内饰单一颜色", "屏竖置"]},
     {"id": "wheel-identity", "name": "21 寸双十辐轮圈 + 红卡钳", "required": True,
-     "qualityCriteria": ["20 根辐条开窗可透光", "卡钳在轮辐开窗后可见", "轮眉黑色包边只在拱口上半"],
-     "evidenceRefs": ["img-r7-34"], "failureModes": ["轮圈读作实心黑饼", "整圆轮眉穿地"]},
+     "qualityCriteria": ["20 根辐条开窗可透光", "卡钳在轮辐开窗后可见", "轮拱为车身钣金开口，无外围包边件"],
+     "evidenceRefs": ["img-r7-34"], "failureModes": ["轮圈读作实心黑饼", "轮拱外加包边/围边件"]},
 ]
 spec["qualityContract"]["mustNotDo"] = [
     "不得把玻璃改成 transmission（整帧 DC 翻倍）",
     "不得用实心盒当 macro 容器后忘记隐藏",
-    "不得让轮眉包边成为整圆环（整圆会穿地读作轮底皮带）",
+    "不得重新加入轮拱外围包边/围边件（R17 用户明确要求去除，曾产生车轮旁白色异物）",
 ]
 spec["qualityContract"]["antiShallowSpecRules"] = [
     "每个 identity 组件必须有 localFeatures 与 colorMaterialRecipe",
@@ -1125,7 +1113,7 @@ spec["qualityContract"]["definitionOfDone"] = [
 FEATURE_INDEX = {f.get("id") for c in COMPS for f in (c.get("localFeatures") or []) if isinstance(f, dict)}
 _details = [
     ("d-paint-metallic-flop", "gloss", "墨绿金属漆 clearcoat flop", "paint-green"),
-    ("d-arch-cladding", "hole", "轮拱黑色包边半圆带", "d-arch-cladding"),
+    ("d-arch-cladding", "hole", "轮拱真开口（无包边件，R17 去除围边）", "d-arch-cladding"),
     ("d-beltline-rise", "contour", "腰线后扬", "d-beltline-rise"),
     ("d-full-width-blade", "linework", "前脸全宽镀铬饰条", "d-full-width-blade"),
     ("d-headlamp-c", "bevel", "C 形大灯楔形灯罩", "d-headlamp-c"),
@@ -1226,7 +1214,7 @@ spec["proceduralStrategy"] = [
     "灯/字标/屏幕全部由材质 ID 契约驱动，内容贴图在适配层 Canvas 生成",
 ]
 spec["assumptions"] = [
-    "车宽 1.981 含轮眉包边（|x|=0.990），不含展开的后视镜",
+    "车宽 1.981 由后视镜外缘 |x|=0.986 决定；轮拱包边已按用户要求去除（胎外缘 |x|=0.968），不含展开的后视镜",
     "单视角无法确证底盘/后备箱内部，按同级 SUV 典型值推断",
 ]
 spec["risks"] = [

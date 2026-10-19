@@ -11,6 +11,7 @@ import { damp, makeLcg } from '../util/math';
 import { mergeSafe } from '../util/geo';
 import { batchMergeStatic, UV_CONTENT_MATERIAL_IDS } from './batchMerge';
 import { applyReferenceTextures } from './refTextures';
+import { mountLicensePlate } from './plateTexture';
 import {
   createZunjieV800LuxuryMPVModel,
   type ProceduralModelRuntime,
@@ -2683,6 +2684,57 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
     }
   }
 
+  // ---- R17 绿色新能源车牌（前后各一，用户截图红框位）----
+  // 同 tailgate-maextro 先例：bbox 实测必须在 batchMergeStatic **之前**（合并摘掉 leaf
+  // mesh 后 setFromObject 得空盒）；面片挂 body 下不进合批，MeshBasic 透明贴花 +1 DC/牌。
+  // 后牌位：尾门中央 MAEXTRO 条带（tail-chrome-strip y1.30~1.34）下方、两尾灯之间
+  // （用户截图 077Z 红框 ≈ 尾门 y+5% 处）；前牌位：前保中央下部（用户截图 096Z 红框）。
+  if (typeof document !== 'undefined') {
+    model.updateMatrixWorld(true);
+    // 后牌
+    const tgNodeR = byId.get('tailgate');
+    if (tgNodeR) {
+      const tgBox = new THREE.Box3().setFromObject(tgNodeR);
+      if (!tgBox.isEmpty()) {
+        const c = tgBox.getCenter(new THREE.Vector3());
+        const s = tgBox.getSize(new THREE.Vector3());
+        const cl = body.worldToLocal(c.clone());
+        mountLicensePlate({
+          body,
+          name: 'license-plate-rear',
+          text: '尊界V800',
+          size: [0.44, 0.126],
+          // 尾门上部 MAEXTRO 条带下、两灯之间：y = 中心 +5% 门高
+          position: [cl.x, cl.y + s.y * 0.05, cl.z - s.z / 2 - 0.02],
+          faceRear: true,
+          ownedTextures
+        });
+      }
+    }
+    // 前牌：前保（bumper-lower）中央面
+    const bbNode = byId.get('bumper-lower');
+    const feNode = byId.get('front-end');
+    const plateSrc = bbNode ?? feNode;
+    if (plateSrc) {
+      const bBox = new THREE.Box3().setFromObject(plateSrc);
+      if (!bBox.isEmpty()) {
+        const c = bBox.getCenter(new THREE.Vector3());
+        const s = bBox.getSize(new THREE.Vector3());
+        const cl = body.worldToLocal(c.clone());
+        mountLicensePlate({
+          body,
+          name: 'license-plate-front',
+          text: '尊界V800',
+          size: [0.44, 0.126],
+          // 前保面上部（贴 MAEXTRO 字行下缘），面朝 +Z 车头
+          position: [cl.x, cl.y + s.y * 0.32, cl.z + s.z / 2 + 0.02],
+          faceRear: false,
+          ownedTextures
+        });
+      }
+    }
+  }
+
   // ---- P1 内饰织物贴图：皮革 ×3 / 木纹 / 麂皮 / 窗帘 / 地毯 ----
   // 七个材质 spec 声明 textureless（normal/bump 全 null），这里的 Canvas 程序化
   // 贴图是唯一支撑。可平铺纹理全车通用 → 合批照合不误；唯一需要分区的是
@@ -3300,7 +3352,12 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
   // 改用**材质身份**：给第一排座椅一个独占的材质克隆，合批必然把它分到独立 batch，
   // 运行时 `material.visible = false` 这一批整体不画 —— 与合批实现解耦，稳定可靠。
   // 代价：+1 draw call（三种机位共用一个专属 batch）。
-  const cabinSeatMat = (() => {
+  //
+  // R16 回归教训（用户截图 verify/r14/game/cabin_r14b.png）：R16 把赋值集合缩成了
+  // 2 个坐垫，靠背/头枕 4 件漏配 → 它们留在 leather-warm 大批里照样画，车内正前方
+  // 依然是那面「中央隔板实体模块」。第一排 6 件（坐垫+靠背+头枕，左右各 3）必须全列。
+  const cabinOccluderMats: THREE.MeshPhysicalMaterial[] = [];
+  void (() => {
     const src = (meshOf('seat-driver')?.material ?? meshOf('seat-passenger')?.material) as
       | THREE.MeshPhysicalMaterial
       | undefined;
@@ -3308,7 +3365,14 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
     const clone = src.clone() as THREE.MeshPhysicalMaterial;
     clone.userData.cabinHidable = true;
     let assigned = 0;
-    for (const id of ['seat-driver', 'seat-passenger'] as const) {
+    for (const id of [
+      'seat-driver',
+      'seat-passenger',
+      'seat-driver-back',
+      'seat-driver-headrest',
+      'seat-passenger-back',
+      'seat-passenger-headrest'
+    ] as const) {
       const node = byId.get(id);
       if (!node) {
         console.warn('[V800Adapter] cabin occluder 组件缺失：', id);
@@ -3322,7 +3386,42 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
         }
       });
     }
-    console.info(`[V800Adapter] cabin occluder 材质克隆 → ${assigned} 个 mesh`);
+    console.info(`[V800Adapter] cabin occluder 座椅材质克隆 → ${assigned} 个 mesh`);
+    cabinOccluderMats.push(clone);
+    return clone;
+  })();
+
+  // ---- R17：中央模块第二遮挡克隆（console-riser / tunnel-rear）----
+  // 与座椅同一机制（独占克隆 + material.visible=false），但**不能**并进皮革克隆：
+  // 这两件是 wood 材质（spec material: "wood"），混入皮革克隆会让车外机位的中控台
+  // 读出菱格皮革纹。克隆源取 console-riser 自身材质 —— 此刻它已是 R13 木纹贴图
+  // 挂载后的实例，车外观感与隐藏前逐像素一致，只有 cabin 机位整批不画。
+  // （V800 spec 无 center-console 组件；console-island-* 是木纹台上的水晶/托盘小件，
+  // 体积小不挡视野，不纳入。）
+  void (() => {
+    const src = (meshOf('console-riser')?.material ?? meshOf('tunnel-rear')?.material) as
+      | THREE.MeshPhysicalMaterial
+      | undefined;
+    if (!src) return null;
+    const clone = src.clone() as THREE.MeshPhysicalMaterial;
+    clone.userData.cabinHidable = true;
+    let assigned = 0;
+    for (const id of ['console-riser', 'tunnel-rear'] as const) {
+      const node = byId.get(id);
+      if (!node) {
+        console.warn('[V800Adapter] cabin occluder 组件缺失：', id);
+        continue;
+      }
+      node.traverse((o) => {
+        const mesh = o as THREE.Mesh;
+        if (mesh.isMesh) {
+          mesh.material = clone;
+          assigned++;
+        }
+      });
+    }
+    console.info(`[V800Adapter] cabin occluder 中控材质克隆 → ${assigned} 个 mesh`);
+    cabinOccluderMats.push(clone);
     return clone;
   })();
 
@@ -3487,7 +3586,11 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
         rec!.tris++;
         let regionHit = -1;
         // 菱格平铺材质（quiltTiled）：整幅皆图案、无分区概念 → 直接合法
-        if ((mat as THREE.MeshPhysicalMaterial | undefined)?.userData?.quiltTiled === true) {
+        // refTextures 参考图材质（userData.refTexture）：UV 由世界坐标重建、整幅图
+        // 平铺（triplanar/planar forced repeat），同样无图集分区概念 → 直接合法
+        // （R17：R15 接入参考图后 384 三角被误报「串味」——判据没跟上 refTextures）。
+        const matUd = (mat as THREE.MeshPhysicalMaterial | undefined)?.userData;
+        if (matUd?.quiltTiled === true || matUd?.refTexture !== undefined) {
           regionHit = 0;
         }
         // 判据分两族：
@@ -3721,7 +3824,7 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
     root,
     body,
     wheels,
-    cabinOccluderMaterials: cabinSeatMat ? [cabinSeatMat] : [],
+    cabinOccluderMaterials: cabinOccluderMats,
     get currentHeat() {
       return heat;
     },

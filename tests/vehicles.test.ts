@@ -1,10 +1,11 @@
 /**
- * R15-4 双车档位回归：R7「踏板永不断裂 + 制动盘升温 ×50 + 过热策略不变」。
+ * R15-4 双车档位回归：R7「踏板永不断裂 + 制动盘升温 ×100 + 过热策略不变」。
  *
  * 锁的是**档位契约**（不是数值快照）：
  *  - V800：b=1.0 过载爬升 1.77s 断裂 → 冗余接管（既有语义逐位不变）
  *  - R7  ：踏板力钳在 breakForceN 不再断裂；热阈值/冷却/重布防/2s 断力全部沿用，
- *          只是升温倍率 ×50 —— 因此摩擦制动变成「只能点一下」的稀缺资源，
+ *          只是升温倍率 ×100（R17 基座减半后由 ×50 补偿上调，有效升温不变）——
+ *          因此摩擦制动变成「只能点一下」的稀缺资源，
  *          主力减速必须靠电回收（b≤0.25 段，机械项为 0 不产热）。
  */
 import { describe, expect, it } from 'vitest';
@@ -19,11 +20,11 @@ const R7 = VEHICLE_PROFILES.r7;
 const V800 = VEHICLE_PROFILES.v800;
 
 describe('档位元数据', () => {
-  it('V800 可断裂 / 升温 ×1；R7 不可断裂 / 升温 ×50，热参数两者一致', () => {
+  it('V800 可断裂 / 升温 ×1；R7 不可断裂 / 升温 ×100，热参数两者一致', () => {
     expect(V800.brakeBreakable).toBe(true);
     expect(V800.brakeTempGainScale).toBe(1);
     expect(R7.brakeBreakable).toBe(false);
-    expect(R7.brakeTempGainScale).toBe(50);
+    expect(R7.brakeTempGainScale).toBe(100);
     // 过热策略共用同一份常量（阈值/冷却/重布防/断力时长不随车型变化）
     expect(BRAKE.thermalTriggerTemp).toBe(1.0);
     expect(BRAKE.thermalRearmTemp).toBe(0.6);
@@ -61,8 +62,10 @@ describe('踏板断裂开关', () => {
 describe('制动盘升温倍率', () => {
   /**
    * 同一段输入（b=0.6，从 200km/h 起步 3 步 = 25ms）下两档的温升比。
-   * 窗口必须**短于进红区的时间**：`brakeTemp` 上限 1.5，R7 在 50× 下约 3 步就封顶，
-   * 取长窗口会把「封顶值 / 未封顶值」当成倍率（实测会读成 20.4×）。
+   * 窗口必须**短于进红区的时间**：`brakeTemp` 上限 1.5，R7 在 ×100 下约 4 步进红区、
+   * ~6 步封顶，取长窗口会把「封顶值 / 未封顶值」当成倍率（实测会读成 20.4×）。
+   * R17：基座 gain 减半（2.4→1.2）、倍率 ×50→×100 补偿，R7 有效升温逐位不变，
+   * 故本窗口的绝对温升与改前相同（3 步 ≈0.69，远低于封顶）。
    */
   const run = (profile: typeof V800): number => {
     const v = createVehicleState();
@@ -73,12 +76,12 @@ describe('制动盘升温倍率', () => {
     return v.brakeTemp;
   };
 
-  it('R7 温升是 V800 的 50 倍（±0.5%，封顶前窗口）', () => {
+  it('R7 温升是 V800 的 100 倍（±0.5%，封顶前窗口）', () => {
     const base = run(V800);
     const hot = run(R7);
     expect(base).toBeGreaterThan(0);
     expect(hot).toBeLessThan(1.5); // 确认没封顶，倍率口径成立
-    expect(hot / base).toBeCloseTo(50, 1);
+    expect(hot / base).toBeCloseTo(100, 1);
   });
 
   it('R7 满踩在一帧级时间内就进红区并触发 2s 热保护', () => {
@@ -118,7 +121,7 @@ describe('R7 打法的可玩性（电回收为主）', () => {
     expect(res!.degraded).toBe(false);
     expect(res!.success).toBe(true);
     expect(res!.stopDistance).toBeLessThan(TRACK.barrierDistance);
-    // 50× 升温下**任何**带机械制动的刹车都会进红区（轻踩 0.25 也只要 ~0.09s），
+    // ×100 升温下**任何**带机械制动的刹车都会进红区（轻踩 0.25 也只要 ~0.09s），
     // 因此「热保护反复介入」正是 R7 的核心玩法特征，不是失败。
     expect(sm.vehicle.thermalLocks).toBeGreaterThan(0);
     console.info(
