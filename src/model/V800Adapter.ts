@@ -62,6 +62,8 @@ export interface CarLike {
    * 把它 `visible=false`，整批不画 —— 与合批实现解耦（按对象隐藏会被合批吞并）。
    */
   readonly cabinOccluderMaterials?: readonly THREE.Material[];
+  /** R19：进入/离开 cabin 系机位时切换车漆内舱暗面（BackSide 渲染） */
+  setPaintShadow?: (interior: boolean) => void;
 }
 
 const MS_TO_RPM_SCALE = 2.6; // 视觉轮速系数（车轮半径 0.382，弧度 = dist/r，视觉略放大）
@@ -3358,6 +3360,34 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
   // R16 回归教训（用户截图 verify/r14/game/cabin_r14b.png）：R16 把赋值集合缩成了
   // 2 个坐垫，靠背/头枕 4 件漏配 → 它们留在 leather-warm 大批里照样画，车内正前方
   // 依然是那面「中央隔板实体模块」。第一排 6 件（坐垫+靠背+头枕，左右各 3）必须全列。
+  /**
+   * R19f：内舱暗面 = **换材质**，不是翻 side。
+   * R19/R19c 的 BackSide 方案实测是错的：body-lower / root 是**单壳实心挤出体**，
+   * 切 BackSide 后外表面被剔除、相机直接看穿进壳体内部，整屏变成暗面材质的
+   * 自发光底色（实测 (13,8,8) 满屏），仪表台/三联屏/方向盘全被吞掉 —— 比原问题更糟。
+   * 正解：外壳始终 FrontSide，车内机位时把批次材质整体换成「暗车漆」克隆
+   *（深色 + 零金属度 + 高粗糙），离车切回原漆。目标面（引擎盖/甲板 y≈1.09）仍是
+   * 可见实体，只是不再被黄昏暖光读成亮铜色金属板。
+   */
+  const paintShadowPairs: Array<{ mesh: THREE.Mesh; exterior: THREE.Material; interior: THREE.Material }> = [];
+  const makeInteriorPaintClone = (src: THREE.MeshPhysicalMaterial): THREE.MeshPhysicalMaterial => {
+    const clone = src.clone() as THREE.MeshPhysicalMaterial;
+    clone.color.setHex(0x2a211c);
+    clone.emissive.setHex(0x120d0a);
+    clone.emissiveIntensity = 0.55; // R19f：1.0 时自发光直接盖过灯光 → 满屏死黑
+    clone.emissiveMap = null;
+    clone.map = null;
+    clone.normalMap = null;
+    clone.roughnessMap = null;
+    clone.metalness = 0.0;
+    clone.roughness = 0.92;
+    clone.envMapIntensity = 0.12;
+    clone.clearcoat = 0;
+    clone.side = src.side; // 保持原 side（FrontSide）
+    clone.userData = { ...clone.userData, cabinPaintShadow: true };
+    clone.needsUpdate = true;
+    return clone;
+  };
   const cabinOccluderMats: THREE.MeshPhysicalMaterial[] = [];
   void (() => {
     const src = (meshOf('seat-driver')?.material ?? meshOf('seat-passenger')?.material) as
@@ -3427,6 +3457,23 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
     return clone;
   })();
 
+  // ---- R19 续：合批后把「内舱暗面」行为赋给 batch/paint-* 批次 ----
+  // 合批把 body-lower/root 等 paint-* 件并进 batch/paint-upper|paint-lower（材质实例
+  // 被复制到批次网格上）。克隆替换仅对未进批次的源 mesh 有效；批次网格用一个轻量
+  // userData 注入：Game 切换机位时遍历 batch/paint-* 直接改 side，语义与 setPaintShadow
+  // 等价（外观态 FrontSide / 内舱态 BackSide）。
+  const wireBatchPaintShadow = (stats: { created: THREE.Mesh[] }): void => {
+    for (const mesh of stats.created) {
+      const name = mesh.name || '';
+      if (!name.startsWith('batch/paint-')) continue;
+      const mat = mesh.material as THREE.MeshPhysicalMaterial | undefined;
+      if (!mat) continue;
+      const clone = makeInteriorPaintClone(mat);
+      paintShadowPairs.push({ mesh, exterior: mat, interior: clone });
+    }
+    console.info(`[V800Adapter] batch/paint-* 内舱暗面 → ${paintShadowPairs.length} 个批次`);
+  };
+
   const batchStats = batchMergeStatic(model, {
     excludeObjects: [...wheels.map((w) => w.spin), ...caps, ...(gaugeMesh ? [gaugeMesh] : []), pedal],
     excludeMaterialIds: UV_CONTENT_MATERIAL_IDS
@@ -3434,6 +3481,7 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
   if (batchStats.problems.length > 0) {
     console.error('[V800Adapter] 静态合批自校验失败：', batchStats.problems);
   }
+  wireBatchPaintShadow(batchStats);
   byId = indexComponents(model);
   if (typeof window !== 'undefined' && window.location.hash.includes('batchmerge')) {
     console.table(
@@ -3473,15 +3521,21 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
       roughness: 0.96,
       metalness: 0.0
     });
-    // 世界坐标：x 居中 ±0.93、y 壳顶 1.090+8mm、z 前脚踏板(-1.15)到仪表台前缘(1.55)
-    const carpet = new THREE.Mesh(new THREE.BoxGeometry(1.86, 0.012, 2.70), carpetMat);
-    const wp = new THREE.Vector3(0, 1.098, 0.2);
-    body.worldToLocal(wp);
-    carpet.position.copy(wp);
-    carpet.name = 'cabin-floor-carpet';
-    carpet.castShadow = false;
-    carpet.receiveShadow = false;
-    body.add(carpet);
+    // R19 凹槽后：壳顶分两段 —— 前段（z>1.05）仍 1.090，舱段（z 1.05..-1.52）顶面 1.66。
+    // 衬毯铺在**舱段凹槽顶面**（=新的「地板」高度 1.66+8mm），把凹槽顶盖成深色内饰面；
+    // 前段保留旧毯，衔接中控。两块毯子均合批后新增，+2 DC。
+    const mk = (w: number, d: number, y: number, z: number, name: string): void => {
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, 0.012, d), carpetMat);
+      const wp = new THREE.Vector3(0, y, z);
+      body.worldToLocal(wp);
+      mesh.position.copy(wp);
+      mesh.name = name;
+      mesh.castShadow = false;
+      mesh.receiveShadow = false;
+      body.add(mesh);
+    };
+    mk(1.86, 0.95, 1.098, 1.52, 'cabin-floor-carpet'); // 前段：中控/脚坑上方
+    mk(1.86, 2.15, 1.668, -0.45, 'cabin-roof-carpet'); // 舱段：凹槽顶面（z 0.575..-1.525，避开前坡转角）
   }
 
   // ---- QA 钩子：#uvassert —— 图集串味验证（三角形-矩形相交法）----
@@ -3813,11 +3867,47 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
     }
   }
 
+  // ---- R19f：内舱暗面（换材质；声明与工具见 cabinOccluderMats 之前）----
+  // 病根：body-lower / root 挤出壳顶面 y≈1.09 是全宽平顶，黄昏暖光把它读成
+  // 大片亮铜色金属板 = 用户指认的「中央隔板实体模块」（r19_grid 网格射线定罪
+  // batch/paint-upper 占满画面上半，命中点 y 1.20~1.34）。
+  // 处置：车内机位把 paint-* 批次材质整体换成「暗车漆」克隆（深色 / 零金属度 / 高粗糙），
+  // 离车切回原漆。外壳保持 FrontSide —— 车头盖、甲板仍是可见实体，不再发亮铜色。
+  // 只取 **自身 sculptComponent.id 等于 body-lower / root** 的 Mesh（pivot 与 mesh 同名，
+  // 工厂里 mesh 挂在 pivot 下）。⚠️ 绝不取「子树全部 Mesh」—— root 子树含整车外板，
+  // 那样会把车漆整体染成暗面（实测误克隆 24 件，外观直接毁掉）。
+  // 与 cabinOccluderMats 同一开关时机，零每帧开销。
+  void (() => {
+    const targets = ['body-lower', 'root'] as const;
+    const seen = new Set<THREE.Mesh>();
+    for (const id of targets) {
+      const node = byId.get(id);
+      if (!node) continue;
+      node.traverse((o) => {
+        const mesh = o as THREE.Mesh;
+        if (!mesh.isMesh || seen.has(mesh)) return;
+        if (mesh.userData?.sculptComponent?.id !== id) return; // 只认自身 id
+        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        const src = mats[0] as THREE.MeshPhysicalMaterial | undefined;
+        if (!src) return;
+        seen.add(mesh);
+        paintShadowPairs.push({ mesh, exterior: src, interior: makeInteriorPaintClone(src) });
+      });
+    }
+    console.info(`[V800Adapter] 内舱暗面配对 → ${paintShadowPairs.length} 组（含合批批次）`);
+  })();
+  const setPaintShadow = (interior: boolean): void => {
+    for (const p of paintShadowPairs) {
+      p.mesh.material = interior ? p.interior : p.exterior;
+    }
+  };
+
   const api: CarLike = {
     root,
     body,
     wheels,
     cabinOccluderMaterials: cabinOccluderMats,
+    setPaintShadow,
     get currentHeat() {
       return heat;
     },

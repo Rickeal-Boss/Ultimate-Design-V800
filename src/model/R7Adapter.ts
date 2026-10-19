@@ -596,6 +596,34 @@ export function createR7CarAdapter(tier: QualityTier = 'high'): CarLike {
   // tileWorld 0.6）、扶手是 leather-plum 无图、坐垫是菱格图（seat-quilt
   // tileWorld 0.24）—— 混克隆会让车外机位（风挡/侧窗可见中岛）读出错误纹理。
   // 因此按「贴图态材质」分三个克隆，各自 hidden 时整批不画、显示时逐像素不变。
+  /**
+   * R19f：内舱暗面 = **换材质**，不是翻 side（与 V800 同构）。
+   * R19/R19c 的 BackSide 方案实测是错的：body-lower / root 是**单壳实心挤出体**，
+   * 切 BackSide 后外表面被剔除、相机直接看穿进壳体内部，整屏变成暗面材质的
+   * 自发光底色（V800 实测 (13,8,8) 满屏），内饰全被吞掉 —— 比原问题更糟。
+   * 正解：外壳始终 FrontSide，车内机位时把 paint-* 批次材质整体换成「暗车漆」克隆
+   *（深色 + 零金属度 + 高粗糙 + 零虹彩），离车切回原漆。
+   */
+  const paintShadowPairs: Array<{ mesh: THREE.Mesh; exterior: THREE.Material; interior: THREE.Material }> = [];
+  const makeInteriorPaintClone = (src: THREE.MeshPhysicalMaterial): THREE.MeshPhysicalMaterial => {
+    const clone = src.clone() as THREE.MeshPhysicalMaterial;
+    clone.color.setHex(0x23282a);
+    clone.emissive.setHex(0x0d1112);
+    clone.emissiveIntensity = 0.55; // R19f：1.0 时自发光盖过灯光 → 满屏死黑
+    clone.emissiveMap = null;
+    clone.map = null;
+    clone.normalMap = null;
+    clone.roughnessMap = null;
+    clone.metalness = 0.0;
+    clone.roughness = 0.92;
+    clone.envMapIntensity = 0.12;
+    clone.clearcoat = 0;
+    clone.iridescence = 0;
+    clone.side = src.side; // 保持原 side（FrontSide）
+    clone.userData = { ...clone.userData, cabinPaintShadow: true };
+    clone.needsUpdate = true;
+    return clone;
+  };
   const cabinOccluderMats: THREE.MeshPhysicalMaterial[] = [];
   {
     // R7 的 byId「先序先命中 = 外层 pivot」：seat-driver-cushion 等命中是 Group，
@@ -733,11 +761,25 @@ export function createR7CarAdapter(tier: QualityTier = 'high'): CarLike {
       }
     }
   }
+  // ---- R19 续：合批后把「内舱暗面」赋给 batch/paint-* 批次（同 V800）----
+  const wireBatchPaintShadow = (stats: { created: THREE.Mesh[] }): void => {
+    for (const mesh of stats.created) {
+      const name = mesh.name || '';
+      if (!name.startsWith('batch/paint-')) continue;
+      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      const mat = mats[0] as THREE.MeshPhysicalMaterial | undefined;
+      if (!mat) continue;
+      paintShadowPairs.push({ mesh, exterior: mat, interior: makeInteriorPaintClone(mat) });
+    }
+    console.info(`[R7Adapter] batch/paint-* 内舱暗面 → ${paintShadowPairs.length} 个批次`);
+  };
+
   const mergeResult = batchMergeStatic(model, {
     excludeObjects: dynamicNodes,
     excludeMaterialIds: UV_CONTENT_MATERIAL_IDS,
     mergeTarget: model,
   });
+  wireBatchPaintShadow(mergeResult);
 
   // ---- R18：座舱地板衬毯（覆盖 body-lower 挤出壳顶面，消灭副驾「中央隔板」）----
   // 病根（落地审查 §6）：body-lower 壳顶面 y=1.094（paint-green）在副驾眼点(1.285)下方
@@ -774,6 +816,35 @@ export function createR7CarAdapter(tier: QualityTier = 'high'): CarLike {
   let lastG = 0;
   let lastGear = 'P';
 
+  // ---- R19：内舱暗面（与 V800 同构）----
+  // 病根同 V800：body-lower / root 单壳的 paint-green 反面从车内读成亮色金属板
+  //（R18 只用衬毯盖色，副驾/主驾下半幅仍是绿漆）。克隆「内舱暗面」材质，
+  // Game 进 cabin 系机位时 setPaintShadow(true) 切 BackSide（只画反面=深色内舱）。
+  // (声明已提前至 cabinOccluderMats 之前，供 wireBatchPaintShadow 使用)
+  void (() => {
+    const seen = new Set<THREE.Mesh>();
+    for (const id of ['body-lower', 'root'] as const) {
+      const node = byId.get(id);
+      if (!node) continue;
+      node.traverse((o) => {
+        const mesh = o as THREE.Mesh;
+        if (!mesh.isMesh || seen.has(mesh)) return;
+        if (mesh.userData?.sculptComponent?.id !== id) return; // 只认自身 id
+        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        const src = mats[0] as THREE.MeshPhysicalMaterial | undefined;
+        if (!src) return;
+        seen.add(mesh);
+        paintShadowPairs.push({ mesh, exterior: src, interior: makeInteriorPaintClone(src) });
+      });
+    }
+    console.info(`[R7Adapter] 内舱暗面配对 → ${paintShadowPairs.length} 组（含合批批次）`);
+  })();
+  const setPaintShadow = (interior: boolean): void => {
+    for (const p of paintShadowPairs) {
+      p.mesh.material = interior ? p.interior : p.exterior;
+    }
+  };
+
   const api: CarLike = {
     root,
     body,
@@ -781,6 +852,7 @@ export function createR7CarAdapter(tier: QualityTier = 'high'): CarLike {
     // R15：内饰三机位（装配局部坐标），由 Game → CameraRig.setInteriorViews 消费
     interiorViews: R7_INTERIOR_VIEWS,
     cabinOccluderMaterials: cabinOccluderMats,
+    setPaintShadow,
     get currentHeat(): number {
       return heat;
     },

@@ -139,6 +139,8 @@ export class Game {
   private readonly windshieldMeshes: THREE.Mesh[] = [];
   /** cabin 机位专用遮挡材质（第一排座椅独占克隆）—— 按材质开关，与合批解耦 */
   private readonly cabinOccluderMaterials: readonly THREE.Material[];
+  /** R19：内舱暗面开关（null = 该车未实现，安全跳过） */
+  private readonly paintShadow: ((interior: boolean) => void) | null;
   private windshieldHidden = false;
   /**
    * 复用同一份 HUD 载荷对象（perf-r14 热点分配清扫）：原先每帧 `hud.update({...})`
@@ -179,6 +181,8 @@ export class Game {
     this.car = this.createCar();
     this.interiorViews = this.readInteriorViews();
     this.cabinOccluderMaterials = this.car.cabinOccluderMaterials ?? [];
+    // R19：车漆内舱暗面开关（body-lower/root 反面在 cabin 机位切 BackSide 深色）
+    this.paintShadow = this.car.setPaintShadow ?? null;
     if (import.meta.env.DEV) {
       console.info(`[cabin] 遮挡材质 ${this.cabinOccluderMaterials.length} 个`);
     }
@@ -295,6 +299,31 @@ export class Game {
     this.menu.show(true);
     this.rig.setMode('orbit');
     this.car.setBrakeLights(1.6);
+
+    // ---- QA 钩子：`#view=<mode>` 直接切机位（跳过「开始挑战」，供 headless 截图）----
+    // 用法：index.html#view=cabin 或 #view=cabinDriver / cabinPassenger / cabinRear。
+    // 车内遮挡切换（windshield/座椅/内舱暗面）走 selectView 同一条路径，所见即游戏内。
+    {
+      const m = /[#&]view=([a-zA-Z]+)/.exec(window.location.hash);
+      if (m) {
+        const mode = m[1] as CameraMode;
+        const known = new Set<string>(['chase', 'hood', 'cabin', 'cabinDriver', 'cabinPassenger', 'cabinRear', 'orbit', 'side']);
+        if (known.has(mode)) {
+          // selectView 有 phase 门禁（仅 accel/brake），未开局会被拦 → QA 钩子直接
+          // 驱动 rig + 遮挡切换，与 frame 内 wantHide 同一条路径（含 setPaintShadow）。
+          requestAnimationFrame(() => {
+            this.rig.setMode(mode as CameraMode);
+            this.hud.setActiveView(mode as CameraMode);
+            const hide = isInteriorMode(mode as CameraMode);
+            this.windshieldHidden = hide;
+            for (const wm of this.windshieldMeshes) wm.visible = !hide;
+            for (const om of this.cabinOccluderMaterials) om.visible = !hide;
+            this.paintShadow?.(hide);
+            console.info(`[QA] #view=${mode} 已切换`);
+          });
+        }
+      }
+    }
   }
 
   /** renderer 初始化见 render/Renderer.ts（结构要素 1：WebGLRenderer） */
@@ -651,6 +680,9 @@ export class Game {
       // 第一排座椅：车内视角不画自己的座椅（否则正前方是两块绗缝大板）。
       // R15c 实证：按对象隐藏会被合批吞并 → 走独占材质，整批开关。
       for (const m of this.cabinOccluderMaterials) m.visible = !wantHide;
+      // R19：车漆内舱暗面 —— 车内机位把 body-lower/root 切到 BackSide（只画反面=深色内舱），
+      // 离开时切回 FrontSide（只画正面=外观）。零每帧开销，与遮挡材质同一时机。
+      this.paintShadow?.(wantHide);
     }
     const speedBlur =
       pedaling && this.sm.phase !== 'countdown' ? Math.min(1, vehicle.speed / 72) ** 1.6 * 0.07 : 0;

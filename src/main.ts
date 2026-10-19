@@ -11,6 +11,16 @@ const game = new Game(container, quality, () => {
   byId('loading').classList.add('done');
 });
 
+// QA 钩子出口（DEV only）：headless 截图脚本读不到 Game 私有状态，暴露到 window 供
+// puppeteer evaluate 直驱 rig.setMode + 遮挡切换（与 frame 内 wantHide 同路径）。
+if (import.meta.env.DEV) {
+  (window as unknown as { __game?: unknown }).__game = game;
+  // QA 射线定罪：动态引 three（不进生产 bundle），供 headless 探针精确命中遮挡件
+  void import('three').then((THREE) => {
+    (window as unknown as { __THREE?: unknown }).__THREE = THREE;
+  });
+}
+
 // 开发期热更新支持
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
