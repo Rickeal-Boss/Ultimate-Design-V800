@@ -22899,8 +22899,8 @@
    "transform": {
     "position": [
      0.4,
-     1.492,
-     0.42
+     1.472,
+     0.245
     ],
     "rotation": [
      0.1,
@@ -23028,8 +23028,8 @@
    "transform": {
     "position": [
      -0.4,
-     1.492,
-     0.42
+     1.472,
+     0.245
     ],
     "rotation": [
      0.1,
@@ -23158,7 +23158,7 @@
     "position": [
      0.0,
      1.462,
-     0.47
+     0.395
     ],
     "rotation": [
      0.06,
@@ -23259,6 +23259,135 @@
     "dominantAlbedo": "rgba(18, 19, 22, 1.0)",
     "secondaryAlbedo": "rgba(18, 19, 22, 0.85)",
     "materialClass": "plastic",
+    "materialClassConfidence": 0.9
+   }
+  },
+  {
+   "id": "mirror-face",
+   "name": "内后视镜镜面",
+   "level": "micro",
+   "role": "interior",
+   "importance": 0.45,
+   "confidence": 0.9,
+   "primitive": "box",
+   "topologyClass": "assembled-solid",
+   "topologyRationale": "box 表达该部件的可展硬表面",
+   "geometryDescriptor": {
+    "topologyIntent": "hard-surface precise",
+    "edgeTreatment": {
+     "type": "bevel",
+     "bevelRadius": 0.006,
+     "segments": 2
+    },
+    "deformationStack": [],
+    "uvStrategy": "generated procedural coordinates",
+    "normalStrategy": "vertex normals from generated geometry"
+   },
+   "parent": "cabin-interior",
+   "attachment": null,
+   "dimensions": {
+    "width": 0.238,
+    "height": 0.062,
+    "depth": 0.004,
+    "units": "meters",
+    "confidence": 0.9
+   },
+   "transform": {
+    "position": [
+     0.0,
+     1.462,
+     0.373
+    ],
+    "rotation": [
+     0.06,
+     0,
+     0
+    ],
+    "scale": [
+     0.238,
+     0.062,
+     0.004
+    ]
+   },
+   "actionProfile": {
+    "animationRole": "static",
+    "pivot": {
+     "mode": "center",
+     "localPosition": [
+      0,
+      0,
+      0
+     ],
+     "axis": [
+      0,
+      1,
+      0
+     ],
+     "confidence": 0.9
+    },
+    "transformChannels": {
+     "translate": false,
+     "rotate": false,
+     "scale": false,
+     "bend": false,
+     "twist": false,
+     "detach": false,
+     "visibility": true,
+     "materialState": true
+    },
+    "sockets": [],
+    "collider": {
+     "type": "box",
+     "offset": [
+      0,
+      0,
+      0
+     ],
+     "scale": [
+      1,
+      1,
+      1
+     ],
+     "isTrigger": false,
+     "notes": ""
+    },
+    "constraints": [],
+    "destruction": {
+     "breakable": false,
+     "fractureGroup": "root",
+     "seamRefs": [],
+     "detachableFragments": [],
+     "breakImpulse": 0,
+     "debrisMaterial": "base"
+    }
+   },
+   "material": "chrome",
+   "materialLayers": [
+    "chrome"
+   ],
+   "deformations": [],
+   "joints": [],
+   "seams": [],
+   "localFeatures": [],
+   "surfaceDetail": {
+    "macroRoughness": 0,
+    "microRoughness": 0,
+    "bumpAmplitude": 0,
+    "normalPattern": "",
+    "displacementPattern": "",
+    "occlusionPattern": "",
+    "edgeWearPattern": "",
+    "notes": ""
+   },
+   "evidenceRefs": [
+    "img-r7-pass"
+   ],
+   "details": [],
+   "fidelityTier": "hero",
+   "colorMaterialRecipe": {
+    "dominantAlbedo": "rgba(232, 233, 236, 1.0)",
+    "secondaryAlbedo": "rgba(232, 233, 236, 0.85)",
+    "materialClass": "metal",
     "materialClassConfidence": 0.9
    }
   },
@@ -25019,6 +25148,7 @@
     "sun-visor-l",
     "sun-visor-r",
     "rear-view-mirror",
+    "mirror-face",
     "ambient-strip-l",
     "ambient-strip-r"
    ],
@@ -25218,6 +25348,7 @@
     "sun-visor-l",
     "sun-visor-r",
     "rear-view-mirror",
+    "mirror-face",
     "ambient-strip-l",
     "ambient-strip-r"
    ],

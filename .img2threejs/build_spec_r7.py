@@ -989,15 +989,26 @@ C("headliner", "顶棚（米白麂皮）", "meso", "extrude", "cabin-interior", 
                          (-0.200, 1.565), (0.340, 1.494)]), 1.72, bevel=0.006, seg=1,
                     intent="headliner panel"),
   evidence=["img-r7-pass", "img-r7-rearseat"])
+# R19i 纵深修正（用户指认「副驾顶部两块悬浮深色四边形」）：
+#   顶棚 headliner 挤出剖面从 local z=+0.34 起（风挡上沿），前顶横梁 roof-header 占 z 0.285..0.375。
+#   原值 sun-visor z=0.420（占 0.335..0.505）、rear-view-mirror z=0.470（占 0.451..0.489）
+#   → 前者 16.5cm、后者整块 11cm 落在顶棚前方的**风挡玻璃区**，背后是天空 = 视觉上的「悬浮深色四边形」。
+#   修正：遮阳板收到横梁后方 z=0.245（占 0.160..0.330，全部落在顶棚覆盖区），并下移贴合顶棚下表面；
+#        后视镜后移 z=0.395（占 0.376..0.414），后表面与横梁前缘 0.375 严丝合缝，不再悬空。
 for s, side in ((1, "l"), (-1, "r")):
     C(f"sun-visor-{side}", f"遮阳板（{'左' if s > 0 else '右'}）", "micro", "box", "cabin-interior",
-      (s * 0.400, 1.492, 0.420), dims=(0.340, 0.030, 0.170), rot=(0.10, 0, 0),
+      (s * 0.400, 1.472, 0.245), dims=(0.340, 0.030, 0.170), rot=(0.10, 0, 0),
       mat="leather-ivory", imp=0.5, conf=0.85, role="interior", evidence=["img-r7-pass"])
-C("rear-view-mirror", "车内后视镜", "micro", "box", "cabin-interior", (0.0, 1.462, 0.470),
+C("rear-view-mirror", "车内后视镜", "micro", "box", "cabin-interior", (0.0, 1.462, 0.395),
   dims=(0.260, 0.075, 0.038), rot=(0.06, 0, 0), mat="matte-black", imp=0.6, conf=0.88, role="interior",
   feats=[{"id": "d-interior-mirror", "name": "内后视镜 + 顶部模组", "kind": "bevel",
           "note": "内后视镜位于前顶横梁下 12cm（参考副驾视图顶部的后视镜与 ADAS 模组）"}],
   evidence=["img-r7-pass"], det=["d-interior-mirror"])
+# R19i：镜面。原后视镜是纯黑整块，车内机位读成「悬浮黑方块」；补一片朝乘员（local −Z）的
+# 高反射银镜面 —— 复用既有 chrome 材质（零新增材质），让这件读成「黑框银镜」。
+C("mirror-face", "内后视镜镜面", "micro", "box", "cabin-interior", (0.0, 1.462, 0.373),
+  dims=(0.238, 0.062, 0.004), rot=(0.06, 0, 0), mat="chrome", imp=0.45, conf=0.9, role="interior",
+  evidence=["img-r7-pass"])
 for s, side in ((1, "l"), (-1, "r")):
     C(f"ambient-strip-{side}", f"氛围灯带（{'左' if s > 0 else '右'}）", "micro", "box", "cabin-interior",
       (s * 0.430, 0.948, 0.716), dims=(0.760, 0.008, 0.008), mat="ambient",
