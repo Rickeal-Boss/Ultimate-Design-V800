@@ -669,7 +669,12 @@ export function createR7CarAdapter(tier: QualityTier = 'high'): CarLike {
   // 牌位）；前牌位 = spec front-plate 组件面（y0.23~0.36 / z2.47，dev-spec-r7 R17 刚修出
   // 进气口的那块板）。文字「智界R7」（纯文字性引用）。
   if (typeof document !== 'undefined') {
-    model.updateMatrixWorld(true);
+    // R17b 修 R7 双牌「互换嵌体」：必须 root 级刷新——model 级 updateMatrixWorld 时
+    // body.matrixWorld 还是陈旧单位阵（rotY π 未计入），Box3.setFromObject 内部
+    // updateWorldMatrix(false,true) 也不补祖先 → bbox 停在 model 系，而 body.worldToLocal
+    // 用的是新鲜 π 矩阵 → 坐标系错位，后牌被挂到车头鼻端、前牌挂进尾门（探针实锤
+    // world z -2.38）。root 级刷新后 bbox/worldToLocal 全链一致。
+    root.updateMatrixWorld(true);
     const tgNodeR = byId.get('tailgate');
     if (tgNodeR) {
       const tgBox = new THREE.Box3().setFromObject(tgNodeR);

@@ -583,7 +583,7 @@ for s, side in ((1, "l"), (-1, "r")):
       mat="matte-black", imp=0.8, conf=0.9, role="body",
       evidence=["img-r7-front", "img-r7-dash"])
     C(f"bpillar-{side}", f"B 柱（{'左' if s > 0 else '右'}）", "micro", "box", "root",
-      (s * 0.922, 1.330, 0.170), dims=(0.030, 0.470, 0.055), rot=(-0.08, 0, 0),
+      (s * 0.922, 1.330, -0.330), dims=(0.030, 0.470, 0.055), rot=(-0.08, 0, 0),
       mat="matte-black", imp=0.6, conf=0.88, role="body",
       evidence=["img-r7-side"], det=["d-pillar-black"])
     C(f"cpillar-{side}", f"C 柱（{'左' if s > 0 else '右'}）", "micro", "box", "root",
@@ -866,29 +866,29 @@ for s, side in ((1, "l"), (-1, "r")):
 # ---- 门内饰（米白门板 + 紫灰上沿 + 网罩扬声器）----
 for s, side in ((1, "l"), (-1, "r")):
     C(f"door-card-front-{side}", f"前门内饰板（{'左' if s > 0 else '右'}）", "meso", "box", "cabin-interior",
-      (s * 0.878, 0.740, 0.610), dims=(0.050, 0.620, 0.620), mat="leather-ivory",
+      (s * 0.878, 0.740, 0.170), dims=(0.050, 0.620, 0.620), mat="leather-ivory",
       imp=0.85, conf=0.9, role="interior",
       feats=[{"id": f"d-door-two-tone-{side}", "name": "米白门板 + 紫灰上沿", "kind": "linework",
               "note": "门板 y0.96 以上紫灰、以下米白，分界处一条镀铬饰条"}],
       evidence=["img-r7-pass", "img-r7-rearseat"], det=[f"d-door-two-tone-{side}"])
     C(f"door-card-rear-{side}", f"后门内饰板（{'左' if s > 0 else '右'}）", "meso", "box", "cabin-interior",
-      (s * 0.878, 0.740, -0.780), dims=(0.050, 0.620, 1.000), mat="leather-ivory",
+      (s * 0.878, 0.740, -0.875), dims=(0.050, 0.620, 1.000), mat="leather-ivory",
       imp=0.85, conf=0.9, role="interior",
       evidence=["img-r7-rearseat"], det=[f"d-door-two-tone-{side}"])
     C(f"door-trim-front-{side}", f"前门紫灰上沿（{'左' if s > 0 else '右'}）", "micro", "box",
-      "cabin-interior", (s * 0.868, 0.992, 0.610), dims=(0.055, 0.120, 0.620),
+      "cabin-interior", (s * 0.868, 0.992, 0.170), dims=(0.055, 0.120, 0.620),
       mat="leather-plum", imp=0.75, conf=0.9, role="interior", evidence=["img-r7-pass"])
     C(f"door-trim-rear-{side}", f"后门紫灰上沿（{'左' if s > 0 else '右'}）", "micro", "box",
-      "cabin-interior", (s * 0.868, 0.992, -0.780), dims=(0.055, 0.120, 1.000),
+      "cabin-interior", (s * 0.868, 0.992, -0.875), dims=(0.055, 0.120, 1.000),
       mat="leather-plum", imp=0.75, conf=0.9, role="interior", evidence=["img-r7-rearseat"])
     C(f"door-speaker-front-{side}", f"前门扬声器网罩（{'左' if s > 0 else '右'}）", "micro", "plane-card",
-      "cabin-interior", (s * 0.852, 0.600, 0.740), dims=(0.190, 0.260, 0.005),
+      "cabin-interior", (s * 0.852, 0.600, 0.350), dims=(0.190, 0.260, 0.005),
       rot=(0, s * -1.5708, 0), mat="speaker-lattice", imp=0.6, conf=0.88, role="interior",
       feats=[{"id": f"d-speaker-mesh-{side}", "name": "白色网格扬声器罩", "kind": "hole",
               "note": "门板下部 19×26cm 白色冲孔网罩（后排参考图最明显）"}],
       evidence=["img-r7-rearseat"], det=[f"d-speaker-mesh-{side}"])
     C(f"door-speaker-rear-{side}", f"后门扬声器网罩（{'左' if s > 0 else '右'}）", "micro", "plane-card",
-      "cabin-interior", (s * 0.852, 0.600, -0.640), dims=(0.190, 0.260, 0.005),
+      "cabin-interior", (s * 0.852, 0.600, -0.750), dims=(0.190, 0.260, 0.005),
       rot=(0, s * -1.5708, 0), mat="speaker-lattice", imp=0.6, conf=0.88, role="interior",
       evidence=["img-r7-rearseat"], det=[f"d-speaker-mesh-{side}"])
 

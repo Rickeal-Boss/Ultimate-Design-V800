@@ -79,8 +79,8 @@ const POSE: ModePose = {
  * 车里看到的那块「中央隔板实体模块」就是它（挂上参考图后被读成一面绗缝大墙）。
  * 眼点前移 27cm 到 −0.85 越过靠背，并略降 5cm，正前方视野才落到仪表台+路面上。
  */
-const CABIN_EYE: readonly [number, number, number] = [-0.40, 1.32, -0.66];
-const CABIN_TARGET: readonly [number, number, number] = [-0.30, 1.02, -9];
+const CABIN_EYE: readonly [number, number, number] = [-0.40, 1.20, -0.72];
+const CABIN_TARGET: readonly [number, number, number] = [-0.30, 0.98, -9];
 
 /**
  * QA 机位标定钩子：`#eye=x,y,z,tx,ty,tz` 覆盖内建 cabin 机位（世界坐标）。
@@ -141,10 +141,9 @@ const MODES: Record<CameraMode, (speed: number, portrait: boolean, time: number)
     POSE.local = true;
   },
   cabin: () => {
-    // 驾驶位头枕前方，目高 1.27m（R14：原 1.16 只比仪表台顶 1.012 高 15cm，
-    // 且眼点 z=-0.45 落在驾驶座靠背实体内部 → 半屏被一块皮革/台面大板占满）。
-    // 现眼点前移到座椅壳外（射线扫描 minDist 0.15m 只碰到透明的侧窗玻璃），
-    // 抬高到 1.27 使台面只压住画面底部约 1/4，注视点略下压看前方路面。
+    // 驾驶位头枕前方，目高 1.20m（R17b：原 1.32 高于方向盘顶 1.173 → 只见轮缘弧
+    // 不见盘辐/轮毂 =「香蕉弧」；降到 1.20 与方向盘顶 1.225 齐平后盘面正对眼点，
+    // 盘辐/轮毂/仪表全部入画。R15b 的座椅靠背外移约束（minDist 0.15m）仍满足。
     POSE.offset.set(...(CABIN_EYE_OVERRIDE ?? CABIN_EYE));
     POSE.look.set(...(CABIN_TARGET_OVERRIDE ?? CABIN_TARGET));
     POSE.fov = 68;
@@ -184,11 +183,16 @@ const UP = new THREE.Vector3(0, 1, 0);
 let INTERIOR_VIEWS: InteriorViews | null = null;
 
 function setInteriorPose(slot: keyof InteriorViews): void {
-  const v = INTERIOR_VIEWS?.[slot];
-  if (!v) {
+  // R17b：#eye 覆盖对 R7 三内饰机位同样生效（headless QA 免重建标定钩子，
+  // 仅 hash 显式给出时存在，正常游玩永远走下面两条正常路径）
+  if (CABIN_EYE_OVERRIDE) {
+    POSE.offset.set(...CABIN_EYE_OVERRIDE);
+    POSE.look.set(...(CABIN_TARGET_OVERRIDE ?? CABIN_TARGET));
+  } else if (!INTERIOR_VIEWS?.[slot]) {
     POSE.offset.set(...CABIN_EYE);
     POSE.look.set(...CABIN_TARGET);
   } else {
+    const v = INTERIOR_VIEWS[slot];
     // 装配层给的是**装配局部坐标**（spec 口径：+Z 车头）。运行时 POSE 是**世界偏移**
     // （Game 传入的 carQuat 取 root.quaternion = 恒等，车身 π 偏航在 body 内部），
     // 两者差一个绕 Y 的 180°：x、z 全部取反。内置 CABIN_EYE 已是反好的世界值。

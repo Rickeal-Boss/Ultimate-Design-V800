@@ -2704,8 +2704,9 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
           name: 'license-plate-rear',
           text: '尊界V800',
           size: [0.44, 0.126],
-          // 尾门上部 MAEXTRO 条带下、两灯之间：y = 中心 +5% 门高
-          position: [cl.x, cl.y + s.y * 0.05, cl.z - s.z / 2 - 0.02],
+          // 尾门中下部（用户 R17b 指认「适当下调」）：y = 中心 -16% 门高
+          // （尾灯下缘 y0.67 之上、MAEXTRO 条带 y1.30 之下，居中偏下）
+          position: [cl.x, cl.y - s.y * 0.16, cl.z - s.z / 2 - 0.02],
           faceRear: true,
           ownedTextures
         });
@@ -3113,6 +3114,10 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
     mat.emissive.set(0xffffff);
     mat.emissiveIntensity = 1.2;
     mat.color.set(0x0a0a0c);
+    // R17b：透明底——gauge-screen 与三联屏左段在空间上重叠（真车仪表即三联屏左段），
+    // 不透明黑底会把 READY/P 盖成「黑盒压屏」。数字/力度条内容自身着色，其余全透明。
+    mat.transparent = true;
+    mat.depthWrite = false;
     mat.needsUpdate = true;
   }
   let lastGaugeKey = '';
@@ -3127,10 +3132,9 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
     lastGaugeTime = now;
     const w = gaugeCanvas.width;
     const h = gaugeCanvas.height;
-    gctx.fillStyle = '#060a08';
-    gctx.fillRect(0, 0, w, h);
-    gctx.strokeStyle = '#1d3a2c';
-    gctx.strokeRect(6, 6, w - 12, h - 12);
+    // R17b：透明底（材质 transparent=true）——只画内容像素，其余清成 alpha 0，
+    // 露出三联屏左段贴图（READY/P 属于它）；黑盒盖屏是旧观感杂乱的根因。
+    gctx.clearRect(0, 0, w, h);
     // 速度
     gctx.fillStyle = '#7fd8a8';
     gctx.font = 'bold 92px "Segoe UI", sans-serif';
@@ -3139,8 +3143,10 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
     gctx.font = '26px "Segoe UI", sans-serif';
     gctx.fillStyle = '#4a7a62';
     gctx.fillText('km/h', 40, 164);
-    // 踏板力条
+    // 踏板力条（自带半透明底衬保证可读）
     const ratio = Math.min(1, forceN / 1612);
+    gctx.fillStyle = 'rgba(10, 22, 16, 0.6)';
+    gctx.fillRect(222, 44, 256, 116);
     gctx.fillStyle = '#16241d';
     gctx.fillRect(230, 52, 240, 30);
     gctx.fillStyle = ratio > 0.85 ? '#ff4a3c' : ratio > 0.6 ? '#ffb067' : '#7fd8a8';
@@ -3154,11 +3160,7 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
     gctx.font = 'bold 64px "Segoe UI", sans-serif';
     gctx.textAlign = 'right';
     gctx.fillText(gear, w - 34, 220);
-    // READY
-    gctx.fillStyle = '#7fd8a8';
-    gctx.font = '28px "Segoe UI", sans-serif';
-    gctx.textAlign = 'center';
-    gctx.fillText('READY', w / 2, 240);
+    // R17b：READY 文本删除——透明底后与三联屏左段贴图自带的 READY 重复
     gaugeTex.needsUpdate = true;
   };
   drawGauge(0, 0, 0, 'P'); // 初帧即出 UI（QA 机位 / 待机态不走 updateCluster 也能看到仪表画面）

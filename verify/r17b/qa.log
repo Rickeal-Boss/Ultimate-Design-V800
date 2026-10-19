@@ -1,0 +1,22 @@
+GOTO http://[::1]:4317/index.html#vehicle=v800
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17b\v800a_chase.png btn=true
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17b\v800a_hood.png btn=true
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17b\v800a_side.png btn=true
+GOTO http://[::1]:4317/index.html#vehicle=v800&eye=-0.40,1.20,-0.72,-0.30,0.98,-9
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17b\v800eyeA_cabin.png btn=true
+GOTO http://[::1]:4317/index.html#vehicle=v800&eye=-0.42,1.15,-0.70,-0.30,0.95,-9
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17b\v800eyeB_cabin.png btn=true
+GOTO http://[::1]:4317/index.html#vehicle=r7
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17b\r7a_side.png btn=true
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17b\r7a_cabinDriver.png btn=true
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17b\r7a_chase.png btn=true
+GOTO http://[::1]:4317/index.html#vehicle=r7&eye=0,0.85,4.6,0,0.8,2.45
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17b\r7plateRear_cabinDriver.png btn=true
+GOTO http://[::1]:4317/index.html#vehicle=r7&eye=0,0.62,-4.6,0,0.58,-2.45
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17b\r7plateFront_cabinDriver.png btn=true
+GOTO http://[::1]:4317/index.html#vehicle=v800
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17b\v800cabin2_cabin.png
+GOTO http://[::1]:4317/index.html#vehicle=r7&eye=0,0.85,4.6,0,0.8,2.45
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17b\r7plateRear2_cabinDriver.png
+GOTO http://[::1]:4317/index.html#vehicle=r7&eye=0,0.62,-4.6,0,0.58,-2.45
+SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17b\r7plateFront2_cabinDriver.png
