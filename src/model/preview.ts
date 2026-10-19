@@ -132,6 +132,10 @@ window.__v800Capture = (
     target.z + distance * Math.cos(pitch) * Math.cos(az)
   );
   camera.lookAt(target);
+  // R18：近距机位（dist < 5.6）必须恢复 near —— 初始化时 frameZunjie…Camera 把
+  // near 提到 5.58 且永久生效，dist 3~5m 的细节截图会被整台裁穿（R18 实测）。
+  camera.near = 0.05;
+  camera.far = 120;
   camera.updateProjectionMatrix();
   renderer.render(scene, camera);
   status.textContent = `captured:${name}`;
@@ -153,6 +157,15 @@ declare global {
     /** QA 调试：拿场景根（隐藏对照实验用），并按材质 id 隐藏/恢复 mesh */
     __v800Scene: () => THREE.Object3D;
     __v800HideMat: (matId: string, hide: boolean) => number;
+    /** QA 射线拾取：origin → target 的首批命中（组件/材质/距离），用于座舱遮挡定罪 */
+    __v800Pick: (
+      ox: number, oy: number, oz: number,
+      tx: number, ty: number, tz: number,
+    ) => Array<{ name: string; comp: string | null; mat: string | null; dist: number; point: number[]; visible: boolean }>;
+    /** QA 屏幕拾取：NDC (−1..1) → 当前相机射线首批命中；先 __v800CabinShot 摆好机位再调 */
+    __v800PickNdc: (
+      nx: number, ny: number,
+    ) => Array<{ name: string; comp: string | null; mat: string | null; dist: number; point: number[]; visible: boolean }>;
   }
 }
 window.__v800Scene = (): THREE.Object3D => scene;
@@ -171,6 +184,49 @@ window.__v800HideMat = (matId: string, hide: boolean): number => {
     }
   });
   return n;
+};
+window.__v800Pick = (ox, oy, oz, tx, ty, tz) => {
+  const origin = new THREE.Vector3(ox, oy, oz);
+  const dir = new THREE.Vector3(tx, ty, tz).sub(origin).normalize();
+  const rc = new THREE.Raycaster(origin, dir, 0.001, 120);
+  const hits = rc.intersectObject(scene, true);
+  return hits.slice(0, 14).map((h) => {
+    const m = h.object as THREE.Mesh;
+    const mat = Array.isArray(m.material) ? m.material[0] : m.material;
+    const p = h.point;
+    return {
+      name: m.name || '(unnamed)',
+      comp: (m.userData?.sculptComponent?.id as string | undefined) ?? null,
+      mat:
+        ((mat as THREE.MeshPhysicalMaterial | undefined)?.userData?.sculptMaterial?.id as string | undefined) ??
+        mat?.name ??
+        null,
+      dist: Math.round(h.distance * 1000) / 1000,
+      point: [p.x, p.y, p.z].map((v) => Math.round(v * 1000) / 1000),
+      visible: m.visible,
+    };
+  });
+};
+window.__v800PickNdc = (nx, ny) => {
+  const rc = new THREE.Raycaster();
+  rc.setFromCamera(new THREE.Vector2(nx, ny), camera);
+  const hits = rc.intersectObject(scene, true);
+  return hits.slice(0, 14).map((h) => {
+    const m = h.object as THREE.Mesh;
+    const mat = Array.isArray(m.material) ? m.material[0] : m.material;
+    const p = h.point;
+    return {
+      name: m.name || '(unnamed)',
+      comp: (m.userData?.sculptComponent?.id as string | undefined) ?? null,
+      mat:
+        ((mat as THREE.MeshPhysicalMaterial | undefined)?.userData?.sculptMaterial?.id as string | undefined) ??
+        mat?.name ??
+        null,
+      dist: Math.round(h.distance * 1000) / 1000,
+      point: [p.x, p.y, p.z].map((v) => Math.round(v * 1000) / 1000),
+      visible: m.visible,
+    };
+  });
 };
 window.__v800Parts = (): Array<{ id: string; size: number[]; pos: number[]; scale: number[] }> => {
   const rows: Array<{ id: string; size: number[]; pos: number[]; scale: number[]; worldMin?: number[]; worldPos?: number[] }> = [];

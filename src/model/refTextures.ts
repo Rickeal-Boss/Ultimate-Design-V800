@@ -390,8 +390,11 @@ interface CacheEntry {
 }
 
 const texCache = new Map<RefImageId, CacheEntry>();
-/** 贴图就绪后补挂的闭包（贴图未解码时不挂 material，避免 three 绑空纹理 = 黑屏） */
-const pendingWires: Array<() => void> = [];
+/** 贴图就绪后补挂的任务（贴图未解码时不挂 material，避免 three 绑空纹理 = 黑屏）。
+ *  R18 修复：任务带 image id，flush 只消费「本图已就绪」的任务并把其余留在队列 ——
+ *  旧实现每次 load 回调都清空整队，7 张图并行加载时除第一张外全部丢任务
+ *  （三联屏因此永远停在适配器图集上）。 */
+const pendingWires: Array<{ image: RefImageId; run: () => boolean }> = [];
 /** 已改造的材质实例（用于 dispose 与避免重复克隆） */
 const wiredMaterials: Array<{
   mesh: THREE.Mesh;
@@ -516,8 +519,13 @@ function ensureLoad(id: RefImageId, maxSize: number, anisotropy: number): void {
 function flushPending(): void {
   const jobs = pendingWires.splice(0, pendingWires.length);
   for (const job of jobs) {
+    // 本图未就绪 → 留在队列，等它自己的 load 回调再消费（R18 修复丢任务）
+    if (!readyTexture(job.image)) {
+      pendingWires.push(job);
+      continue;
+    }
     try {
-      job();
+      job.run();
     } catch {
       /* 单个补挂失败不影响其余 */
     }
@@ -1153,9 +1161,14 @@ export function applyReferenceTextures(
       } else if (entry && entry.status === 'loading') {
         const capturedMat = mat;
         const capturedId = info.materialId;
-        pendingWires.push(() => {
-          const t = readyTexture(rule.image);
-          if (t) attachChannels(capturedMat, rule, t, capturedId);
+        pendingWires.push({
+          image: rule.image,
+          run: () => {
+            const t = readyTexture(rule.image);
+            if (!t) return false;
+            attachChannels(capturedMat, rule, t, capturedId);
+            return true;
+          }
         });
       }
       if (attached || entry?.status === 'loading') mounted.add(info.materialId);

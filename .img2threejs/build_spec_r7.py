@@ -389,74 +389,155 @@ C("hood", "机盖板", "meso", "extrude", "root", (0.71, 0, 0), dims=(1.42, 0.15
           "note": "机盖后缘 y1.048 与风挡下沿留 8mm 分缝"}],
   evidence=["img-r7-front", "img-r7-34"], det=["d-hood-cutline"])
 
-# ---- 前脸：贯穿镀铬饰条 + 细长 LED 光带 + 三段式下进气 ----
-C("front-fascia", "前脸主体（保险杠罩）", "meso", "extrude", "root", (0, 0.640, 2.398),
-  dims=(1.86, 0.86, 0.080), mat="paint-green", imp=0.95, conf=0.9, role="body",
-  topo="conforming-shell", topoR="正视圆角矩形沿 +Z 挤出的保险杠罩，与车身前缘 2.412 齐平",
-  desc=extrude_desc(rrect(1.86, 0.86, 0.10), 0.080, bevel=0.012, seg=2,
+# ---- 前脸（R18 按实拍重建）：左右分体大灯 / 贯穿铬刃 / 中央盾徽 / 三段下进气 ----
+# 参考图口径：灯组占前脸上部（外端高 0.17m、内端收窄到 0.08m），4 枚方形 LED 沿外侧灯角排布，
+# DRL 眉线自外侧灯角向内下压、末端并入贯穿铬刃；铬刃中段微凹；盾徽居中于刃上方；
+# 下进气三段（中 0.62 + 两侧 0.28）+ 内部 3 条水平叶片 + 两侧外缘导流槽。
+# R18 关键修正：保险杠罩前平面由 2.478 收回到 2.428（车身鼻端 2.412 前 16mm）——
+# 原 0.08m 厚的大平板把灯/铬条全埋进罩内（R17 前脸"读不出灯"的根因）。
+FRONT_Z = 2.428            # 保险杠罩前平面
+FASCIA_TOP = 0.945         # 前脸上沿 ≈ 机盖前缘（机盖 z2.372/y0.952）
+LAMP_OUT, LAMP_IN = 0.915, 0.495   # 灯组外角 / 内侧灯尖 |x|，长 0.42m
+LAMP_RAKE = 0.186          # 灯组上缘斜率（外高内低）
+LAMP_ROT = 0.1839          # atan(0.186)：灯罩/DLR/镜芯共用同一条上扬角
+
+
+def lamp_top_y(x: float) -> float:
+    """灯罩上缘 y（x 取正值的一侧）。"""
+    return 0.858 + (x - LAMP_IN) * LAMP_RAKE
+
+
+def rect_pts(w: float, h: float, cy: float = 0.0) -> list[tuple[float, float]]:
+    return [(-w / 2, cy - h / 2), (w / 2, cy - h / 2), (w / 2, cy + h / 2), (-w / 2, cy + h / 2)]
+
+
+C("front-fascia", "前脸主体（保险杠罩）", "meso", "extrude", "root", (0, (0.210 + FASCIA_TOP) / 2, FRONT_Z - 0.045),
+  dims=(1.88, FASCIA_TOP - 0.210, 0.045), mat="paint-green", imp=0.95, conf=0.9, role="body",
+  topo="conforming-shell",
+  topoR="正视圆角矩形沿 +Z 挤出 45mm：前平面 2.428 只比车身鼻端（2.412）前 16mm，上沿压到机盖前缘 0.945",
+  desc=extrude_desc(rrect(1.88, FASCIA_TOP - 0.210, 0.05), 0.045, bevel=0.010, seg=2,
                     intent="rounded-rect bumper cover extrusion"),
-  feats=[{"id": "d-front-blade", "name": "贯穿镀铬饰条", "kind": "linework",
-          "note": "y0.86 全宽 1.72 的镀铬横条，与两侧大灯灯带同高"}],
-  evidence=["img-r7-front"], det=["d-front-blade"])
+  feats=[{"id": "d-fascia-plane", "name": "保险杠罩前平面", "kind": "contour",
+          "note": "前脸外表面 z2.428：灯组/铬刃/盾徽/进气全部挂在这个平面上（前移 1.6cm 起浮雕）"}],
+  evidence=["img-r7-front"], det=["d-fascia-plane"])
+
+# 分体大灯：每侧 = 灯腔外壳 + 4 枚方形 LED 镜芯 + DRL 眉线 + 下沿镀铬细边
+LAMP_PROFILE = [
+    # 外→内 上缘（外端最高 0.936，内端 0.858）
+    (0.210, 0.936), (0.150, 0.925), (0.090, 0.914), (0.030, 0.903), (-0.030, 0.892),
+    (-0.090, 0.881), (-0.150, 0.870), (-0.210, 0.858),
+    # 内→外 下缘（外端 0.772，向内微降 0.762 —— 与 DRL 在灯尖收敛）
+    (-0.210, 0.762), (-0.150, 0.763), (-0.090, 0.765), (-0.030, 0.767), (0.030, 0.769),
+    (0.090, 0.770), (0.150, 0.771), (0.210, 0.772),
+]
 for s, side in ((1, "l"), (-1, "r")):
-    C(f"headlamp-{side}", f"C 形大灯总成（{'左' if s > 0 else '右'}）", "meso", "extrude", "root",
-      (s * 0.635, 0.862, 2.436), dims=(0.44, 0.135, 0.055), rot=(0, 0, 0), mat="housing-dark",
+    _lh = "左" if s > 0 else "右"
+    _prof = LAMP_PROFILE if s > 0 else [(-x, y) for (x, y) in LAMP_PROFILE]
+    C(f"headlamp-{side}", f"分体大灯灯腔（{_lh}）", "meso", "extrude", "root",
+      (s * 0.705, 0, FRONT_Z + 0.004), dims=(0.42, 0.17, 0.020), mat="housing-dark",
       imp=0.95, conf=0.92, role="lamp",
-      topo="conforming-shell", topoR="灯罩为细长楔形轮廓挤出，内端收窄以贴合贯穿饰条",
-      desc=extrude_desc(ccw([(-0.215, -0.030), (-0.060, 0.030), (0.150, 0.048), (0.220, 0.020),
-                             (0.205, -0.040), (-0.040, -0.062), (-0.200, -0.055)]), 0.055,
-                        bevel=0.006, seg=2, intent="tapered lamp housing extrusion"),
-      evidence=["img-r7-front"], det=["d-headlamp-c"])
-    C(f"drl-strip-{side}", f"日行灯带（{'左' if s > 0 else '右'}）", "micro", "box", "root",
-      (s * 0.640, 0.792, 2.452), dims=(0.40, 0.013, 0.016), mat="lamp-white",
-      imp=0.9, conf=0.92, role="lamp",
-      feats=[{"id": f"d-drl-{side}", "name": "下沿细长光带", "kind": "emissive",
-              "note": "大灯下沿 0.40m 白光带，与贯穿饰条一起构成本车前脸识别点"}],
-      evidence=["img-r7-front"])
-    for k in range(2):
-        C(f"headlamp-projector-{k + 1}-{side}", f"大灯投影镜芯{k + 1}（{'左' if s > 0 else '右'}）",
-          "micro", "box", "root", (s * (0.520 + 0.088 * k), 0.872, 2.462),
-          dims=(0.062, 0.048, 0.026), mat="lamp-head", imp=0.8, conf=0.9, role="lamp",
-          feats=[{"id": f"d-projector-{side}", "name": "大灯内 3 颗投影 + 点阵带", "kind": "bevel",
-                  "note": "C 形灯罩内并排的方形投影镜芯（本模型 2 颗/侧，第 3 颗由点阵贴图补）"}],
-          evidence=["img-r7-front"], det=[f"d-projector-{side}"])
-C("light-bar-front", "前贯穿饰条（镀铬横向）", "meso", "box", "root", (0, 0.852, 2.454),
-  dims=(1.74, 0.024, 0.020), mat="chrome", imp=0.95, conf=0.95, role="trim",
-  feats=[{"id": "d-full-width-blade", "name": "全宽镀铬横条", "kind": "linework",
-          "note": "左右大灯之间一条通长镀铬饰条，参考正前视图最亮的一根横线"}],
+      topo="conforming-shell",
+      topoR="楔形灯腔正视轮廓挤出 20mm：外端高 0.17m、内端收窄到 0.086m，上缘随 LAMP_RAKE 内低外高",
+      desc=extrude_desc(ccw(_prof), 0.020, bevel=0.004, seg=2, intent="split headlamp housing wedge"),
+      feats=[{"id": f"d-headlamp-split-{side}", "name": "分体大灯楔形灯腔", "kind": "bevel",
+              "note": "黑色灯腔外端高 17cm、向内收成 8cm 尖角；内端下沿并入贯穿铬刃（参考正前图灯腔轮廓）"}],
+      evidence=["img-r7-front"], det=[f"d-headlamp-split-{side}"])
+    C(f"drl-strip-{side}", f"DRL 眉线（{_lh}）", "micro", "box", "root",
+      (s * 0.7135, 0.8106, FRONT_Z + 0.030), dims=(0.383, 0.016, 0.012),
+      rot=(0, 0, s * LAMP_ROT), mat="lamp-white", imp=0.95, conf=0.92, role="lamp",
+      feats=[{"id": f"d-drl-brow-{side}", "name": "上沿 DRL 眉线", "kind": "emissive",
+              "note": "0.38m 细长白光带，自外侧灯角（y0.845）向内下压到内尖（y0.767），末端接贯穿铬刃"}],
+      evidence=["img-r7-front"], det=[f"d-drl-brow-{side}"])
+    C(f"lamp-edging-{side}", f"灯组下沿镀铬细边（{_lh}）", "micro", "box", "root",
+      (s * 0.800, 0.786, FRONT_Z + 0.034), dims=(0.220, 0.016, 0.012),
+      rot=(0, 0, s * 0.060), mat="chrome", imp=0.8, conf=0.9, role="trim",
+      feats=[{"id": f"d-lamp-edging-{side}", "name": "灯底镀铬细边", "kind": "linework",
+              "note": "灯腔下沿 22cm 镀铬细边（对应实拍灯下的点阵亮带），与 DRL、贯穿铬刃同处一条下压线"}],
+      evidence=["img-r7-front"], det=[f"d-lamp-edging-{side}"])
+    for k in range(4):
+        _x = 0.880 - 0.075 * k
+        C(f"headlamp-projector-{k + 1}-{side}", f"方形 LED 投影镜芯{k + 1}（{_lh}）",
+          "micro", "box", "root", (s * _x, lamp_top_y(_x) - 0.040, FRONT_Z + 0.032),
+          dims=(0.042, 0.042, 0.020), rot=(0, 0, s * LAMP_ROT), mat="lamp-head",
+          imp=0.85, conf=0.9, role="lamp",
+          feats=[{"id": f"d-lamp-led-{side}", "name": "4 枚方形 LED 投影", "kind": "emissive",
+                  "note": "0.042m 方镜 ×4，间距 0.075m 横向排在外侧前角，沿灯腔上缘同一条上扬角"}],
+          evidence=["img-r7-front"], det=[f"d-lamp-led-{side}"])
+
+# 贯穿镀铬刃：1.30m × 0.022m，7 点 profile 中段下凹 9mm
+BLADE_TOP = [(-0.650, 0.806), (-0.430, 0.801), (-0.215, 0.798), (0.000, 0.797),
+             (0.215, 0.798), (0.430, 0.801), (0.650, 0.806)]
+BLADE_PTS = BLADE_TOP + [(x, y - 0.022) for (x, y) in reversed(BLADE_TOP)]
+C("light-bar-front", "前贯穿镀铬刃", "meso", "extrude", "root", (0, 0, FRONT_Z + 0.002),
+  dims=(1.30, 0.022, 0.014), mat="chrome", imp=0.95, conf=0.95, role="trim",
+  topo="conforming-shell", topoR="7 点折线加厚 22mm 的薄刃挤出 14mm，中段下凹 9mm，两端没入灯组下沿",
+  desc=extrude_desc(ccw(BLADE_PTS), 0.014, bevel=0.003, seg=1, intent="full-width chrome blade with slight center sag"),
+  feats=[{"id": "d-full-width-blade", "name": "贯穿镀铬刃", "kind": "linework",
+          "note": "y0.795 全宽 1.30m 的镀铬刃横贯车鼻，两端收进左右灯组下沿，中段 9mm 下凹（参考正前图最亮的一根横线）"}],
   evidence=["img-r7-front", "img-r7-34"], det=["d-full-width-blade"])
-C("logo-shield", "车头盾形车标座", "micro", "extrude", "root", (0, 0.905, 2.462),
-  dims=(0.058, 0.098, 0.014), mat="chrome", imp=0.9, conf=0.92, role="badge",
-  topo="surface-relief", topoR="盾形薄浮雕板，外轮廓 6 点 CCW",
-  desc=extrude_desc(ccw([(-0.029, 0.049), (0.029, 0.049), (0.029, -0.012), (0.0, -0.049), (-0.029, -0.012)]),
-                    0.014, bevel=0.004, seg=1, intent="shield badge relief"),
+
+C("logo-shield", "车头盾形车标座", "micro", "extrude", "root", (0, 0.888, FRONT_Z + 0.024),
+  dims=(0.075, 0.100, 0.014), mat="chrome", imp=0.9, conf=0.92, role="badge",
+  topo="surface-relief", topoR="0.075×0.10m 盾形薄浮雕板挤出 14mm，外轮廓 5 点 CCW",
+  desc=extrude_desc(ccw([(-0.0375, 0.050), (0.0375, 0.050), (0.0375, -0.012), (0.0, -0.050),
+                         (-0.0375, -0.012)]), 0.014, bevel=0.004, seg=1, intent="shield badge relief"),
   feats=[{"id": "d-shield-badge", "name": "盾形车标", "kind": "bevel",
-          "note": "宽 5.8cm 高 9.8cm 的盾形座，内部菱格由适配层贴图"}],
+          "note": "7.5cm×10cm 盾形座，落在鼻梁上沿、铬刃上方 3.4cm，内部竖向菱格由适配层贴图"}],
   evidence=["img-r7-front"], det=["d-shield-badge"])
-C("front-intake", "三段式下进气口", "meso", "extrude", "root", (0, 0.500, 2.428),
-  dims=(1.32, 0.230, 0.055), mat="matte-black", imp=0.9, conf=0.9, role="grille",
-  topo="conforming-shell", topoR="圆角矩形沿 +Z 挤出 55mm 的黑色进气框",
-  desc=extrude_desc(rrect(1.32, 0.23, 0.05), 0.055, bevel=0.008, seg=2, intent="lower intake frame"),
+
+# 下进气：中段 0.62 + 两侧 0.28（y0.235..0.435，z 2.432..2.448）
+INTAKE_Y0, INTAKE_Y1 = 0.235, 0.435
+C("front-intake", "下进气中段", "meso", "extrude", "root", (0, (INTAKE_Y0 + INTAKE_Y1) / 2, FRONT_Z + 0.004),
+  dims=(0.620, INTAKE_Y1 - INTAKE_Y0, 0.016), mat="matte-black", imp=0.9, conf=0.9, role="grille",
+  topo="conforming-shell", topoR="0.62×0.20m 圆角矩形沿 +Z 挤出 16mm 的中段进气框",
+  desc=extrude_desc(rrect(0.620, INTAKE_Y1 - INTAKE_Y0, 0.030), 0.016, bevel=0.005, seg=2,
+                    intent="center lower intake frame"),
   feats=[{"id": "d-intake-three-part", "name": "三段式进气分隔", "kind": "groove",
-          "note": "中部横梁 + 两侧竖向鳍片把进气口切成三段；R17 收窄至 23cm 高并上移，为下方牌照位让位"}],
+          "note": "中段 0.62m 与两侧 0.28m 进气口之间留 2cm 竖向隔断，构成三段式（参考正前图）"}],
   evidence=["img-r7-front"], det=["d-intake-three-part"])
 for s, side in ((1, "l"), (-1, "r")):
-    C(f"duct-{side}", f"侧导流口（{'左' if s > 0 else '右'}）", "meso", "extrude", "root",
-      (s * 0.845, 0.600, 2.430), dims=(0.130, 0.300, 0.050), mat="matte-black",
+    C(f"intake-side-{side}", f"下进气侧段（{'左' if s > 0 else '右'}）", "meso", "extrude", "root",
+      (s * 0.470, (INTAKE_Y0 + INTAKE_Y1) / 2, FRONT_Z + 0.004),
+      dims=(0.280, INTAKE_Y1 - INTAKE_Y0, 0.016), mat="matte-black", imp=0.85, conf=0.9, role="grille",
+      topo="conforming-shell", topoR="0.28×0.20m 圆角矩形挤出：三段式进气的侧段",
+      desc=extrude_desc(rrect(0.280, INTAKE_Y1 - INTAKE_Y0, 0.030), 0.016, bevel=0.005, seg=2,
+                        intent="side lower intake frame"),
+      evidence=["img-r7-front"], det=["d-intake-three-part"])
+# 中段内部 3 条水平叶片：一块 housing-dark 面板开 2 条横槽（比底色亮一档，仍 1 件）
+SLAT_H, SLAT_SLOT = 0.166, 0.026
+SLAT_PTS = ccw(rect_pts(0.560, SLAT_H))
+SLAT_HOLES = [ccw(rect_pts(0.520, SLAT_SLOT, 0.030)), ccw(rect_pts(0.520, SLAT_SLOT, -0.030))]
+C("intake-slats", "下进气水平叶片（3 条）", "micro", "extrude", "root",
+  (0, (INTAKE_Y0 + INTAKE_Y1) / 2, FRONT_Z + 0.020),
+  dims=(0.560, SLAT_H, 0.008), mat="housing-dark", imp=0.8, conf=0.88, role="grille",
+  topo="surface-relief",
+  topoR="0.56×0.166m 薄板开 2 条 26mm 横槽 → 3 条水平叶片，比进气底色亮一档（housing-dark 金属感）",
+  desc=extrude_desc(SLAT_PTS, 0.008, bevel=0.002, seg=1, holes=SLAT_HOLES,
+                    intent="three horizontal intake vanes (two cut slots)"),
+  feats=[{"id": "d-intake-vanes", "name": "3 条水平叶片", "kind": "groove",
+          "note": "叶片宽 0.04m、槽宽 0.026m，露出后方哑光黑进气底色"}],
+  evidence=["img-r7-front"], det=["d-intake-vanes"])
+for s, side in ((1, "l"), (-1, "r")):
+    C(f"duct-{side}", f"侧导流槽（{'左' if s > 0 else '右'}）", "meso", "extrude", "root",
+      (s * 0.858, 0.330, FRONT_Z + 0.004), dims=(0.100, 0.260, 0.014), mat="matte-black",
       imp=0.8, conf=0.88, role="grille",
-      topo="conforming-shell", topoR="竖向圆角长孔沿 +Z 挤出的侧导流槽",
-      desc=extrude_desc(rrect(0.13, 0.30, 0.045), 0.050, bevel=0.006, seg=2, intent="air curtain duct"),
-      evidence=["img-r7-front", "img-r7-34"])
-C("front-plate", "前牌照板（智界 R7）", "micro", "plane-card", "root", (0, 0.295, 2.470),
-  dims=(0.440, 0.130, 0.004), mat="plate", imp=0.7, conf=0.9, role="badge",
-  feats=[{"id": "d-plate-text", "name": "牌照字样", "kind": "decal",
-          "note": "「智界 R7」由适配层 Canvas 绘制；R17 复位至下进气口下方（原位置被进气口实体掩埋）"}],
+      topo="conforming-shell", topoR="0.10×0.26m 竖向圆角长槽沿 +Z 挤出 14mm 的外缘导流槽",
+      desc=extrude_desc(rrect(0.100, 0.260, 0.035), 0.014, bevel=0.004, seg=2, intent="air curtain duct slot"),
+      feats=[{"id": f"d-duct-{side}", "name": "外缘竖向导流槽", "kind": "groove",
+              "note": "前保外缘 0.10×0.26m 哑光黑竖槽，实拍图中包住保险杠转角"}],
+      evidence=["img-r7-front", "img-r7-34"], det=[f"d-duct-{side}"])
+C("front-plate", "前牌照板", "micro", "plane-card", "root", (0, 0.525, FRONT_Z + 0.004),
+  dims=(0.440, 0.160, 0.004), mat="plate", imp=0.7, conf=0.9, role="badge",
+  feats=[{"id": "d-plate-text", "name": "牌照位", "kind": "decal",
+          "note": "牌面居中 y0.525（铬刃与下进气之间的绿色留白）、宽 0.44m；牌面内容由适配层贴花提供，spec 不含文字"}],
   evidence=["img-r7-front"], det=["d-plate-text"])
-C("front-lip", "前唇下扰流", "meso", "extrude", "root", (0, 0.175, 2.410),
-  dims=(1.70, 0.050, 0.070), mat="matte-black", imp=0.7, conf=0.88, role="trim",
-  topo="conforming-shell", topoR="横贯前保下沿的黑色唇板",
-  desc=extrude_desc(rrect(1.70, 0.05, 0.03), 0.070, bevel=0.006, seg=2, intent="front lip blade"),
-  evidence=["img-r7-front"])
+C("front-lip", "前唇下扰流", "meso", "extrude", "root", (0, 0.193, 2.398),
+  dims=(1.720, 0.090, 0.032), mat="matte-black", imp=0.7, conf=0.88, role="trim",
+  topo="conforming-shell", topoR="1.72m 宽黑色唇板，前平面 2.430 与前脸罩齐平，向下兜到 y0.148",
+  desc=extrude_desc(rrect(1.720, 0.090, 0.028), 0.032, bevel=0.005, seg=2, intent="front lip blade"),
+  feats=[{"id": "d-front-lip", "name": "前唇", "kind": "linework",
+          "note": "宽 1.72m、y0.148..0.238 的哑光黑唇板，与前脸罩同一前平面，托住三段进气下沿"}],
+  evidence=["img-r7-front"], det=["d-front-lip"])
 
 # ---- 尾部 ----
 C("tailgate", "尾门板", "meso", "extrude", "root", (0, 0.905, -2.400),
@@ -1020,10 +1101,12 @@ spec["featureReviewTargets"] = [
      "passIds": ["blockout"], "minimumScore": 0.8, "mustPass": True,
      "componentRefs": ["body-lower", "roof-glass", "rear-glass", "hood", "spoiler"],
      "evidenceRefs": ["img-r7-side", "img-r7-34"]},
-    {"id": "r7-front-signature", "name": "前脸身份：贯穿镀铬饰条 + C 形大灯 + 盾标 + 三段式进气",
+    {"id": "r7-front-signature", "name": "前脸身份：贯穿镀铬刃 + 左右分体大灯（4 LED + DRL）+ 盾标 + 三段式进气",
      "tier": "critical", "passIds": ["structural-pass"], "minimumScore": 0.8, "mustPass": True,
      "componentRefs": ["front-fascia", "light-bar-front", "headlamp-l", "headlamp-r",
-                       "logo-shield", "front-intake", "drl-strip-l", "drl-strip-r"],
+                       "logo-shield", "front-intake", "intake-side-l", "intake-side-r",
+                       "intake-slats", "drl-strip-l", "drl-strip-r", "lamp-edging-l", "lamp-edging-r",
+                       "headlamp-projector-1-l", "headlamp-projector-4-l"],
      "evidenceRefs": ["img-r7-front"]},
     {"id": "r7-rear-signature", "name": "尾部身份：贯穿烟熏尾灯 + LUXEED 字标 + 扩散器 + 鸭尾",
      "tier": "critical", "passIds": ["structural-pass"], "minimumScore": 0.8, "mustPass": True,
@@ -1115,10 +1198,15 @@ _details = [
     ("d-paint-metallic-flop", "gloss", "墨绿金属漆 clearcoat flop", "paint-green"),
     ("d-arch-cladding", "hole", "轮拱真开口（无包边件，R17 去除围边）", "d-arch-cladding"),
     ("d-beltline-rise", "contour", "腰线后扬", "d-beltline-rise"),
-    ("d-full-width-blade", "linework", "前脸全宽镀铬饰条", "d-full-width-blade"),
-    ("d-headlamp-c", "bevel", "C 形大灯楔形灯罩", "d-headlamp-c"),
+    ("d-full-width-blade", "linework", "前脸贯穿镀铬刃（1.30m，中段微凹）", "d-full-width-blade"),
+    ("d-headlamp-split-l", "bevel", "左右分体大灯楔形灯腔", "d-headlamp-split-l"),
+    ("d-lamp-led-l", "emissive", "每侧 4 枚方形 LED 投影镜芯", "d-lamp-led-l"),
+    ("d-drl-brow-l", "emissive", "上沿 DRL 眉线（外侧灯角向内下压）", "d-drl-brow-l"),
+    ("d-lamp-edging-l", "linework", "灯组下沿镀铬细边接贯穿铬刃", "d-lamp-edging-l"),
     ("d-shield-badge", "bevel", "车头盾形标", "d-shield-badge"),
-    ("d-intake-three-part", "groove", "三段式下进气", "d-intake-three-part"),
+    ("d-intake-three-part", "groove", "三段式下进气（0.62 / 0.28 / 0.28）", "d-intake-three-part"),
+    ("d-intake-vanes", "groove", "下进气内 3 条水平叶片", "d-intake-vanes"),
+    ("d-duct-l", "groove", "外缘竖向导流槽", "d-duct-l"),
     ("d-tail-bar-red", "emissive", "贯穿尾灯红光标线", "d-tail-bar-red"),
     ("d-luxeed-lettering", "decal", "LUXEED 字标", "d-luxeed-lettering"),
     ("d-spoiler-lip", "ridge", "鸭尾上翘唇口", "d-spoiler-lip"),

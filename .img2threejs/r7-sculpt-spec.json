@@ -133,7 +133,7 @@
   "unknownsToResolveBeforeImplementation": [],
   "detailInventory": {
    "scanMethod": "component-zones",
-   "targetMinDetails": 22,
+   "targetMinDetails": 27,
    "note": "每条细节都落到某个 component.localFeatures.id（程序化几何/材质/贴图的落点），无散文式细节。",
    "details": [
     {
@@ -167,18 +167,45 @@
      "id": "d-full-width-blade",
      "kind": "linework",
      "zone": "exterior",
-     "note": "前脸全宽镀铬饰条",
+     "note": "前脸贯穿镀铬刃（1.30m，中段微凹）",
      "mapsTo": {
       "ref": "d-full-width-blade"
      }
     },
     {
-     "id": "d-headlamp-c",
+     "id": "d-headlamp-split-l",
      "kind": "bevel",
      "zone": "exterior",
-     "note": "C 形大灯楔形灯罩",
+     "note": "左右分体大灯楔形灯腔",
      "mapsTo": {
-      "ref": "paint-green"
+      "ref": "d-headlamp-split-l"
+     }
+    },
+    {
+     "id": "d-lamp-led-l",
+     "kind": "emissive",
+     "zone": "exterior",
+     "note": "每侧 4 枚方形 LED 投影镜芯",
+     "mapsTo": {
+      "ref": "d-lamp-led-l"
+     }
+    },
+    {
+     "id": "d-drl-brow-l",
+     "kind": "emissive",
+     "zone": "exterior",
+     "note": "上沿 DRL 眉线（外侧灯角向内下压）",
+     "mapsTo": {
+      "ref": "d-drl-brow-l"
+     }
+    },
+    {
+     "id": "d-lamp-edging-l",
+     "kind": "linework",
+     "zone": "exterior",
+     "note": "灯组下沿镀铬细边接贯穿铬刃",
+     "mapsTo": {
+      "ref": "d-lamp-edging-l"
      }
     },
     {
@@ -194,9 +221,27 @@
      "id": "d-intake-three-part",
      "kind": "groove",
      "zone": "exterior",
-     "note": "三段式下进气",
+     "note": "三段式下进气（0.62 / 0.28 / 0.28）",
      "mapsTo": {
       "ref": "d-intake-three-part"
+     }
+    },
+    {
+     "id": "d-intake-vanes",
+     "kind": "groove",
+     "zone": "exterior",
+     "note": "下进气内 3 条水平叶片",
+     "mapsTo": {
+      "ref": "d-intake-vanes"
+     }
+    },
+    {
+     "id": "d-duct-l",
+     "kind": "groove",
+     "zone": "exterior",
+     "note": "外缘竖向导流槽",
+     "mapsTo": {
+      "ref": "d-duct-l"
      }
     },
     {
@@ -610,7 +655,7 @@
   },
   {
    "id": "r7-front-signature",
-   "name": "前脸身份：贯穿镀铬饰条 + C 形大灯 + 盾标 + 三段式进气",
+   "name": "前脸身份：贯穿镀铬刃 + 左右分体大灯（4 LED + DRL）+ 盾标 + 三段式进气",
    "tier": "critical",
    "passIds": [
     "structural-pass"
@@ -624,8 +669,15 @@
     "headlamp-r",
     "logo-shield",
     "front-intake",
+    "intake-side-l",
+    "intake-side-r",
+    "intake-slats",
     "drl-strip-l",
-    "drl-strip-r"
+    "drl-strip-r",
+    "lamp-edging-l",
+    "lamp-edging-r",
+    "headlamp-projector-1-l",
+    "headlamp-projector-4-l"
    ],
    "evidenceRefs": [
     "img-r7-front"
@@ -1748,103 +1800,103 @@
    "confidence": 0.9,
    "primitive": "extrude",
    "topologyClass": "conforming-shell",
-   "topologyRationale": "正视圆角矩形沿 +Z 挤出的保险杠罩，与车身前缘 2.412 齐平",
+   "topologyRationale": "正视圆角矩形沿 +Z 挤出 45mm：前平面 2.428 只比车身鼻端（2.412）前 16mm，上沿压到机盖前缘 0.945",
    "geometryDescriptor": {
     "profile2D": {
      "points": [
       [
-       0.83,
-       -0.43
+       0.89,
+       -0.3675
       ],
       [
-       0.86827,
-       -0.42239
+       0.90913,
+       -0.36369
       ],
       [
-       0.90071,
-       -0.40071
+       0.92536,
+       -0.35286
       ],
       [
-       0.92239,
-       -0.36827
+       0.93619,
+       -0.33663
       ],
       [
-       0.93,
-       -0.33
+       0.94,
+       -0.3175
       ],
       [
-       0.93,
-       0.33
+       0.94,
+       0.3175
       ],
       [
-       0.92239,
-       0.36827
+       0.93619,
+       0.33663
       ],
       [
-       0.90071,
-       0.40071
+       0.92536,
+       0.35286
       ],
       [
-       0.86827,
-       0.42239
+       0.90913,
+       0.36369
       ],
       [
-       0.83,
-       0.43
+       0.89,
+       0.3675
       ],
       [
-       -0.83,
-       0.43
+       -0.89,
+       0.3675
       ],
       [
-       -0.86827,
-       0.42239
+       -0.90913,
+       0.36369
       ],
       [
-       -0.90071,
-       0.40071
+       -0.92536,
+       0.35286
       ],
       [
-       -0.92239,
-       0.36827
+       -0.93619,
+       0.33663
       ],
       [
-       -0.93,
-       0.33
+       -0.94,
+       0.3175
       ],
       [
-       -0.93,
-       -0.33
+       -0.94,
+       -0.3175
       ],
       [
-       -0.92239,
-       -0.36827
+       -0.93619,
+       -0.33663
       ],
       [
-       -0.90071,
-       -0.40071
+       -0.92536,
+       -0.35286
       ],
       [
-       -0.86827,
-       -0.42239
+       -0.90913,
+       -0.36369
       ],
       [
-       -0.83,
-       -0.43
+       -0.89,
+       -0.3675
       ]
      ],
-     "depth": 0.08,
+     "depth": 0.045,
      "bevel": {
       "thickness": 0.006,
-      "size": 0.012,
-      "offset": -0.012,
+      "size": 0.01,
+      "offset": -0.01,
       "segments": 2
      }
     },
     "topologyIntent": "rounded-rect bumper cover extrusion",
     "edgeTreatment": {
      "type": "rounded",
-     "bevelRadius": 0.012,
+     "bevelRadius": 0.01,
      "segments": 2
     },
     "deformationStack": [],
@@ -1854,17 +1906,17 @@
    "parent": "root",
    "attachment": null,
    "dimensions": {
-    "width": 1.86,
-    "height": 0.86,
-    "depth": 0.08,
+    "width": 1.88,
+    "height": 0.735,
+    "depth": 0.045,
     "units": "meters",
     "confidence": 0.9
    },
    "transform": {
     "position": [
      0,
-     0.64,
-     2.398
+     0.5775,
+     2.383
     ],
     "rotation": [
      0,
@@ -1938,10 +1990,10 @@
    "seams": [],
    "localFeatures": [
     {
-     "id": "d-front-blade",
-     "name": "贯穿镀铬饰条",
-     "kind": "linework",
-     "note": "y0.86 全宽 1.72 的镀铬横条，与两侧大灯灯带同高"
+     "id": "d-fascia-plane",
+     "name": "保险杠罩前平面",
+     "kind": "contour",
+     "note": "前脸外表面 z2.428：灯组/铬刃/盾徽/进气全部挂在这个平面上（前移 1.6cm 起浮雕）"
     }
    ],
    "surfaceDetail": {
@@ -1958,7 +2010,7 @@
     "img-r7-front"
    ],
    "details": [
-    "d-front-blade"
+    "d-fascia-plane"
    ],
    "fidelityTier": "hero",
    "colorMaterialRecipe": {
@@ -1970,58 +2022,94 @@
   },
   {
    "id": "headlamp-l",
-   "name": "C 形大灯总成（左）",
+   "name": "分体大灯灯腔（左）",
    "level": "meso",
    "role": "lamp",
    "importance": 0.95,
    "confidence": 0.92,
    "primitive": "extrude",
    "topologyClass": "conforming-shell",
-   "topologyRationale": "灯罩为细长楔形轮廓挤出，内端收窄以贴合贯穿饰条",
+   "topologyRationale": "楔形灯腔正视轮廓挤出 20mm：外端高 0.17m、内端收窄到 0.086m，上缘随 LAMP_RAKE 内低外高",
    "geometryDescriptor": {
     "profile2D": {
      "points": [
       [
-       -0.2,
-       -0.055
-      ],
-      [
-       -0.04,
-       -0.062
-      ],
-      [
-       0.205,
-       -0.04
-      ],
-      [
-       0.22,
-       0.02
+       0.21,
+       0.936
       ],
       [
        0.15,
-       0.048
+       0.925
       ],
       [
-       -0.06,
-       0.03
+       0.09,
+       0.914
       ],
       [
-       -0.215,
-       -0.03
+       0.03,
+       0.903
+      ],
+      [
+       -0.03,
+       0.892
+      ],
+      [
+       -0.09,
+       0.881
+      ],
+      [
+       -0.15,
+       0.87
+      ],
+      [
+       -0.21,
+       0.858
+      ],
+      [
+       -0.21,
+       0.762
+      ],
+      [
+       -0.15,
+       0.763
+      ],
+      [
+       -0.09,
+       0.765
+      ],
+      [
+       -0.03,
+       0.767
+      ],
+      [
+       0.03,
+       0.769
+      ],
+      [
+       0.09,
+       0.77
+      ],
+      [
+       0.15,
+       0.771
+      ],
+      [
+       0.21,
+       0.772
       ]
      ],
-     "depth": 0.055,
+     "depth": 0.02,
      "bevel": {
-      "thickness": 0.006,
-      "size": 0.006,
-      "offset": -0.006,
+      "thickness": 0.004,
+      "size": 0.004,
+      "offset": -0.004,
       "segments": 2
      }
     },
-    "topologyIntent": "tapered lamp housing extrusion",
+    "topologyIntent": "split headlamp housing wedge",
     "edgeTreatment": {
      "type": "rounded",
-     "bevelRadius": 0.006,
+     "bevelRadius": 0.004,
      "segments": 2
     },
     "deformationStack": [],
@@ -2031,17 +2119,17 @@
    "parent": "root",
    "attachment": null,
    "dimensions": {
-    "width": 0.44,
-    "height": 0.135,
-    "depth": 0.055,
+    "width": 0.42,
+    "height": 0.17,
+    "depth": 0.02,
     "units": "meters",
     "confidence": 0.92
    },
    "transform": {
     "position": [
-     0.635,
-     0.862,
-     2.436
+     0.705,
+     0,
+     2.432
     ],
     "rotation": [
      0,
@@ -2113,7 +2201,14 @@
    "deformations": [],
    "joints": [],
    "seams": [],
-   "localFeatures": [],
+   "localFeatures": [
+    {
+     "id": "d-headlamp-split-l",
+     "name": "分体大灯楔形灯腔",
+     "kind": "bevel",
+     "note": "黑色灯腔外端高 17cm、向内收成 8cm 尖角；内端下沿并入贯穿铬刃（参考正前图灯腔轮廓）"
+    }
+   ],
    "surfaceDetail": {
     "macroRoughness": 0,
     "microRoughness": 0,
@@ -2128,7 +2223,7 @@
     "img-r7-front"
    ],
    "details": [
-    "d-headlamp-c"
+    "d-headlamp-split-l"
    ],
    "fidelityTier": "hero",
    "colorMaterialRecipe": {
@@ -2140,10 +2235,10 @@
   },
   {
    "id": "drl-strip-l",
-   "name": "日行灯带（左）",
+   "name": "DRL 眉线（左）",
    "level": "micro",
    "role": "lamp",
-   "importance": 0.9,
+   "importance": 0.95,
    "confidence": 0.92,
    "primitive": "box",
    "topologyClass": "assembled-solid",
@@ -2162,27 +2257,27 @@
    "parent": "root",
    "attachment": null,
    "dimensions": {
-    "width": 0.4,
-    "height": 0.013,
-    "depth": 0.016,
+    "width": 0.383,
+    "height": 0.016,
+    "depth": 0.012,
     "units": "meters",
     "confidence": 0.92
    },
    "transform": {
     "position": [
-     0.64,
-     0.792,
-     2.452
+     0.7135,
+     0.8106,
+     2.4579999999999997
     ],
     "rotation": [
      0,
      0,
-     0
+     0.1839
     ],
     "scale": [
-     0.4,
-     0.013,
-     0.016
+     0.383,
+     0.016,
+     0.012
     ]
    },
    "actionProfile": {
@@ -2246,10 +2341,10 @@
    "seams": [],
    "localFeatures": [
     {
-     "id": "d-drl-l",
-     "name": "下沿细长光带",
+     "id": "d-drl-brow-l",
+     "name": "上沿 DRL 眉线",
      "kind": "emissive",
-     "note": "大灯下沿 0.40m 白光带，与贯穿饰条一起构成本车前脸识别点"
+     "note": "0.38m 细长白光带，自外侧灯角（y0.845）向内下压到内尖（y0.767），末端接贯穿铬刃"
     }
    ],
    "surfaceDetail": {
@@ -2265,7 +2360,9 @@
    "evidenceRefs": [
     "img-r7-front"
    ],
-   "details": [],
+   "details": [
+    "d-drl-brow-l"
+   ],
    "fidelityTier": "hero",
    "colorMaterialRecipe": {
     "dominantAlbedo": "rgba(255, 255, 255, 1.0)",
@@ -2275,10 +2372,10 @@
    }
   },
   {
-   "id": "headlamp-projector-1-l",
-   "name": "大灯投影镜芯1（左）",
+   "id": "lamp-edging-l",
+   "name": "灯组下沿镀铬细边（左）",
    "level": "micro",
-   "role": "lamp",
+   "role": "trim",
    "importance": 0.8,
    "confidence": 0.9,
    "primitive": "box",
@@ -2298,27 +2395,165 @@
    "parent": "root",
    "attachment": null,
    "dimensions": {
-    "width": 0.062,
-    "height": 0.048,
-    "depth": 0.026,
+    "width": 0.22,
+    "height": 0.016,
+    "depth": 0.012,
     "units": "meters",
     "confidence": 0.9
    },
    "transform": {
     "position": [
-     0.52,
-     0.872,
-     2.462
+     0.8,
+     0.786,
+     2.4619999999999997
     ],
     "rotation": [
      0,
      0,
-     0
+     0.06
     ],
     "scale": [
-     0.062,
-     0.048,
-     0.026
+     0.22,
+     0.016,
+     0.012
+    ]
+   },
+   "actionProfile": {
+    "animationRole": "static",
+    "pivot": {
+     "mode": "center",
+     "localPosition": [
+      0,
+      0,
+      0
+     ],
+     "axis": [
+      0,
+      1,
+      0
+     ],
+     "confidence": 0.9
+    },
+    "transformChannels": {
+     "translate": false,
+     "rotate": false,
+     "scale": false,
+     "bend": false,
+     "twist": false,
+     "detach": false,
+     "visibility": true,
+     "materialState": true
+    },
+    "sockets": [],
+    "collider": {
+     "type": "box",
+     "offset": [
+      0,
+      0,
+      0
+     ],
+     "scale": [
+      1,
+      1,
+      1
+     ],
+     "isTrigger": false,
+     "notes": ""
+    },
+    "constraints": [],
+    "destruction": {
+     "breakable": false,
+     "fractureGroup": "root",
+     "seamRefs": [],
+     "detachableFragments": [],
+     "breakImpulse": 0,
+     "debrisMaterial": "base"
+    }
+   },
+   "material": "chrome",
+   "materialLayers": [
+    "chrome"
+   ],
+   "deformations": [],
+   "joints": [],
+   "seams": [],
+   "localFeatures": [
+    {
+     "id": "d-lamp-edging-l",
+     "name": "灯底镀铬细边",
+     "kind": "linework",
+     "note": "灯腔下沿 22cm 镀铬细边（对应实拍灯下的点阵亮带），与 DRL、贯穿铬刃同处一条下压线"
+    }
+   ],
+   "surfaceDetail": {
+    "macroRoughness": 0,
+    "microRoughness": 0,
+    "bumpAmplitude": 0,
+    "normalPattern": "",
+    "displacementPattern": "",
+    "occlusionPattern": "",
+    "edgeWearPattern": "",
+    "notes": ""
+   },
+   "evidenceRefs": [
+    "img-r7-front"
+   ],
+   "details": [
+    "d-lamp-edging-l"
+   ],
+   "fidelityTier": "hero",
+   "colorMaterialRecipe": {
+    "dominantAlbedo": "rgba(232, 233, 236, 1.0)",
+    "secondaryAlbedo": "rgba(232, 233, 236, 0.85)",
+    "materialClass": "metal",
+    "materialClassConfidence": 0.9
+   }
+  },
+  {
+   "id": "headlamp-projector-1-l",
+   "name": "方形 LED 投影镜芯1（左）",
+   "level": "micro",
+   "role": "lamp",
+   "importance": 0.85,
+   "confidence": 0.9,
+   "primitive": "box",
+   "topologyClass": "assembled-solid",
+   "topologyRationale": "box 表达该部件的可展硬表面",
+   "geometryDescriptor": {
+    "topologyIntent": "hard-surface precise",
+    "edgeTreatment": {
+     "type": "bevel",
+     "bevelRadius": 0.006,
+     "segments": 2
+    },
+    "deformationStack": [],
+    "uvStrategy": "generated procedural coordinates",
+    "normalStrategy": "vertex normals from generated geometry"
+   },
+   "parent": "root",
+   "attachment": null,
+   "dimensions": {
+    "width": 0.042,
+    "height": 0.042,
+    "depth": 0.02,
+    "units": "meters",
+    "confidence": 0.9
+   },
+   "transform": {
+    "position": [
+     0.88,
+     0.88961,
+     2.46
+    ],
+    "rotation": [
+     0,
+     0,
+     0.1839
+    ],
+    "scale": [
+     0.042,
+     0.042,
+     0.02
     ]
    },
    "actionProfile": {
@@ -2382,10 +2617,10 @@
    "seams": [],
    "localFeatures": [
     {
-     "id": "d-projector-l",
-     "name": "大灯内 3 颗投影 + 点阵带",
-     "kind": "bevel",
-     "note": "C 形灯罩内并排的方形投影镜芯（本模型 2 颗/侧，第 3 颗由点阵贴图补）"
+     "id": "d-lamp-led-l",
+     "name": "4 枚方形 LED 投影",
+     "kind": "emissive",
+     "note": "0.042m 方镜 ×4，间距 0.075m 横向排在外侧前角，沿灯腔上缘同一条上扬角"
     }
    ],
    "surfaceDetail": {
@@ -2402,7 +2637,7 @@
     "img-r7-front"
    ],
    "details": [
-    "d-projector-l"
+    "d-lamp-led-l"
    ],
    "fidelityTier": "hero",
    "colorMaterialRecipe": {
@@ -2414,10 +2649,10 @@
   },
   {
    "id": "headlamp-projector-2-l",
-   "name": "大灯投影镜芯2（左）",
+   "name": "方形 LED 投影镜芯2（左）",
    "level": "micro",
    "role": "lamp",
-   "importance": 0.8,
+   "importance": 0.85,
    "confidence": 0.9,
    "primitive": "box",
    "topologyClass": "assembled-solid",
@@ -2436,27 +2671,27 @@
    "parent": "root",
    "attachment": null,
    "dimensions": {
-    "width": 0.062,
-    "height": 0.048,
-    "depth": 0.026,
+    "width": 0.042,
+    "height": 0.042,
+    "depth": 0.02,
     "units": "meters",
     "confidence": 0.9
    },
    "transform": {
     "position": [
-     0.608,
-     0.872,
-     2.462
+     0.805,
+     0.87566,
+     2.46
     ],
     "rotation": [
      0,
      0,
-     0
+     0.1839
     ],
     "scale": [
-     0.062,
-     0.048,
-     0.026
+     0.042,
+     0.042,
+     0.02
     ]
    },
    "actionProfile": {
@@ -2520,10 +2755,10 @@
    "seams": [],
    "localFeatures": [
     {
-     "id": "d-projector-l",
-     "name": "大灯内 3 颗投影 + 点阵带",
-     "kind": "bevel",
-     "note": "C 形灯罩内并排的方形投影镜芯（本模型 2 颗/侧，第 3 颗由点阵贴图补）"
+     "id": "d-lamp-led-l",
+     "name": "4 枚方形 LED 投影",
+     "kind": "emissive",
+     "note": "0.042m 方镜 ×4，间距 0.075m 横向排在外侧前角，沿灯腔上缘同一条上扬角"
     }
    ],
    "surfaceDetail": {
@@ -2540,7 +2775,283 @@
     "img-r7-front"
    ],
    "details": [
-    "d-projector-l"
+    "d-lamp-led-l"
+   ],
+   "fidelityTier": "hero",
+   "colorMaterialRecipe": {
+    "dominantAlbedo": "rgba(234, 242, 255, 1.0)",
+    "secondaryAlbedo": "rgba(234, 242, 255, 0.85)",
+    "materialClass": "glass",
+    "materialClassConfidence": 0.9
+   }
+  },
+  {
+   "id": "headlamp-projector-3-l",
+   "name": "方形 LED 投影镜芯3（左）",
+   "level": "micro",
+   "role": "lamp",
+   "importance": 0.85,
+   "confidence": 0.9,
+   "primitive": "box",
+   "topologyClass": "assembled-solid",
+   "topologyRationale": "box 表达该部件的可展硬表面",
+   "geometryDescriptor": {
+    "topologyIntent": "hard-surface precise",
+    "edgeTreatment": {
+     "type": "bevel",
+     "bevelRadius": 0.006,
+     "segments": 2
+    },
+    "deformationStack": [],
+    "uvStrategy": "generated procedural coordinates",
+    "normalStrategy": "vertex normals from generated geometry"
+   },
+   "parent": "root",
+   "attachment": null,
+   "dimensions": {
+    "width": 0.042,
+    "height": 0.042,
+    "depth": 0.02,
+    "units": "meters",
+    "confidence": 0.9
+   },
+   "transform": {
+    "position": [
+     0.73,
+     0.86171,
+     2.46
+    ],
+    "rotation": [
+     0,
+     0,
+     0.1839
+    ],
+    "scale": [
+     0.042,
+     0.042,
+     0.02
+    ]
+   },
+   "actionProfile": {
+    "animationRole": "static",
+    "pivot": {
+     "mode": "center",
+     "localPosition": [
+      0,
+      0,
+      0
+     ],
+     "axis": [
+      0,
+      1,
+      0
+     ],
+     "confidence": 0.9
+    },
+    "transformChannels": {
+     "translate": false,
+     "rotate": false,
+     "scale": false,
+     "bend": false,
+     "twist": false,
+     "detach": false,
+     "visibility": true,
+     "materialState": true
+    },
+    "sockets": [],
+    "collider": {
+     "type": "box",
+     "offset": [
+      0,
+      0,
+      0
+     ],
+     "scale": [
+      1,
+      1,
+      1
+     ],
+     "isTrigger": false,
+     "notes": ""
+    },
+    "constraints": [],
+    "destruction": {
+     "breakable": false,
+     "fractureGroup": "root",
+     "seamRefs": [],
+     "detachableFragments": [],
+     "breakImpulse": 0,
+     "debrisMaterial": "base"
+    }
+   },
+   "material": "lamp-head",
+   "materialLayers": [
+    "lamp-head"
+   ],
+   "deformations": [],
+   "joints": [],
+   "seams": [],
+   "localFeatures": [
+    {
+     "id": "d-lamp-led-l",
+     "name": "4 枚方形 LED 投影",
+     "kind": "emissive",
+     "note": "0.042m 方镜 ×4，间距 0.075m 横向排在外侧前角，沿灯腔上缘同一条上扬角"
+    }
+   ],
+   "surfaceDetail": {
+    "macroRoughness": 0,
+    "microRoughness": 0,
+    "bumpAmplitude": 0,
+    "normalPattern": "",
+    "displacementPattern": "",
+    "occlusionPattern": "",
+    "edgeWearPattern": "",
+    "notes": ""
+   },
+   "evidenceRefs": [
+    "img-r7-front"
+   ],
+   "details": [
+    "d-lamp-led-l"
+   ],
+   "fidelityTier": "hero",
+   "colorMaterialRecipe": {
+    "dominantAlbedo": "rgba(234, 242, 255, 1.0)",
+    "secondaryAlbedo": "rgba(234, 242, 255, 0.85)",
+    "materialClass": "glass",
+    "materialClassConfidence": 0.9
+   }
+  },
+  {
+   "id": "headlamp-projector-4-l",
+   "name": "方形 LED 投影镜芯4（左）",
+   "level": "micro",
+   "role": "lamp",
+   "importance": 0.85,
+   "confidence": 0.9,
+   "primitive": "box",
+   "topologyClass": "assembled-solid",
+   "topologyRationale": "box 表达该部件的可展硬表面",
+   "geometryDescriptor": {
+    "topologyIntent": "hard-surface precise",
+    "edgeTreatment": {
+     "type": "bevel",
+     "bevelRadius": 0.006,
+     "segments": 2
+    },
+    "deformationStack": [],
+    "uvStrategy": "generated procedural coordinates",
+    "normalStrategy": "vertex normals from generated geometry"
+   },
+   "parent": "root",
+   "attachment": null,
+   "dimensions": {
+    "width": 0.042,
+    "height": 0.042,
+    "depth": 0.02,
+    "units": "meters",
+    "confidence": 0.9
+   },
+   "transform": {
+    "position": [
+     0.655,
+     0.84776,
+     2.46
+    ],
+    "rotation": [
+     0,
+     0,
+     0.1839
+    ],
+    "scale": [
+     0.042,
+     0.042,
+     0.02
+    ]
+   },
+   "actionProfile": {
+    "animationRole": "static",
+    "pivot": {
+     "mode": "center",
+     "localPosition": [
+      0,
+      0,
+      0
+     ],
+     "axis": [
+      0,
+      1,
+      0
+     ],
+     "confidence": 0.9
+    },
+    "transformChannels": {
+     "translate": false,
+     "rotate": false,
+     "scale": false,
+     "bend": false,
+     "twist": false,
+     "detach": false,
+     "visibility": true,
+     "materialState": true
+    },
+    "sockets": [],
+    "collider": {
+     "type": "box",
+     "offset": [
+      0,
+      0,
+      0
+     ],
+     "scale": [
+      1,
+      1,
+      1
+     ],
+     "isTrigger": false,
+     "notes": ""
+    },
+    "constraints": [],
+    "destruction": {
+     "breakable": false,
+     "fractureGroup": "root",
+     "seamRefs": [],
+     "detachableFragments": [],
+     "breakImpulse": 0,
+     "debrisMaterial": "base"
+    }
+   },
+   "material": "lamp-head",
+   "materialLayers": [
+    "lamp-head"
+   ],
+   "deformations": [],
+   "joints": [],
+   "seams": [],
+   "localFeatures": [
+    {
+     "id": "d-lamp-led-l",
+     "name": "4 枚方形 LED 投影",
+     "kind": "emissive",
+     "note": "0.042m 方镜 ×4，间距 0.075m 横向排在外侧前角，沿灯腔上缘同一条上扬角"
+    }
+   ],
+   "surfaceDetail": {
+    "macroRoughness": 0,
+    "microRoughness": 0,
+    "bumpAmplitude": 0,
+    "normalPattern": "",
+    "displacementPattern": "",
+    "occlusionPattern": "",
+    "edgeWearPattern": "",
+    "notes": ""
+   },
+   "evidenceRefs": [
+    "img-r7-front"
+   ],
+   "details": [
+    "d-lamp-led-l"
    ],
    "fidelityTier": "hero",
    "colorMaterialRecipe": {
@@ -2552,58 +3063,94 @@
   },
   {
    "id": "headlamp-r",
-   "name": "C 形大灯总成（右）",
+   "name": "分体大灯灯腔（右）",
    "level": "meso",
    "role": "lamp",
    "importance": 0.95,
    "confidence": 0.92,
    "primitive": "extrude",
    "topologyClass": "conforming-shell",
-   "topologyRationale": "灯罩为细长楔形轮廓挤出，内端收窄以贴合贯穿饰条",
+   "topologyRationale": "楔形灯腔正视轮廓挤出 20mm：外端高 0.17m、内端收窄到 0.086m，上缘随 LAMP_RAKE 内低外高",
    "geometryDescriptor": {
     "profile2D": {
      "points": [
       [
-       -0.2,
-       -0.055
+       -0.21,
+       0.772
       ],
       [
-       -0.04,
-       -0.062
+       -0.15,
+       0.771
       ],
       [
-       0.205,
-       -0.04
+       -0.09,
+       0.77
       ],
       [
-       0.22,
-       0.02
+       -0.03,
+       0.769
+      ],
+      [
+       0.03,
+       0.767
+      ],
+      [
+       0.09,
+       0.765
       ],
       [
        0.15,
-       0.048
+       0.763
       ],
       [
-       -0.06,
-       0.03
+       0.21,
+       0.762
       ],
       [
-       -0.215,
-       -0.03
+       0.21,
+       0.858
+      ],
+      [
+       0.15,
+       0.87
+      ],
+      [
+       0.09,
+       0.881
+      ],
+      [
+       0.03,
+       0.892
+      ],
+      [
+       -0.03,
+       0.903
+      ],
+      [
+       -0.09,
+       0.914
+      ],
+      [
+       -0.15,
+       0.925
+      ],
+      [
+       -0.21,
+       0.936
       ]
      ],
-     "depth": 0.055,
+     "depth": 0.02,
      "bevel": {
-      "thickness": 0.006,
-      "size": 0.006,
-      "offset": -0.006,
+      "thickness": 0.004,
+      "size": 0.004,
+      "offset": -0.004,
       "segments": 2
      }
     },
-    "topologyIntent": "tapered lamp housing extrusion",
+    "topologyIntent": "split headlamp housing wedge",
     "edgeTreatment": {
      "type": "rounded",
-     "bevelRadius": 0.006,
+     "bevelRadius": 0.004,
      "segments": 2
     },
     "deformationStack": [],
@@ -2613,17 +3160,17 @@
    "parent": "root",
    "attachment": null,
    "dimensions": {
-    "width": 0.44,
-    "height": 0.135,
-    "depth": 0.055,
+    "width": 0.42,
+    "height": 0.17,
+    "depth": 0.02,
     "units": "meters",
     "confidence": 0.92
    },
    "transform": {
     "position": [
-     -0.635,
-     0.862,
-     2.436
+     -0.705,
+     0,
+     2.432
     ],
     "rotation": [
      0,
@@ -2695,7 +3242,14 @@
    "deformations": [],
    "joints": [],
    "seams": [],
-   "localFeatures": [],
+   "localFeatures": [
+    {
+     "id": "d-headlamp-split-r",
+     "name": "分体大灯楔形灯腔",
+     "kind": "bevel",
+     "note": "黑色灯腔外端高 17cm、向内收成 8cm 尖角；内端下沿并入贯穿铬刃（参考正前图灯腔轮廓）"
+    }
+   ],
    "surfaceDetail": {
     "macroRoughness": 0,
     "microRoughness": 0,
@@ -2710,7 +3264,7 @@
     "img-r7-front"
    ],
    "details": [
-    "d-headlamp-c"
+    "d-headlamp-split-r"
    ],
    "fidelityTier": "hero",
    "colorMaterialRecipe": {
@@ -2722,10 +3276,10 @@
   },
   {
    "id": "drl-strip-r",
-   "name": "日行灯带（右）",
+   "name": "DRL 眉线（右）",
    "level": "micro",
    "role": "lamp",
-   "importance": 0.9,
+   "importance": 0.95,
    "confidence": 0.92,
    "primitive": "box",
    "topologyClass": "assembled-solid",
@@ -2744,27 +3298,27 @@
    "parent": "root",
    "attachment": null,
    "dimensions": {
-    "width": 0.4,
-    "height": 0.013,
-    "depth": 0.016,
+    "width": 0.383,
+    "height": 0.016,
+    "depth": 0.012,
     "units": "meters",
     "confidence": 0.92
    },
    "transform": {
     "position": [
-     -0.64,
-     0.792,
-     2.452
+     -0.7135,
+     0.8106,
+     2.4579999999999997
     ],
     "rotation": [
      0,
      0,
-     0
+     -0.1839
     ],
     "scale": [
-     0.4,
-     0.013,
-     0.016
+     0.383,
+     0.016,
+     0.012
     ]
    },
    "actionProfile": {
@@ -2828,10 +3382,10 @@
    "seams": [],
    "localFeatures": [
     {
-     "id": "d-drl-r",
-     "name": "下沿细长光带",
+     "id": "d-drl-brow-r",
+     "name": "上沿 DRL 眉线",
      "kind": "emissive",
-     "note": "大灯下沿 0.40m 白光带，与贯穿饰条一起构成本车前脸识别点"
+     "note": "0.38m 细长白光带，自外侧灯角（y0.845）向内下压到内尖（y0.767），末端接贯穿铬刃"
     }
    ],
    "surfaceDetail": {
@@ -2847,7 +3401,9 @@
    "evidenceRefs": [
     "img-r7-front"
    ],
-   "details": [],
+   "details": [
+    "d-drl-brow-r"
+   ],
    "fidelityTier": "hero",
    "colorMaterialRecipe": {
     "dominantAlbedo": "rgba(255, 255, 255, 1.0)",
@@ -2857,10 +3413,10 @@
    }
   },
   {
-   "id": "headlamp-projector-1-r",
-   "name": "大灯投影镜芯1（右）",
+   "id": "lamp-edging-r",
+   "name": "灯组下沿镀铬细边（右）",
    "level": "micro",
-   "role": "lamp",
+   "role": "trim",
    "importance": 0.8,
    "confidence": 0.9,
    "primitive": "box",
@@ -2880,27 +3436,165 @@
    "parent": "root",
    "attachment": null,
    "dimensions": {
-    "width": 0.062,
-    "height": 0.048,
-    "depth": 0.026,
+    "width": 0.22,
+    "height": 0.016,
+    "depth": 0.012,
     "units": "meters",
     "confidence": 0.9
    },
    "transform": {
     "position": [
-     -0.52,
-     0.872,
-     2.462
+     -0.8,
+     0.786,
+     2.4619999999999997
     ],
     "rotation": [
      0,
      0,
-     0
+     -0.06
     ],
     "scale": [
-     0.062,
-     0.048,
-     0.026
+     0.22,
+     0.016,
+     0.012
+    ]
+   },
+   "actionProfile": {
+    "animationRole": "static",
+    "pivot": {
+     "mode": "center",
+     "localPosition": [
+      0,
+      0,
+      0
+     ],
+     "axis": [
+      0,
+      1,
+      0
+     ],
+     "confidence": 0.9
+    },
+    "transformChannels": {
+     "translate": false,
+     "rotate": false,
+     "scale": false,
+     "bend": false,
+     "twist": false,
+     "detach": false,
+     "visibility": true,
+     "materialState": true
+    },
+    "sockets": [],
+    "collider": {
+     "type": "box",
+     "offset": [
+      0,
+      0,
+      0
+     ],
+     "scale": [
+      1,
+      1,
+      1
+     ],
+     "isTrigger": false,
+     "notes": ""
+    },
+    "constraints": [],
+    "destruction": {
+     "breakable": false,
+     "fractureGroup": "root",
+     "seamRefs": [],
+     "detachableFragments": [],
+     "breakImpulse": 0,
+     "debrisMaterial": "base"
+    }
+   },
+   "material": "chrome",
+   "materialLayers": [
+    "chrome"
+   ],
+   "deformations": [],
+   "joints": [],
+   "seams": [],
+   "localFeatures": [
+    {
+     "id": "d-lamp-edging-r",
+     "name": "灯底镀铬细边",
+     "kind": "linework",
+     "note": "灯腔下沿 22cm 镀铬细边（对应实拍灯下的点阵亮带），与 DRL、贯穿铬刃同处一条下压线"
+    }
+   ],
+   "surfaceDetail": {
+    "macroRoughness": 0,
+    "microRoughness": 0,
+    "bumpAmplitude": 0,
+    "normalPattern": "",
+    "displacementPattern": "",
+    "occlusionPattern": "",
+    "edgeWearPattern": "",
+    "notes": ""
+   },
+   "evidenceRefs": [
+    "img-r7-front"
+   ],
+   "details": [
+    "d-lamp-edging-r"
+   ],
+   "fidelityTier": "hero",
+   "colorMaterialRecipe": {
+    "dominantAlbedo": "rgba(232, 233, 236, 1.0)",
+    "secondaryAlbedo": "rgba(232, 233, 236, 0.85)",
+    "materialClass": "metal",
+    "materialClassConfidence": 0.9
+   }
+  },
+  {
+   "id": "headlamp-projector-1-r",
+   "name": "方形 LED 投影镜芯1（右）",
+   "level": "micro",
+   "role": "lamp",
+   "importance": 0.85,
+   "confidence": 0.9,
+   "primitive": "box",
+   "topologyClass": "assembled-solid",
+   "topologyRationale": "box 表达该部件的可展硬表面",
+   "geometryDescriptor": {
+    "topologyIntent": "hard-surface precise",
+    "edgeTreatment": {
+     "type": "bevel",
+     "bevelRadius": 0.006,
+     "segments": 2
+    },
+    "deformationStack": [],
+    "uvStrategy": "generated procedural coordinates",
+    "normalStrategy": "vertex normals from generated geometry"
+   },
+   "parent": "root",
+   "attachment": null,
+   "dimensions": {
+    "width": 0.042,
+    "height": 0.042,
+    "depth": 0.02,
+    "units": "meters",
+    "confidence": 0.9
+   },
+   "transform": {
+    "position": [
+     -0.88,
+     0.88961,
+     2.46
+    ],
+    "rotation": [
+     0,
+     0,
+     -0.1839
+    ],
+    "scale": [
+     0.042,
+     0.042,
+     0.02
     ]
    },
    "actionProfile": {
@@ -2964,10 +3658,10 @@
    "seams": [],
    "localFeatures": [
     {
-     "id": "d-projector-r",
-     "name": "大灯内 3 颗投影 + 点阵带",
-     "kind": "bevel",
-     "note": "C 形灯罩内并排的方形投影镜芯（本模型 2 颗/侧，第 3 颗由点阵贴图补）"
+     "id": "d-lamp-led-r",
+     "name": "4 枚方形 LED 投影",
+     "kind": "emissive",
+     "note": "0.042m 方镜 ×4，间距 0.075m 横向排在外侧前角，沿灯腔上缘同一条上扬角"
     }
    ],
    "surfaceDetail": {
@@ -2984,7 +3678,7 @@
     "img-r7-front"
    ],
    "details": [
-    "d-projector-r"
+    "d-lamp-led-r"
    ],
    "fidelityTier": "hero",
    "colorMaterialRecipe": {
@@ -2996,10 +3690,10 @@
   },
   {
    "id": "headlamp-projector-2-r",
-   "name": "大灯投影镜芯2（右）",
+   "name": "方形 LED 投影镜芯2（右）",
    "level": "micro",
    "role": "lamp",
-   "importance": 0.8,
+   "importance": 0.85,
    "confidence": 0.9,
    "primitive": "box",
    "topologyClass": "assembled-solid",
@@ -3018,27 +3712,27 @@
    "parent": "root",
    "attachment": null,
    "dimensions": {
-    "width": 0.062,
-    "height": 0.048,
-    "depth": 0.026,
+    "width": 0.042,
+    "height": 0.042,
+    "depth": 0.02,
     "units": "meters",
     "confidence": 0.9
    },
    "transform": {
     "position": [
-     -0.608,
-     0.872,
-     2.462
+     -0.805,
+     0.87566,
+     2.46
     ],
     "rotation": [
      0,
      0,
-     0
+     -0.1839
     ],
     "scale": [
-     0.062,
-     0.048,
-     0.026
+     0.042,
+     0.042,
+     0.02
     ]
    },
    "actionProfile": {
@@ -3102,10 +3796,10 @@
    "seams": [],
    "localFeatures": [
     {
-     "id": "d-projector-r",
-     "name": "大灯内 3 颗投影 + 点阵带",
-     "kind": "bevel",
-     "note": "C 形灯罩内并排的方形投影镜芯（本模型 2 颗/侧，第 3 颗由点阵贴图补）"
+     "id": "d-lamp-led-r",
+     "name": "4 枚方形 LED 投影",
+     "kind": "emissive",
+     "note": "0.042m 方镜 ×4，间距 0.075m 横向排在外侧前角，沿灯腔上缘同一条上扬角"
     }
    ],
    "surfaceDetail": {
@@ -3122,7 +3816,7 @@
     "img-r7-front"
    ],
    "details": [
-    "d-projector-r"
+    "d-lamp-led-r"
    ],
    "fidelityTier": "hero",
    "colorMaterialRecipe": {
@@ -3133,12 +3827,12 @@
    }
   },
   {
-   "id": "light-bar-front",
-   "name": "前贯穿饰条（镀铬横向）",
-   "level": "meso",
-   "role": "trim",
-   "importance": 0.95,
-   "confidence": 0.95,
+   "id": "headlamp-projector-3-r",
+   "name": "方形 LED 投影镜芯3（右）",
+   "level": "micro",
+   "role": "lamp",
+   "importance": 0.85,
+   "confidence": 0.9,
    "primitive": "box",
    "topologyClass": "assembled-solid",
    "topologyRationale": "box 表达该部件的可展硬表面",
@@ -3156,17 +3850,360 @@
    "parent": "root",
    "attachment": null,
    "dimensions": {
-    "width": 1.74,
-    "height": 0.024,
+    "width": 0.042,
+    "height": 0.042,
     "depth": 0.02,
+    "units": "meters",
+    "confidence": 0.9
+   },
+   "transform": {
+    "position": [
+     -0.73,
+     0.86171,
+     2.46
+    ],
+    "rotation": [
+     0,
+     0,
+     -0.1839
+    ],
+    "scale": [
+     0.042,
+     0.042,
+     0.02
+    ]
+   },
+   "actionProfile": {
+    "animationRole": "static",
+    "pivot": {
+     "mode": "center",
+     "localPosition": [
+      0,
+      0,
+      0
+     ],
+     "axis": [
+      0,
+      1,
+      0
+     ],
+     "confidence": 0.9
+    },
+    "transformChannels": {
+     "translate": false,
+     "rotate": false,
+     "scale": false,
+     "bend": false,
+     "twist": false,
+     "detach": false,
+     "visibility": true,
+     "materialState": true
+    },
+    "sockets": [],
+    "collider": {
+     "type": "box",
+     "offset": [
+      0,
+      0,
+      0
+     ],
+     "scale": [
+      1,
+      1,
+      1
+     ],
+     "isTrigger": false,
+     "notes": ""
+    },
+    "constraints": [],
+    "destruction": {
+     "breakable": false,
+     "fractureGroup": "root",
+     "seamRefs": [],
+     "detachableFragments": [],
+     "breakImpulse": 0,
+     "debrisMaterial": "base"
+    }
+   },
+   "material": "lamp-head",
+   "materialLayers": [
+    "lamp-head"
+   ],
+   "deformations": [],
+   "joints": [],
+   "seams": [],
+   "localFeatures": [
+    {
+     "id": "d-lamp-led-r",
+     "name": "4 枚方形 LED 投影",
+     "kind": "emissive",
+     "note": "0.042m 方镜 ×4，间距 0.075m 横向排在外侧前角，沿灯腔上缘同一条上扬角"
+    }
+   ],
+   "surfaceDetail": {
+    "macroRoughness": 0,
+    "microRoughness": 0,
+    "bumpAmplitude": 0,
+    "normalPattern": "",
+    "displacementPattern": "",
+    "occlusionPattern": "",
+    "edgeWearPattern": "",
+    "notes": ""
+   },
+   "evidenceRefs": [
+    "img-r7-front"
+   ],
+   "details": [
+    "d-lamp-led-r"
+   ],
+   "fidelityTier": "hero",
+   "colorMaterialRecipe": {
+    "dominantAlbedo": "rgba(234, 242, 255, 1.0)",
+    "secondaryAlbedo": "rgba(234, 242, 255, 0.85)",
+    "materialClass": "glass",
+    "materialClassConfidence": 0.9
+   }
+  },
+  {
+   "id": "headlamp-projector-4-r",
+   "name": "方形 LED 投影镜芯4（右）",
+   "level": "micro",
+   "role": "lamp",
+   "importance": 0.85,
+   "confidence": 0.9,
+   "primitive": "box",
+   "topologyClass": "assembled-solid",
+   "topologyRationale": "box 表达该部件的可展硬表面",
+   "geometryDescriptor": {
+    "topologyIntent": "hard-surface precise",
+    "edgeTreatment": {
+     "type": "bevel",
+     "bevelRadius": 0.006,
+     "segments": 2
+    },
+    "deformationStack": [],
+    "uvStrategy": "generated procedural coordinates",
+    "normalStrategy": "vertex normals from generated geometry"
+   },
+   "parent": "root",
+   "attachment": null,
+   "dimensions": {
+    "width": 0.042,
+    "height": 0.042,
+    "depth": 0.02,
+    "units": "meters",
+    "confidence": 0.9
+   },
+   "transform": {
+    "position": [
+     -0.655,
+     0.84776,
+     2.46
+    ],
+    "rotation": [
+     0,
+     0,
+     -0.1839
+    ],
+    "scale": [
+     0.042,
+     0.042,
+     0.02
+    ]
+   },
+   "actionProfile": {
+    "animationRole": "static",
+    "pivot": {
+     "mode": "center",
+     "localPosition": [
+      0,
+      0,
+      0
+     ],
+     "axis": [
+      0,
+      1,
+      0
+     ],
+     "confidence": 0.9
+    },
+    "transformChannels": {
+     "translate": false,
+     "rotate": false,
+     "scale": false,
+     "bend": false,
+     "twist": false,
+     "detach": false,
+     "visibility": true,
+     "materialState": true
+    },
+    "sockets": [],
+    "collider": {
+     "type": "box",
+     "offset": [
+      0,
+      0,
+      0
+     ],
+     "scale": [
+      1,
+      1,
+      1
+     ],
+     "isTrigger": false,
+     "notes": ""
+    },
+    "constraints": [],
+    "destruction": {
+     "breakable": false,
+     "fractureGroup": "root",
+     "seamRefs": [],
+     "detachableFragments": [],
+     "breakImpulse": 0,
+     "debrisMaterial": "base"
+    }
+   },
+   "material": "lamp-head",
+   "materialLayers": [
+    "lamp-head"
+   ],
+   "deformations": [],
+   "joints": [],
+   "seams": [],
+   "localFeatures": [
+    {
+     "id": "d-lamp-led-r",
+     "name": "4 枚方形 LED 投影",
+     "kind": "emissive",
+     "note": "0.042m 方镜 ×4，间距 0.075m 横向排在外侧前角，沿灯腔上缘同一条上扬角"
+    }
+   ],
+   "surfaceDetail": {
+    "macroRoughness": 0,
+    "microRoughness": 0,
+    "bumpAmplitude": 0,
+    "normalPattern": "",
+    "displacementPattern": "",
+    "occlusionPattern": "",
+    "edgeWearPattern": "",
+    "notes": ""
+   },
+   "evidenceRefs": [
+    "img-r7-front"
+   ],
+   "details": [
+    "d-lamp-led-r"
+   ],
+   "fidelityTier": "hero",
+   "colorMaterialRecipe": {
+    "dominantAlbedo": "rgba(234, 242, 255, 1.0)",
+    "secondaryAlbedo": "rgba(234, 242, 255, 0.85)",
+    "materialClass": "glass",
+    "materialClassConfidence": 0.9
+   }
+  },
+  {
+   "id": "light-bar-front",
+   "name": "前贯穿镀铬刃",
+   "level": "meso",
+   "role": "trim",
+   "importance": 0.95,
+   "confidence": 0.95,
+   "primitive": "extrude",
+   "topologyClass": "conforming-shell",
+   "topologyRationale": "7 点折线加厚 22mm 的薄刃挤出 14mm，中段下凹 9mm，两端没入灯组下沿",
+   "geometryDescriptor": {
+    "profile2D": {
+     "points": [
+      [
+       -0.65,
+       0.784
+      ],
+      [
+       -0.43,
+       0.779
+      ],
+      [
+       -0.215,
+       0.776
+      ],
+      [
+       0.0,
+       0.775
+      ],
+      [
+       0.215,
+       0.776
+      ],
+      [
+       0.43,
+       0.779
+      ],
+      [
+       0.65,
+       0.784
+      ],
+      [
+       0.65,
+       0.806
+      ],
+      [
+       0.43,
+       0.801
+      ],
+      [
+       0.215,
+       0.798
+      ],
+      [
+       0.0,
+       0.797
+      ],
+      [
+       -0.215,
+       0.798
+      ],
+      [
+       -0.43,
+       0.801
+      ],
+      [
+       -0.65,
+       0.806
+      ]
+     ],
+     "depth": 0.014,
+     "bevel": {
+      "thickness": 0.003,
+      "size": 0.003,
+      "offset": -0.003,
+      "segments": 1
+     }
+    },
+    "topologyIntent": "full-width chrome blade with slight center sag",
+    "edgeTreatment": {
+     "type": "rounded",
+     "bevelRadius": 0.003,
+     "segments": 1
+    },
+    "deformationStack": [],
+    "uvStrategy": "generated procedural coordinates",
+    "normalStrategy": "vertex normals"
+   },
+   "parent": "root",
+   "attachment": null,
+   "dimensions": {
+    "width": 1.3,
+    "height": 0.022,
+    "depth": 0.014,
     "units": "meters",
     "confidence": 0.95
    },
    "transform": {
     "position": [
      0,
-     0.852,
-     2.454
+     0,
+     2.4299999999999997
     ],
     "rotation": [
      0,
@@ -3174,9 +4211,9 @@
      0
     ],
     "scale": [
-     1.74,
-     0.024,
-     0.02
+     1,
+     1,
+     1
     ]
    },
    "actionProfile": {
@@ -3241,9 +4278,9 @@
    "localFeatures": [
     {
      "id": "d-full-width-blade",
-     "name": "全宽镀铬横条",
+     "name": "贯穿镀铬刃",
      "kind": "linework",
-     "note": "左右大灯之间一条通长镀铬饰条，参考正前视图最亮的一根横线"
+     "note": "y0.795 全宽 1.30m 的镀铬刃横贯车鼻，两端收进左右灯组下沿，中段 9mm 下凹（参考正前图最亮的一根横线）"
     }
    ],
    "surfaceDetail": {
@@ -3280,29 +4317,29 @@
    "confidence": 0.92,
    "primitive": "extrude",
    "topologyClass": "surface-relief",
-   "topologyRationale": "盾形薄浮雕板，外轮廓 6 点 CCW",
+   "topologyRationale": "0.075×0.10m 盾形薄浮雕板挤出 14mm，外轮廓 5 点 CCW",
    "geometryDescriptor": {
     "profile2D": {
      "points": [
       [
-       -0.029,
+       -0.0375,
        -0.012
       ],
       [
        0.0,
-       -0.049
+       -0.05
       ],
       [
-       0.029,
+       0.0375,
        -0.012
       ],
       [
-       0.029,
-       0.049
+       0.0375,
+       0.05
       ],
       [
-       -0.029,
-       0.049
+       -0.0375,
+       0.05
       ]
      ],
      "depth": 0.014,
@@ -3326,8 +4363,8 @@
    "parent": "root",
    "attachment": null,
    "dimensions": {
-    "width": 0.058,
-    "height": 0.098,
+    "width": 0.075,
+    "height": 0.1,
     "depth": 0.014,
     "units": "meters",
     "confidence": 0.92
@@ -3335,8 +4372,8 @@
    "transform": {
     "position": [
      0,
-     0.905,
-     2.462
+     0.888,
+     2.452
     ],
     "rotation": [
      0,
@@ -3413,7 +4450,7 @@
      "id": "d-shield-badge",
      "name": "盾形车标",
      "kind": "bevel",
-     "note": "宽 5.8cm 高 9.8cm 的盾形座，内部菱格由适配层贴图"
+     "note": "7.5cm×10cm 盾形座，落在鼻梁上沿、铬刃上方 3.4cm，内部竖向菱格由适配层贴图"
     }
    ],
    "surfaceDetail": {
@@ -3442,110 +4479,110 @@
   },
   {
    "id": "front-intake",
-   "name": "三段式下进气口",
+   "name": "下进气中段",
    "level": "meso",
    "role": "grille",
    "importance": 0.9,
    "confidence": 0.9,
    "primitive": "extrude",
    "topologyClass": "conforming-shell",
-   "topologyRationale": "圆角矩形沿 +Z 挤出 55mm 的黑色进气框",
+   "topologyRationale": "0.62×0.20m 圆角矩形沿 +Z 挤出 16mm 的中段进气框",
    "geometryDescriptor": {
     "profile2D": {
      "points": [
       [
-       0.61,
-       -0.115
+       0.28,
+       -0.1
       ],
       [
-       0.62913,
-       -0.11119
+       0.29148,
+       -0.09772
       ],
       [
-       0.64536,
-       -0.10036
+       0.30121,
+       -0.09121
       ],
       [
-       0.65619,
-       -0.08413
+       0.30772,
+       -0.08148
       ],
       [
-       0.66,
-       -0.065
+       0.31,
+       -0.07
       ],
       [
-       0.66,
-       0.065
+       0.31,
+       0.07
       ],
       [
-       0.65619,
-       0.08413
+       0.30772,
+       0.08148
       ],
       [
-       0.64536,
-       0.10036
+       0.30121,
+       0.09121
       ],
       [
-       0.62913,
-       0.11119
+       0.29148,
+       0.09772
       ],
       [
-       0.61,
-       0.115
+       0.28,
+       0.1
       ],
       [
-       -0.61,
-       0.115
+       -0.28,
+       0.1
       ],
       [
-       -0.62913,
-       0.11119
+       -0.29148,
+       0.09772
       ],
       [
-       -0.64536,
-       0.10036
+       -0.30121,
+       0.09121
       ],
       [
-       -0.65619,
-       0.08413
+       -0.30772,
+       0.08148
       ],
       [
-       -0.66,
-       0.065
+       -0.31,
+       0.07
       ],
       [
-       -0.66,
-       -0.065
+       -0.31,
+       -0.07
       ],
       [
-       -0.65619,
-       -0.08413
+       -0.30772,
+       -0.08148
       ],
       [
-       -0.64536,
-       -0.10036
+       -0.30121,
+       -0.09121
       ],
       [
-       -0.62913,
-       -0.11119
+       -0.29148,
+       -0.09772
       ],
       [
-       -0.61,
-       -0.115
+       -0.28,
+       -0.1
       ]
      ],
-     "depth": 0.055,
+     "depth": 0.016,
      "bevel": {
-      "thickness": 0.006,
-      "size": 0.008,
-      "offset": -0.008,
+      "thickness": 0.005,
+      "size": 0.005,
+      "offset": -0.005,
       "segments": 2
      }
     },
-    "topologyIntent": "lower intake frame",
+    "topologyIntent": "center lower intake frame",
     "edgeTreatment": {
      "type": "rounded",
-     "bevelRadius": 0.008,
+     "bevelRadius": 0.005,
      "segments": 2
     },
     "deformationStack": [],
@@ -3555,17 +4592,17 @@
    "parent": "root",
    "attachment": null,
    "dimensions": {
-    "width": 1.32,
-    "height": 0.23,
-    "depth": 0.055,
+    "width": 0.62,
+    "height": 0.2,
+    "depth": 0.016,
     "units": "meters",
     "confidence": 0.9
    },
    "transform": {
     "position": [
      0,
-     0.5,
-     2.428
+     0.33499999999999996,
+     2.432
     ],
     "rotation": [
      0,
@@ -3642,7 +4679,7 @@
      "id": "d-intake-three-part",
      "name": "三段式进气分隔",
      "kind": "groove",
-     "note": "中部横梁 + 两侧竖向鳍片把进气口切成三段；R17 收窄至 23cm 高并上移，为下方牌照位让位"
+     "note": "中段 0.62m 与两侧 0.28m 进气口之间留 2cm 竖向隔断，构成三段式（参考正前图）"
     }
    ],
    "surfaceDetail": {
@@ -3670,111 +4707,111 @@
    }
   },
   {
-   "id": "duct-l",
-   "name": "侧导流口（左）",
+   "id": "intake-side-l",
+   "name": "下进气侧段（左）",
    "level": "meso",
    "role": "grille",
-   "importance": 0.8,
-   "confidence": 0.88,
+   "importance": 0.85,
+   "confidence": 0.9,
    "primitive": "extrude",
    "topologyClass": "conforming-shell",
-   "topologyRationale": "竖向圆角长孔沿 +Z 挤出的侧导流槽",
+   "topologyRationale": "0.28×0.20m 圆角矩形挤出：三段式进气的侧段",
    "geometryDescriptor": {
     "profile2D": {
      "points": [
       [
-       0.02,
-       -0.15
+       0.11,
+       -0.1
       ],
       [
-       0.03722,
-       -0.14657
+       0.12148,
+       -0.09772
       ],
       [
-       0.05182,
-       -0.13682
+       0.13121,
+       -0.09121
       ],
       [
-       0.06157,
-       -0.12222
+       0.13772,
+       -0.08148
       ],
       [
-       0.065,
-       -0.105
+       0.14,
+       -0.07
       ],
       [
-       0.065,
-       0.105
+       0.14,
+       0.07
       ],
       [
-       0.06157,
-       0.12222
+       0.13772,
+       0.08148
       ],
       [
-       0.05182,
-       0.13682
+       0.13121,
+       0.09121
       ],
       [
-       0.03722,
-       0.14657
+       0.12148,
+       0.09772
       ],
       [
-       0.02,
-       0.15
+       0.11,
+       0.1
       ],
       [
-       -0.02,
-       0.15
+       -0.11,
+       0.1
       ],
       [
-       -0.03722,
-       0.14657
+       -0.12148,
+       0.09772
       ],
       [
-       -0.05182,
-       0.13682
+       -0.13121,
+       0.09121
       ],
       [
-       -0.06157,
-       0.12222
+       -0.13772,
+       0.08148
       ],
       [
-       -0.065,
-       0.105
+       -0.14,
+       0.07
       ],
       [
-       -0.065,
-       -0.105
+       -0.14,
+       -0.07
       ],
       [
-       -0.06157,
-       -0.12222
+       -0.13772,
+       -0.08148
       ],
       [
-       -0.05182,
-       -0.13682
+       -0.13121,
+       -0.09121
       ],
       [
-       -0.03722,
-       -0.14657
+       -0.12148,
+       -0.09772
       ],
       [
-       -0.02,
-       -0.15
+       -0.11,
+       -0.1
       ]
      ],
-     "depth": 0.05,
+     "depth": 0.016,
      "bevel": {
-      "thickness": 0.006,
-      "size": 0.006,
-      "offset": -0.006,
+      "thickness": 0.005,
+      "size": 0.005,
+      "offset": -0.005,
       "segments": 2
      }
     },
-    "topologyIntent": "air curtain duct",
+    "topologyIntent": "side lower intake frame",
     "edgeTreatment": {
      "type": "rounded",
-     "bevelRadius": 0.006,
+     "bevelRadius": 0.005,
      "segments": 2
     },
     "deformationStack": [],
@@ -3784,17 +4821,664 @@
    "parent": "root",
    "attachment": null,
    "dimensions": {
-    "width": 0.13,
-    "height": 0.3,
-    "depth": 0.05,
+    "width": 0.28,
+    "height": 0.2,
+    "depth": 0.016,
+    "units": "meters",
+    "confidence": 0.9
+   },
+   "transform": {
+    "position": [
+     0.47,
+     0.33499999999999996,
+     2.432
+    ],
+    "rotation": [
+     0,
+     0,
+     0
+    ],
+    "scale": [
+     1,
+     1,
+     1
+    ]
+   },
+   "actionProfile": {
+    "animationRole": "static",
+    "pivot": {
+     "mode": "center",
+     "localPosition": [
+      0,
+      0,
+      0
+     ],
+     "axis": [
+      0,
+      1,
+      0
+     ],
+     "confidence": 0.9
+    },
+    "transformChannels": {
+     "translate": false,
+     "rotate": false,
+     "scale": false,
+     "bend": false,
+     "twist": false,
+     "detach": false,
+     "visibility": true,
+     "materialState": true
+    },
+    "sockets": [],
+    "collider": {
+     "type": "box",
+     "offset": [
+      0,
+      0,
+      0
+     ],
+     "scale": [
+      1,
+      1,
+      1
+     ],
+     "isTrigger": false,
+     "notes": ""
+    },
+    "constraints": [],
+    "destruction": {
+     "breakable": false,
+     "fractureGroup": "root",
+     "seamRefs": [],
+     "detachableFragments": [],
+     "breakImpulse": 0,
+     "debrisMaterial": "base"
+    }
+   },
+   "material": "matte-black",
+   "materialLayers": [
+    "matte-black"
+   ],
+   "deformations": [],
+   "joints": [],
+   "seams": [],
+   "localFeatures": [],
+   "surfaceDetail": {
+    "macroRoughness": 0,
+    "microRoughness": 0,
+    "bumpAmplitude": 0,
+    "normalPattern": "",
+    "displacementPattern": "",
+    "occlusionPattern": "",
+    "edgeWearPattern": "",
+    "notes": ""
+   },
+   "evidenceRefs": [
+    "img-r7-front"
+   ],
+   "details": [
+    "d-intake-three-part"
+   ],
+   "fidelityTier": "hero",
+   "colorMaterialRecipe": {
+    "dominantAlbedo": "rgba(18, 19, 22, 1.0)",
+    "secondaryAlbedo": "rgba(18, 19, 22, 0.85)",
+    "materialClass": "plastic",
+    "materialClassConfidence": 0.9
+   }
+  },
+  {
+   "id": "intake-side-r",
+   "name": "下进气侧段（右）",
+   "level": "meso",
+   "role": "grille",
+   "importance": 0.85,
+   "confidence": 0.9,
+   "primitive": "extrude",
+   "topologyClass": "conforming-shell",
+   "topologyRationale": "0.28×0.20m 圆角矩形挤出：三段式进气的侧段",
+   "geometryDescriptor": {
+    "profile2D": {
+     "points": [
+      [
+       0.11,
+       -0.1
+      ],
+      [
+       0.12148,
+       -0.09772
+      ],
+      [
+       0.13121,
+       -0.09121
+      ],
+      [
+       0.13772,
+       -0.08148
+      ],
+      [
+       0.14,
+       -0.07
+      ],
+      [
+       0.14,
+       0.07
+      ],
+      [
+       0.13772,
+       0.08148
+      ],
+      [
+       0.13121,
+       0.09121
+      ],
+      [
+       0.12148,
+       0.09772
+      ],
+      [
+       0.11,
+       0.1
+      ],
+      [
+       -0.11,
+       0.1
+      ],
+      [
+       -0.12148,
+       0.09772
+      ],
+      [
+       -0.13121,
+       0.09121
+      ],
+      [
+       -0.13772,
+       0.08148
+      ],
+      [
+       -0.14,
+       0.07
+      ],
+      [
+       -0.14,
+       -0.07
+      ],
+      [
+       -0.13772,
+       -0.08148
+      ],
+      [
+       -0.13121,
+       -0.09121
+      ],
+      [
+       -0.12148,
+       -0.09772
+      ],
+      [
+       -0.11,
+       -0.1
+      ]
+     ],
+     "depth": 0.016,
+     "bevel": {
+      "thickness": 0.005,
+      "size": 0.005,
+      "offset": -0.005,
+      "segments": 2
+     }
+    },
+    "topologyIntent": "side lower intake frame",
+    "edgeTreatment": {
+     "type": "rounded",
+     "bevelRadius": 0.005,
+     "segments": 2
+    },
+    "deformationStack": [],
+    "uvStrategy": "generated procedural coordinates",
+    "normalStrategy": "vertex normals"
+   },
+   "parent": "root",
+   "attachment": null,
+   "dimensions": {
+    "width": 0.28,
+    "height": 0.2,
+    "depth": 0.016,
+    "units": "meters",
+    "confidence": 0.9
+   },
+   "transform": {
+    "position": [
+     -0.47,
+     0.33499999999999996,
+     2.432
+    ],
+    "rotation": [
+     0,
+     0,
+     0
+    ],
+    "scale": [
+     1,
+     1,
+     1
+    ]
+   },
+   "actionProfile": {
+    "animationRole": "static",
+    "pivot": {
+     "mode": "center",
+     "localPosition": [
+      0,
+      0,
+      0
+     ],
+     "axis": [
+      0,
+      1,
+      0
+     ],
+     "confidence": 0.9
+    },
+    "transformChannels": {
+     "translate": false,
+     "rotate": false,
+     "scale": false,
+     "bend": false,
+     "twist": false,
+     "detach": false,
+     "visibility": true,
+     "materialState": true
+    },
+    "sockets": [],
+    "collider": {
+     "type": "box",
+     "offset": [
+      0,
+      0,
+      0
+     ],
+     "scale": [
+      1,
+      1,
+      1
+     ],
+     "isTrigger": false,
+     "notes": ""
+    },
+    "constraints": [],
+    "destruction": {
+     "breakable": false,
+     "fractureGroup": "root",
+     "seamRefs": [],
+     "detachableFragments": [],
+     "breakImpulse": 0,
+     "debrisMaterial": "base"
+    }
+   },
+   "material": "matte-black",
+   "materialLayers": [
+    "matte-black"
+   ],
+   "deformations": [],
+   "joints": [],
+   "seams": [],
+   "localFeatures": [],
+   "surfaceDetail": {
+    "macroRoughness": 0,
+    "microRoughness": 0,
+    "bumpAmplitude": 0,
+    "normalPattern": "",
+    "displacementPattern": "",
+    "occlusionPattern": "",
+    "edgeWearPattern": "",
+    "notes": ""
+   },
+   "evidenceRefs": [
+    "img-r7-front"
+   ],
+   "details": [
+    "d-intake-three-part"
+   ],
+   "fidelityTier": "hero",
+   "colorMaterialRecipe": {
+    "dominantAlbedo": "rgba(18, 19, 22, 1.0)",
+    "secondaryAlbedo": "rgba(18, 19, 22, 0.85)",
+    "materialClass": "plastic",
+    "materialClassConfidence": 0.9
+   }
+  },
+  {
+   "id": "intake-slats",
+   "name": "下进气水平叶片（3 条）",
+   "level": "micro",
+   "role": "grille",
+   "importance": 0.8,
+   "confidence": 0.88,
+   "primitive": "extrude",
+   "topologyClass": "surface-relief",
+   "topologyRationale": "0.56×0.166m 薄板开 2 条 26mm 横槽 → 3 条水平叶片，比进气底色亮一档（housing-dark 金属感）",
+   "geometryDescriptor": {
+    "profile2D": {
+     "points": [
+      [
+       -0.28,
+       -0.083
+      ],
+      [
+       0.28,
+       -0.083
+      ],
+      [
+       0.28,
+       0.083
+      ],
+      [
+       -0.28,
+       0.083
+      ]
+     ],
+     "depth": 0.008,
+     "bevel": {
+      "thickness": 0.002,
+      "size": 0.002,
+      "offset": -0.002,
+      "segments": 1
+     },
+     "holes": [
+      [
+       [
+        -0.26,
+        0.017
+       ],
+       [
+        0.26,
+        0.017
+       ],
+       [
+        0.26,
+        0.043
+       ],
+       [
+        -0.26,
+        0.043
+       ]
+      ],
+      [
+       [
+        -0.26,
+        -0.043
+       ],
+       [
+        0.26,
+        -0.043
+       ],
+       [
+        0.26,
+        -0.017
+       ],
+       [
+        -0.26,
+        -0.017
+       ]
+      ]
+     ]
+    },
+    "topologyIntent": "three horizontal intake vanes (two cut slots)",
+    "edgeTreatment": {
+     "type": "rounded",
+     "bevelRadius": 0.002,
+     "segments": 1
+    },
+    "deformationStack": [],
+    "uvStrategy": "generated procedural coordinates",
+    "normalStrategy": "vertex normals"
+   },
+   "parent": "root",
+   "attachment": null,
+   "dimensions": {
+    "width": 0.56,
+    "height": 0.166,
+    "depth": 0.008,
     "units": "meters",
     "confidence": 0.88
    },
    "transform": {
     "position": [
-     0.845,
-     0.6,
-     2.43
+     0,
+     0.33499999999999996,
+     2.448
+    ],
+    "rotation": [
+     0,
+     0,
+     0
+    ],
+    "scale": [
+     1,
+     1,
+     1
+    ]
+   },
+   "actionProfile": {
+    "animationRole": "static",
+    "pivot": {
+     "mode": "center",
+     "localPosition": [
+      0,
+      0,
+      0
+     ],
+     "axis": [
+      0,
+      1,
+      0
+     ],
+     "confidence": 0.88
+    },
+    "transformChannels": {
+     "translate": false,
+     "rotate": false,
+     "scale": false,
+     "bend": false,
+     "twist": false,
+     "detach": false,
+     "visibility": true,
+     "materialState": true
+    },
+    "sockets": [],
+    "collider": {
+     "type": "box",
+     "offset": [
+      0,
+      0,
+      0
+     ],
+     "scale": [
+      1,
+      1,
+      1
+     ],
+     "isTrigger": false,
+     "notes": ""
+    },
+    "constraints": [],
+    "destruction": {
+     "breakable": false,
+     "fractureGroup": "root",
+     "seamRefs": [],
+     "detachableFragments": [],
+     "breakImpulse": 0,
+     "debrisMaterial": "base"
+    }
+   },
+   "material": "housing-dark",
+   "materialLayers": [
+    "housing-dark"
+   ],
+   "deformations": [],
+   "joints": [],
+   "seams": [],
+   "localFeatures": [
+    {
+     "id": "d-intake-vanes",
+     "name": "3 条水平叶片",
+     "kind": "groove",
+     "note": "叶片宽 0.04m、槽宽 0.026m，露出后方哑光黑进气底色"
+    }
+   ],
+   "surfaceDetail": {
+    "macroRoughness": 0,
+    "microRoughness": 0,
+    "bumpAmplitude": 0,
+    "normalPattern": "",
+    "displacementPattern": "",
+    "occlusionPattern": "",
+    "edgeWearPattern": "",
+    "notes": ""
+   },
+   "evidenceRefs": [
+    "img-r7-front"
+   ],
+   "details": [
+    "d-intake-vanes"
+   ],
+   "fidelityTier": "hero",
+   "colorMaterialRecipe": {
+    "dominantAlbedo": "rgba(20, 23, 26, 1.0)",
+    "secondaryAlbedo": "rgba(20, 23, 26, 0.85)",
+    "materialClass": "metal",
+    "materialClassConfidence": 0.9
+   }
+  },
+  {
+   "id": "duct-l",
+   "name": "侧导流槽（左）",
+   "level": "meso",
+   "role": "grille",
+   "importance": 0.8,
+   "confidence": 0.88,
+   "primitive": "extrude",
+   "topologyClass": "conforming-shell",
+   "topologyRationale": "0.10×0.26m 竖向圆角长槽沿 +Z 挤出 14mm 的外缘导流槽",
+   "geometryDescriptor": {
+    "profile2D": {
+     "points": [
+      [
+       0.015,
+       -0.13
+      ],
+      [
+       0.02839,
+       -0.12734
+      ],
+      [
+       0.03975,
+       -0.11975
+      ],
+      [
+       0.04734,
+       -0.10839
+      ],
+      [
+       0.05,
+       -0.095
+      ],
+      [
+       0.05,
+       0.095
+      ],
+      [
+       0.04734,
+       0.10839
+      ],
+      [
+       0.03975,
+       0.11975
+      ],
+      [
+       0.02839,
+       0.12734
+      ],
+      [
+       0.015,
+       0.13
+      ],
+      [
+       -0.015,
+       0.13
+      ],
+      [
+       -0.02839,
+       0.12734
+      ],
+      [
+       -0.03975,
+       0.11975
+      ],
+      [
+       -0.04734,
+       0.10839
+      ],
+      [
+       -0.05,
+       0.095
+      ],
+      [
+       -0.05,
+       -0.095
+      ],
+      [
+       -0.04734,
+       -0.10839
+      ],
+      [
+       -0.03975,
+       -0.11975
+      ],
+      [
+       -0.02839,
+       -0.12734
+      ],
+      [
+       -0.015,
+       -0.13
+      ]
+     ],
+     "depth": 0.014,
+     "bevel": {
+      "thickness": 0.004,
+      "size": 0.004,
+      "offset": -0.004,
+      "segments": 2
+     }
+    },
+    "topologyIntent": "air curtain duct slot",
+    "edgeTreatment": {
+     "type": "rounded",
+     "bevelRadius": 0.004,
+     "segments": 2
+    },
+    "deformationStack": [],
+    "uvStrategy": "generated procedural coordinates",
+    "normalStrategy": "vertex normals"
+   },
+   "parent": "root",
+   "attachment": null,
+   "dimensions": {
+    "width": 0.1,
+    "height": 0.26,
+    "depth": 0.014,
+    "units": "meters",
+    "confidence": 0.88
+   },
+   "transform": {
+    "position": [
+     0.858,
+     0.33,
+     2.432
     ],
     "rotation": [
      0,
@@ -3866,7 +5550,14 @@
    "deformations": [],
    "joints": [],
    "seams": [],
-   "localFeatures": [],
+   "localFeatures": [
+    {
+     "id": "d-duct-l",
+     "name": "外缘竖向导流槽",
+     "kind": "groove",
+     "note": "前保外缘 0.10×0.26m 哑光黑竖槽，实拍图中包住保险杠转角"
+    }
+   ],
    "surfaceDetail": {
     "macroRoughness": 0,
     "microRoughness": 0,
@@ -3881,7 +5572,9 @@
     "img-r7-front",
     "img-r7-34"
    ],
-   "details": [],
+   "details": [
+    "d-duct-l"
+   ],
    "fidelityTier": "hero",
    "colorMaterialRecipe": {
     "dominantAlbedo": "rgba(18, 19, 22, 1.0)",
@@ -3892,110 +5585,110 @@
   },
   {
    "id": "duct-r",
-   "name": "侧导流口（右）",
+   "name": "侧导流槽（右）",
    "level": "meso",
    "role": "grille",
    "importance": 0.8,
    "confidence": 0.88,
    "primitive": "extrude",
    "topologyClass": "conforming-shell",
-   "topologyRationale": "竖向圆角长孔沿 +Z 挤出的侧导流槽",
+   "topologyRationale": "0.10×0.26m 竖向圆角长槽沿 +Z 挤出 14mm 的外缘导流槽",
    "geometryDescriptor": {
     "profile2D": {
      "points": [
       [
-       0.02,
-       -0.15
+       0.015,
+       -0.13
       ],
       [
-       0.03722,
-       -0.14657
+       0.02839,
+       -0.12734
       ],
       [
-       0.05182,
-       -0.13682
+       0.03975,
+       -0.11975
       ],
       [
-       0.06157,
-       -0.12222
+       0.04734,
+       -0.10839
       ],
       [
-       0.065,
-       -0.105
+       0.05,
+       -0.095
       ],
       [
-       0.065,
-       0.105
+       0.05,
+       0.095
       ],
       [
-       0.06157,
-       0.12222
+       0.04734,
+       0.10839
       ],
       [
-       0.05182,
-       0.13682
+       0.03975,
+       0.11975
       ],
       [
-       0.03722,
-       0.14657
+       0.02839,
+       0.12734
       ],
       [
-       0.02,
-       0.15
+       0.015,
+       0.13
       ],
       [
-       -0.02,
-       0.15
+       -0.015,
+       0.13
       ],
       [
-       -0.03722,
-       0.14657
+       -0.02839,
+       0.12734
       ],
       [
-       -0.05182,
-       0.13682
+       -0.03975,
+       0.11975
       ],
       [
-       -0.06157,
-       0.12222
+       -0.04734,
+       0.10839
       ],
       [
-       -0.065,
-       0.105
+       -0.05,
+       0.095
       ],
       [
-       -0.065,
-       -0.105
+       -0.05,
+       -0.095
       ],
       [
-       -0.06157,
-       -0.12222
+       -0.04734,
+       -0.10839
       ],
       [
-       -0.05182,
-       -0.13682
+       -0.03975,
+       -0.11975
       ],
       [
-       -0.03722,
-       -0.14657
+       -0.02839,
+       -0.12734
       ],
       [
-       -0.02,
-       -0.15
+       -0.015,
+       -0.13
       ]
      ],
-     "depth": 0.05,
+     "depth": 0.014,
      "bevel": {
-      "thickness": 0.006,
-      "size": 0.006,
-      "offset": -0.006,
+      "thickness": 0.004,
+      "size": 0.004,
+      "offset": -0.004,
       "segments": 2
      }
     },
-    "topologyIntent": "air curtain duct",
+    "topologyIntent": "air curtain duct slot",
     "edgeTreatment": {
      "type": "rounded",
-     "bevelRadius": 0.006,
+     "bevelRadius": 0.004,
      "segments": 2
     },
     "deformationStack": [],
@@ -4005,17 +5698,17 @@
    "parent": "root",
    "attachment": null,
    "dimensions": {
-    "width": 0.13,
-    "height": 0.3,
-    "depth": 0.05,
+    "width": 0.1,
+    "height": 0.26,
+    "depth": 0.014,
     "units": "meters",
     "confidence": 0.88
    },
    "transform": {
     "position": [
-     -0.845,
-     0.6,
-     2.43
+     -0.858,
+     0.33,
+     2.432
     ],
     "rotation": [
      0,
@@ -4087,7 +5780,14 @@
    "deformations": [],
    "joints": [],
    "seams": [],
-   "localFeatures": [],
+   "localFeatures": [
+    {
+     "id": "d-duct-r",
+     "name": "外缘竖向导流槽",
+     "kind": "groove",
+     "note": "前保外缘 0.10×0.26m 哑光黑竖槽，实拍图中包住保险杠转角"
+    }
+   ],
    "surfaceDetail": {
     "macroRoughness": 0,
     "microRoughness": 0,
@@ -4102,7 +5802,9 @@
     "img-r7-front",
     "img-r7-34"
    ],
-   "details": [],
+   "details": [
+    "d-duct-r"
+   ],
    "fidelityTier": "hero",
    "colorMaterialRecipe": {
     "dominantAlbedo": "rgba(18, 19, 22, 1.0)",
@@ -4113,7 +5815,7 @@
   },
   {
    "id": "front-plate",
-   "name": "前牌照板（智界 R7）",
+   "name": "前牌照板",
    "level": "micro",
    "role": "badge",
    "importance": 0.7,
@@ -4136,7 +5838,7 @@
    "attachment": null,
    "dimensions": {
     "width": 0.44,
-    "height": 0.13,
+    "height": 0.16,
     "depth": 0.004,
     "units": "meters",
     "confidence": 0.9
@@ -4144,8 +5846,8 @@
    "transform": {
     "position": [
      0,
-     0.295,
-     2.47
+     0.525,
+     2.432
     ],
     "rotation": [
      0,
@@ -4154,7 +5856,7 @@
     ],
     "scale": [
      0.44,
-     0.13,
+     0.16,
      0.004
     ]
    },
@@ -4220,9 +5922,9 @@
    "localFeatures": [
     {
      "id": "d-plate-text",
-     "name": "牌照字样",
+     "name": "牌照位",
      "kind": "decal",
-     "note": "「智界 R7」由适配层 Canvas 绘制；R17 复位至下进气口下方（原位置被进气口实体掩埋）"
+     "note": "牌面居中 y0.525（铬刃与下进气之间的绿色留白）、宽 0.44m；牌面内容由适配层贴花提供，spec 不含文字"
     }
    ],
    "surfaceDetail": {
@@ -4258,103 +5960,103 @@
    "confidence": 0.88,
    "primitive": "extrude",
    "topologyClass": "conforming-shell",
-   "topologyRationale": "横贯前保下沿的黑色唇板",
+   "topologyRationale": "1.72m 宽黑色唇板，前平面 2.430 与前脸罩齐平，向下兜到 y0.148",
    "geometryDescriptor": {
     "profile2D": {
      "points": [
       [
-       0.8255,
-       -0.025
+       0.832,
+       -0.045
       ],
       [
-       0.83488,
-       -0.02314
+       0.84272,
+       -0.04287
       ],
       [
-       0.84282,
-       -0.01782
+       0.8518,
+       -0.0368
       ],
       [
-       0.84814,
-       -0.00988
+       0.85787,
+       -0.02772
       ],
       [
-       0.85,
-       -0.0005
+       0.86,
+       -0.017
       ],
       [
-       0.85,
-       0.0005
+       0.86,
+       0.017
       ],
       [
-       0.84814,
-       0.00988
+       0.85787,
+       0.02772
       ],
       [
-       0.84282,
-       0.01782
+       0.8518,
+       0.0368
       ],
       [
-       0.83488,
-       0.02314
+       0.84272,
+       0.04287
       ],
       [
-       0.8255,
-       0.025
+       0.832,
+       0.045
       ],
       [
-       -0.8255,
-       0.025
+       -0.832,
+       0.045
       ],
       [
-       -0.83488,
-       0.02314
+       -0.84272,
+       0.04287
       ],
       [
-       -0.84282,
-       0.01782
+       -0.8518,
+       0.0368
       ],
       [
-       -0.84814,
-       0.00988
+       -0.85787,
+       0.02772
       ],
       [
-       -0.85,
-       0.0005
+       -0.86,
+       0.017
       ],
       [
-       -0.85,
-       -0.0005
+       -0.86,
+       -0.017
       ],
       [
-       -0.84814,
-       -0.00988
+       -0.85787,
+       -0.02772
       ],
       [
-       -0.84282,
-       -0.01782
+       -0.8518,
+       -0.0368
       ],
       [
-       -0.83488,
-       -0.02314
+       -0.84272,
+       -0.04287
       ],
       [
-       -0.8255,
-       -0.025
+       -0.832,
+       -0.045
       ]
      ],
-     "depth": 0.07,
+     "depth": 0.032,
      "bevel": {
-      "thickness": 0.006,
-      "size": 0.006,
-      "offset": -0.006,
+      "thickness": 0.005,
+      "size": 0.005,
+      "offset": -0.005,
       "segments": 2
      }
     },
     "topologyIntent": "front lip blade",
     "edgeTreatment": {
      "type": "rounded",
-     "bevelRadius": 0.006,
+     "bevelRadius": 0.005,
      "segments": 2
     },
     "deformationStack": [],
@@ -4364,17 +6066,17 @@
    "parent": "root",
    "attachment": null,
    "dimensions": {
-    "width": 1.7,
-    "height": 0.05,
-    "depth": 0.07,
+    "width": 1.72,
+    "height": 0.09,
+    "depth": 0.032,
     "units": "meters",
     "confidence": 0.88
    },
    "transform": {
     "position": [
      0,
-     0.175,
-     2.41
+     0.193,
+     2.398
     ],
     "rotation": [
      0,
@@ -4446,7 +6148,14 @@
    "deformations": [],
    "joints": [],
    "seams": [],
-   "localFeatures": [],
+   "localFeatures": [
+    {
+     "id": "d-front-lip",
+     "name": "前唇",
+     "kind": "linework",
+     "note": "宽 1.72m、y0.148..0.238 的哑光黑唇板，与前脸罩同一前平面，托住三段进气下沿"
+    }
+   ],
    "surfaceDetail": {
     "macroRoughness": 0,
     "microRoughness": 0,
@@ -4460,7 +6169,9 @@
    "evidenceRefs": [
     "img-r7-front"
    ],
-   "details": [],
+   "details": [
+    "d-front-lip"
+   ],
    "fidelityTier": "hero",
    "colorMaterialRecipe": {
     "dominantAlbedo": "rgba(18, 19, 22, 1.0)",
@@ -23183,15 +24894,24 @@
     "front-fascia",
     "headlamp-l",
     "drl-strip-l",
+    "lamp-edging-l",
     "headlamp-projector-1-l",
     "headlamp-projector-2-l",
+    "headlamp-projector-3-l",
+    "headlamp-projector-4-l",
     "headlamp-r",
     "drl-strip-r",
+    "lamp-edging-r",
     "headlamp-projector-1-r",
     "headlamp-projector-2-r",
+    "headlamp-projector-3-r",
+    "headlamp-projector-4-r",
     "light-bar-front",
     "logo-shield",
     "front-intake",
+    "intake-side-l",
+    "intake-side-r",
+    "intake-slats",
     "duct-l",
     "duct-r",
     "front-plate",
@@ -23373,15 +25093,24 @@
     "front-fascia",
     "headlamp-l",
     "drl-strip-l",
+    "lamp-edging-l",
     "headlamp-projector-1-l",
     "headlamp-projector-2-l",
+    "headlamp-projector-3-l",
+    "headlamp-projector-4-l",
     "headlamp-r",
     "drl-strip-r",
+    "lamp-edging-r",
     "headlamp-projector-1-r",
     "headlamp-projector-2-r",
+    "headlamp-projector-3-r",
+    "headlamp-projector-4-r",
     "light-bar-front",
     "logo-shield",
     "front-intake",
+    "intake-side-l",
+    "intake-side-r",
+    "intake-slats",
     "duct-l",
     "duct-r",
     "front-plate",

@@ -660,6 +660,26 @@ export function createR7CarAdapter(tier: QualityTier = 'high'): CarLike {
       });
       cabinOccluderMats.push(clone);
     }
+    // ③ R18：中控屏框（center-screen-frame，matte-black）—— 落地审查 §6 射线实锤：
+    //    副驾机位 NDC(-0.35,-0.06) 首命中即它（0.848m @world(-0.030,1.144,-0.678)），
+    //    在左上视野读作一块悬浮黑板。matte-black 为共享材质，必须独占克隆后再赋给
+    //    该件（R17 铁律：合批按材质实例分桶），否则隐藏会连带轮拱/立柱等 matte-black 件。
+    {
+      const node = byId.get('center-screen-frame');
+      const srcMesh = meshOf('center-screen-frame');
+      const mat = (srcMesh?.material ?? null) as THREE.MeshPhysicalMaterial | null;
+      if (mat && node) {
+        const clone = mat.clone();
+        clone.userData.cabinHidable = true;
+        node.traverse((o) => {
+          const mesh = o as THREE.Mesh;
+          if (mesh.isMesh) mesh.material = clone;
+        });
+        cabinOccluderMats.push(clone);
+      } else {
+        console.warn('[R7Adapter] cabin occluder 组件缺失：center-screen-frame');
+      }
+    }
     console.info(`[R7Adapter] cabin occluder 材质克隆 × ${cabinOccluderMats.length}`);
   }
 
@@ -718,6 +738,29 @@ export function createR7CarAdapter(tier: QualityTier = 'high'): CarLike {
     excludeMaterialIds: UV_CONTENT_MATERIAL_IDS,
     mergeTarget: model,
   });
+
+  // ---- R18：座舱地板衬毯（覆盖 body-lower 挤出壳顶面，消灭副驾「中央隔板」）----
+  // 病根（落地审查 §6）：body-lower 壳顶面 y=1.094（paint-green）在副驾眼点(1.285)下方
+  // 0.19m，NDC(0,-0.3) 首命中即它（0.670m），画面下半读作一块绿色体漆硬板。壳顶单材质
+  // 无法单独隐藏。处置：壳顶上方铺深色内饰地毯，车内看到深色地板而非体漆。合批后新增，
+  // 不进 batch，+1 DC。
+  {
+    root.updateMatrixWorld(true);
+    const carpetMat = new THREE.MeshStandardMaterial({
+      color: 0x22201d,
+      roughness: 0.96,
+      metalness: 0.0
+    });
+    // 世界坐标：x 居中 ±0.93、y 壳顶 1.094+8mm、z 后舱(-1.55)到中控屏框前缘(0.70)
+    const carpet = new THREE.Mesh(new THREE.BoxGeometry(1.86, 0.012, 2.28), carpetMat);
+    const wp = new THREE.Vector3(0, 1.102, -0.43);
+    body.worldToLocal(wp);
+    carpet.position.copy(wp);
+    carpet.name = 'cabin-floor-carpet';
+    carpet.castShadow = false;
+    carpet.receiveShadow = false;
+    body.add(carpet);
+  }
 
   // ---- 运行时状态 ----
   let heat = 0;

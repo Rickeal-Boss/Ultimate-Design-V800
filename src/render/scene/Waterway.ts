@@ -1,17 +1,24 @@
 /**
- * 跨河桥 + 河谷水体（R14 重做）。
+ * 跨河桥 + 河谷水体（R14 重做，R18 抬水）。
  *
  * R13 的问题：水只是路面两侧两条 5.8m 宽、比大地面高 1cm 的窄带，桥是横跨公路的
  * 高架 —— 「桥下」根本没有河，视觉上水=略微反光的地面。R14 把 z≈−450 做成真河谷：
  *
  *   Road 大地面在 x±150 / z±80 开槽（见 Road.ts 的 RIVER 契约）
- *   → 槽内四周护坡从 y=−0.02 斜降到 y=−5.6 河床
- *   → 水面 y=−4.4（水深 1.2m），平面 280×140，边缘压在护坡之下（看不到水边断口）
- *   → 公路在槽上变成桥：桥面板 x±7.4 / z±80 / 厚 0.35，两侧 0.55m 矮墙 + 金属扶手，
- *     两排桥墩（z=−415/−485）从河床插到桥底，水线处加深色湿痕
+ *   → 槽内四周护坡从 y=−0.02 斜降到 y=−1.45 河床
+ *   → 水面 y=−0.14（桥面顶 −0.03 之下 0.11m），平面铺到岸坡与水位交线（±147.5/±77.5）
+ *   → 公路在槽上变成桥：桥面板 x±7.4 / z±80 / 厚 0.35，两侧 0.55m 矮墙 + 金属扶手
  *
- * 性能：河谷(护坡+河床, 顶点色) 1 DC + 水面 1 DC + 桥面组 1 DC + 桥墩组 1 DC
- * + 湿痕 1 DC + 扶手 1 DC = 6 DC / 约 210 tri。
+ * R18：原来 waterY=−4.4 / bedY=−5.6，护坡高差 5.58m。从车内低机位看，30m 宽的
+ * 土色坡面在掠射角下铺满整屏，水面被压在坡脚看不见 → 用户截图读成「棕色沙地」。
+ * 现在水位抬到桥面下 0.11m、坡高差只剩 1.43m，水线离槽口 2.5m，水面直接从桥边
+ * 铺到对岸，桥面与水面几乎齐平。
+ *
+ * 桥墩：桥面底 −0.38 已低于水位 −0.14，墩身/帽梁/水线湿痕全部没入水下
+ * （湿痕盒顶还会穿出桥面 0.26m，是一条真实的视觉 bug），R18 一并删掉。
+ *
+ * 性能：河谷(护坡+河床, 顶点色) 1 DC + 水面 1 DC + 桥面组 1 DC + 扶手 1 DC
+ * = 4 DC / 96 tri（河谷 10 + 水面 2 + 桥面组 60 + 扶手 24）。
  * 动画：update(time) 只改 normalMap.offset（uniform 更新），无顶点上传。
  */
 import * as THREE from 'three';
@@ -20,12 +27,23 @@ import { RIVER, createSoilTexture } from './Road';
 import { createWaterBasinTexture, createWaterNormalTexture } from './waterTexture';
 
 const DECK_LEN = RIVER.deckHalfZ * 2;
-/** 桥墩排位（沿路方向） */
-const PIER_ZS = [-415, -485] as const;
-/** 桥墩中心 |x|（在桥面 ±7.4 之内） */
-const PIER_X = 6.6;
-/** 水面平面外扩量：让水边藏进护坡内部，避免出现可见的矩形水缘 */
-const WATER_BLEED = 20;
+/** 槽口处的岸顶高度（与 Road 大地面同高） */
+const BANK_Y = -0.02;
+/**
+ * 水缘越过「水位与岸坡交线」的量：向外多铺 0.12m，让水缘压进坡体内部
+ * （坡面每米只升 4.8cm，0.12m ≈ 6mm 埋深），避免出现可见的矩形水缘。
+ */
+const WATER_EDGE = 0.12;
+
+/**
+ * 水位与岸坡的交线半宽：岸坡从 (holeHalf, BANK_Y) 线性降到 (bedHalf, bedY)，
+ * 求 waterY 落在坡面上的位置。水面平面必须止于这条线附近——水面高于坡面
+ * 就会露出一圈悬空的水缘（R14 用「床宽 + 20m」外扩，只适用于水位远低于坡脚）。
+ */
+function shorelineHalf(holeHalf: number, bedHalf: number): number {
+  const t = (RIVER.waterY - BANK_Y) / (RIVER.bedY - BANK_Y);
+  return holeHalf - t * (holeHalf - bedHalf);
+}
 
 export class Waterway {
   private readonly meshes: THREE.Mesh[] = [];
@@ -37,7 +55,7 @@ export class Waterway {
 
   constructor(scene: THREE.Scene) {
     this.basinTex = createWaterBasinTexture();
-    // 水面尺度：280×140 → 单格约 3.3m×3.3m（R17 由 5m 加密：掠射角镜像要靠高频波纹打碎）
+    // 水面尺度：295×155 → 单格约 3.5m×3.7m（R17 由 5m 加密：掠射角镜像要靠高频波纹打碎）
     this.normalTex = createWaterNormalTexture();
     this.normalTex.repeat.set(84, 42);
     this.textures.push(this.basinTex, this.normalTex);
@@ -127,6 +145,8 @@ export class Waterway {
     //   ① MeshPhysicalMaterial + specularIntensity 0.35 —— 压掉掠射太阳高光的整片泛白
     //   ② emissive 青绿 1.0 —— 水体自带「这是水」的色相信号，不随场景光色漂移
     //   ③ basin 图源提亮加饱和（waterTexture.ts）+ 法线加密打碎镜像
+    // R18：水位抬到桥面下 0.11m 后视线更贴水面（掠射角更极端），
+    // 半透明会让水下 3% 的河床褐土透上来把青绿洗暖，故改为完全不透明，envMap 再压低。
     const material = new THREE.MeshPhysicalMaterial({
       map: this.basinTex,
       emissive: 0x18707c,
@@ -136,16 +156,15 @@ export class Waterway {
       roughness: 0.22,
       metalness: 0.1,
       specularIntensity: 0.35,
-      envMapIntensity: 0.12,
-      transparent: true,
-      opacity: 0.97
+      envMapIntensity: 0.08
     });
     this.materials.push(material);
 
-    const geo = new THREE.PlaneGeometry(
-      (RIVER.bedHalfX + WATER_BLEED) * 2,
-      (RIVER.bedHalfZ + WATER_BLEED) * 2
-    );
+    // R18：水面只铺到「水位与岸坡的交线」外 0.12m（见 shorelineHalf）。
+    // 原「床宽 + 20m」的水缘在新水位下会悬在坡面之上 0.36m，形成一圈水墙。
+    const halfX = shorelineHalf(RIVER.holeHalfX, RIVER.bedHalfX) + WATER_EDGE;
+    const halfZ = shorelineHalf(RIVER.holeHalfZ, RIVER.bedHalfZ) + WATER_EDGE;
+    const geo = new THREE.PlaneGeometry(halfX * 2, halfZ * 2);
     geo.rotateX(-Math.PI / 2);
     geo.translate(0, RIVER.waterY, RIVER.centerZ);
     const water = new THREE.Mesh(geo, material);
@@ -155,8 +174,11 @@ export class Waterway {
   }
 
   /**
-   * 桥：桥面板 + 两端桥台（混凝土 1 mesh）、两排桥墩 + 帽梁（1 mesh）、
-   * 桥墩水线湿痕（1 mesh）、矮墙顶金属扶手（1 mesh）。
+   * 桥：桥面板 + 两端桥台 + 两侧矮墙（混凝土 1 mesh）、矮墙顶金属扶手（1 mesh）。
+   *
+   * R18：桥面底 −0.38 低于水位 −0.14，桥墩/帽梁整根没入水下，水线湿痕盒顶
+   * （waterY−0.1+0.5=+0.26）还会穿透 0.35m 厚的桥面顶出路面 —— 已删。
+   * 现在桥在水位处读作一块贴水的桥板（低水位桥 / causeway），桥边即水面。
    */
   private buildBridge(scene: THREE.Scene): void {
     const concrete = new THREE.MeshStandardMaterial({
@@ -166,12 +188,10 @@ export class Waterway {
       emissive: 0x14120f,
       emissiveIntensity: 0.9
     });
-    const wet = new THREE.MeshStandardMaterial({ color: 0x4d4842, roughness: 0.45, metalness: 0.05 });
     const railing = new THREE.MeshStandardMaterial({ color: 0x9ea3a6, metalness: 0.6, roughness: 0.5 });
-    this.materials.push(concrete, wet, railing);
+    this.materials.push(concrete, railing);
 
-    const { centerZ, deckHalfX, deckTopY, deckThickness, parapetHeight, bedY } = RIVER;
-    const deckBottom = deckTopY - deckThickness;
+    const { centerZ, deckHalfX, deckTopY, deckThickness, parapetHeight } = RIVER;
 
     // --- 桥面板 + 桥台 ---
     const deckGeos: THREE.BufferGeometry[] = [];
@@ -194,31 +214,6 @@ export class Waterway {
     deckMesh.castShadow = true;
     deckMesh.receiveShadow = true;
     this.add(scene, deckMesh);
-
-    // --- 桥墩 + 帽梁 ---
-    const pierTop = deckBottom - 0.4;
-    const pierGeos: THREE.BufferGeometry[] = [];
-    const wetGeos: THREE.BufferGeometry[] = [];
-    for (const z of PIER_ZS) {
-      const cap = new THREE.BoxGeometry(deckHalfX * 2 + 1.2, 0.4, 1.6);
-      cap.translate(0, deckBottom - 0.2, z);
-      pierGeos.push(cap);
-      for (const side of [-1, 1]) {
-        const h = pierTop - (bedY - 0.6);
-        const pier = new THREE.BoxGeometry(1.7, h, 1.3);
-        pier.translate(side * PIER_X, pierTop - h / 2, z);
-        pierGeos.push(pier);
-        // 水线湿痕：略大于墩身的一圈深色带（上缘 −3.6，下缘 −4.6）
-        const stain = new THREE.BoxGeometry(1.78, 1.0, 1.38);
-        stain.translate(side * PIER_X, RIVER.waterY - 0.1, z);
-        wetGeos.push(stain);
-      }
-    }
-    const pierMesh = new THREE.Mesh(mergeSafe(pierGeos), concrete);
-    pierMesh.castShadow = true;
-    this.add(scene, pierMesh);
-    const wetMesh = new THREE.Mesh(mergeSafe(wetGeos), wet);
-    this.add(scene, wetMesh);
 
     // --- 矮墙顶金属扶手（延续 Road 护栏材质语言） ---
     const railGeos: THREE.BufferGeometry[] = [];

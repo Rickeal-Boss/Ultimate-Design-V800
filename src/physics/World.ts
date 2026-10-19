@@ -6,8 +6,8 @@
  * 两侧 600m 静态长墙 —— 车在任何位置都不会坠落。现在按河谷几何铺静态盒：
  *   · 北岸段（z ≥ −370）/ 南岸段（z ≤ −530）：整幅地面，顶面 y=0
  *   · 桥面段（z −530..−370）：只有 x ±7.0 的窄条（顶面 y=0），两侧 0.5m 矮墙
- *   · 河床：x ±150 / z ±80 的大盒，顶面 y=−5.6
- * 车翻过桥侧矮墙 → 自由落体 4.4m 入水 → 阻尼 + 半浮力 → 沉底静止。
+ *   · 河床：x ±150 / z ±80 的大盒，顶面 y=−1.45（与可见河床一致）
+ * 车翻过桥侧矮墙 → 落水（水面 y=−0.14，几乎与桥面平齐）→ 阻尼 + 半浮力 → 沉到底床静止。
  *
  * 玩法改版（决策①）：踏板断裂不再翻滚 —— 冗余制动接管至停车，翻滚只留给撞路障，
  * 故 `brake_snap` 分支与其「凭空赋予侧向+翻转角速度」的能量来源问题一并删除。
@@ -17,7 +17,7 @@ import * as THREE from 'three';
 import { GRAVITY, TRACK, VEHICLE } from '../config/physics';
 
 /** 水面 y（与 render/scene/Road.ts 的 RIVER.waterY 同源，改动必须同步） */
-const WATER_Y = -4.4;
+const WATER_Y = -0.14;
 /** 河谷开槽（与 Road.RIVER 同源） */
 const RIVER_CENTER_Z = -450;
 const RIVER_HOLE_HALF_Z = 80;
@@ -107,7 +107,10 @@ export class World {
     // 桥面窄条（只有 ±7m 宽 —— 越界即坠落）
     addStatic(DECK_HALF_X, 0.4, RIVER_HOLE_HALF_Z, 0, -0.4, RIVER_CENTER_Z);
     // 河床（落水后的承接面）
-    addStatic(150, 0.6, RIVER_HOLE_HALF_Z, 0, -6.2, RIVER_CENTER_Z);
+    // 河床（落水后的承接面）：R18 水面抬到 y=−0.14 后可见河床在 −1.45，
+    // 碰撞面必须同高（半高 0.6 → 中心 −2.05、顶面 −1.45）；原 −5.6 顶面会让
+    // 车穿过可见河床沉到水底 4m 消失。
+    addStatic(150, 0.6, RIVER_HOLE_HALF_Z, 0, -2.05, RIVER_CENTER_Z);
 
     // 护栏：北岸 / 南岸两段（桥段只有 0.5m 矮墙，可以被翻越）
     const sideX = TRACK.roadWidth / 2 + 1.1;

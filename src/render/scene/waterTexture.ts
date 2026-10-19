@@ -51,12 +51,13 @@ export function createWaterColorTexture(): THREE.CanvasTexture {
 }
 
 /**
- * 河面「纵深」贴图（R14，非重复、1:1 铺在 280×140 的水面上）：
+ * 河面「纵深」贴图（R14，非重复、1:1 铺在 295×155 的水面上）：
  * - 纵向（v，跨河方向）渐变：两岸浅 #3a6360 → 河心深 #0f272d，读作真实水深变化；
  * - 顺流长条流纹（沿 u，河道横向）；
  * - 黄昏暖色碎斑（天空反射）；
- * - v≈0.078 / 0.921 两条白噪泡沫带 —— 正是护坡与水面相交的水线位置
- *   （水面平面外扩 20m 压在护坡下，可见水线的 v 由 20/(120+20)=… 反推为 0.079）。
+ * - 岸边泡沫带 —— 水线位置由 Waterway 的「水位×岸坡交线」决定：
+ *   R18 水面抬到 −0.14 后，水缘只比槽口内收 0.12m（v≈0.0008 / 0.9992），
+ *   泡沫带放在 0.012 / 0.988（离岸约 1.9m），避免整条白边被水面边缘裁掉。
  * 必须 ClampToEdge：Repeat 会把「岸边浅色」卷到河心。
  */
 export function createWaterBasinTexture(): THREE.CanvasTexture {
@@ -99,8 +100,8 @@ export function createWaterBasinTexture(): THREE.CanvasTexture {
     ctx.fillRect(x, y, len, 0.8 + random() * 1.4);
   }
 
-  // 岸边泡沫带：贴图 v 方向 140m/256px ≈ 0.55m/px，带宽 ±5px ≈ 2.7m
-  // （R14 首版 ±11px=12m 宽的泡沫在水面上读成一道白墙，俯视尤其假）
+  // 岸边泡沫带：贴图 v 方向 155m/256px ≈ 0.61m/px，带宽 ±6px ≈ 7m
+  // （R18 抬高水位后水线就在水面边缘内侧 0.12m，泡沫带随之移到 v≈0.012）
   const foam = (v: number): void => {
     const y = v * h;
     const g = ctx.createLinearGradient(0, y - 6, 0, y + 6);
@@ -118,9 +119,9 @@ export function createWaterBasinTexture(): THREE.CanvasTexture {
       ctx.fill();
     }
   };
-  foam(0.079);
-  foam(0.921);
-  // 河道东西两端的水线（x=±126 → u≈0.05/0.95）：低角度侧看时对岸的水线全靠这条泡沫读出来
+  foam(0.012);
+  foam(0.988);
+  // 河道东西两端的水线（x≈±147.5 → u≈0.0008/0.9992）：低角度侧看时对岸的水线全靠这条泡沫读出来
   const foamU = (u: number): void => {
     const x = u * w;
     for (let i = 0; i < 200; i++) {
@@ -131,8 +132,8 @@ export function createWaterBasinTexture(): THREE.CanvasTexture {
       ctx.fill();
     }
   };
-  foamU(0.049);
-  foamU(0.951);
+  foamU(0.012);
+  foamU(0.988);
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;

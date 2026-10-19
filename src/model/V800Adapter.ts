@@ -1706,9 +1706,9 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
   //   1152 tris，位于前后轴正中。即：两枚完整圆环竖立在车身中剖面，下弧从车底
   //   露出 → 低机位读作「轮底皮带」。几何本体（整圆而非半圆拱、半径超胎廓、
   //   错放在中剖面）属 spec/工厂侧问题，本层无法在不动面数的前提下摆正
-  //   （平移到轮侧仍是穿地整圆环）。处置：隐藏退化件 —— 轮拱深度感由
-  //   wheel-arch-liner（R2 落地的拱衬半筒）承担，视觉零损失；并汇报主理人
-  //   转 spec 线重雕（半圆拱护缘、贴轮拱口、左右各一）。
+  //   （平移到轮侧仍是穿地整圆环）。处置：隐藏退化件；轮拱深度改由工厂
+  //   body-lower 拱形开口本体承担（R18 已删除外凸的 wheel-arch-liner 衬筒）。
+  //   并汇报主理人转 spec 线重雕（半圆拱护缘、贴轮拱口、左右各一）。
   // 注意：必须在此处（batchMergeStatic 之前）置 visible=false —— 合并器按
   // 「可见性」跳过隐藏件，避免退化几何被烘进 batch/matte-black 后无法单独处理。
   for (const brokenArchId of ['arch-fr', 'arch-rr']) {
@@ -3455,42 +3455,33 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
     );
   }
 
-  // ---- 轮拱衬筒（wheel-arch-liner）：配合工厂 body-lower 拱口开口，制造拱洞深度 ----
-  // 四个车轮位各一个黑色拱衬半筒（开口朝下/外），侧视轮上方读到深色拱内壁，
-  // 消除「轮上方薄壳贴皮」的空带感。运行时新增网格（同踏板/光毯先例：不进
-  // spec/工厂），挂在 body 下、且在 batchMergeStatic 之后加入 —— 合并器只遍历
-  // model 子树且此时本 mesh 尚不存在，天然不漏收/不重收（+~900 三角，预算内）。
-  // 轮位不写死：从工厂场景图 wheel-fl/fr/rl/rr 节点（wheels[].spin pivot）实测
-  // 世界坐标反算 body 局部坐标 —— 车身 rotY π、轮芯 x=±0.855 量级都以实例化后
-  // 实测为准，spec 再调轮距也不失配。
+  // R18：轮拱衬筒（wheel-arch-liner）整块删除。用户指出「四个车轮外围的突出围边」
+  // 即这 4 个半圆筒（半径 0.44 / 宽 0.5，比车身外凸约 9cm），指令为去掉，且不保留
+  // 隐藏兜底 —— 拱口深度交回工厂 body-lower 的拱形开口本身承担。
+
+  // ---- R18：座舱地板衬毯（覆盖 body-lower 挤出壳顶面，消灭「中央隔板」）----
+  // 病根（落地审查 §5 射线实锤）：body-lower 挤出壳顶面 y=1.090（paint-upper）比仪表台
+  // 上沿(1.012)还高，车内机位 NDC(0,-0.35) 首命中即它（0.533m @world(0.40,1.09,1.18)），
+  // 画面下半 ~45% 读作一块铜色体漆硬板 = 用户所指「中央隔板/实体模块」。车身壳顶是
+  // 单一材质，无法单独隐藏（hide paint-upper 会连整个车身外观一起消失）。处置：在壳顶
+  // 上方 6mm 铺一层深色内饰地毯，把车内看到的体漆换成深色内舱地板；贴面在车身壳内，
+  // 车外机位透过玻璃读作深色地板（真实），不改外观轮廓。合批之后新增，不进 batch，+1 DC。
   {
     root.updateMatrixWorld(true);
-    // 半筒：CylinderGeometry 开口段 θ∈[0,π]，rotateZ(π/2) 后轴向沿 X（轮轴方向）、
-    // 拱顶朝 +Y；半径 0.44 与拱口 ≈0.45 内壁贴合，宽度 0.5 盖过胎宽（0.255）
-    const linerProto = new THREE.CylinderGeometry(
-      0.44, 0.44, 0.5, 14, 1, true, 0, Math.PI
-    ).rotateZ(Math.PI / 2);
-    const linerGeos: THREE.BufferGeometry[] = [];
-    const wp = new THREE.Vector3();
-    for (const w of wheels) {
-      w.spin.getWorldPosition(wp);
-      body.worldToLocal(wp);
-      linerGeos.push(linerProto.clone().translate(wp.x, wp.y, wp.z));
-    }
-    linerProto.dispose();
-    const linerGeo = mergeSafe(linerGeos);
-    for (const g of linerGeos) g.dispose();
-    const linerMat = new THREE.MeshStandardMaterial({
-      color: 0x0b0b0d,
-      roughness: 0.9,
-      metalness: 0,
-      side: THREE.DoubleSide // 凹面（拱内壁）/凸面都可能入画，双面保底
+    const carpetMat = new THREE.MeshStandardMaterial({
+      color: 0x26221f,
+      roughness: 0.96,
+      metalness: 0.0
     });
-    const liner = new THREE.Mesh(linerGeo, linerMat);
-    liner.name = 'wheel-arch-liner';
-    liner.castShadow = false;
-    liner.receiveShadow = false;
-    body.add(liner);
+    // 世界坐标：x 居中 ±0.93、y 壳顶 1.090+8mm、z 前脚踏板(-1.15)到仪表台前缘(1.55)
+    const carpet = new THREE.Mesh(new THREE.BoxGeometry(1.86, 0.012, 2.70), carpetMat);
+    const wp = new THREE.Vector3(0, 1.098, 0.2);
+    body.worldToLocal(wp);
+    carpet.position.copy(wp);
+    carpet.name = 'cabin-floor-carpet';
+    carpet.castShadow = false;
+    carpet.receiveShadow = false;
+    body.add(carpet);
   }
 
   // ---- QA 钩子：#uvassert —— 图集串味验证（三角形-矩形相交法）----

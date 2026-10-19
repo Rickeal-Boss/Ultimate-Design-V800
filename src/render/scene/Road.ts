@@ -16,6 +16,10 @@ import { makeLcg } from '../../util/math';
  * R14 把 z≈−450 改造成真正的河谷：Road 的大地面在此开一个矩形槽（x ±150 /
  * z ±80），Waterway 在槽内做「河床 + 四周护坡 + 水面 + 跨河桥面」。
  * 槽口边缘与护坡外缘严格同点同高（y=−0.02），避免看到地面断口。
+ *
+ * R18：水面由 −4.4 抬到 −0.14（桥面下 0.11m）、河床由 −5.6 收到 −1.45。
+ * 水面与岸坡的交线因此贴近槽口（±147.5 / ±77.5），水线之外只剩 2.5m 干坡，
+ * 不会再出现「一大片棕色坡面把水挡住」的画面。
  */
 export const RIVER = {
   /** 河谷/桥梁中心 z */
@@ -24,10 +28,17 @@ export const RIVER = {
   holeHalfX: 150,
   /** 地面开槽半长（z 方向）——总长 160m，可见水面约 113m */
   holeHalfZ: 80,
-  /** 河床/槽底 y */
-  bedY: -5.6,
-  /** 水面 y（水深 1.2m） */
-  waterY: -4.4,
+  /**
+   * 河床/槽底 y（R18：水面抬到桥面附近后只需保留 1.31m 水深）。
+   * 原 −5.6 是「深谷」配置：护坡从槽口 −0.02 跌 5.58m，30m 外的坡面在
+   * 掠射角下糊成一整块棕色挡墙，把 −4.4 的水面完全遮住 → 用户读成沙地。
+   */
+  bedY: -1.45,
+  /**
+   * 水面 y（R18：桥面顶 −0.03 下方 0.11m，几乎与桥面平齐）。
+   * 原 −4.4 比桥面低 4.37m，从车里只能看到护坡土色。
+   */
+  waterY: -0.14,
   /** 平底河床半宽（x） */
   bedHalfX: 120,
   /** 平底河床半长（z） */
@@ -142,13 +153,18 @@ export class Road {
     // 主路面
     const tex = roadTexture(anisotropy);
     tex.repeat.set(1, roadLength / 12);
+    // R18：黄昏环境反射在低机位掠射角下把整幅沥青洗成浅棕「沙地」
+    // （envMapIntensity 0.9 + roughness 0.38 的菲涅耳镜像）。A/B 实证
+    // verify/r18c_base vs verify/r18c（同机位 #eye=-4.8,1.35,7.5,0,0.55,0）：
+    // 前景路面 (80,47,35)→(62,39,33)，棕色收敛、标线回清，故定稿 0.45/0.50。
+    // 只动主路面材质；路肩/护栏/标线（贴图内）不动。
     const road = new THREE.Mesh(
       new THREE.PlaneGeometry(TRACK.roadWidth, roadLength),
       new THREE.MeshStandardMaterial({
         map: tex,
-        roughness: 0.38,
+        roughness: 0.5,
         metalness: 0.08,
-        envMapIntensity: 0.9
+        envMapIntensity: 0.45
       })
     );
     road.rotation.x = -Math.PI / 2;

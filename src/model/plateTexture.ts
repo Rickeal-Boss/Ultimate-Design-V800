@@ -5,8 +5,9 @@
  * 前脸下部中央）。沿用 tailgate-maextro 先例：合批后运行时面片挂 body 下、
  * MeshBasic + 透明贴图 + depthWrite:false（无光照贴花，零合批交互、+1 DC/牌）。
  *
- * 中国新能源车牌视觉：绿渐变底 + 白字白框（小型车渐变绿号牌）。游戏内牌面文字
- * 取车型名（「尊界V800」/「智界R7」），纯文字性引用、商标免责见 README。
+ * 中国新能源车牌视觉：绿渐变底 + 白色圆角外框（小型车渐变绿号牌）。
+ * R18：用户明确「前后绿色车牌里面不应该出现文字」——牌面只保留渐变底与边框，
+ * 不再绘制任何字符；`text` 参数仅为保持调用点签名而保留（忽略）。
  */
 import * as THREE from 'three';
 
@@ -14,7 +15,7 @@ import * as THREE from 'three';
 const W = 700;
 const H = 200;
 
-export function createGreenPlateTexture(text: string): THREE.CanvasTexture {
+export function createGreenPlateTexture(_text: string): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = W;
   canvas.height = H;
@@ -46,16 +47,22 @@ export function createGreenPlateTexture(text: string): THREE.CanvasTexture {
   ctx.closePath();
   ctx.stroke();
 
-  // 白字（粗体等宽观感；字距略放宽贴近号牌排版）
-  ctx.fillStyle = '#F6FAF3';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.font = `bold ${Math.round(H * 0.52)}px "Segoe UI", "Microsoft YaHei", sans-serif`;
-  const chars = [...text];
-  const adv = W / (chars.length + 1.2);
-  chars.forEach((ch, i) => {
-    ctx.fillText(ch, adv * (i + 1.1), H * 0.54, adv * 1.1);
-  });
+  // 极淡内框（距外框 8px），只做牌面层次，不含任何字符
+  ctx.strokeStyle = 'rgba(242, 246, 238, 0.28)';
+  ctx.lineWidth = 3;
+  const m2 = m + 8;
+  const r2 = r - 4;
+  ctx.beginPath();
+  ctx.moveTo(m2 + r2, m2);
+  ctx.arcTo(m2, m2, m2, m2 + r2, r2);
+  ctx.lineTo(m2, H - m2 - r2);
+  ctx.arcTo(m2, H - m2, m2 + r2, H - m2, r2);
+  ctx.lineTo(W - m2 - r2, H - m2);
+  ctx.arcTo(W - m2, H - m2, W - m2, H - m2 - r2, r2);
+  ctx.lineTo(W - m2, m2 + r2);
+  ctx.arcTo(W - m2, m2, W - m2 - r2, m2, r2);
+  ctx.closePath();
+  ctx.stroke();
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
