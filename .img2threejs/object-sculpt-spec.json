@@ -2354,7 +2354,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.007368,
+      "size": 0.005385,
+      "offset": -0.005385,
+      "segments": 2
+     }
     }
    },
    "parent": "root",
@@ -2602,6 +2608,12 @@
        "yTop": 1.761,
        "topScale": 0.985
       }
+     },
+     "bevel": {
+      "thickness": 0.06,
+      "size": 0.06,
+      "offset": -0.06,
+      "segments": 2
      }
     },
     "topologyIntent": "continuous dark DLO band；R13 后缘立直：玻璃带后缘 z=-2.82 垂直（与 body-lower 尾面齐平），顶/底角 r0.05",
@@ -3139,7 +3151,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.005814,
+      "size": 0.003333,
+      "offset": -0.003333,
+      "segments": 2
+     }
     }
    },
    "parent": "root",
@@ -3361,7 +3379,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.076087,
+      "size": 0.051852,
+      "offset": -0.051852,
+      "segments": 2
+     }
     }
    },
    "parent": "root",
@@ -3578,7 +3602,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.14,
+      "size": 0.01037,
+      "offset": -0.01037,
+      "segments": 2
+     }
     }
    },
    "parent": "root",
@@ -3792,7 +3822,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.14,
+      "size": 0.01037,
+      "offset": -0.01037,
+      "segments": 2
+     }
     }
    },
    "parent": "root",
@@ -4006,7 +4042,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.076087,
+      "size": 0.051852,
+      "offset": -0.051852,
+      "segments": 2
+     }
     }
    },
    "parent": "root",
@@ -4223,7 +4265,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.14,
+      "size": 0.01037,
+      "offset": -0.01037,
+      "segments": 2
+     }
     }
    },
    "parent": "root",
@@ -4437,7 +4485,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.14,
+      "size": 0.01037,
+      "offset": -0.01037,
+      "segments": 2
+     }
     }
    },
    "parent": "root",
@@ -4857,7 +4911,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.3,
+      "size": 0.009783,
+      "offset": -0.009783,
+      "segments": 2
+     }
     }
    },
    "parent": "front-end",
@@ -5330,7 +5390,13 @@
        -0.23
       ]
      ],
-     "depth": 0.07
+     "depth": 0.07,
+     "bevel": {
+      "thickness": 0.006,
+      "size": 0.006,
+      "offset": -0.006,
+      "segments": 2
+     }
     },
     "topologyIntent": "R18d 竖向灯组（0.15×0.46×0.07）：node x±0.80 / y0.80（世界 0.57..1.03，正好压在 chrome-brow 下沿之下）/ 灯壳前脸凸出翼子板面 ~4cm；profile 8 点竖向胶囊，绕序 CCW；scale 已从 [1,0.68,1] 修正为 [1,1,1]",
     "edgeTreatment": {
@@ -5856,7 +5922,13 @@
        -0.23
       ]
      ],
-     "depth": 0.07
+     "depth": 0.07,
+     "bevel": {
+      "thickness": 0.006,
+      "size": 0.006,
+      "offset": -0.006,
+      "segments": 2
+     }
     },
     "topologyIntent": "R18d 竖向灯组（0.15×0.46×0.07）：node x±0.80 / y0.80（世界 0.57..1.03，正好压在 chrome-brow 下沿之下）/ 灯壳前脸凸出翼子板面 ~4cm；profile 8 点竖向胶囊，绕序 CCW；scale 已从 [1,0.68,1] 修正为 [1,1,1]",
     "edgeTreatment": {
@@ -6653,7 +6725,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.24,
+      "size": 0.002483,
+      "offset": -0.002483,
+      "segments": 2
+     }
     }
    },
    "parent": "bumper-lower",
@@ -6867,7 +6945,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.16,
+      "size": 0.004301,
+      "offset": -0.004301,
+      "segments": 2
+     }
     }
    },
    "parent": "bumper-lower",
@@ -8133,7 +8217,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.001081,
+      "size": 0.133333,
+      "offset": -0.133333,
+      "segments": 2
+     }
     }
    },
    "parent": "root",
@@ -8350,7 +8440,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.000909,
+      "size": 0.15,
+      "offset": -0.15,
+      "segments": 2
+     }
     }
    },
    "parent": "root",
@@ -8564,7 +8660,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.01129,
+      "size": 0.175,
+      "offset": -0.175,
+      "segments": 2
+     }
     }
    },
    "parent": "root",
@@ -8781,7 +8883,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.01129,
+      "size": 0.175,
+      "offset": -0.175,
+      "segments": 2
+     }
     }
    },
    "parent": "root",
@@ -8998,7 +9106,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.048,
+      "size": 0.053333,
+      "offset": -0.053333,
+      "segments": 2
+     }
     }
    },
    "parent": "root",
@@ -9214,7 +9328,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.004,
+      "size": 0.083333,
+      "offset": -0.083333,
+      "segments": 2
+     }
     }
    },
    "parent": "root",
@@ -9430,7 +9550,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.236364,
+      "size": 0.118182,
+      "offset": -0.118182,
+      "segments": 2
+     }
     }
    },
    "parent": "root",
@@ -9652,7 +9778,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.086957,
+      "size": 0.044444,
+      "offset": -0.044444,
+      "segments": 2
+     }
     }
    },
    "parent": "mirror-l",
@@ -9866,7 +9998,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.001081,
+      "size": 0.133333,
+      "offset": -0.133333,
+      "segments": 2
+     }
     }
    },
    "parent": "root",
@@ -10083,7 +10221,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.000909,
+      "size": 0.15,
+      "offset": -0.15,
+      "segments": 2
+     }
     }
    },
    "parent": "root",
@@ -10297,7 +10441,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.01129,
+      "size": 0.175,
+      "offset": -0.175,
+      "segments": 2
+     }
     }
    },
    "parent": "root",
@@ -10514,7 +10664,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.01129,
+      "size": 0.175,
+      "offset": -0.175,
+      "segments": 2
+     }
     }
    },
    "parent": "root",
@@ -10731,7 +10887,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.048,
+      "size": 0.053333,
+      "offset": -0.053333,
+      "segments": 2
+     }
     }
    },
    "parent": "root",
@@ -10947,7 +11109,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.004,
+      "size": 0.083333,
+      "offset": -0.083333,
+      "segments": 2
+     }
     }
    },
    "parent": "root",
@@ -11163,7 +11331,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.236364,
+      "size": 0.118182,
+      "offset": -0.118182,
+      "segments": 2
+     }
     }
    },
    "parent": "root",
@@ -11385,7 +11559,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.086957,
+      "size": 0.044444,
+      "offset": -0.044444,
+      "segments": 2
+     }
     }
    },
    "parent": "mirror-r",
@@ -11599,7 +11779,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.026667,
+      "size": 0.015,
+      "offset": -0.015,
+      "segments": 2
+     }
     }
    },
    "parent": "root",
@@ -12009,7 +12195,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.033333,
+      "size": 0.071429,
+      "offset": -0.071429,
+      "segments": 2
+     }
     }
    },
    "parent": "root",
@@ -12247,7 +12439,13 @@
        -0.12941
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.045812,
+      "size": 0.045812,
+      "offset": -0.045812,
+      "segments": 2
+     }
     }
    },
    "parent": "root",
@@ -13208,7 +13406,13 @@
        -0.12941
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.045812,
+      "size": 0.045812,
+      "offset": -0.045812,
+      "segments": 2
+     }
     }
    },
    "parent": "root",
@@ -14169,7 +14373,13 @@
        -0.12941
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.045812,
+      "size": 0.045812,
+      "offset": -0.045812,
+      "segments": 2
+     }
     }
    },
    "parent": "root",
@@ -15130,7 +15340,13 @@
        -0.12941
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.045812,
+      "size": 0.045812,
+      "offset": -0.045812,
+      "segments": 2
+     }
     }
    },
    "parent": "root",
@@ -16075,7 +16291,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.035,
+      "size": 0.035,
+      "offset": -0.035,
+      "segments": 2
+     }
     }
    },
    "parent": "root",
@@ -16312,7 +16534,13 @@
        -0.291185
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.3,
+      "size": 0.050847,
+      "offset": -0.050847,
+      "segments": 2
+     }
     }
    },
    "parent": "cabin-interior",
@@ -16726,7 +16954,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.001944,
+      "size": 0.004217,
+      "offset": -0.004217,
+      "segments": 2
+     }
     }
    },
    "parent": "cabin-interior",
@@ -16943,7 +17177,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.073913,
+      "size": 0.019101,
+      "offset": -0.019101,
+      "segments": 2
+     }
     }
    },
    "parent": "cabin-interior",
@@ -17158,7 +17398,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.116667,
+      "size": 0.019663,
+      "offset": -0.019663,
+      "segments": 2
+     }
     }
    },
    "parent": "cabin-interior",
@@ -17372,7 +17618,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.175,
+      "size": 0.001556,
+      "offset": -0.001556,
+      "segments": 2
+     }
     }
    },
    "parent": "cabin-interior",
@@ -17863,7 +18115,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.285714,
+      "size": 0.006173,
+      "offset": -0.006173,
+      "segments": 2
+     }
     }
    },
    "parent": "cabin-interior",
@@ -18707,7 +18965,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.04375,
+      "size": 0.083333,
+      "offset": -0.083333,
+      "segments": 2
+     }
     }
    },
    "parent": "cabin-interior",
@@ -18924,7 +19188,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.067308,
+      "size": 0.097222,
+      "offset": -0.097222,
+      "segments": 2
+     }
     }
    },
    "parent": "cabin-interior",
@@ -19929,7 +20199,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.026923,
+      "size": 0.079545,
+      "offset": -0.079545,
+      "segments": 2
+     }
     }
    },
    "parent": "cabin-interior",
@@ -20304,7 +20580,21 @@
        -0.054389
       ]
      ],
-     "depth": 0.508
+     "depth": 0.508,
+     "shaping": {
+      "crown": {
+       "axis": "y",
+       "base": 0.005,
+       "amp": 0.015
+      }
+     },
+     "steps": 8,
+     "bevel": {
+      "thickness": 0.0261,
+      "size": 0.0261,
+      "offset": -0.0261,
+      "segments": 2
+     }
     }
    },
    "parent": "cabin-interior",
@@ -20570,7 +20860,11 @@
        ]
       ]
      },
-     "closed": false
+     "closed": false,
+     "crown": {
+      "base": 0.01,
+      "amp": 0.02
+     }
     }
    },
    "parent": "seat-driver",
@@ -20806,7 +21100,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.3,
+      "size": 0.115385,
+      "offset": -0.115385,
+      "segments": 2
+     }
     }
    },
    "parent": "seat-driver",
@@ -21048,7 +21348,21 @@
        -0.054389
       ]
      ],
-     "depth": 0.508
+     "depth": 0.508,
+     "shaping": {
+      "crown": {
+       "axis": "y",
+       "base": 0.005,
+       "amp": 0.015
+      }
+     },
+     "steps": 8,
+     "bevel": {
+      "thickness": 0.0261,
+      "size": 0.0261,
+      "offset": -0.0261,
+      "segments": 2
+     }
     }
    },
    "parent": "cabin-interior",
@@ -21314,7 +21628,11 @@
        ]
       ]
      },
-     "closed": false
+     "closed": false,
+     "crown": {
+      "base": 0.01,
+      "amp": 0.02
+     }
     }
    },
    "parent": "seat-passenger",
@@ -21550,7 +21868,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.3,
+      "size": 0.115385,
+      "offset": -0.115385,
+      "segments": 2
+     }
     }
    },
    "parent": "seat-passenger",
@@ -21792,7 +22116,21 @@
        -0.054389
       ]
      ],
-     "depth": 0.52832
+     "depth": 0.52832,
+     "shaping": {
+      "crown": {
+       "axis": "y",
+       "base": 0.005,
+       "amp": 0.015
+      }
+     },
+     "steps": 8,
+     "bevel": {
+      "thickness": 0.0261,
+      "size": 0.0261,
+      "offset": -0.0261,
+      "segments": 2
+     }
     }
    },
    "parent": "cabin-interior",
@@ -22042,7 +22380,11 @@
        ]
       ]
      },
-     "closed": false
+     "closed": false,
+     "crown": {
+      "base": 0.01,
+      "amp": 0.02
+     }
     }
    },
    "parent": "seat-rear-l",
@@ -22278,7 +22620,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.3,
+      "size": 0.115385,
+      "offset": -0.115385,
+      "segments": 2
+     }
     }
    },
    "parent": "seat-rear-l",
@@ -22513,7 +22861,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.036842,
+      "size": 0.041176,
+      "offset": -0.041176,
+      "segments": 2
+     }
     }
    },
    "parent": "seat-rear-l",
@@ -22743,7 +23097,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.058824,
+      "size": 0.033333,
+      "offset": -0.033333,
+      "segments": 2
+     }
     }
    },
    "parent": "seat-rear-l",
@@ -22986,7 +23346,21 @@
        -0.054389
       ]
      ],
-     "depth": 0.52832
+     "depth": 0.52832,
+     "shaping": {
+      "crown": {
+       "axis": "y",
+       "base": 0.005,
+       "amp": 0.015
+      }
+     },
+     "steps": 8,
+     "bevel": {
+      "thickness": 0.0261,
+      "size": 0.0261,
+      "offset": -0.0261,
+      "segments": 2
+     }
     }
    },
    "parent": "cabin-interior",
@@ -23236,7 +23610,11 @@
        ]
       ]
      },
-     "closed": false
+     "closed": false,
+     "crown": {
+      "base": 0.01,
+      "amp": 0.02
+     }
     }
    },
    "parent": "seat-rear-r",
@@ -23472,7 +23850,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.3,
+      "size": 0.115385,
+      "offset": -0.115385,
+      "segments": 2
+     }
     }
    },
    "parent": "seat-rear-r",
@@ -23707,7 +24091,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.036842,
+      "size": 0.041176,
+      "offset": -0.041176,
+      "segments": 2
+     }
     }
    },
    "parent": "seat-rear-r",
@@ -23937,7 +24327,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.058824,
+      "size": 0.033333,
+      "offset": -0.033333,
+      "segments": 2
+     }
     }
    },
    "parent": "seat-rear-r",
@@ -24173,7 +24569,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.004,
+      "size": 0.002632,
+      "offset": -0.002632,
+      "segments": 2
+     }
     }
    },
    "parent": "cabin-interior",
@@ -24396,7 +24798,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.001159,
+      "size": 0.002632,
+      "offset": -0.002632,
+      "segments": 2
+     }
     }
    },
    "parent": "cabin-interior",
@@ -24610,7 +25018,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.032143,
+      "size": 0.008182,
+      "offset": -0.008182,
+      "segments": 2
+     }
     }
    },
    "parent": "cabin-interior",
@@ -25178,7 +25592,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.016279,
+      "size": 0.022581,
+      "offset": -0.022581,
+      "segments": 2
+     }
     }
    },
    "parent": "cabin-interior",
@@ -25599,7 +26019,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.016279,
+      "size": 0.022581,
+      "offset": -0.022581,
+      "segments": 2
+     }
     }
    },
    "parent": "cabin-interior",
@@ -26020,7 +26446,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.016279,
+      "size": 0.022581,
+      "offset": -0.022581,
+      "segments": 2
+     }
     }
    },
    "parent": "cabin-interior",
@@ -26441,7 +26873,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.016279,
+      "size": 0.022581,
+      "offset": -0.022581,
+      "segments": 2
+     }
     }
    },
    "parent": "cabin-interior",
@@ -27130,7 +27568,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.000833,
+      "size": 0.001154,
+      "offset": -0.001154,
+      "segments": 2
+     }
     }
    },
    "parent": "cabin-interior",
@@ -30573,7 +31017,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.002679,
+      "size": 0.05,
+      "offset": -0.05,
+      "segments": 2
+     }
     }
    },
    "parent": "root",
@@ -30794,7 +31244,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.002679,
+      "size": 0.05,
+      "offset": -0.05,
+      "segments": 2
+     }
     }
    },
    "parent": "root",
@@ -31015,7 +31471,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.002679,
+      "size": 0.05,
+      "offset": -0.05,
+      "segments": 2
+     }
     }
    },
    "parent": "root",
@@ -31236,7 +31698,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.002679,
+      "size": 0.05,
+      "offset": -0.05,
+      "segments": 2
+     }
     }
    },
    "parent": "root",
@@ -31457,7 +31925,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.14,
+      "size": 0.004516,
+      "offset": -0.004516,
+      "segments": 2
+     }
     }
    },
    "parent": "front-end",
@@ -31678,7 +32152,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.035714,
+      "size": 0.003571,
+      "offset": -0.003571,
+      "segments": 2
+     }
     }
    },
    "parent": "root",
@@ -31899,7 +32379,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.18,
+      "size": 0.010588,
+      "offset": -0.010588,
+      "segments": 2
+     }
     }
    },
    "parent": "root",
@@ -32120,7 +32606,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.18,
+      "size": 0.010588,
+      "offset": -0.010588,
+      "segments": 2
+     }
     }
    },
    "parent": "root",
@@ -32341,7 +32833,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.318182,
+      "size": 0.004487,
+      "offset": -0.004487,
+      "segments": 2
+     }
     }
    },
    "parent": "root",
@@ -32562,7 +33060,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.125,
+      "size": 0.2,
+      "offset": -0.2,
+      "segments": 2
+     }
     }
    },
    "parent": "root",
@@ -32783,7 +33287,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.125,
+      "size": 0.2,
+      "offset": -0.2,
+      "segments": 2
+     }
     }
    },
    "parent": "root",
@@ -33225,7 +33735,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.006154,
+      "size": 0.004211,
+      "offset": -0.004211,
+      "segments": 2
+     }
     }
    },
    "parent": "cabin-interior",
@@ -34124,7 +34640,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.048,
+      "size": 0.01791,
+      "offset": -0.01791,
+      "segments": 2
+     }
     }
    },
    "parent": "cabin-interior",
@@ -34364,7 +34886,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.291667,
+      "size": 0.026119,
+      "offset": -0.026119,
+      "segments": 2
+     }
     }
    },
    "parent": "cabin-interior",
@@ -34604,7 +35132,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.3,
+      "size": 0.03,
+      "offset": -0.03,
+      "segments": 2
+     }
     }
    },
    "parent": "cabin-interior",
@@ -34844,7 +35378,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.031579,
+      "size": 0.003871,
+      "offset": -0.003871,
+      "segments": 2
+     }
     }
    },
    "parent": "cabin-interior",
@@ -35083,7 +35623,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.25,
+      "size": 0.007042,
+      "offset": -0.007042,
+      "segments": 2
+     }
     }
    },
    "parent": "cabin-interior",
@@ -38572,7 +39118,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.007826,
+      "size": 0.006923,
+      "offset": -0.006923,
+      "segments": 2
+     }
     }
    },
    "parent": "seat-rear-l",
@@ -39020,7 +39572,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.007826,
+      "size": 0.006923,
+      "offset": -0.006923,
+      "segments": 2
+     }
     }
    },
    "parent": "seat-rear-r",
@@ -39244,7 +39802,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.004819,
+      "size": 0.053333,
+      "offset": -0.053333,
+      "segments": 2
+     }
     }
    },
    "parent": "root",
@@ -39465,7 +40029,13 @@
        -0.5
       ]
      ],
-     "depth": 1
+     "depth": 1,
+     "bevel": {
+      "thickness": 0.004819,
+      "size": 0.053333,
+      "offset": -0.053333,
+      "segments": 2
+     }
     }
    },
    "parent": "root",
@@ -39686,7 +40256,13 @@
        -0.5
       ]
      ],
-     "depth": 1.1
+     "depth": 1.1,
+     "bevel": {
+      "thickness": 0.025,
+      "size": 0.002759,
+      "offset": -0.002759,
+      "segments": 2
+     }
     }
    },
    "parent": "root",
