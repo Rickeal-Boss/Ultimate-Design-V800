@@ -12,6 +12,7 @@ import { mergeSafe } from '../util/geo';
 import { batchMergeStatic, UV_CONTENT_MATERIAL_IDS } from './batchMerge';
 import { applyReferenceTextures } from './refTextures';
 import { mountLicensePlate } from './plateTexture';
+import { createTailgateCreaseGeometry } from './parts/tailgatePanel';
 import {
   createZunjieV800LuxuryMPVModel,
   type ProceduralModelRuntime,
@@ -3473,6 +3474,40 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
     }
     console.info(`[V800Adapter] batch/paint-* 内舱暗面 → ${paintShadowPairs.length} 个批次`);
   };
+
+  // ---- R20-1：尾门「上下折线」手写几何替换（必须在 batchMergeStatic **之前**）----
+  // 病灶：工厂尾门是 ExtrudeGeometry 平板 —— 实测 distinctZ(z@1e-3) = 2（只有 0 与外
+  // 表面 0.07 两个 z 平面），用户从 R18 起连续指认「尾门缺上下折线」。spec 侧无解：
+  // deformationStack / edgeTreatment 是生成器不读的散文字段，挤出基元 steps:1 只能
+  // 出常面。故在适配层把几何换成规则网格解析面（parts/tailgatePanel.ts）：外表面
+  // z = 冠面 + 上折线 V 槽 + 下折线 V 槽，折线槽两侧拆点拿硬边 catch-light。
+  // 几何逐位沿用旧件的局部帧与世界 bbox（x ±0.8459 / y 0.53..1.19 / z −2.836..−2.766），
+  // 所以本文件下方「尾门 MAEXTRO 贴花 / 后牌」按 tailgate 子树 bbox 定位的逻辑**不受影响**，
+  // 且必须在合批前替换 —— 合批后再换会与 batch/paint-upper 已有顶点集不一致。
+  // ⚠️ 主键是 mesh 自身的 userData.sculptComponent.id === 'tailgate'（精确自匹配）。
+  // 绝不可退化成「子树里全部 Mesh」：历史事故是误克隆 24 件外壳、整车外观全毁。
+  {
+    const creased = createTailgateCreaseGeometry();
+    let swapped = 0;
+    model.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      if (mesh.userData?.sculptComponent?.id !== 'tailgate') return; // 自身精确匹配
+      const previous = mesh.geometry;
+      mesh.geometry = creased;
+      previous.dispose();
+      swapped += 1;
+    });
+    if (swapped === 1) {
+      const tris = (creased.index ? creased.index.count : creased.getAttribute('position').count) / 3;
+      console.info(`[V800Adapter] 尾门折线几何 → ${tris} tri（旧件 28 tri 平板已 dispose）`);
+    } else if (swapped === 0) {
+      creased.dispose();
+      console.warn('[V800Adapter] 尾门折线几何未命中任何 mesh（期望 1）——保持工厂原几何');
+    } else {
+      console.warn(`[V800Adapter] 尾门折线几何命中 ${swapped} 个 mesh（期望 1）——同一几何实例被共享`);
+    }
+  }
 
   const batchStats = batchMergeStatic(model, {
     excludeObjects: [...wheels.map((w) => w.spin), ...caps, ...(gaugeMesh ? [gaugeMesh] : []), pedal],

@@ -1,13 +1,250 @@
 """填充 object-sculpt-spec.json：完整组件树/材质/重复系统/审查目标/通道。
 坐标系：+Z 车头、+Y 上、原点=轴距中点地面。单位米。左舵=+X？—— three 右手系 +Z 朝观察者；
 车头 +Z 时左侧为 +X（驾驶员在 +X 侧）。集成层按需 rotateY(PI)。
+
+⚠️ R20-3 执行须知（实测取证，勿再踩）：
+  本文件是 **R0 基座**（最后改动 R0，产出 125 个组件），当前 spec 有 185 个组件 —— R6..R19
+  的几何精化是 `tools/a1_r3_roundness.py`、`tools/r12*_surgery.py`、`tools/r1x_apply.py`
+  这类**外科脚本**直接补进 JSON 的。直接 `python build_spec.py` 会把 70 个组件删掉、
+  89 个组件的 primitive 退回 box，等于毁掉整车几何。所以 R20-3 的 spec 改动走
+  `--r20-a` / `--r20-b` / `--r20-pass` 三种「只跑后处理 pass、不重写 componentTree」模式：
+      见文件末尾 apply_r20_* + 文件头部的 argv guard。
+  另外本文件在 Windows 上以默认文本模式写盘会把 LF 变 CRLF（当前 spec 是纯 LF），
+  所以所有写盘一律 `newline="\\n"`。
 """
 import json
+import sys
 from pathlib import Path
 
-WRK = Path(r"<workspace>/.img2threejs")
+# 目录即脚本所在目录（原为 "<workspace>/.img2threejs" 占位符 —— 直接跑会 FileNotFoundError）
+WRK = Path(__file__).resolve().parent
 SP = WRK / "object-sculpt-spec.json"
-d = json.loads(SP.read_text(encoding="utf-8"))
+
+R20_FLAGS = ("--r20-a", "--r20-b", "--r20-pass")
+PASS_MODE = any(flag in sys.argv for flag in R20_FLAGS)
+
+# ---- 硬护栏（主管 R20-3 裁决 ①）：裸跑全量模式会把 R6..R19 的 70 个组件删掉、
+# 89 个组件的 primitive 退回 box。仓库里的 spec 一旦超过 150 个组件，全量模式直接拒跑。
+# 想重建 R0 基座必须显式加 --force-full-rebuild 并自己承担后果。
+if not PASS_MODE and "--force-full-rebuild" not in sys.argv:
+    _existing = 0
+    try:
+        _existing = len(json.loads(SP.read_text(encoding="utf-8")).get("componentTree") or [])
+    except Exception:
+        _existing = 0
+    if _existing > 150:
+        print(
+            f"[build_spec] REFUSED: 目标 spec 已有 {_existing} 个组件（R0 基座只产出 125 个）。\n"
+            "  全量模式会删掉 R6..R19 外科脚本补进来的 70 个组件、把 89 个组件的 primitive\n"
+            "  退回 box —— 禁止在本仓库裸跑。请用 --r20-a / --r20-b / --r20-pass 只跑后处理；\n"
+            "  确需重建基座请显式加 --force-full-rebuild。"
+        )
+        sys.exit(2)
+
+# 后处理 pass 的 diff 白名单（主管 R20-3 裁决 ①.2）：只允许这些字段路径发生变化
+ALLOWED_DIFF_SUFFIXES = (
+    ("profile2D", "bevel"),
+    ("profile2D", "steps"),
+    ("profile2D", "shaping", "crown"),
+    ("curveSweep", "crown"),
+)
+
+
+def diff_paths(before, after, path=()):
+    """返回 before→after 所有发生变化的键路径（componentTree 下逐件递归）。"""
+    if isinstance(before, dict) and isinstance(after, dict):
+        out = []
+        for key in set(before) | set(after):
+            if key not in before or key not in after:
+                out.append(path + (key,))
+            else:
+                out.extend(diff_paths(before[key], after[key], path + (key,)))
+        return out
+    if isinstance(before, list) and isinstance(after, list):
+        if len(before) != len(after):
+            return [path + (f"<len {len(before)}->{len(after)}>",)]
+        out = []
+        for i, (x, y) in enumerate(zip(before, after)):
+            out.extend(diff_paths(x, y, path + (str(i),)))
+        return out
+    return [] if before == after else [path]
+
+
+def assert_diff_whitelist(before_tree, after_tree, original_text):
+    """任何落在白名单外的键变化 ⇒ 回滚 spec 并退出（防止 pass 手抖改到别的字段）。"""
+    bad = []
+    for changed in diff_paths(before_tree, after_tree):
+        if not any(len(changed) >= len(s) and tuple(changed[-len(s):]) == s for s in ALLOWED_DIFF_SUFFIXES):
+            bad.append("/".join(changed))
+    if bad:
+        SP.write_text(original_text, encoding="utf-8", newline="\n")
+        print("[build_spec] ROLLED BACK: 后处理改到了白名单外的字段：")
+        for path in bad[:20]:
+            print("   ", path)
+        sys.exit(3)
+    return True
+
+
+# ============================ R20-3 后处理 pass ============================
+# 清单 A：坐垫/靠背冠面（沿挤出深度 / 沿 spine 的鼓形）。声明真源就在这里。
+SEAT_CROWN = {
+    "seat-driver": {"axis": "y", "base": 0.005, "amp": 0.015},
+    "seat-passenger": {"axis": "y", "base": 0.005, "amp": 0.015},
+    "seat-rear-l": {"axis": "y", "base": 0.005, "amp": 0.015},
+    "seat-rear-r": {"axis": "y", "base": 0.005, "amp": 0.015},
+}
+SEAT_BACK_CROWN = {
+    "seat-driver-back": {"base": 0.010, "amp": 0.020},
+    "seat-passenger-back": {"base": 0.010, "amp": 0.020},
+    "seat-rear-l-back": {"base": 0.010, "amp": 0.020},
+    "seat-rear-r-back": {"base": 0.010, "amp": 0.020},
+}
+# 坐垫冠面的必要配套：ExtrudeGeometry 的 steps 决定深度方向有几圈环。steps:1 只有两端
+# 两圈 → 深度方向没有中间顶点，crown 纯 no-op（实测）。8 段 = 每 63.5mm 一圈，正弦弧
+# 与真弧偏差 ≈0.3mm，肉眼不可辨；每垫 +280 tri。
+SEAT_CROWN_STEPS = 8
+
+
+def apply_r20_crown(components):
+    """清单 A：给 4 坐垫写 profile2D.shaping.crown + steps、给 4 靠背写 curveSweep.crown。幂等。"""
+    hits = []
+    for c in components:
+        cid = c.get("id")
+        gd = c.get("geometryDescriptor")
+        if not isinstance(gd, dict):
+            continue
+        if cid in SEAT_CROWN:
+            prof = gd.get("profile2D")
+            if not isinstance(prof, dict):
+                continue
+            shaping = prof.get("shaping")
+            if not isinstance(shaping, dict):
+                shaping = {}
+                prof["shaping"] = shaping
+            shaping["crown"] = dict(SEAT_CROWN[cid])
+            prof["steps"] = SEAT_CROWN_STEPS
+            hits.append(cid)
+        elif cid in SEAT_BACK_CROWN:
+            sweep = gd.get("curveSweep")
+            if not isinstance(sweep, dict):
+                continue
+            sweep["crown"] = dict(SEAT_BACK_CROWN[cid])
+            hits.append(cid)
+    return hits
+
+
+def apply_r20_bevel(components):
+    """清单 B：把 geometryDescriptor.edgeTreatment(rounded|bevel) 统一翻译成
+    profile2D.bevel（生成器真正会读的唯一倒角入口）。幂等：已有 bevel 的件不动。
+
+    单位换算：世界空间件（scale=[1,1,1]，depth 是真实米）t/s 都等于半径本身；
+    归一化件（depth=1 且 scale≠1）要把米折算成 shape 单位。
+
+    ⚠️ R20-3 实测修正 1（分母用 max 而不是 min）：bevel 的 size 是 **shape 空间**里的
+    单值，而 shape 会被 (sx, sy) **非等比**缩放，一个 size 只能保证「某个轴上是 r」。
+    用 min(sx,sy) 会让长轴上的世界半径放大 (max/min) 倍 —— 实测 bumper-chrome-lip
+    (scale 1.86/0.04/0.05) 得到 size=0.2 ⇒ **端面在 x 向内缩 372mm**、hood-panel 缩 260mm，
+    整根饰条被削掉三分之一。改成 max(sx,sy) 后两个轴的世界半径都 ≤ r（保守方向）：
+    bumper-chrome-lip 变成 x 内缩 8mm / y 内缩 8mm，与语义一致。
+
+    ⚠️ R20-3 实测修正 2（轮廓适配闸门）：倒角半径不能超过轮廓自身尺寸的一半，否则端面
+    自交/塌陷。实测 roof-panel 的 bevelRadius=0.05 落在 0.1088 高的轮廓上 = 2s/H 0.92
+    （端面被吃掉 92%，顶冠边直接消失），roof-spoiler/dpillar-l/r 是 0.54~0.56。这 4 件
+    一律跳过并在输出里列出。
+    """
+    changed, skipped = [], []
+    for c in components:
+        cid = c.get("id")
+        if cid == "tailgate":
+            skipped.append((cid, "handwritten"))
+            continue
+        if c.get("primitive") != "extrude":
+            continue
+        gd = c.get("geometryDescriptor")
+        if not isinstance(gd, dict):
+            continue
+        et = gd.get("edgeTreatment")
+        if not isinstance(et, dict) or et.get("type") not in ("rounded", "bevel"):
+            continue
+        r = et.get("bevelRadius")
+        if not isinstance(r, (int, float)) or isinstance(r, bool) or r <= 0:
+            skipped.append((cid, "no-radius"))
+            continue
+        prof = gd.get("profile2D")
+        if not isinstance(prof, dict):
+            continue
+        existing = prof.get("bevel")
+        if isinstance(existing, dict) and float(existing.get("thickness") or 0) > 0:
+            skipped.append((cid, "already-bevel"))
+            continue
+        depth = prof.get("depth")
+        if not isinstance(depth, (int, float)) or isinstance(depth, bool) or depth <= 0:
+            skipped.append((cid, "no-depth"))
+            continue
+        raw_scale = (c.get("transform") or {}).get("scale") or [1, 1, 1]
+        sx, sy, sz = (abs(float(v)) for v in (list(raw_scale) + [1, 1, 1])[:3])
+        if abs(sx - 1) < 1e-9 and abs(sy - 1) < 1e-9 and abs(sz - 1) < 1e-9:
+            t_units, s_units = float(r), float(r)
+        else:
+            if sz <= 0 or max(sx, sy) <= 0:
+                skipped.append((cid, "degenerate-scale"))
+                continue
+            t_units, s_units = float(r) / sz, float(r) / max(sx, sy)
+        if s_units <= 0 or t_units <= 0:
+            skipped.append((cid, "degenerate-units"))
+            continue
+        # 轮廓适配闸门：端面内缩不得超过轮廓任一方向尺寸的 50%
+        pts = prof.get("points") or []
+        if len(pts) >= 3:
+            pxs = [p[0] for p in pts]
+            pys = [p[1] for p in pts]
+            span_x = max(pxs) - min(pxs)
+            span_y = max(pys) - min(pys)
+            smallest = min(v for v in (span_x, span_y) if v > 1e-9) if max(span_x, span_y) > 1e-9 else 0.0
+            if smallest > 1e-9 and (2 * s_units) / smallest > 0.5:
+                skipped.append((cid, f"profile-collapse:{(2 * s_units) / smallest:.2f}"))
+                continue
+        if t_units >= depth * 0.35:
+            skipped.append((cid, "bevel-too-thick"))
+            continue
+        if depth - 2 * t_units <= 0.02:
+            skipped.append((cid, "depth-too-thin"))
+            continue
+        prof["bevel"] = {
+            "thickness": round(t_units, 6),
+            "size": round(s_units, 6),
+            "offset": round(-s_units, 6),
+            "segments": 2,
+        }
+        changed.append((cid, round(t_units, 4), round(s_units, 4)))
+    return changed, skipped
+
+
+ORIGINAL_TEXT = SP.read_text(encoding="utf-8")
+d = json.loads(ORIGINAL_TEXT)
+
+# ---- 后处理模式入口：只改目标字段，绝不重写 componentTree（见文件头 R20-3 说明）----
+
+if PASS_MODE:
+    BEFORE_SNAPSHOT = json.loads(ORIGINAL_TEXT)
+    do_a = "--r20-a" in sys.argv or "--r20-pass" in sys.argv
+    do_b = "--r20-b" in sys.argv or "--r20-pass" in sys.argv
+    comps_live = d.get("componentTree", [])
+    if do_a:
+        hits = apply_r20_crown(comps_live)
+        print(f"R20-3 pass A (crown) applied to {len(hits)} components: {', '.join(hits)}")
+    if do_b:
+        changed, skipped = apply_r20_bevel(comps_live)
+        print(f"R20-3 pass B (edgeTreatment→bevel) applied to {len(changed)} components:")
+        for cid, t, s in changed:
+            print(f"  {cid:28s} thickness={t:<9} size={s}")
+        if skipped:
+            print(f"  skipped {len(skipped)}: " + ", ".join(f"{c}:{w}" for c, w in skipped))
+    assert_diff_whitelist(BEFORE_SNAPSHOT, d, ORIGINAL_TEXT)
+    SP.write_text(json.dumps(d, ensure_ascii=False, indent=1), encoding="utf-8", newline="\n")
+    print("diff whitelist OK (only profile2D.bevel / profile2D.steps / profile2D.shaping.crown / curveSweep.crown)")
+    raise SystemExit(0)
+
 pa = json.loads((WRK / "assessment.json").read_text(encoding="utf-8"))["preSpecAssessment"]
 
 def C(cid, name, level, primitive, parent, pos, dims=None, rot=None, mat=None,
@@ -356,5 +593,5 @@ for _c in comps:
         "materialClassConfidence": 0.9,
     }
 d["componentTree"] = comps
-SP.write_text(json.dumps(d, ensure_ascii=False, indent=1), encoding="utf-8")
+SP.write_text(json.dumps(d, ensure_ascii=False, indent=1), encoding="utf-8", newline="\n")
 print(f"SPEC FILLED: {len(comps)} components, {len(d['materials'])} materials, {len(d['repetitionSystems'])} repetition systems")
