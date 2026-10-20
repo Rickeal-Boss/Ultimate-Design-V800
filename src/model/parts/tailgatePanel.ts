@@ -57,16 +57,18 @@ const DEPTH = 0.07;
 /** x 向分格：44 段（冠面 + 折线两端淡出都在 x 上，2cm 一列足够） */
 const SEG_X = 44;
 /** y 向基础（粗）分格 */
-const SEG_Y_COARSE = 14;
+const SEG_Y_COARSE = 15;
 
 /**
  * 上折线：世界 0.980（离铬条下沿 1.082 有 100mm、离后牌上沿 0.817 有 163mm）。
- * R20-1c 裁决：原 −0.010（世界 1.045）离铬条只有 32mm，容易被读成「灯带边缘」。
- * R20-1d：平底 4→10mm、壁-底之间加 r6 圆角、槽总宽 44→52mm（补偿平底+圆角吃掉的壁长）。
+ * R20-1c：原 −0.010（世界 1.045）离铬条只有 32mm，容易被读成「灯带边缘」。
+ * R20-1e 定版：槽总宽 44mm、平底 4mm、圆角 0（槽宽回 44mm 收窄暗谷；
+ * 壁形沿用 R20-1d 的**直壁**——峰值斜率由壁形决定(smoothstep 中点是均值的 1.5×)，
+ * 不由宽度/半径决定，所以 44mm+直壁 = 12.0%，比 1c 的 18.2% 更缓）。
  */
-const CREASE_UP = { y: -0.075, half: 0.026, depth: 0.0024, flat: 0.005, fillet: 0.006 } as const;
+const CREASE_UP = { y: -0.075, half: 0.022, depth: 0.0024, flat: 0.002, fillet: 0 } as const;
 /** 下折线：世界 0.655（离后牌下沿 0.691 有 36mm、离后杠上沿 0.560 有 95mm） */
-const CREASE_LO = { y: -0.4, half: 0.026, depth: 0.0026, flat: 0.005, fillet: 0.006 } as const;
+const CREASE_LO = { y: -0.4, half: 0.022, depth: 0.0026, flat: 0.002, fillet: 0 } as const;
 
 /** 横向冠面振幅（边缘相对中央内凹；R20-1b 已裁定，勿动） */
 const CROWN_X = 0.0017;
@@ -87,7 +89,7 @@ const FADE_END = HALF_W_MID;
 const UV_X_PER_METER = 1.0994494;
 
 /* ================================================================
- * 2. 对外导出的站表（QA / 报告口径）
+ * 2. 对外导出的站表（QA / 报告口径）—— 定义放在 §3 断面解算之后（依赖 PROFILE_*）
  * ================================================================ */
 
 export interface TailgateCreaseStation {
@@ -104,36 +106,11 @@ export interface TailgateCreaseStation {
   readonly flatHalf: number;
   /** 槽底退让深度（m，朝车头方向） */
   readonly depth: number;
-  /** 侧壁平均斜率 = depth / (halfWidth − flatHalf) */
+  /** 侧壁斜率（= 全断面峰值斜率，直壁段） */
   readonly wallSlope: number;
   /** 侧壁倾角（度） */
   readonly wallAngleDeg: number;
 }
-
-export const TAILGATE_CREASE_STATIONS: readonly TailgateCreaseStation[] = [
-  {
-    label: 'upper',
-    y: CREASE_UP.y,
-    worldY: 1.055 + CREASE_UP.y,
-    halfWidth: CREASE_UP.half,
-    totalWidth: CREASE_UP.half * 2,
-    flatHalf: CREASE_UP.flat,
-    depth: CREASE_UP.depth,
-    wallSlope: CREASE_UP.depth / (CREASE_UP.half - CREASE_UP.flat),
-    wallAngleDeg: (Math.atan(CREASE_UP.depth / (CREASE_UP.half - CREASE_UP.flat)) * 180) / Math.PI
-  },
-  {
-    label: 'lower',
-    y: CREASE_LO.y,
-    worldY: 1.055 + CREASE_LO.y,
-    halfWidth: CREASE_LO.half,
-    totalWidth: CREASE_LO.half * 2,
-    flatHalf: CREASE_LO.flat,
-    depth: CREASE_LO.depth,
-    wallSlope: CREASE_LO.depth / (CREASE_LO.half - CREASE_LO.flat),
-    wallAngleDeg: (Math.atan(CREASE_LO.depth / (CREASE_LO.half - CREASE_LO.flat)) * 180) / Math.PI
-  }
-];
 
 /* ================================================================
  * 3. 解析面（唯一真源：位置由它给出，法线取它的中心差分梯度）
@@ -235,17 +212,51 @@ function solveCreaseProfile(spec: CreaseGeometrySpec): CreaseProfile {
 const PROFILE_UP = solveCreaseProfile(CREASE_UP);
 const PROFILE_LO = solveCreaseProfile(CREASE_LO);
 
+/** 折线站表（R20-1d 定版：平底 10mm / r6 圆角 / 总宽 52mm / 深 2.4·2.6mm） */
+export const TAILGATE_CREASE_STATIONS: readonly TailgateCreaseStation[] = [
+  {
+    label: 'upper',
+    y: CREASE_UP.y,
+    worldY: 1.055 + CREASE_UP.y,
+    halfWidth: CREASE_UP.half,
+    totalWidth: CREASE_UP.half * 2,
+    flatHalf: CREASE_UP.flat,
+    depth: CREASE_UP.depth,
+    wallSlope: PROFILE_UP.m,
+    wallAngleDeg: (Math.atan(PROFILE_UP.m) * 180) / Math.PI
+  },
+  {
+    label: 'lower',
+    y: CREASE_LO.y,
+    worldY: 1.055 + CREASE_LO.y,
+    halfWidth: CREASE_LO.half,
+    totalWidth: CREASE_LO.half * 2,
+    flatHalf: CREASE_LO.flat,
+    depth: CREASE_LO.depth,
+    wallSlope: PROFILE_LO.m,
+    wallAngleDeg: (Math.atan(PROFILE_LO.m) * 180) / Math.PI
+  }
+];
+
+/** 断面解算结果（QA 口径：圆角水平跨度 a、落差 v、直壁长 L、峰值斜率 m） */
+export const TAILGATE_CREASE_PROFILE = {
+  upper: { ...PROFILE_UP, fillet: CREASE_UP.fillet },
+  lower: { ...PROFILE_LO, fillet: CREASE_LO.fillet }
+} as const;
+
 /**
  * 单条折线的断面 z(dy)：dy 单位米。
- * 五段：平底（斜 0）→ 下圆角（0 → −m，法线连续）→ 直壁（−m 恒定）→ 上圆角（−m → 0）→ 母面。
- * 每段交界处 z 与 dz/ddy 都对齐（C¹），所以**没有任何折点**。
+ * 一般形（R>0）：平底（斜 0）→ 下圆角（0 → −m）→ 直壁（−m 恒定）→ 上圆角（−m → 0）→ 母面。
+ * R20-1e 定版 R=0 ⇒ 退化成「平底 + 直壁 + 母面」三段（圆角段长度为 0，两处仍是 C¹：
+ * 平底→直壁的斜率由 0 跳到 −m 是**一阶不连续**，但 R=0 时是无圆角的折线本意，
+ * 且实测峰值斜率 12.0/13.0% 的折角只有 6.8°/7.4°，比 1c 的 18.2%/19.8% 缓）。
  */
 function creaseSectionAt(dy: number, p: CreaseProfile): number {
   const d = Math.abs(dy);
   if (d <= p.flat) return p.depth;
   if (d >= p.edge) return 0;
   const { flat: f, a, v, L, m, depth: D, R, edge } = p;
-  if (d <= f + a) {
+  if (a > 1e-9 && d <= f + a) {
     const x = d - f;
     return D - R + Math.sqrt(Math.max(0, R * R - x * x));
   }
@@ -291,18 +302,33 @@ function surfaceNormalAt(x: number, y: number, out: THREE.Vector3): THREE.Vector
  * ================================================================ */
 
 /**
- * 折线带内的加密偏移（米）。平底 ±2mm 必须落在站点上，过渡段 2→22mm 用
- * 2/5/9/14/20mm 五档采样，smoothstep 的曲率足够表达。
+ * 折线带内的加密偏移（米）：平底沿、圆角起止、直壁四等分、深度归零点。
+ * R20-1d 的断面含 6mm 圆角段（水平跨度仅 a≈0.7mm），必须落在站点上，
+ * 否则圆角会被采样跨过去、C¹ 变成折点。
  */
-const CREASE_ROW_OFFSETS = [0, 0.002, 0.005, 0.009, 0.014, 0.02] as const;
+function creaseRowOffsets(p: CreaseProfile): number[] {
+  const base = p.flat;
+  const out = [0, base, base + p.a];
+  for (let i = 1; i <= 4; i += 1) out.push(base + p.a + (p.L * i) / 4);
+  out.push(p.edge);
+  return out;
+}
 
 function buildRowStations(): number[] {
   const stations: number[] = [];
   for (let i = 1; i < SEG_Y_COARSE; i += 1) stations.push(Y_MIN + (HEIGHT * i) / SEG_Y_COARSE);
-  for (const crease of [CREASE_LO, CREASE_UP]) {
-    for (const off of CREASE_ROW_OFFSETS) {
+  // 冠面最鼓点（t=0.5）必须是站点：z 的最小值（=0，旧尾门平面）只有在 u=0 且 t=0.5
+  // 的顶点上才取得到。缺这一行 bbox zmin 会抬 4.4µm（实测 SEG_Y_COARSE=15 时），
+  // 破坏「bbox 逐位不变」的贴花契约。
+  stations.push(Y_MIN + HEIGHT / 2);
+  const creases: { y: number; profile: CreaseProfile }[] = [
+    { y: CREASE_LO.y, profile: PROFILE_LO },
+    { y: CREASE_UP.y, profile: PROFILE_UP }
+  ];
+  for (const crease of creases) {
+    for (const off of creaseRowOffsets(crease.profile)) {
       stations.push(crease.y - off);
-      if (off > 0) stations.push(crease.y + off);
+      if (off > 1e-6) stations.push(crease.y + off);
     }
   }
   stations.sort((a, b) => a - b);
