@@ -14,6 +14,15 @@ import { applyReferenceTextures } from './refTextures';
 import { mountLicensePlate } from './plateTexture';
 import { createTailgateCreaseGeometry } from './parts/tailgatePanel';
 import {
+  createTailLamp,
+  createTailLampMaterials,
+  makeEaglePanelTexture,
+  TAIL_LAMP_GOLD_BRAKE_RATIO,
+  TAIL_LAMP_STANDBY,
+  type TailLampMaterials
+} from './parts/tailLamp';
+import { createHeadLamp, createHeadLampMaterials, type HeadLampMaterials } from './parts/headLamp';
+import {
   createZunjieV800LuxuryMPVModel,
   type ProceduralModelRuntime,
 } from './createV800Model';
@@ -2072,6 +2081,9 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
   const tailMat = tailLamp?.mat ?? null;
   const headMat = headLamp?.mat ?? null;
   const markMat = markLamp?.mat ?? null;
+  // R21-B/C：手写尾灯 / 前大灯材质引用（在下方 R21 接线块赋值，update() 联动用）
+  let tailLampMats: TailLampMaterials | null = null;
+  let headLampMats: HeadLampMaterials | null = null;
   // R12b：头灯 LED 白条在装配态整条过曝成白柱（正视 r12c_nose 实证），
   // 压到 0.62 保留日行灯亮度层次、仍高于 bloom 阈值。
   if (headMat) {
@@ -2659,6 +2671,27 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
         const tgSize = tgBox.getSize(new THREE.Vector3());
         // 世界 → body 局部（body rotY(π)：车尾世界 +Z ↔ body 局部 -Z）
         const centerLocal = body.worldToLocal(tgCenter.clone());
+        // R21-A1：MAEXTRO 字标垂直居中到尾部镀铬贯条（tail-chrome-strip）。
+        // 实测 badge 中心 y≈1.098 vs 铬条中心 y≈1.1145，badge 偏下 ~17mm。
+        // 不写死猜测值：按铬条运行时 world bbox 中心重定位（spec 微调后也不会失准）。
+        // 该测量必须在 batchMergeStatic 之前（铬条 leaf 合批后被摘走 → setFromObject 空盒）。
+        let badgeY = centerLocal.y + tgSize.y * 0.36; // fallback：测不到铬条时回退旧公式
+        const chromeNode = byId.get('tail-chrome-strip');
+        if (chromeNode) {
+          const chromeBox = new THREE.Box3().setFromObject(chromeNode);
+          if (!chromeBox.isEmpty()) {
+            const chromeCenterLocal = body.worldToLocal(chromeBox.getCenter(new THREE.Vector3()));
+            badgeY = chromeCenterLocal.y;
+            console.info(
+              `[V800Adapter] MAEXTRO badge 垂直居中：铬条 world bbox y ${chromeBox.min.y.toFixed(4)}..${chromeBox.max.y.toFixed(4)}` +
+                `（中心 ${chromeCenterLocal.y.toFixed(4)}）→ badge.y=${badgeY.toFixed(4)}`
+            );
+          } else {
+            console.warn('[V800Adapter] tail-chrome-strip 测到空盒（合批前不应发生），badge 回退旧公式');
+          }
+        } else {
+          console.warn('[V800Adapter] 找不到 tail-chrome-strip 组件，badge 回退旧公式');
+        }
         // R12-T1：尾门上部 MAEXTRO 贯通小字（参考图 C3 实锤：真车尾门顶沿有一行
         // 宽字距 MAEXTRO 铬字）。承载面实证：尾门上部贯穿红带（y≈1.12 世界）与
         // 顶沿饰条之间有一整段干净漆面（r12_mat/tail_view.png）。同 badge 先例：
@@ -2677,7 +2710,7 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
         maextro.receiveShadow = false;
         maextro.position.set(
           centerLocal.x,
-          centerLocal.y + tgSize.y * 0.36, // 尾门上部：贯穿灯带之上、顶沿之下的干净区
+          badgeY, // R21-A1：垂直居中到镀铬条（实测 bbox 中心，非写死）
           centerLocal.z - tgSize.z / 2 - 0.015
         );
         maextro.rotation.y = Math.PI;
@@ -3509,8 +3542,124 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
     }
   }
 
+  // ---- R21-A2：rear-glass-upper 由 paint-lower 不透明漆面改为真实深色后风挡玻璃 ----
+  // 现状：该件是 spec 把「后风挡玻璃带（下延段）」错误地用 paint-lower（深色亮面漆）渲染，
+  // 车外读成一块黑漆板而非玻璃。真车（白车尾参考图）：MAEXTRO 铬条上方是一整块深色后风挡，
+  // 形态大块玻璃。本层只换材质、不动几何（几何是 R18c 已定稿的平板，与 greenhouse 后窗带衔接）。
+  // 选「克隆 glass-dark」而非直接复用同一实例：
+  //   · R18c 历史：旧 glass-dark 太透(0.34) 会让机位看穿空腔内饰、被判「没装玻璃」。
+  //     这里压到 opacity 0.80（近不透明隐私玻璃），靠反射(金属0.22 / envMap 1.55)给镜面层次，
+  //     读成深色隐私玻璃而不是空洞 —— 与侧窗 greenhouse-glass 观感同源但更实。
+  //   · 独占克隆避免与侧窗玻璃-dark 互扰；且透明件本就被 batchMerge 跳过合批，独立实例
+  //     也不会并入 greenhouse 桶，零 DC 增量风险。
+  //   · 必须在 batchMergeStatic **之前**换材质（与尾门折线替换同窗口）。
+  {
+    const glassDarkSrc = matById.get('glass-dark');
+    const rgNode = byId.get('rear-glass-upper');
+    if (glassDarkSrc && rgNode) {
+      const rearGlassMat = glassDarkSrc.clone();
+      rearGlassMat.transmission = 0;
+      rearGlassMat.transparent = true;
+      rearGlassMat.depthWrite = false;
+      rearGlassMat.opacity = 0.8;
+      rearGlassMat.color.set(0x10151b);
+      rearGlassMat.metalness = 0.22;
+      rearGlassMat.roughness = 0.07;
+      rearGlassMat.envMapIntensity = 1.55;
+      rearGlassMat.thickness = 0.02;
+      // 保留 sculptMaterial.id='glass-dark'：下游若按键查材质保持一致；合批按实例主键不受影响。
+      rearGlassMat.userData.sculptMaterial = {
+        ...(glassDarkSrc.userData.sculptMaterial ?? {}),
+        id: 'glass-dark'
+      };
+      rearGlassMat.needsUpdate = true;
+      let swapped = 0;
+      rgNode.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (!m.isMesh) return;
+        if (m.userData?.sculptComponent?.id !== 'rear-glass-upper') return; // 自身精确匹配
+        m.material = rearGlassMat;
+        swapped += 1;
+      });
+      if (swapped > 0) {
+        console.info(`[V800Adapter] rear-glass-upper → 克隆 glass-dark（隐私玻璃 opacity 0.80），命中 ${swapped} mesh`);
+      } else {
+        console.warn('[V800Adapter] rear-glass-upper 未命中任何 leaf mesh（期望 ≥1）——保持工厂 paint-lower');
+      }
+    }
+  }
+
+  // ---- R21-B/C：尾灯 / 前大灯手写几何接线（parts/tailLamp.ts + parts/headLamp.ts）----
+  // 与 R20 尾门同律：必须在 batchMergeStatic **之前**替换——合批会把子树 leaf 的
+  // sculptComponent 摘掉，之后 setFromObject 得空盒。旧件整组隐藏（batchMerge 跳过
+  // visible=false 子树），新件挂 pivot 本体（挂在隐藏节点下 three 不渲染）。
+  const lampPivots: THREE.Object3D[] = [];
+  {
+    // pivot 消歧：taillamp-l/r 与壳 mesh 同 id，凭「有子节点」取 pivot；
+    // headlamp-l/r 节点自身即旧壳体 mesh（下有 led/star 子件），同样有子节点。
+    const findLampPivot = (id: string): THREE.Object3D | null => {
+      let found: THREE.Object3D | null = null;
+      model.traverse((o) => {
+        if (found) return;
+        if (o.userData?.sculptComponent?.id === id && o.children.length > 0) found = o;
+      });
+      return found;
+    };
+
+    // —— B：尾灯（镀铬包边 + 上3红刃 + 鹰形点阵屏 + 下2红刃，C1 特写口径）——
+    tailLampMats = createTailLampMaterials(makeEaglePanelTexture());
+    for (const side of ['left', 'right'] as const) {
+      const pivot = findLampPivot(side === 'left' ? 'taillamp-l' : 'taillamp-r');
+      if (!pivot) {
+        console.warn(`[V800Adapter] R21-B 找不到尾灯 pivot taillamp-${side === 'left' ? 'l' : 'r'}，保持旧件`);
+        continue;
+      }
+      // 隐旧：7 件/侧全部（壳/上下横杠/核心/拉丝银框/灯带场/签名屏）
+      for (const child of [...pivot.children]) child.visible = false;
+      // 挂新：pivot 本体保持 visible=true。
+      // ⚠️ R21 补验（主理人，探针实证 verify/r21/lamp-probe/lamp_probe.json）：
+      // tailLamp.ts 头部注释假设「taillamp pivot 自带 rotY(π)」与真实场景不符——
+      // 场景中 pivot 无旋转（preview 世界车尾 = +Z，pivot 世界 z=+2.839 恒等变换），
+      // 直接挂会把整灯内缩 ~4cm 且鹰形屏法线朝车内。故套一层 rotY(π) 外层容器：
+      // 内层 group 保持 rotation=0 / scale.x=-1（镜像与 QA 契约不破），外层只转 π。
+      const tl = createTailLamp({ side, materials: tailLampMats });
+      const wrap = new THREE.Group();
+      wrap.name = `taillamp-${side === 'left' ? 'l' : 'r'}-hand-wrap`;
+      wrap.rotation.y = Math.PI;
+      wrap.add(tl.group);
+      pivot.add(wrap);
+      lampPivots.push(pivot);
+    }
+
+    // —— C：前大灯（顶部横 DRL + 4 透镜堆叠 + 星点，E1/E2 口径）——
+    headLampMats = createHeadLampMaterials();
+    for (const side of ['left', 'right'] as const) {
+      const pivot = findLampPivot(side === 'left' ? 'headlamp-l' : 'headlamp-r');
+      if (!pivot) {
+        console.warn(`[V800Adapter] R21-C 找不到前灯 pivot headlamp-${side === 'left' ? 'l' : 'r'}，保持旧件`);
+        continue;
+      }
+      // pivot 自身即旧壳体 mesh：不能整节点 visible=false（会连新件一起藏），
+      // 按 headLamp.ts 接线说明改走「geometry 换空」方案。
+      const oldShell = pivot as THREE.Mesh;
+      if (oldShell.isMesh && oldShell.geometry) {
+        oldShell.geometry = new THREE.BufferGeometry();
+      }
+      // 隐旧：led/star 子件
+      for (const child of [...pivot.children]) child.visible = false;
+      pivot.add(createHeadLamp({ side, materials: headLampMats }).group);
+      lampPivots.push(pivot);
+    }
+
+    if (lampPivots.length > 0) {
+      console.info(`[V800Adapter] R21-B/C 手写灯组接线完成：${lampPivots.length} 个 pivot（尾灯×2 + 前灯×2）`);
+    }
+    // 防合批吞并：独占材质 r21-tail-lamp-* / r21-head-lamp-* 若被按 id 并进全车
+    // 批次，batch 复制材质实例会导致刹车联动改不到实际渲染材质。
+  }
+
   const batchStats = batchMergeStatic(model, {
-    excludeObjects: [...wheels.map((w) => w.spin), ...caps, ...(gaugeMesh ? [gaugeMesh] : []), pedal],
+    excludeObjects: [...wheels.map((w) => w.spin), ...caps, ...(gaugeMesh ? [gaugeMesh] : []), pedal, ...lampPivots],
     excludeMaterialIds: UV_CONTENT_MATERIAL_IDS
   });
   if (batchStats.problems.length > 0) {
@@ -4000,6 +4149,13 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
       snapT = damp(snapT, 0, 6, dt);
       if (snapT < 0.001) snapT = 0;
       if (tailMat) tailMat.emissiveIntensity = brakeLevel + snapGain;
+      // R21-B：手写尾灯（独占材质，刹车联动在旧件链路之外单独走）
+      if (tailLampMats) {
+        tailLampMats.red.emissiveIntensity =
+          TAIL_LAMP_STANDBY.red + brakeLevel + snapGain;
+        tailLampMats.gold.emissiveIntensity =
+          TAIL_LAMP_STANDBY.gold + (brakeLevel + snapGain) * TAIL_LAMP_GOLD_BRAKE_RATIO;
+      }
       // 尾灯暗场红带（housing-dark 图集）：与灯芯同强度联动（几何灯带时期的联动路径）
       if (tailFieldMat) tailFieldMat.emissiveIntensity = brakeLevel + snapGain;
       // 尾灯中部金色签名屏：随刹车联动，比上下横带暗
