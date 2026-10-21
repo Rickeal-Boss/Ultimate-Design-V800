@@ -1,0 +1,60 @@
+=== 1. 三角数 / 预算 ===
+  单轮 tri（共享材质路径）= 1554
+  单轮 tri（独占材质路径）= 1554
+  4 轮合计 = 6216
+  PASS  左右 tri 一致 :: 1554 vs 1554
+  PASS  材质共享不影响 tri :: 1554/1554
+  PASS  单轮 ≤1600 tri :: 1554
+  PASS  4 轮 ≤6400 tri :: 6216
+=== 2. bbox（轮心局部系，+Z = 车外侧）===
+  r22-wheel-hub-xp: center=(0.1450,0,0) size=(0.0300,0.6000,0.6000)
+  r22-wheel-hub-xn: center=(-0.1450,0,0) size=(0.0300,0.6000,0.6000)
+  local: min=(-0.3000,-0.3000,0.1300) max=(0.3000,0.3000,0.1600)
+  local center=(0,0,0.1450) size=(0.6000,0.6000,0.0300)
+  PASS  外半径 ≈ 0.300（顶点实测） :: 0.3000
+  PASS  最低点 ≥ 轮胎外端面 0.1275（不被轮胎吞没） :: 0.1300
+  PASS  最高点 ≤ 旧 rim 盘面 0.160（不外扩出旧包络） :: 0.1600
+  PASS  局部系中心在轮轴 (0,0) :: (0,0)
+=== 3. 窗带循环（18 窗 / 20° / 径向占比）===
+  PASS  窗数 = 18 :: 18
+  PASS  角距逐位 = 20° :: 20.000
+  PASS  窗径向 0.70R–0.925R（含 9° 倾角外接） :: rIn=0.2106 (0.702R) rOut=0.2754 (0.918R)
+  PASS  窗前不越窗带边界（0.203–0.283） :: 0.2106–0.2754
+  PASS  窗框倒角环不越窗带边界（0.203–0.283） :: bezel 0.2071–0.2789
+  窗带几何 verts=272 tri=308
+  PASS  窗带顶点数在预期区间 :: 272
+=== 4. 材质 ===
+  材质 id: r22-hub-bright, r22-hub-dark, r22-hub-cap, r22-hub-emblem
+  PASS  每轮 4 mesh（每材质 1 件） :: 4
+  PASS  4 个独占材质 id 且全部命名 :: r22-hub-bright,r22-hub-dark,r22-hub-cap,r22-hub-emblem
+  PASS  id 与 WHEEL_HUB_MATERIAL_IDS 完全一致 :: r22-hub-bright,r22-hub-dark,r22-hub-cap,r22-hub-emblem
+  PASS  左右共用同一材质实例（4 DC 口径） :: unique=4
+  PASS  独占路径不复用外部材质实例 :: unique=4
+=== 5. 几何自查（绕序一致性 / 法线连续 / 退化 / NaN）===
+  面数总计（4 mesh）= 1554
+  PASS  无 NaN/Inf 顶点或法线 :: 0
+  PASS  无退化三角（面积 > 1e-12） :: 0
+  PASS  绕序一致：面法线 · 顶点法线 > 0（全部面） :: bad=0/1554
+  PASS  顶点法线非零 :: 0
+  法线长度偏差 >2% 的点 = 0
+  PASS  顶点法线单位化（±2%） :: 0
+  PASS  r22-hub-dark 面片朝向 +Z（earcut 绕序正确） :: bad=0/56
+  PASS  r22-hub-emblem 面片朝向 +Z（earcut 绕序正确） :: bad=0/22
+  母线相邻法线最大夹角 = 66.4°（&lt;90° 即平滑，无翻面）
+  PASS  母线法线连续（无翻面棱） :: 66.4°
+=== 6. 朝向 / 世界对位 ===
+  PASS  side=+1 → rotation.y = +π/2（局部 +Z → 世界 +X） :: 1.5708
+  PASS  side=−1 → rotation.y = −π/2（局部 +Z → 世界 −X） :: -1.5708
+  side=+1 local+Z → world (1.000,0,0)
+  side=−1 local+Z → world (-1.000,0,0)
+  PASS  两侧 +Z 分别指向世界 ±X（车外侧）
+  fl: center=(0.855,0.382,1.715) side=1
+  fr: center=(-0.855,0.382,1.715) side=-1
+  rl: center=(0.855,0.382,-1.715) side=1
+  rr: center=(-0.855,0.382,-1.715) side=-1
+=== 7. 轮面覆盖率（射线自 +Z 打入，须全命中且 z ≥ 胎面 0.1275）===
+  采样 1440，未命中 0，命中点 world x ∈ [0.1374, 0.1583]
+  PASS  轮面 r ≤ 0.298 全角度无空洞（无漏视轮胎） :: miss=0/1440
+  PASS  命中点全部 ≥ 胎端面（z_local ≥ 0.1275） :: bad=0
+
+ALL GREEN（warn=0）

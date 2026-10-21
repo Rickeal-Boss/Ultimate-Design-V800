@@ -1,0 +1,18 @@
+hidden old nodes: 16
+fl: bbox x[0.9850,1.0150] y[0.0820,0.6820] z[1.4150,2.0150] size=(0.0300,0.6000,0.6000)
+fr: bbox x[-1.0150,-0.9850] y[0.0820,0.6820] z[1.4150,2.0150] size=(0.0300,0.6000,0.6000)
+rl: bbox x[0.9850,1.0150] y[0.0820,0.6820] z[-2.0150,-1.4150] size=(0.0300,0.6000,0.6000)
+rr: bbox x[-1.0150,-0.9850] y[0.0820,0.6820] z[-2.0150,-1.4150] size=(0.0300,0.6000,0.6000)
+tire outboard face world x = 0.9825
+hub x range = [0.9850, 1.0150]
+gap tire→hub = 2.5 mm (positive = 无 z-fight)
+非轮系邻件 bbox 相交数: 8
+    root | Zunjie V800 整车 ov=6480cm3
+    root | Zunjie V800 整车 ov=6480cm3
+    root | Zunjie V800 整车 ov=6480cm3
+    root | Zunjie V800 整车 ov=6480cm3
+    body-lower | 车身下半壳体 ov=8676cm3
+    body-lower | 车身下半壳体 ov=8676cm3
+    body-lower | 车身下半壳体 ov=8676cm3
+    body-lower | 车身下半壳体 ov=8676cm3
+接线后（未合批）：可见 mesh 198，三角 70144

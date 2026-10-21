@@ -3401,17 +3401,17 @@
     "position": [
      0.885,
      1.4375,
-     -2.55
+     -2.67
     ],
     "rotation": [
      0,
      0,
-     -0.12
+     0
     ],
     "scale": [
      0.13,
      0.675,
-     0.46
+     0.30
     ]
    },
    "actionProfile": {
@@ -3466,9 +3466,9 @@
      "debrisMaterial": "base"
     }
    },
-   "material": "matte-black",
+   "material": "dpillar-silver",
    "materialLayers": [
-    "matte-black"
+    "dpillar-silver"
    ],
    "deformations": [],
    "joints": [],
@@ -4064,17 +4064,17 @@
     "position": [
      -0.885,
      1.4375,
-     -2.55
+     -2.67
     ],
     "rotation": [
      0,
      0,
-     0.12
+     0
     ],
     "scale": [
      0.13,
      0.675,
-     0.46
+     0.30
     ]
    },
    "actionProfile": {
@@ -4129,9 +4129,9 @@
      "debrisMaterial": "base"
     }
    },
-   "material": "matte-black",
+   "material": "dpillar-silver",
    "materialLayers": [
-    "matte-black"
+    "dpillar-silver"
    ],
    "deformations": [],
    "joints": [],

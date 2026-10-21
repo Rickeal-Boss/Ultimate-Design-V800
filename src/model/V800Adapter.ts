@@ -22,6 +22,8 @@ import {
   type TailLampMaterials
 } from './parts/tailLamp';
 import { createHeadLamp, createHeadLampMaterials, type HeadLampMaterials } from './parts/headLamp';
+import { createWindowTrim, createWindowTrimMaterials, createGlassBand } from './parts/windowTrim';
+import { createWheelHub, createWheelHubMaterials, type WheelHubSide } from './parts/wheelHub';
 import {
   createZunjieV800LuxuryMPVModel,
   type ProceduralModelRuntime,
@@ -3658,8 +3660,67 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
     // 批次，batch 复制材质实例会导致刹车联动改不到实际渲染材质。
   }
 
+  // ═══ R22 手写部件接线（涡轮盘轮毂 / 镀铬窗框 / 玻璃带）═══
+  // 与 R21 灯组同律：工厂件置 visible=false 后挂手写件；独占材质进 excludeObjects，
+  // 避免被合批吞并（丢高光 / 刹车联动改不到实际渲染材质）。
+  const r22Exclude: THREE.Object3D[] = [];
+
+  // —— R22-B 涡轮盘式轮毂（手写几何，替换工厂 rim-* / wheel-cap-*）——
+  {
+    const hubMats = createWheelHubMaterials();
+    const tags = ['wheel-fl', 'wheel-fr', 'wheel-rl', 'wheel-rr'] as const;
+    let wired = 0;
+    for (let i = 0; i < tags.length; i++) {
+      const corner = tags[i].slice('wheel-'.length) as 'fl' | 'fr' | 'rl' | 'rr';
+      const spin = wheels[i]?.spin;
+      if (!spin) {
+        console.warn(`[V800Adapter] R22-B 找不到轮系 ${tags[i]}，保持旧件`);
+        continue;
+      }
+      // 隐旧：rim-* / wheel-cap-*（pivot + mesh 两节点，按 sculptComponent.id 精确匹配）
+      spin.traverse((o) => {
+        const id = (o.userData as { sculptComponent?: { id?: string } }).sculptComponent?.id;
+        if (id === `rim-${corner}` || id === `wheel-cap-${corner}`) o.visible = false;
+      });
+      const side: WheelHubSide = corner === 'fl' || corner === 'rl' ? 1 : -1;
+      const hub = createWheelHub(side, hubMats);
+      hub.position.set(0, 0, 0); // spin 原点已是轮心（R8 轮心对轴），随轮滚动
+      spin.add(hub);
+      wired++;
+    }
+    if (wired > 0) console.info(`[V800Adapter] R22-B 涡轮盘轮毂接线完成：${wired} 轮`);
+  }
+
+  // —— R22-C 镀铬窗框 + 玻璃带（手写几何；替换 window-belt-*，chrome-belt-* 间距过挤一并隐）——
+  {
+    const trimMats = createWindowTrimMaterials();
+    for (const side of [1, -1] as const) {
+      const wbId = side === 1 ? 'window-belt-l' : 'window-belt-r';
+      const cbId = side === 1 ? 'chrome-belt-l' : 'chrome-belt-r';
+      // 隐旧窗线 + 旧镀铬腰带（与窗框仅 80-130mm，参考≈350mm，过挤）
+      model.traverse((o) => {
+        const id = (o.userData as { sculptComponent?: { id?: string } }).sculptComponent?.id;
+        if (id === wbId || id === cbId) o.visible = false;
+      });
+      const trim = createWindowTrim(side, trimMats);
+      model.add(trim);
+      r22Exclude.push(trim);
+      const glass = createGlassBand(side);
+      model.add(glass);
+      r22Exclude.push(glass);
+    }
+    console.info('[V800Adapter] R22-C 镀铬窗框 + 玻璃带接线完成（左右）');
+  }
+
   const batchStats = batchMergeStatic(model, {
-    excludeObjects: [...wheels.map((w) => w.spin), ...caps, ...(gaugeMesh ? [gaugeMesh] : []), pedal, ...lampPivots],
+    excludeObjects: [
+      ...wheels.map((w) => w.spin),
+      ...caps,
+      ...(gaugeMesh ? [gaugeMesh] : []),
+      pedal,
+      ...lampPivots,
+      ...r22Exclude,
+    ],
     excludeMaterialIds: UV_CONTENT_MATERIAL_IDS
   });
   if (batchStats.problems.length > 0) {

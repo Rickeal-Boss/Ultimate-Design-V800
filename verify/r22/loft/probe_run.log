@@ -1,0 +1,93 @@
+══════ R22-A body-lower loft · node shim 数值回归（真实工厂产物） ══════
+
+[1] 工厂产物 body-lower mesh 命中数 = 1
+    primitive=extrude  loft={"rings":13}
+    profile points=85 depth=2.006 bevel={"thickness":0.015,"size":0.012,"offset":-0.012,"segments":3}
+    transform.position=[1.003,0,0] rotation=[0,-1.5708,0] scale=[1,1,1]
+
+[2] 真实产物（loft rings=13）
+    tri=3188  verts=2068
+    distinctLocalZ=69  populated5mmBuckets=69/408
+    zCoreShare=46.7%   maxGapRatio=0.076   zSpan=2.0300m
+    本地 bbox min(-2.8300, 0.2000, -0.0120) max(2.3680, 1.6600, 2.0180)
+
+[3] 控制组（现状 steps=1，工厂 buildExtrudeGeometry 逐字副本）
+    tri=1340  verts=968
+    distinctLocalZ=22  populated5mmBuckets=22/408
+    zCoreShare=0.0%   maxGapRatio=0.948   zSpan=2.0300m
+    本地 bbox min(-2.8300, 0.2000, -0.0120) max(2.3680, 1.6600, 2.0180)
+
+[4] Δtri = 1848   Δverts = 1100
+    zCoreShare 0.0% → 46.7%
+    maxGapRatio 0.948 → 0.076
+
+[2b] 属性：position, uv, normal
+    uv 范围 u∈[-2.8180, 2.3560] v∈[-0.9910, 1.6480]
+    uv 唯一行数：loft=1686  现状=762  （环数增多 → 行数增多属预期，scheme 不变）
+
+[5] 形状保形性：loft 顶点 → 现状曲面 最短距离（采样 690/2068，对照 1340 tri）
+    max=2.227e-14 m   mean=1.305e-16 m
+    判读：max ≈ 0 → loft 是**纯细分**，外形逐点不变，相邻件（wheel-arch/rocker/tailgate）对齐不受影响
+
+[6] 本地 z 5mm 桶采样（每 20 桶一行）  [本地 z = 车宽方向]
+    桶中心z      loft verts   现状 verts   loft X极差
+    z=-0.010         28         28   3.595
+    z=0.003          0          0   0.000
+    z=0.190         11          0   4.983
+    z=0.003          0          0   0.000
+    z=0.003          0          0   0.000
+    z=0.003          0          0   0.000
+    z=0.003          0          0   0.000
+    z=0.003          0          0   0.000
+    z=0.003          0          0   0.000
+    z=0.003          0          0   0.000
+    z=0.003          0          0   0.000
+    z=0.003          0          0   0.000
+    z=0.003          0          0   0.000
+    z=0.003          0          0   0.000
+    z=0.003          0          0   0.000
+    z=1.490         33          0   5.188
+    z=0.003          0          0   0.000
+    z=0.003          0          0   0.000
+    z=0.003          0          0   0.000
+    z=0.003          0          0   0.000
+    z=1.990         51         51   5.184
+    >> 病段核心(z-span 中心 z≈1.003)：loft verts=100  现状 verts=28
+
+[7] 尾立面接缝（世界坐标，裸模型车头朝 +Z）
+    body-lower 世界 bbox min(-1.0150, 0.2000, -2.8300) max(1.0150, 1.6600, 2.3680)
+    body-lower 世界 zMin = -2.8300（期望 ≈ -2.82）
+    tailgate 世界 bbox min(-0.8463, 0.5300, -2.8360) max(0.8463, 1.1900, -2.7660)  → z 间隙 = 0.0640 m
+
+[8] 工厂裸模型口径：mesh=190  tri(全部)=71320  tri(可见)=71320
+[V800Adapter] MAEXTRO badge 垂直居中：铬条 world bbox y 1.0800..1.1500（中心 1.1150）→ badge.y=1.1150
+[V800Adapter] 参考图贴图挂载材质： headliner-suede, lamp-red, leather-dark, leather-ivory, leather-warm, screen-ui, starlight
+[V800Adapter] cabin occluder 座椅材质克隆 → 10 个 mesh
+[V800Adapter] cabin occluder 中控材质克隆 → 2 个 mesh
+[V800Adapter] 尾门折线几何 → 3580 tri（旧件 28 tri 平板已 dispose）
+[V800Adapter] rear-glass-upper → 克隆 glass-dark（隐私玻璃 opacity 0.80），命中 1 mesh
+[V800Adapter] R21-B/C 手写灯组接线完成：4 个 pivot（尾灯×2 + 前灯×2）
+[V800Adapter] batch/paint-* 内舱暗面 → 2 个批次
+[V800Adapter] 内舱暗面配对 → 3 组（含合批批次）
+
+[9] #assembled 口径（createV800CarAdapter('high')）
+    mesh: all=129  visible(非碰撞体)=96
+    ┌ 口径 A  all      (含隐藏/碰撞体，Instanced×count) = 91662
+    │ 口径 B  all      (含隐藏/碰撞体，Instanced 不翻倍) = 83022
+    │ 口径 C  visible  (非碰撞体，Instanced×count)      = 87766   ← 最接近 renderer.info.render.triangles
+    └ 口径 D  visible  (非碰撞体，Instanced 不翻倍)     = 79126
+    tri preview = 87766   （visible 再排除 root/cabin-interior 容器占位）
+    → 本次改动引入的 Δtri = +1848（**与口径无关**，body-lower 多出的 1848 tri 全部参与渲染）
+    → 推算接线前：A=89814  B=81174  C=85918  D=77278
+    ⚠ 浏览器口径还受视锥剔除影响；preview 相机 30°/near0.05/far60 整车全在视锥内，应无剔除差
+    被排除的 mesh（33 个）：root[hidden], headlamp-l[hidden], headlamp-led-l[hidden], headlamp-star-l[hidden], headlamp-led-dot-1-l[hidden], headlamp-led-dot-2-l[hidden], headlamp-led-dot-3-l[hidden], headlamp-r[hidden], headlamp-led-r[hidden], headlamp-star-r[hidden], headlamp-led-dot-1-r[hidden], headlamp-led-dot-2-r[hidden], headlamp-led-dot-3-r[hidden], taillamp-l[hidden], lantern-core-l[hidden], lantern-bezel-l[hidden], lantern-emitter-l[hidden], lantern-signature-l[hidden], taillamp-bar-top-l[hidden], taillamp-bar-bottom-l[hidden] …
+    body-lower 在 assembled 中：已合批/不可分（tri 计入批次）
+
+══════ 判据 ══════
+  tri = 3188±50                : PASS  (实测 3188)
+  zCoreShare ≥ 40%             : PASS  (实测 46.7%)
+  maxGapRatio ≤ 0.15           : PASS  (实测 0.076)
+  形状保形（max dev < 1e-6 m） : PASS  (实测 2.227e-14)
+  尾立面 z=-2.82 未位移(±2cm) : PASS  (实测 -2.8300)
+  #assembled(visible) ≤ 78000 : FAIL  (实测 87766)
+  #assembled(preview) ≤ 78000 : FAIL  (实测 87766)

@@ -1,0 +1,8 @@
+全车（接线前，工厂裸件）tri = 71320
+将退役旧件 tri: rim-fl=1056 rim-fr=1056 rim-rl=1056 rim-rr=1056 wheel-cap-fl=792 wheel-cap-fr=792 wheel-cap-rl=792 wheel-cap-rr=792 合计 7392
+cap-fl/fr/rl/rr（滚花齿环，被埋，可留可隐藏）: cap-fl=256 cap-fr=256 cap-rl=256 cap-rr=256
+  rim-fl {"n":2,"tri":1056}
+  wheel-cap-fl {"n":2,"tri":792}
+  cap-fl {"n":2,"tri":256}
+  wheel-fl {"n":2,"tri":284}
+  tire-fl {"n":2,"tri":1056}
