@@ -25,6 +25,13 @@ import { createHeadLamp, createHeadLampMaterials, type HeadLampMaterials } from 
 import { createWindowTrim, createWindowTrimMaterials, createGlassBand } from './parts/windowTrim';
 import { createWheelHub, createWheelHubMaterials, type WheelHubSide } from './parts/wheelHub';
 import {
+  createRoofPod,
+  ROOF_POD_POSITION_SPEC_FRAME,
+  ROOF_POD_REPLACE_IDS
+} from './parts/roofPod';
+import { createFrontFascia } from './parts/frontFascia';
+import { createMirrors, MIRROR_HIDE_IDS } from './parts/mirror';
+import {
   createZunjieV800LuxuryMPVModel,
   type ProceduralModelRuntime,
 } from './createV800Model';
@@ -3712,6 +3719,53 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
     console.info('[V800Adapter] R22-C 镀铬窗框 + 玻璃带接线完成（左右）');
   }
 
+  // ═══ R23 手写部件接线（车顶传感模块 / 前脸面板+MAEXTRO字标 / 外后视镜）═══
+  // 与 R21/R22 同律：必须在 batchMergeStatic **之前**；工厂旧件隐掉后挂手写件；
+  // 独占材质整组进 excludeObjects，避免被合批吞并（材质改名不可寻址 / 法线被抹平）。
+  const r23Exclude: THREE.Object3D[] = [];
+
+  // —— R23-C 车顶传感器模块（parts/roofPod.ts；隐 spec 占位件 lidar-wedge，挂 root）——
+  {
+    const podReplace: readonly string[] = ROOF_POD_REPLACE_IDS;
+    model.traverse((o) => {
+      const id = (o.userData as { sculptComponent?: { id?: string } }).sculptComponent?.id;
+      if (id && podReplace.includes(id)) o.visible = false;
+    });
+    // ★ 坐标框：ROOF_POD_POSITION（默认 z=+2.23，源自照片 L≈0.09 换算）会悬在引擎盖上方
+    //   ——spec 实测风挡顶/车顶前缘只到 z≈+1.65，故用 SPEC_FRAME 校正版。
+    const pod = createRoofPod({ position: [...ROOF_POD_POSITION_SPEC_FRAME] });
+    model.add(pod);
+    r23Exclude.push(pod);
+    console.info('[V800Adapter] R23-C 车顶传感器模块接线完成（隐 lidar-wedge，挂 root，z=+1.65）');
+  }
+
+  // —— R23-D 前脸封闭格栅面板 + 引擎盖 MAEXTRO 发光字标（parts/frontFascia.ts）——
+  // 附加件（FRONT_FASCIA_REPLACE_IDS 为空），几何按 front-end 局部系构建 → 挂 front-end 节点。
+  {
+    const feNode = byId.get('front-end');
+    if (feNode) {
+      const ff = createFrontFascia();
+      feNode.add(ff.group);
+      r23Exclude.push(ff.group);
+      console.info('[V800Adapter] R23-D 前脸面板 + MAEXTRO 字标接线完成（挂 front-end 局部系）');
+    } else {
+      console.warn('[V800Adapter] R23-D 找不到 front-end 节点，前脸件未挂载');
+    }
+  }
+
+  // —— R23-F 外后视镜一对（parts/mirror.ts；隐 spec 占位件 mirror-*/cap-*/arm-*，挂 root）——
+  {
+    const hide = new Set<string>(MIRROR_HIDE_IDS);
+    model.traverse((o) => {
+      const id = (o.userData as { sculptComponent?: { id?: string } }).sculptComponent?.id;
+      if (id && hide.has(id)) o.visible = false;
+    });
+    const mirrors = createMirrors();
+    model.add(mirrors.group);
+    r23Exclude.push(mirrors.group);
+    console.info('[V800Adapter] R23-F 外后视镜接线完成（左右一对，MIRROR_MOUNT z=+1.82）');
+  }
+
   const batchStats = batchMergeStatic(model, {
     excludeObjects: [
       ...wheels.map((w) => w.spin),
@@ -3720,6 +3774,7 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
       pedal,
       ...lampPivots,
       ...r22Exclude,
+      ...r23Exclude,
     ],
     excludeMaterialIds: UV_CONTENT_MATERIAL_IDS
   });

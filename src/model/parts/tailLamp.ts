@@ -162,8 +162,11 @@ export const TAIL_LAMP_MATERIAL_IDS = {
   gold: 'r21-tail-lamp-gold'
 } as const;
 
-/** 待机（低亮度）发光强度；刹车联动在此之上叠加（见头部接线第 6 步） */
-export const TAIL_LAMP_STANDBY = { red: 0.5, gold: 0.55 } as const;
+/** 待机（低亮度）发光强度；刹车联动在此之上叠加（见头部接线第 6 步）。
+ *  R23 look-dev：鹰形点阵屏待机偏暗 → gold 由 0.55 提升至 0.80（≈1.45×），
+ *  点阵仍按 emissiveMap 同源缩放保持可读、不糊成亮斑；该常量同时驱动材质初值
+ *  (L396) 与 V800Adapter 刹车联动 standby 基值 (L4218)，一处提升两路受益。 */
+export const TAIL_LAMP_STANDBY = { red: 0.5, gold: 0.80 } as const;
 /** 金屏刹车联动比例（与 V800Adapter GOLD_BRAKE_RATIO 同口径） */
 export const TAIL_LAMP_GOLD_BRAKE_RATIO = 0.75;
 
@@ -396,8 +399,9 @@ export function createTailLampMaterials(eagleTexture?: THREE.Texture | null): Ta
         emissiveIntensity: TAIL_LAMP_STANDBY.gold, metalness: 0.1, roughness: 0.5
       })
     : mk(TAIL_LAMP_MATERIAL_IDS.gold, {
-        // 无图降级（node shim）：只保留暗底 + 弱金光，保证 QA 几何校验可跑
-        color: 0x0f0c06, emissive: 0xd9a84e, emissiveIntensity: 0.35,
+        // 无图降级（node shim）：只保留暗底 + 弱金光，保证 QA 几何校验可跑。
+        // R23 look-dev：emissiveIntensity 由 0.35 → 0.50（≈×1.45，与带图口径同比例）
+        color: 0x0f0c06, emissive: 0xd9a84e, emissiveIntensity: 0.50,
         metalness: 0.1, roughness: 0.5
       });
   return {
@@ -405,7 +409,9 @@ export function createTailLampMaterials(eagleTexture?: THREE.Texture | null): Ta
       color: 0x0d0f12, metalness: 0.35, roughness: 0.5
     }),
     chrome: mk(TAIL_LAMP_MATERIAL_IDS.chrome, {
-      color: 0xdfe2e8, metalness: 1.0, roughness: 0.14
+      // R23 look-dev：黄昏环境反光弱 → metalness 保持 1.0、roughness 0.14→0.09、
+      // 新增 envMapIntensity 1.6，使 RoomEnvironment 黄昏高光明显但不镜面过曝。
+      color: 0xdfe2e8, metalness: 1.0, roughness: 0.09, envMapIntensity: 1.6
     }),
     red: mk(TAIL_LAMP_MATERIAL_IDS.red, {
       color: 0x7e1220, emissive: 0xe03040, emissiveIntensity: TAIL_LAMP_STANDBY.red,
