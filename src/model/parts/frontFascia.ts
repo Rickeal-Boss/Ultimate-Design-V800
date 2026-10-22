@@ -78,6 +78,8 @@ export function toFeLocal(worldW: number, worldH: number, worldD: number): [numb
 export interface FrontFasciaMaterials {
   /** 封闭格栅面板：车身同色深色金属漆（半哑光，独占） */
   grille: THREE.MeshStandardMaterial;
+  /** R25 格栅点阵面片：扇形格线 + 暖金发光勾边（map+emissiveMap 同源，独占） */
+  grilleFace: THREE.MeshStandardMaterial;
   /** 引擎盖前缘横向饰条（字标嵌 herein，独占） */
   trim: THREE.MeshStandardMaterial;
   /** MAEXTRO 发光字母（emissive 白/银白，独占） */
@@ -101,6 +103,7 @@ export interface FrontFasciaResult {
 /** 独占材质 id（batchMerge / 落地审查寻址用；绝不并入共享批次） */
 export const FRONT_FASCIA_MATERIAL_IDS = {
   grille: 'r23-front-fascia-grille',
+  grilleFace: 'r25-front-fascia-grille-face',
   trim: 'r23-front-fascia-trim',
   letter: 'r23-front-fascia-letter'
 } as const;
@@ -295,7 +298,112 @@ function buildMaextroLetters(): THREE.BufferGeometry {
 }
 
 /* ================================================================
- * 4. 独占材质工厂（零外部图片；id 全 r23-front-fascia-*）
+ * 3.5 格栅点阵纹（R25：参考图 image#13——斜向扇形格栅 + 暖色发光勾边）
+ * 纯函数 painter（CanvasRenderingContext2D 注入；node 无 DOM 返回 null → 降级无图）。
+ * 画布 768×384（2:1 ≈ 格栅面板 1.20×0.62 的 1.94:1）：
+ *   · 近黑底 #0a0a0c（不发光，格栅关闭时读作深色封闭面板）；
+ *   · 扇形格线：自底边中心向上左右辐射的斜线族 + 反向斜线交成菱形网，深灰；
+ *   · 暖金发光勾边：3 条主格线带径向渐变辉光（emissiveMap 载体）；
+ *   · 中央盾标避让区：中部竖向柔化（盾座本身是 bronze 实体，纹样不与它抢戏）。
+ * ================================================================ */
+
+/** 格栅扇形纹 painter（纯函数）：ctx 已按 768×384 准备好 */
+export function paintGrillePattern(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+  ctx.fillStyle = '#0a0a0c';
+  ctx.fillRect(0, 0, w, h);
+  const cx = w * 0.5;
+  const baseY = h * 1.02; // 辐射源在底边下方，线上端收敛到顶边
+
+  // ① 扇形格线：从底边中心辐射（左 7 条 / 右 7 条），交成菱形网
+  const fans: Array<[number, string, number]> = []; // [终点 x 比例, 色, 线宽]
+  for (let i = 1; i <= 7; i++) {
+    const t = i / 7;
+    fans.push([-t, '#34343c', 2.2]);
+    fans.push([t, '#34343c', 2.2]);
+  }
+  // 反向斜线（左上→右下 / 右上→左下），与辐射线交成菱形
+  for (let i = 0; i <= 6; i++) {
+    const x = (i / 6) * w;
+    fans.push([x, '#2b2b33', 1.6]);
+  }
+  ctx.lineCap = 'round';
+  for (const [fx, color, lw] of fans) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    if (Math.abs(fx) <= 1) {
+      // 辐射线：底边中心 → 顶边 fx 处
+      ctx.moveTo(cx, baseY);
+      ctx.lineTo(cx + fx * w * 0.62, -h * 0.02);
+    } else {
+      // 反向斜线：顶边 x → 底边镜像 x（交成菱形）
+      ctx.moveTo(fx, -h * 0.02);
+      ctx.lineTo(w - fx, h * 1.02);
+    }
+    ctx.stroke();
+  }
+
+  // ② 暖金发光勾边：4 条主格线（两侧各 2 条），径向渐变辉光
+  const glowLines: Array<[number, number]> = [
+    [-0.36, 0.95],
+    [0.36, 0.95],
+    [-0.62, 0.7],
+    [0.62, 0.7],
+  ];
+  for (const [gx, alpha] of glowLines) {
+    const ex = cx + gx * w * 0.62;
+    const grad = ctx.createLinearGradient(cx, baseY, ex, 0);
+    grad.addColorStop(0, `rgba(232, 200, 138, 0)`);
+    grad.addColorStop(0.55, `rgba(240, 210, 150, ${alpha * 0.6})`);
+    grad.addColorStop(1, `rgba(255, 240, 205, ${alpha})`);
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = 3.6;
+    ctx.beginPath();
+    ctx.moveTo(cx, baseY);
+    ctx.lineTo(ex, -h * 0.02);
+    ctx.stroke();
+    // 辉光：粗淡线垫底
+    ctx.strokeStyle = `rgba(201, 168, 107, ${alpha * 0.3})`;
+    ctx.lineWidth = 12;
+    ctx.beginPath();
+    ctx.moveTo(cx, baseY);
+    ctx.lineTo(ex, -h * 0.02);
+    ctx.stroke();
+  }
+
+  // ③ 中央盾标避让：中部竖向椭圆柔化（深一档，让 bronze 盾标成为视觉中心）
+  const soft = ctx.createRadialGradient(cx, h * 0.52, 0, cx, h * 0.52, w * 0.075);
+  soft.addColorStop(0, 'rgba(6, 6, 8, 0.85)');
+  soft.addColorStop(1, 'rgba(6, 6, 8, 0)');
+  ctx.fillStyle = soft;
+  ctx.fillRect(0, 0, w, h);
+
+  // ④ 顶边微亮渐变（模拟格栅上沿的金属分界）
+  const top = ctx.createLinearGradient(0, 0, 0, h * 0.08);
+  top.addColorStop(0, 'rgba(120, 124, 134, 0.22)');
+  top.addColorStop(1, 'rgba(120, 124, 134, 0)');
+  ctx.fillStyle = top;
+  ctx.fillRect(0, 0, w, h * 0.08);
+}
+
+/** 格栅扇形纹 canvas 贴图；node（无 DOM）环境返回 null */
+export function makeGrilleTexture(): THREE.CanvasTexture | null {
+  if (typeof document === 'undefined') return null;
+  const W = 768;
+  const H = 384;
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  paintGrillePattern(ctx, W, H);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+/* ================================================================
+ * 4. 独占材质工厂（零外部图片；id 全 r23-front-fascia-* / r25-*）
  * ================================================================ */
 
 export function createFrontFasciaMaterials(): FrontFasciaMaterials {
@@ -307,11 +415,24 @@ export function createFrontFasciaMaterials(): FrontFasciaMaterials {
     m.userData.sculptMaterial = { id };
     return m;
   };
+  // R25 格栅点阵面片：暗底承 map + 暖金勾边承 emissiveMap（同源纹理），
+  // 待机低亮度（standby 1.2）——格栅关闭时读作深色封闭面板，勾边若隐若现。
+  const grilleTex = makeGrilleTexture();
+  const grilleFace = mk(FRONT_FASCIA_MATERIAL_IDS.grilleFace, {
+    color: grilleTex ? 0xffffff : 0x0f0f12,
+    map: grilleTex,
+    emissive: 0xffffff,
+    emissiveMap: grilleTex,
+    emissiveIntensity: 1.2,
+    metalness: 0.35,
+    roughness: 0.5
+  });
   return {
     // 车身同色深色金属漆（半哑光）：匹配 paint-upper #0F0F12 基色，roughness 上调至半哑光
     grille: mk(FRONT_FASCIA_MATERIAL_IDS.grille, {
       color: 0x0f0f12, metalness: 0.55, roughness: 0.42
     }),
+    grilleFace,
     // 引擎盖前缘饰条：略亮的深色，让字标浮起
     trim: mk(FRONT_FASCIA_MATERIAL_IDS.trim, {
       color: 0x14161b, metalness: 0.5, roughness: 0.5
@@ -347,7 +468,27 @@ export function createFrontFascia(options: FrontFasciaOptions = {}): FrontFascia
     FRONT_FASCIA_ANCHORS.grille.pos[2]
   );
 
-  // ---- 5.2 引擎盖前缘横向饰条（字标嵌 herein） ----
+  // ---- 5.2 R25 格栅点阵面片：单面 quad 贴在格栅面板正面（防 z-fight）----
+  // 承载扇形格线 + 暖金勾边（map+emissiveMap 同源 canvas，零外部图片）。
+  // ⚠️ 挤出体带 bevel（bevelThickness=0.003）时实际前面 = pos.z + depth + bevel
+  //    = 0.075+0.02+0.003 = 0.098 —— quad 必须落在此之外，否则被包进挤出体内。
+  //    尺寸收 4cm/边：面板圆角半径 0.05，尖角 quad 会戳出圆角。
+  // 无 DOM 环境（node QA）降级：不建面片，格栅保持素面板（材质已同步降级）。
+  let grilleFaceGeo: THREE.BufferGeometry | null = null;
+  if (materials.grilleFace.map) {
+    grilleFaceGeo = at(
+      new THREE.PlaneGeometry(
+        FRONT_FASCIA_ANCHORS.grille.size[0] - 0.04,
+        FRONT_FASCIA_ANCHORS.grille.size[1] - 0.04
+      ),
+      FRONT_FASCIA_ANCHORS.grille.pos[0],
+      FRONT_FASCIA_ANCHORS.grille.pos[1],
+      // 面板前面 = pos.z + depth + bevel(0.003)；面片再 +1mm
+      FRONT_FASCIA_ANCHORS.grille.pos[2] + FRONT_FASCIA_ANCHORS.grille.size[2] + 0.003 + 0.001
+    );
+  }
+
+  // ---- 5.3 引擎盖前缘横向饰条（字标嵌 herein） ----
   const trimGeo = at(
     extrude(
       roundedRectShape(
@@ -363,10 +504,10 @@ export function createFrontFascia(options: FrontFasciaOptions = {}): FrontFascia
     FRONT_FASCIA_ANCHORS.trim.pos[2]
   );
 
-  // ---- 5.3 MAEXTRO 发光字母（程序化线段几何，已烘焙落位） ----
+  // ---- 5.4 MAEXTRO 发光字母（程序化线段几何，已烘焙落位） ----
   const letterGeo = buildMaextroLetters();
 
-  // ---- 5.4 装配：每材质 1 个 mesh，挂到 Group ----
+  // ---- 5.5 装配：每材质 1 个 mesh，挂到 Group ----
   const group = new THREE.Group();
   group.name = 'front-fascia-hand';
   group.userData.sculptComponent = { id: 'front-fascia' };
@@ -377,10 +518,11 @@ export function createFrontFascia(options: FrontFasciaOptions = {}): FrontFascia
     group.add(mesh);
   };
   addMesh(grilleGeo, materials.grille, 'ff-grille');
+  if (grilleFaceGeo) addMesh(grilleFaceGeo, materials.grilleFace, 'ff-grille-face');
   addMesh(trimGeo, materials.trim, 'ff-trim');
   addMesh(letterGeo, materials.letter, 'ff-letters');
 
-  // ---- 5.5 统计 tri 数 ----
+  // ---- 5.6 统计 tri 数 ----
   let triangleCount = 0;
   group.traverse((o) => {
     const m = o as THREE.Mesh;

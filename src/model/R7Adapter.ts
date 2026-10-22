@@ -459,6 +459,23 @@ export function createR7CarAdapter(tier: QualityTier = 'high'): CarLike {
     });
   };
 
+  // ---- R25：前脸贯穿日行灯带（light-bar-front：chrome 装饰刃 → 发光 DRL）----
+  // 参考图（智界 R7 前脸官方图）：全宽贯穿式日行灯是该车前脸第一识别特征（1.3m
+  // 通栏白刃），原 spec 材质是 chrome——不发光装饰刃，前脸读作"缺魂"。
+  // 逐 mesh 克隆为独占发光材质常亮（黄昏场景 DRL 恒亮；V800 的 front-light-bar
+  // 同为常亮 lamp-white，双车口径一致）。chrome 原件不动（lamp-edging 等仍共享）。
+  cloneForMesh('light-bar-front', (mat) => {
+    mat.color.setHex(0xf4f7fa);
+    mat.emissive.setHex(0xffffff);
+    mat.emissiveIntensity = 1.6;
+    mat.metalness = 0.1;
+    mat.roughness = 0.22;
+    mat.userData = {
+      ...mat.userData,
+      sculptMaterial: { ...mat.userData?.sculptMaterial, id: 'r25-r7-front-drl' }
+    };
+  });
+
   const decalTextures: THREE.Texture[] = [];
   const decal = (
     meshId: string,
