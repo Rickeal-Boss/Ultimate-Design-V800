@@ -2902,7 +2902,7 @@
        1.76
       ]
      ],
-     "depth": 1.94
+     "depth": 1.86
     },
     "topologyIntent": "roof shell；R13 后缘外扩至 z=-2.825；R14 后檐减薄到 0.096（1.752~1.848），内顶面 1.739 平直前接 1.759，消除 roof 后檐与尾门间的\"横向搁板\"深腔",
     "edgeTreatment": {
@@ -2939,7 +2939,7 @@
    },
    "transform": {
     "position": [
-     0.97,
+     0.93,
      0,
      0
     ],
@@ -3046,7 +3046,7 @@
     "materialClass": "metal",
     "materialClassConfidence": 0.85
    },
-   "notes": "治粗糙 + EX-15：顶盖后段抬高 13mm 台阶（z-1.95~-2.26），前后缘倒圆。 | 2026-10-17 第四轮几何改造：整车顶线 +0.115（主顶 1.835、EX-15 后段台阶 1.848 保留）；前缘自 z0.98 重落位至 z1.14，落在新风挡上沿正上方（cowl z1.62 + 55° 风挡 → 玻璃顶 z≈1.127），消除悬空外伸。"
+   "notes": "治粗糙 + EX-15：顶盖后段抬高 13mm 台阶（z-1.95~-2.26），前后缘倒圆。 | 2026-10-17 第四轮几何改造：整车顶线 +0.115（主顶 1.835、EX-15 后段台阶 1.848 保留）；前缘自 z0.98 重落位至 z1.14，落在新风挡上沿正上方（cowl z1.62 + 55° 风挡 → 玻璃顶 z≈1.127），消除悬空外伸。 | R24-A 收腰：半宽 0.97→0.93（position.x=0.93、profile2D.depth=1.94→1.86，居中对齐），恢复 body 1.015 → greenhouse 0.962 → roof 0.93 单调递减；消除 greenhouse→roof 交界 −8mm 外翻帽檐，变为 +32mm 正台阶。"
   },
   {
    "id": "windshield",
@@ -3411,7 +3411,7 @@
     "scale": [
      0.13,
      0.675,
-     0.30
+     0.3
     ]
    },
    "actionProfile": {
@@ -3689,9 +3689,9 @@
      "debrisMaterial": "base"
     }
    },
-   "material": "matte-black",
+   "material": "pillar-trim",
    "materialLayers": [
-    "matte-black"
+    "pillar-trim"
    ],
    "deformations": [],
    "joints": [],
@@ -3909,9 +3909,9 @@
      "debrisMaterial": "base"
     }
    },
-   "material": "matte-black",
+   "material": "pillar-trim",
    "materialLayers": [
-    "matte-black"
+    "pillar-trim"
    ],
    "deformations": [],
    "joints": [],
@@ -4074,7 +4074,7 @@
     "scale": [
      0.13,
      0.675,
-     0.30
+     0.3
     ]
    },
    "actionProfile": {
@@ -4352,9 +4352,9 @@
      "debrisMaterial": "base"
     }
    },
-   "material": "matte-black",
+   "material": "pillar-trim",
    "materialLayers": [
-    "matte-black"
+    "pillar-trim"
    ],
    "deformations": [],
    "joints": [],
@@ -4572,9 +4572,9 @@
      "debrisMaterial": "base"
     }
    },
-   "material": "matte-black",
+   "material": "pillar-trim",
    "materialLayers": [
-    "matte-black"
+    "pillar-trim"
    ],
    "deformations": [],
    "joints": [],
@@ -11952,7 +11952,7 @@
        1.05
       ]
      ],
-     "radius": 0.022,
+     "radius": 0.011,
      "closed": true,
      "radialSegments": 28
     },
@@ -12074,7 +12074,7 @@
     "materialClass": "metal",
     "materialClassConfidence": 0.9
    },
-   "notes": " 参考图 82 张均未证实该特征；按车型惯例推定，非实测证据。原承载裁片已按权利人合规要求移除，仓库内不可复验。 结构修复(structural-pass审查): 原attachment.localStart/localEnd为跨轨端点,生成器将其解释为单圆柱并落在root坐标系地面(y≈0.06)。现localStart==localEnd(零长度→生成器回退tubePath闭环分支,表达纵轨×2),节点transform.position改为[0,1.732,-0.4]使管中心贴车顶顶面(y=1.72,embed 0.01),世界z范围[-2.3,0.8]在roof-panel z范围[-2.36,0.98]内。 补偿: tubePath 闭环经 CatmullRom 插值在四角外凸≈0.19, 收缩局部 z 至[-1.55,1.05]并移节点 z=-0.25, 使世界 z 外凸后≈[-1.98,0.98] 不越过 roof 后缘 -2.36。 再修: 90°尖角在 CatmullRom 下过冲(先 z 后 x), 改八角形闭环(45°切角0.2) 世界 z≈[-1.85,0.85] x=±0.62 均在 roof 范围内。",
+   "notes": " 参考图 82 张均未证实该特征；按车型惯例推定，非实测证据。原承载裁片已按权利人合规要求移除，仓库内不可复验。 结构修复(structural-pass审查): 原attachment.localStart/localEnd为跨轨端点,生成器将其解释为单圆柱并落在root坐标系地面(y≈0.06)。现localStart==localEnd(零长度→生成器回退tubePath闭环分支,表达纵轨×2),节点transform.position改为[0,1.732,-0.4]使管中心贴车顶顶面(y=1.72,embed 0.01),世界z范围[-2.3,0.8]在roof-panel z范围[-2.36,0.98]内。 补偿: tubePath 闭环经 CatmullRom 插值在四角外凸≈0.19, 收缩局部 z 至[-1.55,1.05]并移节点 z=-0.25, 使世界 z 外凸后≈[-1.98,0.98] 不越过 roof 后缘 -2.36。 再修: 90°尖角在 CatmullRom 下过冲(先 z 后 x), 改八角形闭环(45°切角0.2) 世界 z≈[-1.85,0.85] x=±0.62 均在 roof 范围内。 | R24-A：闭环管半径 0.022→0.011（框宽/stroke 减半），外部审查判据#6——正前/正后视角黑框不再读作井盖环；闭环路径/节点位姿不变，roof-panel 收腰至 0.93 后仍在顶面范围内（halfW≈0.745 < 0.93）。",
    "attachment": {
     "parentSocket": "roof-panel.top",
     "localStart": [
@@ -31946,8 +31946,8 @@
    "transform": {
     "position": [
      0,
-     0.055,
-     0.112
+     0.0148,
+     0.0925
     ],
     "rotation": [
      0,
@@ -32047,7 +32047,7 @@
     "materialClass": "plastic",
     "materialClassConfidence": 0.86
    },
-   "notes": "EX-05：沿 chrome-brow 上缘的贯通细白光带；lamp-white 与保险杠灯带合批 +0 DC。"
+   "notes": "EX-05：沿 chrome-brow 上缘的贯通细白光带；lamp-white 与保险杠灯带合批 +0 DC。 | R24-A3 迁移：local position [0,0.055,0.112]→[0,0.0148,0.0925]，world y [0.921,0.937]→[0.880,0.894]，让开 MAEXTRO 字标带 y[0.910,1.036]（净空 16mm ≥ 5mm）。宽度 x±0.31 / 厚度 / lamp-white 发光 / 横向贯穿语义均不变；z 仍贴在格栅正面（背面埋入格栅面板 3mm（无悬空缝隙），正面探出 ~18mm），车额头机位可见。"
   },
   {
    "id": "roof-spoiler",
@@ -33529,8 +33529,8 @@
    "transform": {
     "position": [
      0,
-     0.02,
-     0.104
+     0.02543,
+     0.059
     ],
     "rotation": [
      0,
@@ -33630,7 +33630,7 @@
     "materialClass": "plastic",
     "materialClassConfidence": 0.86
    },
-   "notes": "EX-07：盾前 4mm 的自发光白面板（lamp-white）；纹理细节待适配层。"
+   "notes": "EX-07：盾前 4mm 的自发光白面板（lamp-white）；纹理细节待适配层。 | R24-A3 对位：local position [0,0.02,0.104]→[0,0.02543,0.059]，world y/x 包络保持 [0.808,0.977]/x±0.030 不变、z 后退 ~45mm 埋入 front-end 壳体内（壳前面之后 ≥8mm，壳背面之前，不穿出）→ 消除盾座上方 0.901~0.977 的白色残条。选「埋入」而非「收进盾座轮廓内」的依据：收进盾座会让 panel∪shield 并集 bbox 中心 y 0.819→0.781，把 R24-B 已交付的 badgeCore 连带下移 38mm；埋入方案该并集逐位不变，badgeCore 原位不动。"
   },
   {
    "id": "console-island-charge-tray",
@@ -43176,6 +43176,55 @@
     ]
    },
    "referencePbr": null
+  },
+  {
+   "id": "pillar-trim",
+   "name": "B/C柱哑光深灰（提亮档）",
+   "type": "standard",
+   "shaderModel": "MeshStandardMaterial",
+   "baseColor": "#1E1E24",
+   "color": "#1E1E24",
+   "albedo": {
+    "base": "#1E1E24",
+    "secondary": "#1E1E24",
+    "note": "R24-A：自 matte-black(#121214) 提亮一档至 #1E1E24，深烟灰玻璃带内可辨柱体分层"
+   },
+   "colorVariation": {
+    "type": "subtle-panel-variation",
+    "intensity": 0.08
+   },
+   "textureResolution": null,
+   "textureProjection": null,
+   "surfaceFrequencyBands": null,
+   "roughness": 0.75,
+   "metalness": 0.1,
+   "normal": null,
+   "bump": null,
+   "displacement": null,
+   "ambientOcclusion": {
+    "type": "baked-contact",
+    "intensity": 0.5,
+    "note": "contact AO at panel gaps/crevices"
+   },
+   "wear": {
+    "type": "none",
+    "intensity": 0
+   },
+   "dirt": {
+    "type": "none",
+    "intensity": 0
+   },
+   "localOverrides": [],
+   "shaderNotes": [
+    "哑光深灰工程塑料（B/C 柱专用，与格栅/轮拱哑光黑分离）"
+   ],
+   "notes": "R24-A：外部审查判据#5——B/C 柱在玻璃带内隐约可辨。仅 bpillar/cpillar ×4 引用，不影响其余 matte-black 件。",
+   "textureless": {
+    "declared": true,
+    "evidence": [
+     "哑光深灰均质表面，无纹理细节；R24-A 自 matte-black 分桶（batchmerge +1 桶，DC +1 已接受）"
+    ]
+   }
   }
  ],
  "repetitionSystems": [

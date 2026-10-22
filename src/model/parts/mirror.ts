@@ -27,13 +27,21 @@
  *   反射会翻转三角形绕序 → 所有材质统一 DoubleSide 兜底（R21-C 同律）。
  *   右侧经 −x 反射后：outboard→−X、镜面法线 X 分量取反 → 自然仍朝车内(inboard)与车尾(rear)。
  *
- * 几何构成（每材质 1 mesh，共 4 mesh/侧；tri 预算一对合计 ≤1600）：
+ * 几何构成（每材质 1 mesh，共 5 mesh/侧；tri 预算一对合计 ≤1600）：
  *   mirrorBodyMat   （独占 r23-mirror-body）   圆润流线镜壳（rounded-rect 挤出，弧段锁 4）
- *   mirrorChromeMat （独占 r23-mirror-chrome） 镀铬支杆 + 镀铬下缘基座（双色下缘）
+ *   mirrorChromeMat （独占 r23-mirror-chrome） 镀铬支杆
+ *   mirrorAccentMat （独占 r23-mirror-accent） 镜壳下缘 accent 条（R24-B 从 chrome 拆出）
  *   mirrorGlassMat  （独占 r23-mirror-glass）  深色高光镜面（朝后外偏 ~18°、微俯 ~12°）
  *   结构：单支杆一体化流线支撑臂从前门板前缘向外伸出；镜壳圆润无棱角。
  *
- * 独占材质铁律（R8/R12）：3 个 id 全 r23-mirror-*，不得并入全车共享批次，
+ * R24-B accent 独立材质：镜壳下缘条此前与支杆共用 materials.chrome —— 任何针对下缘
+ *   的色相/反射调整都会连坐支杆（合批按**材质实例**分桶，改实例即改两处）。且真车此处
+ *   是中性铬（0xe8e9ec），而 RoomEnvironment 是暖色软光箱：metalness 1.0 +
+ *   envMapIntensity 1.4 会把中性铬整条反射成暖铜（外部审查 P3「bronze 面漆感、过橙」）。
+ *   处置：拆出独占 r23-mirror-accent（+1 DC），color/roughness/metalness 对齐文件内
+ *   chrome 参数，envMapIntensity 1.4 → 1.0 收敛暖反射。
+ *
+ * 独占材质铁律（R8/R12）：4 个 id 全 r23-mirror-*，不得并入全车共享批次，
  *   也不得把 materials.* 实例借给其他部件。接线层须将本部件挂入 batchMergeStatic
  *   的 excludeObjects（否则按 id 合批后材质改名不可寻址、且合批重算法线抹平镜面高光）。
  */
@@ -85,8 +93,10 @@ export const MIRROR_HIDE_IDS = [
 export interface MirrorMaterials {
   /** 镜壳主体（车身同色亮漆，独占） */
   body: THREE.MeshPhysicalMaterial;
-  /** 镀铬支杆 / 下缘基座（独占） */
+  /** 镀铬支杆（独占） */
   chrome: THREE.MeshPhysicalMaterial;
+  /** 镜壳下缘 accent 条：中性铬（独占，R24-B 从 chrome 拆出，不再连坐支杆） */
+  accent: THREE.MeshPhysicalMaterial;
   /** 深色高光镜面（独占） */
   glass: THREE.MeshPhysicalMaterial;
 }
@@ -111,6 +121,7 @@ export interface MirrorResult {
 export const MIRROR_MATERIAL_IDS = {
   body: 'r23-mirror-body',
   chrome: 'r23-mirror-chrome',
+  accent: 'r23-mirror-accent',
   glass: 'r23-mirror-glass'
 } as const;
 
@@ -178,12 +189,22 @@ export function createMirrorMaterials(): MirrorMaterials {
       clearcoatRoughness: 0.06,
       envMapIntensity: 1.0
     }),
-    // 镀铬支杆 / 下缘：比共享 chrome 更镜（rough 0.08 / envInt 1.4，任务书口径；R8 不过拉满防锈斑）
+    // 镀铬支杆：比共享 chrome 更镜（rough 0.08 / envInt 1.4，任务书口径；R8 不过拉满防锈斑）
     chrome: mk(MIRROR_MATERIAL_IDS.chrome, {
       color: 0xe8e9ec,
       metalness: 1.0,
       roughness: 0.08,
       envMapIntensity: 1.4
+    }),
+    // 镜壳下缘 accent 条（R24-B）：真车是中性铬，不是暗铜面漆。
+    // color / metalness / roughness 与上方 chrome 对齐；envMapIntensity 1.4 → 1.0
+    // —— 暖色 RoomEnvironment 在满反射金属上会把 0xe8e9ec 整条染成暖铜（过橙），
+    //    压一档环境反射后回到中性铬读感（独占实例，不影响支杆）。
+    accent: mk(MIRROR_MATERIAL_IDS.accent, {
+      color: 0xe8e9ec,
+      metalness: 1.0,
+      roughness: 0.08,
+      envMapIntensity: 1.0
     }),
     // 深色高光镜面：rough 0.05 / color #1a2026（任务书口径）
     glass: mk(MIRROR_MATERIAL_IDS.glass, {
@@ -284,7 +305,8 @@ export function createMirror(options: MirrorOptions = {}): MirrorResult {
   };
   addTo(head, housingGeo, materials.body, 'mirror-housing');
   addTo(head, glassGeo, materials.glass, 'mirror-glass');
-  addTo(head, chromeBaseGeo, materials.chrome, 'mirror-chrome-base');
+  // R24-B：下缘 accent 条走独占材质，与支杆的 chrome 解耦
+  addTo(head, chromeBaseGeo, materials.accent, 'mirror-chrome-base');
   group.add(head);
 
   // 支杆直接挂在 group（跨度：支杆根部 x=0 → 镜壳 inboard 面 x≈0.075）

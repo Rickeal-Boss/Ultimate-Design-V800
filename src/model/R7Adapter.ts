@@ -708,6 +708,29 @@ export function createR7CarAdapter(tier: QualityTier = 'high'): CarLike {
         console.warn('[R7Adapter] cabin occluder 组件缺失：center-screen-frame');
       }
     }
+    // ④ R24：A 柱内衬板 + 仪表台下沿（leather-ivory 亮色）—— 用户截图 r7.png 指认
+    //    「与 V800 中央隔板同类的车内遮挡」：cabinDriver 机位下 A 柱内衬（apillar-inner-l/r，
+    //    亮象牙白）在视野左右读作两面大灰板，仪表台下沿（dash-lower，同料）糊住下半幅。
+    //    参考图确认真车此处确为米白，但座舱机位通行做法 = 近场亮面板不画，只留 A 柱
+    //    （matte-black）与顶棚勾出轮廓（同 ① 门板策略）。每件克隆自身材质后整体隐藏：
+    //    车内机位整批不画，车外机位（风挡/侧窗透视）逐像素不变（R17 铁律：合批按材质
+    //    实例分桶，独占克隆不连坐其他 leather-ivory 件）。
+    for (const id of ['apillar-inner-l', 'apillar-inner-r', 'dash-lower'] as const) {
+      const node = byId.get(id);
+      const srcMesh = meshOf(id);
+      const mat = (srcMesh?.material ?? null) as THREE.MeshPhysicalMaterial | null;
+      if (!mat || !node) {
+        console.warn('[R7Adapter] cabin occluder 组件缺失：', id);
+        continue;
+      }
+      const clone = mat.clone();
+      clone.userData.cabinHidable = true;
+      node.traverse((o) => {
+        const mesh = o as THREE.Mesh;
+        if (mesh.isMesh) mesh.material = clone;
+      });
+      cabinOccluderMats.push(clone);
+    }
     console.info(`[R7Adapter] cabin occluder 材质克隆 × ${cabinOccluderMats.length}`);
   }
 
@@ -773,6 +796,70 @@ export function createR7CarAdapter(tier: QualityTier = 'high'): CarLike {
     }
     console.info(`[R7Adapter] batch/paint-* 内舱暗面 → ${paintShadowPairs.length} 个批次`);
   };
+
+  // ---- R24：座舱亮面板材质级兜底遮挡（治 ① 按 id 克隆的静默漏藏）----
+  // 实证（.qa/r24_r7cabin.mjs）：① 的 12 个 id 克隆实际只覆盖 5 个 mesh
+  // （byId 先序命中 + 合批按材质实例/几何签名分桶，部分 id 静默 miss），
+  // 前排座椅/门板/扬声器网罩仍以 leather-ivory / speaker-lattice 亮色暴露在
+  // cabinDriver 机位——用户 r7.png 指认「与 V800 中央隔板同类的车内遮挡」。
+  // 材质级兜底：合批后把这三类材质的**所有实例**（含合批批次，batchMerge 不复制
+  // 材质实例，直接隐藏即整批不画）纳入 cabinOccluderMats。仅在 interior 机位
+  // 隐藏，车外机位（风挡/侧窗透视）逐像素不变。
+  // · leather-ivory / speaker-lattice：全内饰件（座椅/门板/遮阳板/方向盘/中岛/
+  //   A 柱内衬/仪表台下沿/扬声器网罩），无外外观件共用；
+  // · glass-dark：侧窗/后窗/天幕玻璃——座舱内斜向大亮板的真凶（R24 消去法实锤：
+  //   侧窗玻璃以 ~1.35 envMapIntensity 反射黄昏天空，从驾员眼点读作右侧暖色大斜
+  //   板；Game 只藏 glass-clear 前挡，侧窗不在其列）。隐藏后侧窗读作暗色门体。
+  {
+    const CABIN_HIDE_MATERIAL_IDS = ['leather-ivory', 'speaker-lattice', 'glass-dark'];
+    const seenMat = new Set<THREE.MeshPhysicalMaterial>();
+    model.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      for (const m of mats) {
+        const mat = m as THREE.MeshPhysicalMaterial;
+        const mid = mat.userData?.sculptMaterial?.id;
+        if (!mid || !CABIN_HIDE_MATERIAL_IDS.includes(mid)) continue;
+        if (seenMat.has(mat)) continue;
+        seenMat.add(mat);
+        mat.userData.cabinHidable = true;
+        cabinOccluderMats.push(mat);
+      }
+    });
+    console.info(`[R7Adapter] 座舱亮面板材质级兜底 → ${seenMat.size} 个材质实例（leather-ivory/speaker-lattice/glass-dark）`);
+  }
+
+  // ---- R24：座舱遮挡稳健扫描（治 byId 先序命中 + 合批分桶的静默漏藏）----
+  // 实证（.qa/r24_r7cabin.mjs）：按 id 逐件 byId.get().traverse() 12 件只中 5 件，
+  // door-trim-*（leather-plum 门饰板）等静默 miss → cabinDriver 右前门饰板裸露成
+  // 「大斜板」（用户 r7.png 指认，与 V800 中央隔板同类）。改为按
+  // sculptComponent.id 正则全树扫描：每个源材质实例只克隆一次（保留各自贴图/染色，
+  // 互不串味——R17 铁律），整批 cabinHidable，合批后随批次隐藏。
+  {
+    const CABIN_HIDE_RE = /^(seat-|door-card|door-trim|door-speaker|sun-visor|apillar-inner|dash-lower|steering-hub)/;
+    const cloneBySrc = new Map<THREE.MeshPhysicalMaterial, THREE.MeshPhysicalMaterial>();
+    let swept = 0;
+    model.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      const id = mesh.userData?.sculptComponent?.id as string | undefined;
+      if (!id || !CABIN_HIDE_RE.test(id)) return;
+      const src = (Array.isArray(mesh.material) ? mesh.material[0] : mesh.material) as THREE.MeshPhysicalMaterial | undefined;
+      if (!src || src.userData?.cabinHidable) return;
+      let clone = cloneBySrc.get(src);
+      if (!clone) {
+        clone = src.clone();
+        clone.userData = { ...src.userData, cabinHidable: true };
+        clone.needsUpdate = true;
+        cloneBySrc.set(src, clone);
+        cabinOccluderMats.push(clone);
+      }
+      mesh.material = clone;
+      swept += 1;
+    });
+    console.info(`[R7Adapter] 座舱遮挡稳健扫描 → ${swept} mesh / ${cloneBySrc.size} 材质克隆`);
+  }
 
   const mergeResult = batchMergeStatic(model, {
     excludeObjects: dynamicNodes,

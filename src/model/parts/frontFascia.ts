@@ -14,31 +14,34 @@
  *   兄弟节点），并加入 batchMerge 的 excludeObjects，独占材质不被并进全车批次。
  *
  * 坐标 / 锚点（★ 与头灯同律：本部件挂在 front-end 下，几何按 front-end 局部系构建）：
- *   front-end 局部系 = spec 中 front-end 节点的子节点坐标系。实测 front-end 自身 transform：
- *     position [0, 0.86, 2.33]，rotation [-0.12, 0, 0]，scale [1.062, 0.46, 1]，parent = root。
+ *   front-end 局部系 = spec 中 front-end 节点的子节点坐标系。front-end 自身 transform：
+ *     position [0, 0.86, 2.33]，rotation [-0.12, 0, 0]，parent = root。
+ *   ⚠️ R24-B 实测勘误：旧注释写 scale [1.062, 0.46, 1]，但 headless 探针
+ *   （.qa/r24_b_probe.mjs，#assembled + 裸模型双跑）实测 front-end 及其全部子件
+ *   world scale = **[1, 1, 1]**（ff-trim 世界 0.92×0.169 与其局部尺寸逐位吻合）。
+ *   旧注释的 [1.062,0.46,1] 是某版 spec 的陈值 —— 本文件所有「局部 = 世界/缩放」
+ *   的换算按旧值反推会把尺寸放大 1/0.46 ≈ 2.2 倍（字标曾被放成 16cm 高）。
+ *   本轮起 FE_SCALE 以实测为准 = 1，**局部米 = 世界米**。
  *   root 的 scale [2.006,1.78,5.44] 是宏容器占位盒（生成期被隐藏/忽略），不作用于子节点矩阵；
  *   子节点（bumper-lower / chrome-brow / front-light-bar / headlamp-l/r）的 transform 直接以
- *   绝对世界米表达（仅再叠加 front-end 的 [1.062,0.46,1] + rotX(-0.12)）。
- *   因此本文件几何一律用「front-end 局部米」书写，并按下式把目标世界米换算成局部米，
- *   使最终渲染尺寸贴合视觉参考（车头 +Z，鼻尖世界 z≈+2.72）：
- *     local = world / front-end.scale  即  localX = w/1.062, localY = h/0.46, localZ = d/1.0
+ *   绝对世界米表达（仅再叠加 front-end 的 rotX(-0.12)）。
  *   ★ 车头 +Z 件不需要 rotY(π)（与 tailLamp 相反）：挤出沿 0→depth，front face 落在 +z。
  *
- *   实测兄弟件 front-end 局部锚点（world = front-end 矩阵作用后，root 忽略）：
- *     bumper-lower  局部 y∈[-0.60,-0.28]  → 世界 y≈0.64 / 顶 0.714，z∈[-0.165,-0.065]
- *     chrome-brow   局部 y∈[0.1725,0.2625]→ 世界 y≈0.94 / 0.98， z∈[0.085,0.145]  (最前缘饰条)
- *     front-light-bar 局部 y≈0.055, z≈0.112 → 世界 y≈0.90, z≈2.44
- *     headlamp-l/r  局部 x=±0.8, y≈-0.074, z≈0.081 (本件 x 半宽 0.60 → 与之错开，不 z-fight)
- *   中央净空带（保险杠顶 0.714 ~ 镀铬上沿底 0.939）≈ 0.225m 世界高。参考图格栅高 ≈0.30m
- *   略超净空，故本件取世界高 ≈0.285m（局部 0.62）：顶 ≈世界 0.97 与 chrome-brow(0.94~0.98)
- *   交叠极小且本件 z 退于其前缘(0.145) 被遮挡、底略前于 bumper(-0.065) 仅覆其顶极少部分，
- *   不产生共面闪烁。
+ *   实测兄弟件 world bbox（R24-B 探针，工厂系车头 +Z）：
+ *     front-end 面板   x±0.97  y[0.62, 1.109]  z[2.301, 2.438]
+ *     bumper-lower     x±0.96  y[0.245,0.574]  z[2.200, 2.337]
+ *     chrome-brow      x±0.92  y[1.041,1.138]  z[2.383, 2.453]   ← 字标纵向包络上界
+ *     front-light-bar  x±0.31  y[0.921,0.937]  z[2.434, 2.455]
+ *     shield-logo      x±0.045 y[0.661,0.901]  z[2.465, 2.506]   ← 中央盾标（bronze，最前）
+ *     shield-emblem-panel  x±0.030 y[0.808,0.977] z[2.421,2.445]  ← 曜日纹发光面板（被盾标遮挡）
+ *   本件落位因此以「chrome-brow 下沿 1.041」为字标纵向硬上界（见下方锚点注释）。
  *
- *   本件局部落位（front-end 局部系，单位=局部米；* 标注为换算前的目标世界米）：
- *     grillePanel  中心 (0, -0.060, 0.075)，尺寸 (1.20 × 0.62 × 0.02)   *世界 1.27×0.285×0.02m
- *     hoodTrim     中心 (0,  0.100, 0.100)，尺寸 (0.92 × 0.10  × 0.016)*世界 0.98×0.046×0.016m
- *     maextroLetters 中心 (0, 0.100, 0.112)，总宽 0.80 *世界 0.85m，单字母高 0.109 *世界 0.05m
- *   整组 world 中心约 (0, 0.83~0.91, 2.42~2.45)，与前脸中央其余件同区、互不穿模。
+ *   本件局部落位（front-end 局部系，单位=局部米=世界米；rotX(-0.12) 仅微调世界 y/z）：
+ *     grillePanel  中心 (0, -0.060, 0.075)，尺寸 (1.20 × 0.62 × 0.02)m
+ *     hoodTrim     中心 (0,  0.100, 0.100)，尺寸 (0.92 × 0.10  × 0.016)m
+ *     maextroLetters 中心 (0, 0.100, 0.112)，总宽 0.80m，单字母 0.080 × 0.109m
+ *                  笔画 15.5mm（R24-B；旧 11mm）
+ *   整组 world 中心约 (0, 0.91~1.04, 2.41~2.45)，与前脸中央其余件同区、互不穿模。
  *
  * 几何约定（与 project 铁律 / headLamp / tailLamp 一致）：
  *   · profile / 轮廓一律 CCW（shoelace>0），ExtrudeGeometry 前向法线朝外；
@@ -54,8 +57,14 @@ import { mergeSafe } from '../../util/geo';
  * 0. front-end 局部系换算常量 + 落位（注释见头部）
  * ================================================================ */
 
-/** front-end 节点对非根子节点的缩放（root 占位盒缩放不作用，见头部说明） */
-export const FE_SCALE = { x: 1.062, y: 0.46, z: 1.0 } as const;
+/**
+ * front-end 节点对子节点的缩放。
+ * ⚠️ R24-B 实测勘误：旧值 {1.062, 0.46, 1.0} 来自陈旧 spec 注释；headless 探针实测
+ * front-end 及其子件 world scale = [1,1,1]（.qa/r24_b_probe.mjs，ff-trim 世界 0.92×0.169
+ * 与局部尺寸逐位吻合）。局部米 = 世界米。保留本常量仅为兼容 toFeLocal 调用方与
+ * 「笔画厚度按朝向反算」的通用公式 —— 若未来 spec 重新引入 front-end 缩放，只改这里。
+ */
+export const FE_SCALE = { x: 1.0, y: 1.0, z: 1.0 } as const;
 
 /** 把目标世界米换算成 front-end 局部米（供集成层校核 / 二次开发参考） */
 export function toFeLocal(worldW: number, worldH: number, worldD: number): [number, number, number] {
@@ -100,7 +109,13 @@ export const FRONT_FASCIA_MATERIAL_IDS = {
  *  中央盾标，与 MAEXTRO 字标无关，不在此列）。挂载方式见头部：作为 front-end 子节点新增。 */
 export const FRONT_FASCIA_REPLACE_IDS: readonly string[] = [];
 
-/** 局部落位（front-end 局部系；与头部注释一致，供集成层校核） */
+/** 局部落位（front-end 局部系；与头部注释一致，供集成层校核）
+ *
+ *  R24-B 字标加粗：笔画 11mm → 15.5mm（+41%，任务书 30–50% 区间），字高/落位/trim
+ *  尺寸一律不动（实测 scale=1 后字高本就是 109mm；加粗后字组纵向包络
+ *  0.0378..0.1623 局部米 → 世界 y 0.911..1.035，距 chrome-brow 下沿 1.041 仍有
+ *  6.5mm 净空，与 R23-D 原包络一致，不新增任何遮挡）。
+ */
 export const FRONT_FASCIA_ANCHORS = {
   grille: { pos: [0, -0.06, 0.075] as [number, number, number], size: [1.20, 0.62, 0.02] as [number, number, number] },
   trim: { pos: [0, 0.10, 0.10] as [number, number, number], size: [0.92, 0.10, 0.016] as [number, number, number] },
@@ -177,11 +192,36 @@ function at(g: THREE.BufferGeometry, x: number, y: number, z: number): THREE.Buf
  * 3. MAEXTRO 字标：线段式笔画几何（零图、零字体）
  * ================================================================ */
 
-/** 单元格局部尺寸（front-end 局部米；世界 0.085×0.05m） */
-const LW = 0.080; // 单字母宽（局部）
-const LH = 0.109; // 单字母高（局部）
+/** 单元格尺寸（front-end 局部米 = 世界米，FE_SCALE 实测为 1，见头部勘误） */
+const LW = 0.080; // 单字母宽
+/** 单字母高 0.109m —— R24-B 维持原值：实测 scale=1 后字母本就 10.9cm 高
+ *  （旧注释的「世界 5cm」是按陈旧 scale 0.46 反推的误标），无需再 +20%。 */
+const LH = 0.109;
 const LETTER_DEPTH = 0.014;
-const STROKE_T = 0.011; // 笔画厚度（局部，统一）
+
+/**
+ * 笔画宽度（米，R24-B 新口径）。
+ * 旧值 `STROKE_T = 0.011`（11mm）在 80×109mm 的字母上只占字宽 13.75%，
+ * 远景下笔画亚像素化、七字母糊成一条白横带（外部审查 R21–R23 P2）。
+ * 取 15.5mm = +41%（落在任务书的 30–50% 区间）。上限约束：E 的三横要留出
+ * ≥ 笔画宽的可分辨暗间隙 ⇒ 字高 ≥ 4×笔画宽（4 × 15.5 = 62mm < 109mm ✓，
+ * E 横间净隙 3.9cm）。发光强度不动（emissiveIntensity 1.7 原样保留）。
+ */
+const STROKE_WORLD = 0.0155;
+/** 笔画厚度沿局部 X 的取值（竖笔左右宽度） */
+const STROKE_LOCAL_X = STROKE_WORLD / FE_SCALE.x;
+/** 笔画厚度沿局部 Y 的取值（横笔上下厚度） */
+const STROKE_LOCAL_Y = STROKE_WORLD / FE_SCALE.y;
+
+/**
+ * 任意朝向笔画的局部厚度：笔画盒经 rotateZ(ang) 后，局部 Y 轴（厚度方向）落在
+ * 单位向量 p = (−sin ang, cos ang)；该方向经 FE_SCALE 后的世界长度
+ * |(p.x·sx, p.y·sy)| 即「1 局部米 = 多少世界米」，用世界目标宽除之即得局部厚度。
+ */
+function strokeLocal(ang: number): number {
+  const worldPerLocal = Math.hypot(Math.sin(ang) * FE_SCALE.x, Math.cos(ang) * FE_SCALE.y);
+  return STROKE_WORLD / Math.max(worldPerLocal, 1e-6);
+}
 
 /**
  * 每字母的归一化笔画 [x0,y0,x1,y1]（x:0→1 左→右，y:0→1 底→顶，单元格 1×1）。
@@ -210,7 +250,8 @@ function strokeBox(x0n: number, y0n: number, x1n: number, y1n: number): THREE.Bu
   const dy = y1 - y0;
   const len = Math.hypot(dx, dy);
   const ang = Math.atan2(dy, dx);
-  const g = new THREE.BoxGeometry(len, STROKE_T, LETTER_DEPTH);
+  // R24-B：厚度按朝向反算（世界等宽 STROKE_WORLD），不再用固定局部值
+  const g = new THREE.BoxGeometry(len, strokeLocal(ang), LETTER_DEPTH);
   g.rotateZ(ang);
   g.translate((x0 + x1) / 2, (y0 + y1) / 2, 0);
   return g;
@@ -226,8 +267,13 @@ function buildMaextroLetters(): THREE.BufferGeometry {
     const ch = WORD[i];
     const letterCenterX = startX + i * STEP + LW / 2;
     if (ch === 'O') {
-      // 圆角框：外 0.080×0.109 / 内 0.040×0.049，前缘朝 +z（形状居中于原点）
-      const o = roundedRectFrameShape(LW, LH, 0.022, LW - 2 * STROKE_T, LH - 2 * STROKE_T, 0.012, 6);
+      // 圆角框：外 0.080×0.109m；内孔按笔画 15.5mm 反算（FE_SCALE 实测为 1，
+      // STROKE_LOCAL_X/Y ≡ STROKE_WORLD；公式保留以便未来 spec 重引入缩放时仍等宽）。
+      const o = roundedRectFrameShape(
+        LW, LH, 0.022,
+        LW - 2 * STROKE_LOCAL_X, LH - 2 * STROKE_LOCAL_Y,
+        0.012, 6
+      );
       const g = extrude(o, LETTER_DEPTH, 0);
       g.translate(letterCenterX, baseY + LH / 2, baseZ);
       parts.push(g);

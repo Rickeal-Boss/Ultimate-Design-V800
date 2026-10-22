@@ -31,6 +31,7 @@ import {
 } from './parts/roofPod';
 import { createFrontFascia } from './parts/frontFascia';
 import { createMirrors, MIRROR_HIDE_IDS } from './parts/mirror';
+import { createBadgeCore } from './parts/badgeCore';
 import {
   createZunjieV800LuxuryMPVModel,
   type ProceduralModelRuntime,
@@ -3766,6 +3767,117 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
     console.info('[V800Adapter] R23-F 外后视镜接线完成（左右一对，MIRROR_MOUNT z=+1.82）');
   }
 
+  // ═══ R24-B 手写部件接线（前脸中央徽标发光内芯）═══
+  // 与 R21/R22/R23 同律：必须在 batchMergeStatic **之前**（合批摘掉 leaf mesh 后
+  // setFromObject 得空盒），且独占材质整组进 excludeObjects，避免被合批吞并。
+  const r24Exclude: THREE.Object3D[] = [];
+
+  // —— R24-B 前脸中央徽标发光内芯（parts/badgeCore.ts）——
+  // 承载面实测（.qa/r24_b_probe.mjs，工厂系车头 +Z）：
+  //   shield-emblem-panel  x±0.030 y[0.808,0.977] z[2.421,2.445]（lamp-white 曜日纹面板）
+  //   shield-logo          x±0.045 y[0.661,0.901] z[2.465,2.506]（bronze-dark 六边盾，**最前**）
+  // 结论：任务书写的「徽标 = shield-emblem-panel」在实机上被更靠前的 shield-logo 盾座
+  //   **整体遮挡**（面板 z 仅探出 front-end 面 7mm）——这正是外部审查「内部发光白芯
+  //   未渲染、近看像挂坠」的几何根因。若只按面板 bbox 贴面，内芯会有一半埋进盾座里。
+  //   因此：锚定 mesh 仍按任务书精确匹配 shield-emblem-panel（铁律13），但居中/贴面
+  //   用「徽标簇 = shield-emblem-panel ∪ shield-logo」的并集 bbox：并集中心 y=0.819
+  //   落在盾座 y 带内、贴面深度取簇内沿外法线的最大支撑 = 盾座前面 z=2.506 ——
+  //   内芯整块落在盾座正面之上（真车即「盾形徽标中央有一块亮白发光核」）。
+  {
+    // 铁律13：按 sculptComponent.id **精确匹配自身 mesh** —— 绝不用「子树全部 Mesh」
+    // （会误克隆整车外板），也不能用 byId.get()（先命中的是外层 pivot Group，不是 mesh）。
+    const wantIds = ['shield-emblem-panel', 'shield-logo'];
+    const hits = new Map<string, THREE.Mesh>();
+    model.traverse((o) => {
+      if (hits.size === wantIds.length) return;
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      const id = m.userData?.sculptComponent?.id as string | undefined;
+      if (id && wantIds.includes(id) && !hits.has(id)) hits.set(id, m);
+    });
+    const anchor = hits.get('shield-emblem-panel') ?? null;
+    if (!anchor) {
+      console.warn('[V800Adapter] R24-B 找不到 shield-emblem-panel 自身 mesh，徽标内芯未挂载');
+    } else {
+      root.updateMatrixWorld(true); // body 有 rotY(π)，世界系车头 = −Z（铁律19：实测，不推导）
+      const boxes = new Map<string, THREE.Box3>();
+      for (const [id, mesh] of hits) boxes.set(id, new THREE.Box3().setFromObject(mesh));
+      const anchorBox = boxes.get('shield-emblem-panel')!;
+      if (anchorBox.isEmpty()) {
+        console.warn('[V800Adapter] R24-B shield-emblem-panel 测到空盒，徽标内芯未挂载');
+      } else {
+        // 安装面 mesh：取簇内**最前**的可见面。实测 shield-logo（bronze 盾座，root 直挂）
+        // 前面 z=2.506 比 shield-emblem-panel（front-end 子件，带 rotX(-0.12) 倾角）前面
+        // z=2.445 更靠前 —— 内芯必须贴盾座正面、且朝向与盾座一致（盾座无倾角、面法线
+        // 即车头方向）；若沿用面板的倾角法线，24cm 高的盾面上内芯下缘会悬空 2.9cm。
+        const mount = hits.get('shield-logo') ?? anchor;
+        mount.updateWorldMatrix(true, false);
+        // 外法线：安装面自身局部 +Z 变换到世界，再按「远离整车中心」的一侧定向
+        // —— 前脸件成立，换成尾门件同样成立，不依赖任何朝向注释（铁律19）。
+        const fwd = new THREE.Vector3(0, 0, 1).transformDirection(mount.matrixWorld).normalize();
+        const modelCenter = new THREE.Box3().setFromObject(model).getCenter(new THREE.Vector3());
+        if (fwd.dot(anchorBox.getCenter(new THREE.Vector3()).sub(modelCenter)) < 0) fwd.negate();
+        // 徽标簇并集 bbox（居中用）与簇内沿外法线的最大支撑（贴面用）。
+        // ⚠️ 支撑不能直接用世界 AABB（对带 rotX(-0.12) 倾角的件会高估 ~2cm，
+        // 内芯下缘会悬空）—— 这里取「几何局部 bbox 八角 → world 变换 → 投影」的
+        // 最大值，对薄板挤出体即其前面所在平面，精确。
+        const cluster = new THREE.Box3();
+        for (const b of boxes.values()) if (!b.isEmpty()) cluster.union(b);
+        const supportOf = (mesh: THREE.Mesh, dir: THREE.Vector3): number => {
+          const g = mesh.geometry;
+          if (!g.boundingBox) g.computeBoundingBox();
+          const bb = g.boundingBox;
+          if (!bb) return 0;
+          let maxD = -Infinity;
+          const p = new THREE.Vector3();
+          for (const x of [bb.min.x, bb.max.x]) {
+            for (const y of [bb.min.y, bb.max.y]) {
+              for (const z of [bb.min.z, bb.max.z]) {
+                p.set(x, y, z).applyMatrix4(mesh.matrixWorld);
+                const d = p.dot(dir);
+                if (d > maxD) maxD = d;
+              }
+            }
+          }
+          return maxD;
+        };
+        let surface = supportOf(anchor, fwd);
+        for (const [id, mesh] of hits) {
+          if (id !== 'shield-emblem-panel') surface = Math.max(surface, supportOf(mesh, fwd));
+        }
+        const size = cluster.getSize(new THREE.Vector3());
+        // 内芯按徽标簇 bbox 自适应（默认 34×98mm 的 0.62 / 0.66 比例，限幅防放大出框）
+        const core = createBadgeCore({
+          width: Math.min(0.038, size.x * 0.62),
+          height: Math.min(0.112, size.y * 0.66)
+        });
+        // 贴着徽标最前表面放置：表面点 + 外法线 × 1.5mm（内芯厚 2mm ⇒ 背面仍外露
+        // 0.5mm 不共面、正面外凸 2.5mm，防 z-fighting）
+        core.group.position
+          .copy(cluster.getCenter(new THREE.Vector3()))
+          .addScaledVector(fwd, surface - cluster.getCenter(new THREE.Vector3()).dot(fwd) + 0.0015);
+        // 朝向：直接复制**安装面**的世界旋转（纯旋转，不翻绕序）；局部 +Z 与外法线反向时
+        // 绕局部 Y 转 π 补偿 —— 是旋转不是反射，FrontSide 无需改 DoubleSide（铁律12）。
+        const q = new THREE.Quaternion();
+        mount.getWorldQuaternion(q);
+        if (new THREE.Vector3(0, 0, 1).transformDirection(mount.matrixWorld).dot(fwd) < 0) {
+          q.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI));
+        }
+        core.group.quaternion.copy(q);
+        model.attach(core.group); // attach 保持世界变换；挂在 model 下随 body 俯仰
+        r24Exclude.push(core.group);
+        console.info(
+          `[V800Adapter] R24-B 徽标发光内芯接线完成：簇 bbox ` +
+            `x[${cluster.min.x.toFixed(3)},${cluster.max.x.toFixed(3)}] ` +
+            `y[${cluster.min.y.toFixed(3)},${cluster.max.y.toFixed(3)}] ` +
+            `z[${cluster.min.z.toFixed(3)},${cluster.max.z.toFixed(3)}] ` +
+            `→ 内芯 world pos(${core.group.position.x.toFixed(3)},${core.group.position.y.toFixed(3)},${core.group.position.z.toFixed(3)}) ` +
+            `tri=${core.triangleCount}`
+        );
+      }
+    }
+  }
+
   const batchStats = batchMergeStatic(model, {
     excludeObjects: [
       ...wheels.map((w) => w.spin),
@@ -3775,6 +3887,7 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
       ...lampPivots,
       ...r22Exclude,
       ...r23Exclude,
+      ...r24Exclude,
     ],
     excludeMaterialIds: UV_CONTENT_MATERIAL_IDS
   });
