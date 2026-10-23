@@ -162,7 +162,7 @@ export class Menu {
       el('p', undefined, '② 车速达到 100 km/h，【切入刹车】按钮亮起；达到限速会自动切入'),
       el('p', undefined, '③ 刹车段：向上拖动【刹车滑条】（或按住 S/↓/空格）施加踏板力'),
       el('p', undefined, VEHICLE_RULE[active]),
-      el('p', undefined, '⑤ 在路障（1300m）前刹停即成功，得分 = 初速² ÷ 用时；紧贴路障再切入会撞上去'),
+      el('p', undefined, '⑤ 在主殿（1300m）前刹停即成功，得分 = 初速² ÷ 用时；紧贴主殿再切入会撞上去'),
       el('p', undefined, '⑥ 拖动画面转视角 · 滚轮/捏合缩放 · 双击回正（V 键循环机位）')
     );
     const btnRow = el('div', 'btn-row');

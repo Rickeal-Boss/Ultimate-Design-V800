@@ -1,38 +1,57 @@
 /**
- * 远景岩体 + 御桥峡谷内衬 + 崖体（R27 重做，「完全使用新环境模型」）。
+ * 远景岩体 + 御桥峡谷内衬（R27 重做，R28 删近景崖体）。
  *
  * ── 本轮改了什么（旧残留 → 新环境）─────────────────────────────────────────
  * 旧：两圈 MeshBasic + 顶点色的「远山素环」，配色粉紫→褐的三段渐变、平顶圆包轮廓。
  *     参考图（2497fab5 / 7cd7329c）里城堡两侧是**灰白崖体 + 岩石**，远景是浅灰褐/土黄
  *     剪影，不是粉紫霞光山 ⇒ 旧环与参考图不符，用户判定为「旧版环境残留」。
- * 新：
+ * 新（R27）：
  *  ① 远景环改**岩石语言**：色取 R27_PALETTE.rockCliff #665a4d（近环）/ rockWarm #816e55
  *     （远环）；细节对比按实测 13.7（白石 6.9 的 **2 倍**）给强噪声，节理走**纵向**
  *     （vision §02「不规则块状 + 垂直节理」，不是水平沉积层理）。
  *  ② 材质由 MeshBasic 换成 **MeshLambertMaterial**（吃光 + 吃雾）。旧 MeshBasic 既不
  *     受光也不随方位变化，远景永远是一块平涂渐变贴图。
  *  ③ 新增**御桥峡谷内衬**：Road.buildGround 在走廊里不铺地面（否则盖住桥下峡谷、
- *     并与桥面 z-fighting），这里补上峡谷的岩壁 + 谷底，深 VIADUCT.gorgeDepth = 60。
- *  ④ 新增**崖体**（沿御桥两侧 |x| > 24.7、城内段 |x| > 20）：几何线的工作面是
- *     |x| ≤ VIADUCT.totalHalf + 8 = 24.7，之外归本文件堆崖。
+ *     并与桥面 z-fighting），这里补上峡谷的岩壁 + 谷底，深 VIADUCT.gorgeDepth。
+ *
+ * ── R28（CLIFF_POLICY，audit §1.6 + V H6，主理人拍板）──────────────────────
+ *  ④ **近景崖体 buildCliffs 整删**（连同 CLIFF_X_VIADUCT / CLIFF_X_INNER / CLIFF_RUN
+ *     常量）：`verify/r27_final/viaduct_side.png` 实证巨型平滑丘体吞掉御桥与城堡
+ *     （G4/P1），参考图崖体是块状巨岩+垂直节理+阶梯石台、与城堡嵌合，不是圆锥沙丘。
+ *     删后 QA 侧机位不再有「x>230 崖体避让」约束。
+ *  ⑤ 远景环内收 2600/2200 → **1600/1200**（缺陷 B：雾密度 12e-5 下 2200~2600m 处
+ *     exp 衰减仅 3~8%，远环读作硬边带）+ **环顶顶点色向雾色插值**做空气透视
+ *     （底 0.15 → 顶 0.55 混向 ACTIVE_ENV.fog.color），环顶剪影融进天光。
+ *  ⑥ 峡谷内衬保留（CLIFF_POLICY.keepGorge），深度随 VIADUCT.gorgeDepth 同步 ——
+ *     R28 从 R27 的削值 60 恢复实测 **66.5**（读常量即得，见 buildGorge）。
+ *  ⑦ 块状岩台（V G4 形制）= 可选远景装饰，默认**不做**
+ *     （CLIFF_POLICY.blockyTerrace='optional-off'）；若做须 |x|>80 且不遮挡 QA_VIEWS。
  *
  * ── 明度红线（vision §02）───────────────────────────────────────────────
  * 白石 : 岩石 ≈ **1.6 : 1 ~ 2 : 1**。岩石明度**不许抬到跟白石齐平** —— 抬平了整张图
  * 会失去「白石城 + 灰褐崖」的层次，读成一块灰糊。故岩石顶点色一律以
- * R27_PALETTE.rockCliff / rockWarm 为顶，只向下扰动，不向上。
+ * R27_PALETTE.rockCliff / rockWarm 为顶，只向下扰动，不向上（雾色插值除外 ——
+ * 那是空气透视，混向的是雾不是亮部）。
  *
  * ── 预算 ───────────────────────────────────────────────────────────────
- * 远景环 ~1040 tri + 峡谷内衬 ~2.6k tri + 崖体 ~3.2k tri ≈ **6.8k tri / 2 DC**
+ * 远景环 ~1040 tri + 峡谷内衬 ~2.9k tri ≈ **4k tri / 2 DC**（R28 删崖体 ~3.2k tri）
  * （整帧红线 R27_BUDGET.frameTri = 320,000，本线增量建议 ≤40k ⇒ 余量充足）。
  */
 import * as THREE from 'three';
 import { MeshLambertMaterial } from 'three';
-import { INNER, R27_PALETTE, VIADUCT } from './r27Layout';
+import { ACTIVE_ENV } from '../../config/environment';
+import { R27_PALETTE, VIADUCT } from './r28Layout';
 
-/** 近景岩石（崖体/峡谷壁）albedo —— Rock_CliffCoastal5 实测中位 */
+/** 近景岩石（峡谷壁）albedo —— Rock_CliffCoastal5 实测中位 */
 const ROCK_NEAR = new THREE.Color(R27_PALETTE.rockCliff);
 /** 远景岩石 albedo —— DarkRockDesert 实测中位（更亮更暖 = 空气透视） */
 const ROCK_FAR = new THREE.Color(R27_PALETTE.rockWarm);
+/** 雾色（空气透视混色目标）——与场景雾同源，L3 调 fog.color 时自动跟随 */
+const HAZE = new THREE.Color(ACTIVE_ENV.fog.color);
+/** 环底混雾量（远处岩脚贴地，轻混即可） */
+const HAZE_BOTTOM = 0.15;
+/** 环顶混雾量（缺陷 B：环顶剪影融进天光，消除硬边带） */
+const HAZE_TOP = 0.55;
 
 /**
  * 光照增益（**截图反演值，别拍脑袋改**）。
@@ -40,20 +59,13 @@ const ROCK_FAR = new THREE.Color(R27_PALETTE.rockWarm);
  * 口径：顶点色是 albedo（未 tonemap）。MeshBasic 会把它原样送出（≈ 渲染 L110）；
  * 换成 Lambert 之后输出 = albedo × Σ辐照度/π × 本增益，同一片岩石在受光/背光面上
  * 会拉开很大的差。两个增益分别对着 `verify/r27_env2/` 的实拍调：
- *  · NEAR（崖体/峡谷壁，DoubleSide）：相机贴近、主光掠射，NdotL 分布宽 ⇒ 1.8；
+ *  · NEAR（峡谷壁，DoubleSide）：相机贴近、主光掠射，NdotL 分布宽 ⇒ 1.8；
  *  · FAR （远景环，BackSide）：内表面朝原点，而太阳在 −Z（城堡方向）⇒ 玩家视线里的
  *    那段环**整段背光**（NdotL<0），只剩 hemi 0.34 + fill + env，故要抬到 2.6
  *    才有「浅灰褐剪影」而不是「一条黑带」。
  */
 const ROCK_GAIN_NEAR = 1.8;
 const ROCK_GAIN_FAR = 2.6;
-
-/** 崖体内缘：御桥段退到几何线工作面之外（VIADUCT.totalHalf + 8 = 24.7） */
-const CLIFF_X_VIADUCT = VIADUCT.totalHalf + 8;
-/** 崖体内缘：城内段退到建筑之后（INNER.faceHalf = 15.5 ⇒ 取 20） */
-const CLIFF_X_INNER = 20;
-/** 崖体横向进深（内缘 → 外脚） */
-const CLIFF_RUN = 190;
 
 /* ═══════════════════ 值噪声（确定性，禁止 Math.random） ═══════════════════ */
 
@@ -167,20 +179,20 @@ function addGrid(
 
 export class Terrain {
   constructor(scene: THREE.Scene) {
-    // 远景岩环（BackSide：从圈内看）
+    // 远景岩环（BackSide：从圈内看）。R28 半径内收 2600/2200 → 1600/1200 + 环顶
+    // 混雾（缺陷 B），见 buildRing。
     const sky = emptyPatch();
-    this.buildRing(sky, 2600, 260, 3813444, ROCK_FAR, 0.34);
-    this.buildRing(sky, 2200, 170, 4864582, ROCK_NEAR, 0.5);
+    this.buildRing(sky, 1600, 260, 3813444, ROCK_FAR, 0.34);
+    this.buildRing(sky, 1200, 170, 4864582, ROCK_NEAR, 0.5);
     const skyline = new THREE.Mesh(toGeometry(sky), this.material(ROCK_GAIN_FAR, THREE.BackSide));
     skyline.name = 'terrain-skyline';
     skyline.frustumCulled = false;
     scene.add(skyline);
 
-    // 峡谷内衬 + 崖体（DoubleSide：峡谷从内看、崖体从外看）
+    // 御桥峡谷内衬（CLIFF_POLICY.keepGorge）。R28：近景崖体 buildCliffs 已整删
+    // （CLIFF_POLICY.nearCliffs='delete'）—— 巨型沙丘吞桥实证见文件头 ④。
     const rock = emptyPatch();
     this.buildGorge(rock);
-    this.buildCliffs(rock, VIADUCT.zNear + 20, VIADUCT.zFar - 20, CLIFF_X_VIADUCT, 8, 915371);
-    this.buildCliffs(rock, INNER.zNear, INNER.zFar, CLIFF_X_INNER, 10, 2648173);
     const rockMesh = new THREE.Mesh(toGeometry(rock), this.material(ROCK_GAIN_NEAR, THREE.DoubleSide));
     rockMesh.name = 'terrain-rock';
     rockMesh.frustumCulled = false;
@@ -203,6 +215,10 @@ export class Terrain {
    * 轮廓 = 3 项低频正弦定主脊 + 1 项高频（47π，指数 0.5 做尖峰）+ LCG 破整齐，
    * 沿用 R26 的「三角波尖顶」做法（3 项正弦叠出来是圆包，远看像雾团不像山）。
    * 逐站色偏改成 **纵向节理**：沿方位角高频、沿高度不变 ⇒ 竖条纹。
+   *
+   * R28 空气透视（缺陷 B）：顶点色在 rockTint 之后**向雾色插值**，底 HAZE_BOTTOM、
+   * 顶 HAZE_TOP —— 环顶剪影融进天光，不再是贴着天空的硬边带；半径内收到
+   * 1600/1200 后环带在画面里有体量，远景由「远环 + 雾」兜底（V H6）。
    */
   private buildRing(
     out: Patch,
@@ -237,12 +253,12 @@ export class Terrain {
       // 沿方位角的节理（u 用弧长 / 30m 一节，v 恒 0.4 ⇒ 竖条纹贯穿全高）
       const u = (i / SEG) * ((Math.PI * 2 * radius) / 30);
       out.pos.push(x, -10, z, x, h, z);
-      // 顶：u 节理；底（崖脚）：同一节理 × 遮挡压暗，读作岩壁根部的阴影
+      // 顶：u 节理 × 重混雾；底（崖脚）：同一节理 × 遮挡压暗 × 轻混雾
       const kt = rockTint(u, 0.4, 0);
       const kb = rockTint(u, 0.4, bottomShade);
-      tmp.copy(base).multiplyScalar(kt);
+      tmp.copy(base).multiplyScalar(kt).lerp(HAZE, HAZE_TOP);
       out.col.push(tmp.r, tmp.g, tmp.b);
-      tmp.copy(base).multiplyScalar(kb);
+      tmp.copy(base).multiplyScalar(kb).lerp(HAZE, HAZE_BOTTOM);
       out.col.push(tmp.r, tmp.g, tmp.b);
       if (i < SEG) {
         const b = origin + i * 2;
@@ -253,10 +269,10 @@ export class Terrain {
 
   /**
    * 御桥峡谷内衬：走廊（|x| ≤ VIADUCT.totalHalf / z ∈ [VIADUCT.zFar, VIADUCT.zNear]）
-   * 的岩壁 + 谷底，深 VIADUCT.gorgeDepth。
+   * 的岩壁 + 谷底，深 VIADUCT.gorgeDepth（R27 曾削到 60 控 tri，R28 恢复实测 66.5）。
    *
    * 与 Road.buildGround 的槽口**严格同点**：壁顶 y = −0.02（大地同高）、壁脚/谷底
-   * y = −gorgeDepth。壁面朝内（向走廊中心），站在桥上往两侧看就是 60m 深的峡谷。
+   * y = −gorgeDepth。壁面朝内（向走廊中心），站在桥上往两侧看就是 66.5m 深的峡谷。
    * 谷底向下 45% 压暗（shade），读作见不到阳光的谷底阴影。
    */
   private buildGorge(out: Patch): void {
@@ -329,72 +345,5 @@ export class Terrain {
       ROCK_NEAR,
       false
     );
-  }
-
-  /**
-   * 崖体：沿 z 扫掠一条 6 点横剖面，双侧成对堆在走廊外侧。
-   *
-   * 剖面（dx 为相对内缘的比例，y 为相对峰高的比例）：
-   *   内脚(0, 0) → 0.09/0.16 → **主峰 0.18/1.0** → 0.38/0.62 → 0.64/0.26 → 外脚(1, 0)
-   * 峰高逐站用双频噪声（22…40m）+ 两端各 40m  taper 到 3m（收进地面，不留断墙）。
-   */
-  private buildCliffs(
-    out: Patch,
-    zFrom: number,
-    zTo: number,
-    xIn: number,
-    step: number,
-    seed: number
-  ): void {
-    const PROFILE: readonly (readonly [number, number])[] = [
-      [0, 0],
-      [0.09, 0.16],
-      [0.18, 1.0],
-      [0.38, 0.62],
-      [0.64, 0.26],
-      [1.0, 0]
-    ];
-    const FOOT_Y = -0.6; // 内外脚埋进地面以下，避免与 y=−0.02 的大地留缝
-    const nz = Math.max(2, Math.round(Math.abs(zFrom - zTo) / step));
-    const span = Math.abs(zFrom - zTo);
-
-    for (const side of [-1, 1] as const) {
-      // 峰高序列（先算好，两端 taper）
-      const crest: number[] = [];
-      for (let k = 0; k <= nz; k += 1) {
-        const z = zFrom + ((zTo - zFrom) * k) / nz;
-        const big = fbm2(z * 0.011 + seed * 0.0007, 1.7);
-        const small = noise2(z * 0.055 + seed * 0.0031, 9.2);
-        let h = 22 + 13 * big + 5 * small;
-        const edge = Math.min(k, nz - k) * step; // 离最近端点的距离
-        if (edge < 40) h = 3 + ((h - 3) * edge) / 40; // 两端 40m 收进地面
-        crest.push(h);
-      }
-      void span;
-
-      addGrid(
-        out,
-        nz,
-        PROFILE.length - 1,
-        (i, j) => {
-          const z = zFrom + ((zTo - zFrom) * i) / nz;
-          const [fx, fy] = PROFILE[j];
-          const h = crest[i];
-          // 横向也抖一点（±6m），峰线才不是一条直墙；内脚不动，绝不越进走廊
-          const jitter = j === 0 ? 0 : (noise2(z * 0.07 + j * 3.3, seed * 0.0011) - 0.5) * 12;
-          const x = side * (xIn + fx * CLIFF_RUN + (j === 0 ? 0 : jitter));
-          const y = fy <= 0 ? FOOT_Y : FOOT_Y + h * fy;
-          return [x, y, z + (j === 0 ? 0 : (noise2(z * 0.09 + j, seed * 0.0021) - 0.5) * 6)];
-        },
-        (i, j) => {
-          const [fx, fy] = PROFILE[j];
-          const z = zFrom + ((zTo - zFrom) * i) / nz;
-          // 高处的岩面更亮（少遮挡），崖脚/背阴的凹处更暗
-          return rockTint(z / 30 + fx * 6, 0.4 + j * 0.2, 0.42 - 0.42 * fy);
-        },
-        ROCK_NEAR,
-        side > 0
-      );
-    }
   }
 }

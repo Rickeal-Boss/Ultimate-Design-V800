@@ -10,6 +10,7 @@ import { byId, el, setVisible } from './dom';
 export interface HudInput {
   speedKmh: number;
   brakeSeconds: number;
+  /** 距撞击面剩余 m（R28 语义=距主殿正面；HUD 只显示纯数值，字段名可不动） */
   distanceToBarrier: number;
   pedalForce: number;
   regenPowerKw: number;

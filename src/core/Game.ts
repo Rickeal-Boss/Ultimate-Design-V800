@@ -76,7 +76,6 @@ export class Game {
   private readonly env: Environment;
   private readonly lighting: Lighting;
   private readonly contactShadow: ContactShadow;
-  private readonly road: Road;
   private readonly castle: Castle;
   private readonly waterway: Waterway;
   private readonly car: CarLike;
@@ -177,7 +176,8 @@ export class Game {
     this.env = new Environment(this.scene, this.renderer, quality.envMapSize);
     this.lighting = new Lighting(this.scene, quality, this.env.sunDirection);
     this.contactShadow = new ContactShadow(this.scene);
-    this.road = new Road(this.scene, this.renderer.capabilities.getMaxAnisotropy());
+    // Road 仅装配期构建（R28 起 update 是空壳、无 dispose），同 Terrain 不持引用
+    new Road(this.scene, this.renderer.capabilities.getMaxAnisotropy());
     new Terrain(this.scene);
     this.castle = new Castle(this.scene, quality);
     this.waterway = new Waterway(this.scene);
@@ -360,6 +360,22 @@ export class Game {
         return gl.domElement.toDataURL('image/png');
       };
       // 预算读数（dev-2 报告遗留项 4）：tri/DC 由 castle 自己累计
+      // R28 口径升级（r28_audit §6 口径提醒 2）：__v800EnvStats = castle+terrain+road
+      // 合计 tri/dc。⚠ 缺口：Terrain/Road 目前没有统计接口（两文件归 L2 线，不在
+      // L4 白名单内；Terrain 实例构造后也未持引用），暂只能并入 castle —— frameTri
+      // 对账仍缺 Terrain（≈6.8k tri / 2 DC）与 Road 两块，待 L2 提供
+      // getTerrainStats()/getRoadStats() 后在此并入。
+      (window as unknown as Record<string, unknown>).__v800EnvStats = (): unknown => {
+        const castle = this.castle.getCastleStats();
+        return {
+          tris: castle.tris,
+          dc: castle.dc,
+          castle,
+          terrain: null,
+          road: null
+        };
+      };
+      // 兼容别名：旧探针（.qa/r27_env_final.mjs stats 命令等）仍读 __v800CastleStats
       (window as unknown as Record<string, unknown>).__v800CastleStats = (): unknown =>
         this.castle.getCastleStats();
     }
@@ -598,20 +614,21 @@ export class Game {
         break;
       }
       case 'crash': {
-        // 翻滚演出只留给撞路障（断裂已改为冗余接管，不再有凭空的翻滚能量来源）
+        // 翻滚演出只留给撞主殿撞击面（CrashReason='barrier' 枚举冻结；断裂已改为
+        // 冗余接管，不再有凭空的翻滚能量来源）
         const speedMs = this.sm.vehicle.speed;
         this.rig.setMode('crash');
         this.hud.setActiveView('crash');
         this.settleTimer = 0;
         this.hud.setRedundancyActive(false);
         this.car.body.rotation.set(0, MODEL_BASE_YAW, 0); // 保留基准偏航 π，只清俯仰/横滚
-        this.crashWorld.begin(this.car.root, speedMs, this.road.barrierBlocks);
+        this.crashWorld.begin(this.car.root, speedMs); // 主殿实心撞击，无飞散路障块
         this.crashElapsed = 0;
         this.sfx.impact(1);
         this.fx.burstSparks(this.car.root.localToWorld(new THREE.Vector3(0, 0.6, -2.7)));
         this.brakeFlash = 0.5;
         this.rig.addShake(0.8);
-        this.hud.showToast('撞上路障！', true, 2200);
+        this.hud.showToast('撞上主殿！', true, 2200);
         vibrate([90, 40, 200]);
         this.pendingResult = { result: event.result, delay: CRASH.resultDelaySeconds };
         break;
@@ -669,7 +686,7 @@ export class Game {
     this.lighting.update(focus);
     this.contactShadow.update(this.car.body);
     this.env.update(this.rig.camera.position);
-    this.road.update(this.time);
+    // road.update 已摘除（R28，r28_audit §1.2）：警示灯删除后 Road.update 留空壳
     this.waterway.update(this.time);
 
     // ---- 内饰仪表 ----

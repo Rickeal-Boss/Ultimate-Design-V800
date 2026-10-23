@@ -32,7 +32,20 @@ import * as THREE from 'three';
 import { mergeSafe } from '../../util/geo';
 import { STONE_TILE_METERS } from './stoneTexture';
 import type { StoneKind } from './stoneTexture';
-import { GATE, INNER, LAMP, PARAPET, ROAD_W, VIADUCT } from './r27Layout';
+import {
+  GATE,
+  GATE_DECOR,
+  HALL_BRAZIER,
+  INNER,
+  LAMP,
+  MAIN_HALL,
+  PARAPET,
+  ROAD_HALF,
+  ROAD_W,
+  TOWER,
+  TOWER_GROUP,
+  VIADUCT
+} from './r27Layout';
 
 /* ═══════════════════ 桶与低配档 ═══════════════════ */
 
@@ -255,27 +268,10 @@ function pointedArch(
 }
 
 /**
- * 反解**内圈** rise：使券线**外缘拱冠恰好落在 crownY**（御桥三排券对齐铺装面/层间线用）。
- *
- * 双心尖拱的解析性质：内圈 (halfW, R) 的外圈 = (halfW+band, R+band)（同一组圆心、
- * 半径 +band —— 这才是等厚券线）。外圈拱冠（未提尖）高度
- *   apex_o = √((halfW+band)·(2R + band − halfW))
- * 令 apex_o = crownY − cusp − springY ≡ A，可解
- *   R = (A²/(halfW+band) − band + halfW) / 2，rise = √(2R·halfW − halfW²)
- * （旧代码直接令 rise = crownY − band − cusp − springY，把外冠算高 0.15~0.33m，
- *  spandrel 的拱边界会穿过 topY 自交，铺装面上会冒出一道拱冠。）
+ * 反解**内圈** rise（御桥旧双层尖拱券廊时代的遗产，R28 扁拱化后不再需要：
+ * 扁拱矢高由 VIADUCT.archRise 常量直给）。保留 archByRadius/pointedArch 供
+ * 城门/钟楼/主殿的尖拱件使用（那些仍是两心圆尖拱）。
  */
-function riseForCrown(
-  halfW: number,
-  band: number,
-  springY: number,
-  crownY: number,
-  cusp: number
-): number {
-  const A = crownY - cusp - springY;
-  const R = (A * A / (halfW + band) - band + halfW) / 2;
-  return Math.sqrt(Math.max(0, 2 * R * halfW - halfW * halfW));
-}
 
 /** ExtrudeGeometry 收尾：补法线 + 米制 UV（尖拱件共用） */
 function finishArch(g: THREE.BufferGeometry, tile: number): THREE.BufferGeometry {
@@ -436,21 +432,27 @@ function archPlateX(
   return g;
 }
 
-/* ═══════════════════ ① 御桥：拱 + 墩 + 夯土墙 ═══════════════════ */
+/* ═══════════════════ ① 御桥：扁拱 + 双层桥面 + 通天柱列 ═══════════════════ */
 
 /**
- * 御桥结构（24 跨，静态全进 ashlar 桶）。
+ * 御桥结构（24 跨，静态全进 ashlar/gold 桶）。
+ *
+ * ── R28 形制更正（A：FBX R28-T2 精测，判废 R27 的双层尖拱券廊）────────────
+ * Mesh.486 实测：主券是**单心圆弧扁拱**（净跨 51 / 矢高 13.37 / R=2.03 归一化
+ * rms 3mm ⇒ 矢跨比 0.26），**下层券廊不存在**——是「双层桥面（+11.4/−20）+
+ * 单层拱廊 + 通天柱列落谷底（y=−224.23）」。比例层换算（×0.2822）：
+ *   起拱线 −8.06 / 拱顶 −4.28 / 下层桥面 −8.86 / 墩宽 3.05 / 桥下净高 66.5。
+ * 尖拱族函数在 rise < halfW 时解析退化为单心圆弧（apexAngle < 90°），
+ * cusp=0 即扁拱，无需新几何器。
  *
  * 横断面（x > 0 侧，桥面 y=0）：
  *   |x| ≤ 7.4   车行带（深色铺装，归 makePaving）
  *   7.8..16.6   步道（白色铺装，归 makePaving）
- *   中央区 x∈[−7.8,7.8]：主券（spring −7.85 / band 1.6）+ 拱上夯土墙（spandrel）
- *   侧区 x∈[7.6,16.6]：一层券廊（spring −5.0）+ 二层券廊（spring −12.9）+ 各自 spandrel
- *   墩位（z 站）：侧区 4 束柱（床面 −59.5 → −5.0）+ 墩头方块；中央区 4 束柱（→ −7.85）+ 墩头
- *
- * 「开间」读法：每跨一个通高开口被一层券（上）/ 二层券（中）两层券廊分格，
- * 中间以 spandrel 隔断 ⇒ 参考图 2497fab5 的双层尖拱廊读法。
- * 拱顶一律比铺装面低一个 band 厚（外冠恰好落在 y=0），铺装 12~14mm 贴上不 z-fight。
+ *   中央区 x∈[−7.8,7.8]：主券扁拱（起拱 −8.06 / 拱顶 −4.28）+ spandrel 填到桥面
+ *   侧区 x∈[7.6,16.6]：同形制侧拱（侧区读数与参考图 2497fab5/3d084b59 的单排
+ *                      大拱一致；「双层」读法由下层桥面横带承担，非双层券廊）
+ *   墩位（z 站）：4 束柱从谷底（−66）通天到起拱线，墩头封到桥面
+ *   每站桥脸 1 枚叶形金垂饰（G5 identity）
  */
 export function makeViaduct(): StoneBuckets {
   const b = emptyBuckets();
@@ -458,81 +460,80 @@ export function makeViaduct(): StoneBuckets {
   const half = span / 2; // 8.71875
   const bedY = -VIADUCT.gorgeDepth + 0.5; // 墩脚埋在谷底之上 0.5m
 
-  /* ── 三排券的几何参数（外冠一律 riseForCrown 反解，精确落在目标线上）── */
-  // 中央主券：外冠 y=0（铺装面）
-  const mainBand = 1.6;
-  const mainCusp = 0.9;
-  const mainSpring = -VIADUCT.archRise; // −7.85
-  const mainRise = riseForCrown(half, mainBand, mainSpring, 0, mainCusp); // 5.184
+  /* ── 扁拱几何参数（cusp=0：单心圆弧；rise/矢高由常量直给）── */
+  const archSpring = -VIADUCT.archSpringDrop; // −8.06（起拱线）
+  const archCrown = -VIADUCT.archCrownDrop; // −4.28（拱顶）
+  const rise = archCrown - archSpring; // 3.77（矢高）
+  const slabTop = archSpring; // 下层桥面顶 = 起拱线（拱从桥面顶起拱）
+  const slabBottom = -VIADUCT.secondTierDrop; // −8.86
+  const band = 1.1;
   const mainDepth = 2 * (7.4 + 0.4); // 15.6（略宽于车行带）
-  // 侧区一层券：外冠 y=0（铺装面）
-  const t1Band = 0.9;
-  const t1Cusp = 0.7;
-  const t1Spring = -5.0;
-  const t1Rise = riseForCrown(half, t1Band, t1Spring, 0, t1Cusp); // 2.985
-  // 侧区二层券：外冠 y=−5.0（= 一层券 spring，层间咬合）
-  const t2Band = 0.9;
-  const t2Cusp = 1.0;
-  const t2Spring = -VIADUCT.secondTierDrop; // −12.9
-  const t2Rise = riseForCrown(half, t2Band, t2Spring, t1Spring, t2Cusp); // 5.942
-  // 侧区 x 范围（步道下方整幅）
   const sideIn = 7.6;
   const sideOut = VIADUCT.totalHalf - 0.12; // 16.6
   const sideDepth = sideOut - sideIn; // 9.0
   const sideMid = (sideIn + sideOut) / 2; // 12.1（侧墩束中心）
-  const cuspW = 0.45;
 
   for (let k = 0; k < VIADUCT.spans; k += 1) {
     const zc = VIADUCT.zNear - (k + 0.5) * span; // 开间中心
-    // 中央主券 + 拱上夯土墙（spandrel 坐在券线**外缘**上 → 铺装面）
-    const mainBandGeo = archBandX(half, mainSpring, mainRise, mainBand, mainDepth, 9, mainCusp, cuspW);
-    mainBandGeo.translate(0, 0, zc);
-    b.ashlar.push(mainBandGeo);
-    const mainSpandrel = archWallOuterX(half, mainSpring, 0, mainRise, mainBand, mainDepth, 9, mainCusp, cuspW);
-    mainSpandrel.translate(0, 0, zc);
-    b.ashlar.push(mainSpandrel);
+    // 中央主券：ashlar 券带 + 金饰线 + spandrel（坐在券线外缘上 → 铺装面）
+    b.ashlar.push(archBandX(half, archSpring, rise, band, mainDepth, 9, 0).translate(0, 0, zc));
+    b.gold.push(archBandX(half + band, archSpring, rise, 0.16, mainDepth, 9, 0).translate(0, 0, zc));
+    b.ashlar.push(archWallOuterX(half, archSpring, 0, rise, band, mainDepth, 9, 0).translate(0, 0, zc));
     for (const side of [-1, 1] as const) {
-      // 一层券 + spandrel（外缘 → y=0）
-      const t1 = archBandX(half, t1Spring, t1Rise, t1Band, sideDepth, 9, t1Cusp, cuspW);
-      t1.translate(side * sideMid, 0, zc);
-      b.ashlar.push(t1);
-      const s1 = archWallOuterX(half, t1Spring, 0, t1Rise, t1Band, sideDepth, 9, t1Cusp, cuspW);
-      s1.translate(side * sideMid, 0, zc);
-      b.ashlar.push(s1);
-      // 二层券 + spandrel（外缘 → 一层券 spring −5.0）
-      const t2 = archBandX(half, t2Spring, t2Rise, t2Band, sideDepth, 9, t2Cusp, cuspW);
-      t2.translate(side * sideMid, 0, zc);
-      b.ashlar.push(t2);
-      const s2 = archWallOuterX(half, t2Spring, t1Spring, t2Rise, t2Band, sideDepth, 9, t2Cusp, cuspW);
-      s2.translate(side * sideMid, 0, zc);
-      b.ashlar.push(s2);
+      // 侧区扁拱 + 金饰线 + spandrel（外缘 → y=0）
+      b.ashlar.push(archBandX(half, archSpring, rise, band, sideDepth, 9, 0).translate(side * sideMid, 0, zc));
+      b.gold.push(archBandX(half + band, archSpring, rise, 0.16, sideDepth, 9, 0).translate(side * sideMid, 0, zc));
+      b.ashlar.push(archWallOuterX(half, archSpring, 0, rise, band, sideDepth, 9, 0).translate(side * sideMid, 0, zc));
     }
   }
 
-  /* ── 墩（束柱 + 墩头）：25 个站（k=0..spans），z 从 zNear 到 zFar ── */
-  const colW = (VIADUCT.pierW - 3 * 0.12) / VIADUCT.pierColumns; // 1.0875
+  /* ── 下层桥面（双层读法来源）：通长横带，顶 = 起拱线、底 = secondTierDrop ── */
+  {
+    const zLen = VIADUCT.zNear - VIADUCT.zFar;
+    const zMid = (VIADUCT.zNear + VIADUCT.zFar) / 2;
+    const slabH = slabTop - slabBottom; // 0.8
+    b.ashlar.push(box('ashlar', 2 * VIADUCT.totalHalf, slabH, zLen, 0, slabBottom + slabH / 2, zMid));
+    // 桥脸金线（下层桥面外棱一道，读作"分层线"）
+    for (const side of [-1, 1] as const) {
+      b.gold.push(box('gold', 0.14, 0.1, zLen, side * (VIADUCT.totalHalf - 0.07), slabBottom + 0.12, zMid));
+    }
+  }
+
+  /* ── 墩（通天束柱 + 墩头）：spans+1 个站，z 从 zNear 到 zFar ── */
+  const colW = (VIADUCT.pierW - 3 * 0.12) / VIADUCT.pierColumns; // 0.67（pierW 3.05）
   const taper = VIADUCT.pierTaper; // 0.93
   // 末站（k=spans，z=−358.5）落在城门进深里：中央束柱+墩头会捅进门洞隧道
   // （车从 −351.5 穿到 −365.5，|x|≤1.8 的柱群正在路中间）⇒ 中央墩整站不建。
-  const lastStation = VIADUCT.zFar;
   for (let k = 0; k <= VIADUCT.spans; k += 1) {
     const zs = VIADUCT.zNear - k * span;
-    const inGate = Math.abs(zs - lastStation) < 1e-6;
+    const inGate = Math.abs(zs - VIADUCT.zFar) < 1e-6;
     for (let c = 0; c < VIADUCT.pierColumns; c += 1) {
       const off = (c - (VIADUCT.pierColumns - 1) / 2) * (colW + 0.12);
-      // 侧墩：床面 bedY → 二层券 spring（−12.9）。pierColumn 的 cy 是**底部**、
-      // 高 = top − bottom（曾把符号写反成 −spring−bedY = 72.4m，束柱捅到桥面上方
-      // 12.9m，车视位整条路心被白色柱墙堵死 —— r27_env_final 首拍实证）。
-      b.ashlar.push(pierColumn(colW, colW * taper, t2Spring - bedY, sideMid + off, bedY, zs));
-      b.ashlar.push(pierColumn(colW, colW * taper, t2Spring - bedY, -(sideMid + off), bedY, zs));
-      // 中央墩：床面 → 主券 spring（−7.85）；末站让位门洞
-      if (!inGate) b.ashlar.push(pierColumn(colW, colW * taper, mainSpring - bedY, off, bedY, zs));
+      // 侧墩：谷底 → 起拱线（通天柱列，FBX 落 y=−224 的比例层）
+      b.ashlar.push(pierColumn(colW, colW * taper, slabTop - bedY, sideMid + off, bedY, zs));
+      b.ashlar.push(pierColumn(colW, colW * taper, slabTop - bedY, -(sideMid + off), bedY, zs));
+      // 中央墩：谷底 → 起拱线；末站让位门洞
+      if (!inGate) b.ashlar.push(pierColumn(colW, colW * taper, slabTop - bedY, off, bedY, zs));
     }
-    // 墩头：把站位的券口封成"实心弓"——侧区从最低起拱 −12.9 一直到铺装面
-    // （两层券的 spring 都在墩头里，可见开口从墩头面起算，不会出现悬空券端）
-    b.ashlar.push(box('ashlar', sideDepth, -t2Spring, 2.2, sideMid, t2Spring / 2, zs));
-    b.ashlar.push(box('ashlar', sideDepth, -t2Spring, 2.2, -sideMid, t2Spring / 2, zs));
-    if (!inGate) b.ashlar.push(box('ashlar', mainDepth, -mainSpring, 2.2, 0, mainSpring / 2, zs));
+    // 束柱金环（G5 束柱读法的关键）：每侧墩顶 + 墩中两道金箍，把「整片墙」读回「细柱束」
+    for (const sx of [-sideMid, sideMid]) {
+      b.gold.push(box('gold', sideDepth + 0.2, 0.2, 0.22, sx, slabTop - 0.15, zs));
+      b.gold.push(box('gold', sideDepth + 0.2, 0.18, 0.2, sx, slabTop * 0.55, zs));
+    }
+    if (!inGate) {
+      b.gold.push(box('gold', mainDepth + 0.2, 0.2, 0.22, 0, slabTop - 0.15, zs));
+    }
+    // 墩头：把站位的券口封成"实心弓"——从下层桥面底一直到铺装面
+    // （起拱线在墩头里，可见开口从墩头面起算，不会出现悬空券端）
+    b.ashlar.push(box('ashlar', sideDepth, -slabBottom, 2.2, sideMid, slabBottom / 2, zs));
+    b.ashlar.push(box('ashlar', sideDepth, -slabBottom, 2.2, -sideMid, slabBottom / 2, zs));
+    if (!inGate) b.ashlar.push(box('ashlar', mainDepth, -slabBottom, 2.2, 0, slabBottom / 2, zs));
+    // 叶形金垂饰（G5 identity）：墩头桥脸正中，檐下一枚下垂金叶
+    for (const side of [-1, 1] as const) {
+      const leaf = spire('gold', 0.34, 0.05, 0.85, 6, side * (sideOut - 0.35), -1.6, zs, Math.PI);
+      b.gold.push(leaf);
+      b.gold.push(box('gold', 0.5, 0.12, 0.5, side * (sideOut - 0.35), -0.95, zs));
+    }
   }
   return b;
 }
@@ -652,7 +653,8 @@ function pavePlane(
 /**
  * 铺装。参考图 7cd7329c 桥面是**三段等分**：中间深色车行带 + 两侧浅色条石边带
  * （各 ≈1/3 路宽）；步道（人行道）是白色 ashlar。
- *   road：|x| ≤ 7.4，z ∈ [260, −1400]（起步点后方 → 路障外 100m）
+ *   road：|x| ≤ 7.4，z ∈ [260, MAIN_HALL.z=−1300]（起步点后方 → 主殿正面=撞击面，
+ *         R28 路端统一收口：旧 −1400 判废，其后由主殿遮挡，不做尽头截断）
  *   walk：桥上段 |x| ∈ [7.8, 16.6]（z ∈ [60, 城门脸]）；城内段 |x| ∈ [7.8, 15.4]
  *        （城门隧道内 7.8..10 是隧道地面，10..15.4 埋进门墩，城外无步道）
  */
@@ -662,7 +664,7 @@ export function makePaving(): PavingKit {
   const paveTile = STONE_TILE_METERS.floor * 2; // 9.6m/张 ⇒ 石板缝 ≈2.4m
   const walkTile = STONE_TILE_METERS.ashlar; // 2.8m/张
   const roadNear = 260;
-  const roadFar = -1400;
+  const roadFar = MAIN_HALL.z; // −1300（R28：主殿正面收口，替代旧 −1400）
   const roadLen = roadNear - roadFar;
   const roadMid = (roadNear + roadFar) / 2;
   const edgeW = ROAD_W / 3; // 4.93（三段等分）
@@ -698,39 +700,54 @@ export function makePaving(): PavingKit {
 /* ═══════════════════ ④ 火盆灯柱 ═══════════════════ */
 
 /**
- * 火盆灯柱：节拍 44m 双侧，x = ±(totalHalf − inset)。全高 7.5m：
- * 3 级墩座 → 束柱柱身 → 金焰火盆（碗形向下收口）→ 尖焰（上尖下宽，不是球）。
- * 石件进 ashlar、火盆进 gold、火焰进 flame（MeshBasic）。
+ * 火盆灯柱：节拍 44m 双侧，x = ±(totalHalf − inset)。全高 8.6m（R28 由 7.5 上调，
+ * V §7.1 灯柱总高 1.75×W_kit ≈ 8.6；参考图里灯柱是强立面存在）。
+ * 形制（G3 identity，R28 重做）：
+ *   3 级白石墩座 → **白石圆柱身**（主柱 + 四角小束柱 = 束柱观感，**不是金锥体**）
+ *   → 金箍带 ×3 → **金碗形火盆**（上口大、向下收口 + 口沿金圈）→ **尖焰**（上尖下宽）。
+ * 石件进 ashlar、火盆进 gold、火焰进 flame（MeshBasic 靠 bloom）。
  */
 export function makeLamps(): StoneBuckets {
   const b = emptyBuckets();
   const x = VIADUCT.totalHalf - LAMP.inset; // 16.17
   const zNear = VIADUCT.zNear - 22; // 38
   const zFar = GATE.z + GATE.depth / 2; // −351.5（城门内不立灯）
-  const { h, poleW, braizerH, flameH } = LAMP;
-  const braizerY = h - braizerH - flameH; // 5.05
+  const { h, poleW, braizerH, flameH, bandCount } = LAMP;
+  const baseH = 1.2;
+  const rimH = 0.13;
+  const shaftTop = h - braizerH - rimH - flameH; // 6.57（柱身顶 = 火盆底）
+  const shaftH = shaftTop - baseH; // 5.37
 
   for (let z = zNear; z > zFar; z -= LAMP.pitch) {
     for (const side of [-1, 1] as const) {
       const cx = side * x;
-      // 3 级墩座
-      b.ashlar.push(box('ashlar', 1.0, 0.35, 1.0, cx, 0.175, z));
-      b.ashlar.push(box('ashlar', 0.7, 0.55, 0.7, cx, 0.625, z));
-      b.ashlar.push(box('ashlar', 0.85, 0.3, 0.85, cx, 1.05, z));
-      // 束柱柱身（3 根细方柱成一束：参考图 2a302891 实证为束柱非单柱；收分）
-      for (const ox of [-0.13, 0, 0.13]) {
-        b.ashlar.push(pierColumn(poleW * 0.42, poleW * 0.42 * 0.8, braizerY - 1.2, cx + ox, 1.2, z));
+      // 3 级白石墩座
+      b.ashlar.push(box('ashlar', 1.15, 0.35, 1.15, cx, 0.175, z));
+      b.ashlar.push(box('ashlar', 0.82, 0.55, 0.82, cx, 0.625, z));
+      b.ashlar.push(box('ashlar', 0.95, 0.3, 0.95, cx, 1.05, z));
+      // 白石圆柱身：主圆柱 + 四角小束柱（束柱观感，参考图 2a302891 实证）
+      const main = new THREE.CylinderGeometry(poleW * 0.62, poleW * 0.68, shaftH, LOW_DETAIL ? 6 : 10, 1, true);
+      main.translate(cx, baseH + shaftH / 2, z);
+      planarUV(main, TILE.ashlar);
+      b.ashlar.push(main);
+      for (const ox of [-1, 1] as const) {
+        for (const oz of [-1, 1] as const) {
+          const g = new THREE.CylinderGeometry(0.15, 0.17, shaftH, 6, 1, true);
+          g.translate(cx + ox * poleW * 0.42, baseH + shaftH / 2, z + oz * poleW * 0.42);
+          planarUV(g, TILE.ashlar);
+          b.ashlar.push(g);
+        }
       }
-      // 柱身金饰环 ×2（参考图：灯柱柱身有金色几何装饰带）
-      for (const rf of [0.35, 0.68]) {
-        b.gold.push(spire('gold', 0.3, 0.27, 0.09, 10, cx, 1.2 + (braizerY - 1.2) * rf, z));
+      // 柱身金箍带 ×3（V：束柱观感的金箍 2~3 道）
+      for (let i = 0; i < bandCount; i += 1) {
+        const by = baseH + (shaftH * (i + 0.5)) / bandCount;
+        b.gold.push(spire('gold', poleW * 0.8, poleW * 0.74, 0.14, 10, cx, by, z));
       }
-      // 金焰火盆（碗形：上口小、底部大）
-      b.gold.push(spire('gold', 0.32, 0.55, braizerH, 10, cx, braizerY, z));
-      // 火盆口沿金圈
-      b.gold.push(spire('gold', 0.4, 0.4, 0.12, 10, cx, braizerY + braizerH, z));
-      // 尖焰
-      b.flame.push(flame(0.4, flameH, cx, braizerY + braizerH, z));
+      // 金碗形火盆：上口大（r 0.62）向下收口（r 0.30）——碗，不是锥（G3）
+      b.gold.push(spire('gold', 0.3, 0.62, braizerH, 10, cx, shaftTop, z));
+      b.gold.push(spire('gold', 0.68, 0.68, rimH, 10, cx, shaftTop + braizerH, z)); // 盆口沿金圈
+      // 尖焰（上尖下宽，2400K 发光由材质/FLAME 色板承担）
+      b.flame.push(flame(0.4, flameH, cx, shaftTop + braizerH + rimH, z));
     }
   }
   return b;
@@ -798,19 +815,51 @@ export function makeGate(): StoneBuckets {
     for (const ox of [-1, 1] as const) {
       b.gold.push(box('gold', 0.35, towerH - 1, 0.16, cx + ox * (towerW / 2 - 0.35), (towerH - 1) / 2 + 0.5, zFront - 0.08));
     }
-    // 角小尖塔 ×4（前两后两）
+    // ── G1 identity：墩身金 V 纹（chevron）×4 层 + 菱形金章 ×2（V §7.1）──
+    for (let i = 0; i < GATE_DECOR.vBandLevels; i += 1) {
+      const vy = 4.5 + i * 5.2; // 4.5..20.1
+      // V 字 = 两段斜板在墩面正中会合
+      for (const ox of [-1, 1] as const) {
+        b.gold.push(
+          boxRot('gold', 3.4, 0.42, 0.22, cx + ox * (towerW / 4 - 0.2), vy + 0.9, zFront - 0.12, -ox * 0.72)
+        );
+      }
+    }
+    for (const by of [26, 34]) {
+      const badge = box('gold', 1.5, 1.5, 0.2, cx, by, zFront - 0.12);
+      badge.rotateZ(Math.PI / 4); // 菱形
+      b.gold.push(badge);
+      b.gold.push(spire('gold', 0.16, 0, 0.5, 4, cx, by + 1.0, zFront - 0.12)); // 章尖
+    }
+    // 角小尖塔 ×4（前两后两）+ 顶饰金色四角星（G1：墩顶小尖塔+菱形/星形金饰）
     for (const ox of [-1, 1] as const) {
       for (const oz of [-1, 1] as const) {
         const px = cx + ox * (towerW / 2 - 0.7);
         const pz = zMid + oz * (halfD - 0.9);
         b.ashlar.push(box('ashlar', 1.1, 2.2, 1.1, px, towerH + 1.1, pz));
         b.ashlar.push(spire('ashlar', 0.55, 0, 3.2, 8, px, towerH + 2.2, pz, Math.PI / 8));
+        // 四角星：两片正交菱形金片
+        for (const r of [0, Math.PI / 2]) {
+          const star = box('gold', 0.34, 1.5, 0.12, px, towerH + 5.9, pz);
+          star.rotateZ(r);
+          b.gold.push(star);
+        }
       }
     }
     // 尖塔棱线金丝
     for (const ox of [-1, 1] as const) {
       b.gold.push(box('gold', 0.1, 3.0, 0.1, cx + ox * (towerW / 2 - 0.7), towerH + 3.5, zFront - 1.5));
     }
+  }
+
+  // ── 飞拱（G1 identity）：双墩上方跨过门洞的浅拱 + 金边（参考图 kit③ 双墩间飞拱）
+  {
+    const flyHalf = openHalf + towerW; // 17.5（双墩外缘）
+    const flySpring = openH - 4; // 26（起拱线贴门拱顶上）
+    const fly = archBand(flyHalf, flySpring, 5.2, 0.7, 1.0, 9, 0.4, 0.4);
+    fly.rotateY(Math.PI);
+    fly.translate(0, 0, zFront - 0.15);
+    b.gold.push(fly);
   }
 
   // ── 门洞三层金券（前脸同心，逐层退进墙内）：最宽一条最外挑，其余逐层内收。
@@ -828,15 +877,29 @@ export function makeGate(): StoneBuckets {
     zBand -= dep + 0.05;
   }
 
-  // ── 金饰圆盘（拱上正中）：金盘 + 8 根辐射金刺 + 前置小金盘
-  const discY = 33.5;
-  b.gold.push(spire('gold', 2.8, 2.8, 0.7, 16, 0, discY, zFront - 0.35));
-  for (let i = 0; i < 8; i += 1) {
-    const a = (i / 8) * Math.PI * 2;
-    const spike = boxRot('gold', 1.0, 0.3, 0.7, Math.cos(a) * 3.1, discY + Math.sin(a) * 3.1, zFront - 0.3, a + Math.PI / 2);
+  // ── 金日轮/翼形饰（拱上正中，G1 identity）：竖面金盘 + 12 根辐射金刺 + 双侧翼卷
+  // 尺寸按 GATE_DECOR：宽 ≈0.5×门楼全宽（17.5）、高 ≈0.18×门楼高（9.9）。
+  const discY = GATE_DECOR.sunDiscYCrown; // 33.5
+  const discR = GATE_DECOR.sunDiscW / 2; // 8.75
+  const sunDisc = new THREE.CylinderGeometry(discR, discR, 0.7, 24);
+  sunDisc.rotateX(Math.PI / 2); // 竖面（朝来车 +z）
+  sunDisc.translate(0, discY, zFront - 0.1);
+  planarUV(sunDisc, TILE.gold);
+  b.gold.push(sunDisc);
+  for (let i = 0; i < 12; i += 1) {
+    const a = Math.PI + (i / 11) * Math.PI; // 上半圆放射
+    const spike = boxRot('gold', 1.2, 0.34, 0.7, Math.cos(a) * (discR + 0.7), discY + Math.sin(a) * (discR + 0.7), zFront - 0.06, a + Math.PI / 2);
     b.gold.push(spike);
   }
-  b.gold.push(spire('gold', 1.8, 1.8, 0.5, 16, 0, discY, zFront - 0.05));
+  for (const side of [-1, 1] as const) {
+    // 双侧翼卷（两段斜板 + 端珠）
+    b.gold.push(boxRot('gold', 5.5, 0.5, 0.7, side * (discR + 2.4), discY + 2.8, zFront - 0.06, side * 0.5));
+    b.gold.push(boxRot('gold', 3.8, 0.45, 0.7, side * (discR + 4.6), discY + 1.0, zFront - 0.06, side * 0.95));
+    b.gold.push(spire('gold', 0.45, 0, 1.4, 6, side * (discR + 6.2), discY + 0.3, zFront - 0.06));
+  }
+  // 日轮芯（前置小金盘 + 金珠）
+  b.gold.push(spire('gold', discR * 0.42, discR * 0.42, 0.5, 16, 0, discY, zFront + 0.05));
+  b.gold.push(spire('gold', 0.5, 0.5, 0.6, 8, 0, discY + discR + 1.6, zFront - 0.06));
 
   // ── 拱脚金饰带（archivoltBandH = 9.6 ⇒ 三道水平金带落在起拱区 0..9.6）
   // ⚠ 只铺两侧塔墩（|x| ∈ [10.3, 17.2]），**绝不横穿门洞**：y=1.2 那条原先是
@@ -864,8 +927,358 @@ export function makeGate(): StoneBuckets {
   return b;
 }
 
+/* ═══════════════════ ⑤c 塔群（G2：中央钟楼 + 双铃塔 + 细尖塔 + 翼墙） ═══════════════════ */
+
 /**
- * 尖拱窗单元 · **±x 朝向墙**（城内建筑前脸用）：拱宽沿 z、厚度沿 x。
+ * 塔群 = 参考图 7cd7329c 主构图的 identity（R27 完全缺失，G2 P0）：
+ * 中央钟楼坐在门楼体量上方（z 门楼带内，基座不占 |x|<ROAD_HALF 行车走廊），
+ * 双铃塔列于门楼双墩外侧，细尖塔更外，翼墙向两侧展开封住立面宽度。
+ * 高度阶梯：钟楼 98 > 铃塔 86 > 细尖塔 66 > 翼墙 29 > 门楼 55（V §7.1 体块排序）。
+ * 铃塔顶用 **dark 桶**做深色坡顶（参考图铃塔是深色尖顶），钟楼冠顶用 gold。
+ */
+export function makeTowerGroup(): StoneBuckets {
+  const b = emptyBuckets();
+  const gz = GATE.z; // −358.5
+  const gd = GATE.depth; // 14
+  const zFront = gz + gd / 2; // 门楼前脸 −351.5
+
+  /* ── 中央钟楼（identity 三件套：圆钟面 + 金冠尖顶 + 竖向金饰条贯通）── */
+  {
+    const { w, baseY, totalH, clockY, clockD } = TOWER_GROUP.clock;
+    const shaftTop = 78; // 檐口（冠顶自此起）
+    // 台基（咬合门楼体量顶 massTop=44）
+    b.ashlar.push(box('ashlar', w + 2.6, 4.5, gd + 1.8, 0, baseY + 2.25, gz));
+    // 塔身三段收分（阶梯=砌层感，44.5 → 78）
+    b.ashlar.push(box('ashlar', w + 1.4, 13.5, gd + 0.6, 0, 44.5 + 6.75, gz)); // 44.5..58
+    b.ashlar.push(box('ashlar', w + 0.5, 12, gd + 0.2, 0, 58 + 6, gz)); // 58..70
+    b.ashlar.push(box('ashlar', w - 0.3, 8, gd - 0.2, 0, 70 + 4, gz)); // 70..78
+    // 檐口 + 金线
+    b.ashlar.push(box('ashlar', w + 2.2, 1.2, gd + 1.4, 0, shaftTop + 0.6, gz));
+    b.gold.push(box('gold', w + 2.4, 0.22, gd + 1.6, 0, shaftTop + 1.35, gz));
+    // 金冠尖顶（cone 8 面 + 金珠）
+    b.gold.push(spire('gold', 3.4, 0, totalH - shaftTop - 1.2, 8, 0, shaftTop + 1.2, gz, Math.PI / 8));
+    b.gold.push(spire('gold', 0.55, 0.55, 0.7, 8, 0, shaftTop + 1.1, gz));
+    // 圆钟面（前脸，竖面）：金圈 + 近黑盘 + 金指针（V：钟面位于 0.62~0.70 塔高）
+    const cz = zFront - 0.06;
+    const ring = new THREE.CylinderGeometry(clockD / 2 + 0.55, clockD / 2 + 0.55, 0.34, 20);
+    ring.rotateX(Math.PI / 2);
+    ring.translate(0, clockY, cz);
+    planarUV(ring, TILE.gold);
+    b.gold.push(ring);
+    const face = new THREE.CylinderGeometry(clockD / 2, clockD / 2, 0.4, 20);
+    face.rotateX(Math.PI / 2);
+    face.translate(0, clockY, cz);
+    planarUV(face, TILE.wall);
+    b.dark.push(face);
+    b.gold.push(box('gold', 0.32, clockD * 0.62, 0.16, 0, clockY, cz - 0.2)); // 时针（垂直）
+    b.gold.push(box('gold', clockD * 0.48, 0.32, 0.16, clockD * 0.24, clockY, cz - 0.2)); // 分针
+    b.gold.push(spire('gold', 0.42, 0.42, 0.6, 8, 0, shaftTop + 1.0, gz)); // 冠座金珠
+    // 竖向金饰条 ×2（前脸贯通塔身）
+    for (const ox of [-1, 1] as const) {
+      b.gold.push(box('gold', 0.4, shaftTop - 44.5, 0.18, ox * (w / 2 - 0.5), (44.5 + shaftTop) / 2, zFront - 0.12));
+    }
+    // 钟楼尖拱窗 ×1（钟上方）
+    {
+      const win = lancetWindowZ(1.1, 5.2, 0.3, 0.7, 0.5, 0.3);
+      win.frame.translate(0, 69, zFront);
+      win.plate.translate(0, 69, zFront);
+      b.ashlar.push(win.frame);
+      b.dark.push(win.plate);
+    }
+  }
+
+  /* ── 双铃塔（拱形钟室挂钟；顶为深色坡顶 = dark 桶）── */
+  for (const side of [-1, 1] as const) {
+    const cx = side * TOWER_GROUP.bell.x; // ±25
+    const { w, totalH, bellY, bellOpenH } = TOWER_GROUP.bell;
+    const shaftTop = 68; // 檐口
+    b.ashlar.push(box('ashlar', w + 2.4, 2, w + 2.4, cx, 1, gz)); // 台基
+    b.ashlar.push(box('ashlar', w + 0.6, 33, w + 0.6, cx, 2 + 16.5, gz)); // 塔身下段 2..35
+    b.ashlar.push(box('ashlar', w, shaftTop - 35, w, cx, 35 + (shaftTop - 35) / 2, gz)); // 塔身上段 35..68
+    b.ashlar.push(box('ashlar', w + 1.6, 1.2, w + 1.6, cx, shaftTop + 0.6, gz)); // 檐口
+    b.gold.push(box('gold', w + 1.8, 0.22, w + 1.8, cx, shaftTop + 1.35, gz)); // 檐口金线
+    // 深色坡顶（dark 桶深色尖顶；tile 用 wall——StoneKind 无 dark）
+    b.dark.push(spire('wall', w * 0.62, 0, totalH - shaftTop - 1.2, 8, cx, shaftTop + 1.2, gz, Math.PI / 8));
+    // 钟室：拱框（gold 券线）+ 近黑内衬 + 金钟（V：钟高 = 开口高 2/3）
+    const openHalf = bellOpenH * 0.42; // 拱宽 ≈ 高的 0.84（1:1.2 拱）
+    {
+      const frame = archBand(openHalf, 0, bellOpenH * 0.72, 0.34, 0.5, 7, 0.6, 0.45);
+      frame.rotateY(Math.PI);
+      frame.translate(cx, bellY, zFront);
+      b.gold.push(frame);
+    }
+    {
+      const plate = archPlate(openHalf - 0.2, 0, bellOpenH * 0.72, 0.8, 7, 0.6);
+      plate.rotateY(Math.PI);
+      plate.translate(cx, bellY, zFront - 0.8);
+      b.dark.push(plate);
+    }
+    // 金钟（碗形 + 吊环，挂在拱室中央）
+    const bellH = bellOpenH * 0.66;
+    b.gold.push(spire('gold', bellH * 0.34, bellH * 0.2, bellH * 0.78, 10, cx, bellY + 0.4, zFront - 0.5, 0));
+    b.gold.push(box('gold', bellH * 0.68, 0.22, 0.3, cx, bellY + 0.4, zFront - 0.5)); // 钟唇
+    b.gold.push(spire('gold', 0.16, 0.16, 0.5, 6, cx, bellY + 0.4 + bellH * 0.78, zFront - 0.5)); // 吊环
+    // 塔身金饰条 ×2 + 尖拱窗 ×1（钟室下）
+    for (const ox of [-1, 1] as const) {
+      b.gold.push(box('gold', 0.3, 30, 0.16, cx + ox * (w / 2 - 0.4), 20, zFront - 0.1));
+    }
+    {
+      const win = lancetWindowZ(0.8, 4.6, 0.26, 0.6, 0.45, 0.28);
+      win.frame.translate(cx, 44, zFront);
+      win.plate.translate(cx, 44, zFront);
+      b.ashlar.push(win.frame);
+      b.dark.push(win.plate);
+    }
+  }
+
+  /* ── 细尖塔 ×2（kit④ 语言：全塔 1:6.2，上段杆件 1:11.3）── */
+  for (const side of [-1, 1] as const) {
+    const cx = side * TOWER_GROUP.spire.x; // ±42
+    const { w, totalH } = TOWER_GROUP.spire;
+    b.ashlar.push(box('ashlar', w + 2, 1.6, w + 2, cx, 0.8, gz)); // 台基
+    b.ashlar.push(box('ashlar', w, 38, w, cx, 1.6 + 19, gz)); // 基座段 1.6..39.6
+    b.ashlar.push(box('ashlar', w * 0.86, 8, w * 0.86, cx, 39.6 + 4, gz)); // 中段收分
+    // 上段细杆（1:11.3）
+    const rodH = totalH - 47.6;
+    b.ashlar.push(pierColumn(rodH / TOWER.spireAspect, (rodH / TOWER.spireAspect) * 0.7, rodH, cx, 47.6, gz));
+    // 金饰带 ×2 + 金尖
+    b.gold.push(box('gold', w + 0.5, 0.3, w + 0.5, cx, 20, gz));
+    b.gold.push(box('gold', w * 0.9 + 0.4, 0.3, w * 0.9 + 0.4, cx, 43, gz));
+    b.gold.push(spire('gold', 0.5, 0, 2.2, 6, cx, totalH, gz));
+    // 细杆金珠
+    b.gold.push(spire('gold', 0.3, 0.3, 0.5, 6, cx, totalH - 3, gz));
+  }
+
+  /* ── 翼墙（门楼双墩外侧 → ±55，封住参考图立面宽度）── */
+  {
+    const { xEnd, h } = TOWER_GROUP.wing;
+    const xIn = GATE.halfW; // 17.5（门楼半宽）
+    for (const side of [-1, 1] as const) {
+      const cx = side * (xIn + xEnd) / 2;
+      const w = xEnd - xIn; // 37.5
+      b.wall.push(box('wall', w, h, 8, cx, h / 2, gz)); // 墙身
+      b.ashlar.push(box('ashlar', w + 0.8, 0.6, 8.8, cx, h + 0.3, gz)); // 顶叠涩
+      b.gold.push(box('gold', w + 1, 0.24, 9, cx, h + 0.78, gz)); // 檐口金带
+      // 垛口（齿 1:1，节拍 2.4）
+      const merlons = Math.floor(8 / 2.4);
+      for (let m = 0; m < merlons; m += 1) {
+        const mz = gz - 4 + (8 * (m + 0.5)) / merlons;
+        b.ashlar.push(box('ashlar', w, 1.2, 8 / merlons / 2, cx, h + 1.4, mz));
+        b.gold.push(spire('gold', 0.22, 0, 0.4, 4, cx, h + 2, mz));
+      }
+      // 尖拱窗 ×3（墙内壁朝路心）
+      for (let i = 0; i < 3; i += 1) {
+        const wz = gz - 2.8 + i * 2.8;
+        const win = lancetWindowX(0.85, 5.0, 0.26, 0.7, 0.45, 0.3);
+        // 先镜像（局部 z=0 居中）再平移到世界位——反序会让 −side 窗落到 −wz
+        if (side < 0) {
+          win.frame.rotateY(Math.PI);
+          win.plate.rotateY(Math.PI);
+        }
+        win.frame.translate(side * xIn, 3.2, wz);
+        win.plate.translate(side * xIn, 3.2, wz);
+        b.ashlar.push(win.frame);
+        b.dark.push(win.plate);
+      }
+      // 竖向金饰条 ×2（翼墙外棱）
+      for (const ox of [-1, 1] as const) {
+        b.gold.push(box('gold', 0.3, h - 1, 0.16, side * (xIn + (ox < 0 ? 0.4 : w - 0.4)), (h - 1) / 2 + 0.6, gz + 4.1));
+      }
+    }
+  }
+  return b;
+}
+
+/* ═══════════════════ ⑤d 主殿（撞击目标 · 城内终点宫殿） ═══════════════════ */
+
+/**
+ * 主殿 = 用户指令「castle 内部最后撞上的实体建筑」（R28 替代旧路障，G2/P0）。
+ * 正面立面 z=−1300 即物理撞击面（CRASH_WALL.z）；形制取 kit③ 门楼模块语言：
+ *   前排门楼段 frontW 56（中央封闭大拱门龛 clearW 16 × clearH 24 + 金日轮/翼形饰）
+ *   两翼墙 ±28 → ±65（facadeW 130，纯视觉）+ 后排主殿身（rearDepth 37）
+ *   尖顶冠 crownH 100（kit④ 细杆语言，**无钟面**——钟楼 identity 归 TOWER_GROUP）
+ *   前广场 14.5m：大台阶 4 级 + 火盆阵（HALL_BRAZIER：门龛火盆对 + 广场列阵）
+ * 门龛**封闭不可通行**（深色内衬 + 金券 + 门楣金饰）⇒ 整车撞立面（H1「无穿透」）。
+ */
+export function makeMainHall(): StoneBuckets {
+  const b = emptyBuckets();
+  const { z, depth, frontDepth, frontW, clearW, clearH, frontH, crownH, facadeW, wingInner, wingOuter } = MAIN_HALL;
+  const zFront = z; // −1300（立面）
+  const zBack = z - depth; // −1360
+  const zMidFront = zFront - frontDepth / 2; // 前排中心 −1311.5
+
+  /* ── 前排门楼段（frontW 56 × frontH 70）── */
+  {
+    // 台基两层
+    b.ashlar.push(box('ashlar', frontW + 3, 1.2, frontDepth + 2, 0, 0.6, zMidFront));
+    b.ashlar.push(box('ashlar', frontW + 1.4, 1.0, frontDepth + 1, 0, 1.7, zMidFront));
+    // 殿身（55 宽 × 60 高，2.7..62.7）
+    const bodyH = frontH - 7.3;
+    b.ashlar.push(box('ashlar', frontW, bodyH, frontDepth, 0, 2.7 + bodyH / 2, zMidFront));
+    // 中央封闭大拱门龛（dark 内衬 + 金券 3 层 + 楣饰）
+    const openHalf = clearW / 2; // 8
+    const rise = clearH - 2.4; // 21.6（起拱线 2.4 处）
+    for (const [band, dep] of [
+      [1.5, 0.6],
+      [0.95, 0.5],
+      [0.55, 0.45]
+    ] as const) {
+      const g = archBand(openHalf, 2.4, rise, band, dep, 9, 1.1, 0.45);
+      g.rotateY(Math.PI);
+      g.translate(0, 0, zFront + 0.05 - (band === 1.5 ? 0 : band === 0.95 ? 1.15 : 2.1));
+      b.gold.push(g);
+    }
+    b.dark.push(archPlate(openHalf - 0.3, 2.4, rise, frontDepth - 1.2, 9, 1.1).translate(0, 0, zFront));
+    // 门楣：金日轮/翼形饰（竖面金盘 + 放射金刺 + 双侧翼卷；宽 ≈0.5×frontW、高 ≈0.18×frontH）
+    const discW = frontW * 0.5; // 28
+    const discH = frontH * 0.18; // 12.6
+    const discY = clearH + discH * 0.55; // ≈30.5
+    const sunDisc = new THREE.CylinderGeometry(discW / 2, discW / 2, 0.7, 24);
+    sunDisc.rotateX(Math.PI / 2);
+    sunDisc.translate(0, discY - discH * 0.3, zFront - 0.1);
+    planarUV(sunDisc, TILE.gold);
+    b.gold.push(sunDisc);
+    for (let i = 0; i < 12; i += 1) {
+      const a = Math.PI + (i / 11) * Math.PI; // 上半圆放射
+      const spike = boxRot('gold', 1.1, 0.32, 0.7, Math.cos(a) * (discW / 2 + 0.6), discY - discH * 0.3 + Math.sin(a) * (discW / 2 + 0.6), zFront - 0.06, a + Math.PI / 2);
+      b.gold.push(spike);
+    }
+    for (const side of [-1, 1] as const) {
+      // 双侧翼卷（两段斜板）
+      b.gold.push(boxRot('gold', 6.5, 0.5, 0.7, side * (discW / 2 + 2.2), discY + 3.2, zFront - 0.06, side * 0.5));
+      b.gold.push(boxRot('gold', 4.5, 0.45, 0.7, side * (discW / 2 + 4.6), discY + 1.2, zFront - 0.06, side * 0.95));
+      b.gold.push(spire('gold', 0.5, 0, 1.6, 6, side * (discW / 2 + 6.4), discY + 0.4, zFront - 0.06));
+    }
+    // 门龛两侧尖拱窗 ×2 + 竖向金条 ×4 + 分层金带 ×3
+    for (const side of [-1, 1] as const) {
+      const wx = side * (openHalf + 4.4);
+      const win = lancetWindowZ(1.0, 6.0, 0.3, 0.8, 0.5, 0.32);
+      win.frame.translate(wx, 6.5, zFront);
+      win.plate.translate(wx, 6.5, zFront);
+      b.ashlar.push(win.frame);
+      b.dark.push(win.plate);
+      b.gold.push(box('gold', 0.42, frontH - 9, 0.18, wx + side * 2.1, (frontH - 9) / 2 + 4, zFront - 0.1));
+    }
+    for (let i = 0; i < 3; i += 1) {
+      b.gold.push(box('gold', frontW + 0.6, 0.34, frontDepth + 0.4, 0, 14 + i * 12, zMidFront));
+    }
+    // 檐口 + 垛口
+    b.ashlar.push(box('ashlar', frontW + 2.4, 1.4, frontDepth + 1.8, 0, frontH - 0.7, zMidFront));
+    b.gold.push(box('gold', frontW + 2.6, 0.26, frontDepth + 2, 0, frontH + 0.15, zMidFront));
+    const merlons = Math.floor(frontDepth / 2.4);
+    for (let m = 0; m < merlons; m += 1) {
+      const mz = zBack + 1 + (frontDepth * (m + 0.5)) / merlons;
+      b.ashlar.push(box('ashlar', frontW, 1.4, frontDepth / merlons / 2, 0, frontH + 1.1, mz));
+    }
+    // 尖顶冠（kit④ 细杆语言，无钟面）
+    const rodH = crownH - frontH; // 30
+    b.ashlar.push(box('ashlar', 9, 5, 9, 0, frontH + 2.5, zMidFront)); // 冠座
+    b.gold.push(spire('gold', 3.6, 0, rodH - 5, 8, 0, frontH + 5, zMidFront, Math.PI / 8));
+    b.gold.push(spire('gold', 0.5, 0.5, 0.8, 8, 0, frontH + 4.9, zMidFront));
+    b.gold.push(spire('gold', 0.42, 0, 2.4, 6, 0, crownH, zMidFront));
+  }
+
+  /* ── 两翼墙（±28 → ±65，低于前排，纯视觉件不参与碰撞）── */
+  {
+    const wingH = 36;
+    for (const side of [-1, 1] as const) {
+      const cx = side * (wingInner + wingOuter) / 2;
+      const w = wingOuter - wingInner; // 37
+      b.wall.push(box('wall', w, wingH, frontDepth, cx, wingH / 2, zMidFront));
+      b.ashlar.push(box('ashlar', w + 0.8, 0.6, frontDepth + 0.8, cx, wingH + 0.3, zMidFront));
+      b.gold.push(box('gold', w + 1, 0.24, frontDepth + 1, cx, wingH + 0.78, zMidFront));
+      // 垛口 + 金齿饰
+      const merlons = Math.floor(frontDepth / 2.4);
+      for (let m = 0; m < merlons; m += 1) {
+        const mz = zBack + 1 + (frontDepth * (m + 0.5)) / merlons;
+        b.ashlar.push(box('ashlar', w, 1.2, frontDepth / merlons / 2, cx, wingH + 1.2, mz));
+        b.gold.push(spire('gold', 0.2, 0, 0.38, 4, cx, wingH + 1.8, mz));
+      }
+      // 尖拱窗列（朝路心）
+      for (let i = 0; i < 3; i += 1) {
+        const wz = zMidFront - 7 + i * 7;
+        const win = lancetWindowX(0.9, 5.6, 0.28, 0.75, 0.45, 0.3);
+        // 先镜像再平移（反序会让 −side 窗落到 −wz）
+        if (side < 0) {
+          win.frame.rotateY(Math.PI);
+          win.plate.rotateY(Math.PI);
+        }
+        win.frame.translate(side * wingInner, 6, wz);
+        win.plate.translate(side * wingInner, 6, wz);
+        b.ashlar.push(win.frame);
+        b.dark.push(win.plate);
+      }
+      // 竖向金饰条 ×2（翼墙外棱）
+      for (const ox of [-1, 1] as const) {
+        b.gold.push(box('gold', 0.32, wingH - 2, 0.16, side * (wingInner + (ox < 0 ? 0.5 : w - 0.5)), (wingH - 2) / 2 + 1, zMidFront + frontDepth / 2 - 0.2));
+      }
+    }
+  }
+
+  /* ── 后排主殿身（rearDepth 37，低于前排，侧视多层体量 2497fab5 相容）── */
+  {
+    const rearH = 30;
+    b.ashlar.push(box('ashlar', facadeW - 6, 1, depth - frontDepth + 2, 0, 0.5, zBack + (depth - frontDepth) / 2));
+    b.ashlar.push(box('ashlar', facadeW - 8, rearH, depth - frontDepth, 0, 1 + rearH / 2, zBack + (depth - frontDepth) / 2));
+    b.ashlar.push(box('ashlar', facadeW - 6, 1.2, depth - frontDepth + 1.4, 0, 1 + rearH + 0.6, zBack + (depth - frontDepth) / 2));
+    b.gold.push(box('gold', facadeW - 5, 0.24, depth - frontDepth + 1.6, 0, 1 + rearH + 1.4, zBack + (depth - frontDepth) / 2));
+    // 双坡顶（石）
+    {
+      const cz = zBack + (depth - frontDepth) / 2;
+      const run = (facadeW - 8) / 2;
+      const ridgeY = 1 + rearH + 4.5;
+      for (const rs of [-1, 1] as const) {
+        const lx = rs < 0 ? -run / 2 : run / 2;
+        b.ashlar.push(boxRot('ashlar', Math.hypot(run, 4.5), 0.5, depth - frontDepth - 2, lx, (1 + rearH + 1.2 + ridgeY) / 2, cz, -rs * Math.atan2(4.5, run)));
+      }
+      b.gold.push(box('gold', 0.4, 3.2, 0.4, 0, ridgeY + 1.6, cz)); // 屋脊金十字
+      b.gold.push(box('gold', 1.8, 0.4, 0.4, 0, ridgeY + 2.4, cz));
+    }
+    // 后排尖拱窗 ×4（朝 +z 面）
+    for (let i = 0; i < 4; i += 1) {
+      const wx = -15 + i * 10;
+      const win = lancetWindowZ(0.85, 5.2, 0.26, 0.7, 0.45, 0.3);
+      win.frame.translate(wx, 5, zBack + (depth - frontDepth));
+      win.plate.translate(wx, 5, zBack + (depth - frontDepth));
+      b.ashlar.push(win.frame);
+      b.dark.push(win.plate);
+    }
+  }
+
+  /* ── 前广场带（14.5m）：大台阶 4 级 + 火盆阵 ── */
+  {
+    const plazaNear = z - MAIN_HALL.plazaDepth; // −1285.5
+    const stepW = 2 * VIADUCT.totalHalf; // 33.4（整幅车道+两侧步道）
+    for (let s = 0; s < MAIN_HALL.stepLevels; s += 1) {
+      // 首级底坐在路面铺装（y=0.012）之上 8mm，逐级升 stepRise —— 与 road 平面不共面
+      const sy = 0.02 + s * MAIN_HALL.stepRise;
+      const sz = plazaNear + (MAIN_HALL.plazaDepth * (s + 0.5)) / MAIN_HALL.stepLevels;
+      b.ashlar.push(box('ashlar', stepW, MAIN_HALL.stepRise, MAIN_HALL.plazaDepth / MAIN_HALL.stepLevels, 0, sy + MAIN_HALL.stepRise / 2, sz));
+    }
+    // 大门火盆对（门龛两侧 ±11）
+    for (const side of [-1, 1] as const) {
+      const cx = side * HALL_BRAZIER.gatePairX;
+      b.ashlar.push(box('ashlar', 1.1, 1.0, 1.1, cx, 0.5, z - 3.2));
+      b.gold.push(spire('gold', 0.34, 0.62, 1.15 * HALL_BRAZIER.gatePairScale, 10, cx, 1.0, z - 3.2)); // 金碗盆（下收口）
+      b.gold.push(spire('gold', 0.72, 0.72, 0.14, 10, cx, 1.0 + 1.15 * HALL_BRAZIER.gatePairScale, z - 3.2)); // 盆口沿
+      b.flame.push(flame(0.4, 0.75 * HALL_BRAZIER.flameScale, cx, 1.0 + 1.15 * HALL_BRAZIER.gatePairScale + 0.14, z - 3.2));
+    }
+    // 列阵火盆（广场两侧各 2 座，z 节拍 5，栏板内侧 1.5）
+    for (const side of [-1, 1] as const) {
+      for (let i = 0; i < HALL_BRAZIER.arrayCount; i += 1) {
+        const cx = side * (ROAD_HALF + HALL_BRAZIER.arrayInset);
+        const cz = plazaNear + 3.5 + i * HALL_BRAZIER.arrayPitch;
+        b.ashlar.push(box('ashlar', 0.9, 0.8, 0.9, cx, 0.4, cz));
+        b.gold.push(spire('gold', 0.28, 0.52, 1.15, 10, cx, 0.8, cz));
+        b.gold.push(spire('gold', 0.6, 0.6, 0.12, 10, cx, 0.8 + 1.15, cz));
+        b.flame.push(flame(0.34, 0.72, cx, 0.8 + 1.15 + 0.12, cz));
+      }
+    }
+  }
+  return b;
+}
+
+/**
  * 局部约定：墙面在 x=0、墙体向 +x 延伸；券框外挑到 x ∈ [−frameOut, 0]（朝街面），
  * 背板嵌进墙体 x ∈ [0, plateBack]。窗台随框一起外挑。
  */
@@ -908,22 +1321,18 @@ function lancetWindowZ(
 /* ═══════════════════ ⑥ 城内大街 ═══════════════════ */
 
 /**
- * 城内大街：过门后 z ∈ [−365.5, −1350]，街侧建筑前脸 |x| = faceHalf = 15.5，
- * 进深 8（插进崖体消除缝）。每 46m 一个街区，每街区每侧：
- *   殿（块中央，12.5×17.9×8，双坡顶 + 金十字 + 3 尖拱窗）
+ * 城内大街：过门后 z ∈ [INNER.zNear, INNER.zFar=−1285.5]（R28：街区数由公式
+ * floor((zNear−zFar)/blockLen)=20 自动成立，末段让位主殿广场 14.5m + 主殿），
+ * 街侧建筑前脸 |x| = faceHalf = 15.5，进深 8（插进崖体消除缝）。每 46m 一个街区，
+ * 每街区每侧：
+ *   殿（块中央，TOWER.hallW 12.5 × TOWER.hallH 17.9 × 8，双坡顶 + 金十字 + 3 尖拱窗）
  *   塔（块左四分位，8 宽 × 36 高 + 9.5 尖顶，3 尖拱窗）
  *   三段连墙（带叠涩 + 垛口，B 段开一窗）
  *   火盆 ×2
  * 尖拱窗尺寸按 TOWER.windowW/H 的比例层放大（1.068×7.039 是 1:1 人体尺度，
  * 直接搬到 17.9m 的殿上会小得读不出；这里按建筑尺度等比放到 ~1.8×7）。
- */
-/**
- * 城内大街：过门后 z ∈ [−365.5, −1350]，街侧建筑前脸 |x| = faceHalf = 15.5，
- * 进深 8（插进崖体消除缝）。每 46m 一个街区，每街区每侧：
- *   殿（块中央，沿街宽 12.5 × 墙高 17.3 × 进深 8，双坡顶 + 金十字 + 3 尖拱窗）
- *   塔（块左四分位，8 宽 × 36 高 + 9.5 尖顶，3 尖拱窗）
- *   三段连墙（带叠涩 + 垛口，B 段开一窗）
- *   火盆 ×2
+ * ⚠ 殿尺寸一律 import TOWER.hallW/hallH（R27 曾硬编码 12.5/17.3，audit §3 判罚：
+ *    改常量不生效的暗坑——常量必须从布局真源来）。
  *
  * ── 局部坐标配方（本函数一切形体先按局部建，再一次性贴到世界）──────────────
  * 局部：前脸在 x=0、墙体向 +x 延伸、z 以块心为 0。世界化只有一步：
@@ -952,9 +1361,9 @@ export function makeInnerCity(): StoneBuckets {
         return g;
       };
 
-      /* ── 殿（块中央）：沿街宽 12.5，墙高 17.3 ── */
-      const hallW = 12.5;
-      const hallH = 17.3;
+      /* ── 殿（块中央）：沿街宽 TOWER.hallW，墙高 TOWER.hallH ── */
+      const hallW = TOWER.hallW;
+      const hallH = TOWER.hallH;
       b.ashlar.push(put(box('ashlar', depth + 0.8, 0.6, hallW + 1.4, depth / 2 + 0.4, 0.3, 0))); // 台基
       b.ashlar.push(put(box('ashlar', depth, hallH, hallW, depth / 2, 0.6 + hallH / 2, 0))); // 殿身
       const wallTop = 0.6 + hallH; // 17.9

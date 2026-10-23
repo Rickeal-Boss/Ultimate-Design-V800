@@ -37,6 +37,8 @@ import {
   makePaving,
   makeLamps,
   makeGate,
+  makeTowerGroup,
+  makeMainHall,
   makeInnerCity
 } from './castleKit';
 import type { StoneBuckets } from './castleKit';
@@ -74,18 +76,20 @@ function stoneMaterial(kind: 'ashlar' | 'wall' | 'gold'): THREE.MeshStandardMate
     metalness: 0
   };
   if (kind === 'gold') {
-    // 做旧黄铜的「发光感」：逆光暴云天下金属只有环境反射一条路（metalness 0.85
+    // 金饰「发光感」：逆光暴云天下金属只有环境反射一条路（metalness 0.85
     // ⇒ 漫反射 ≈ 0），背光面与朝下面无光可吃 —— 城门拱脚带朝下面在车视机位
-    // 实测读到 L=25 近黑（r27_final tunnel_drive 像素探针）。加一层金色自辉
-    // （≈授权金基色 #a7843c 的 0.3）把暗面托到 L≈90，亮面仍走 env 反射，
-    // 对应参考图金饰「明度中高 + 强烈金属光泽和发光感」的读法。
+    // 实测读到 L=25 近黑（r27_final tunnel_drive 像素探针）。R28 视觉规格书定的
+    // 金饰 albedo = #C9A227（中调）/ #F0D45C（高光），比旧 #a7843c 旧黄铜更亮；
+    // 自辉用**降饱和金** 0xb8902f × 0.35：够把暗面托离死黑（L≈90），又不致在
+    // 逆光下整片发「橙」（qa 复拍复核：0xc9a227×0.42 时金饰偏橙、对比生硬，
+    // 参考图要的是「柔和亮金」）。亮面仍走 env 反射保留金属光泽。
     return new THREE.MeshStandardMaterial({
       ...base,
       metalness: 0.85,
       roughness: 0.42,
       envMapIntensity: 1.4,
-      emissive: 0xa7843c,
-      emissiveIntensity: 0.3
+      emissive: 0xb8902f,
+      emissiveIntensity: 0.35
     });
   }
   const secondary = kind === 'wall';
@@ -174,7 +178,10 @@ export class Castle {
     this.absorb(makeParapet());
     this.absorb(makeLamps());
     this.absorb(makeGate());
+    // R28：塔群（中央钟楼+双铃塔+细尖塔+翼墙，G2 identity）与主殿（撞击目标）
+    this.absorb(makeTowerGroup());
     this.absorb(makeInnerCity());
+    this.absorb(makeMainHall());
     const pave = makePaving();
     this.addMesh(pave.road, this.special('pave-road', pavementMaterial), 'castle-pave-road');
     this.addMesh(pave.walk, this.special('pave-walk', walkPavingMaterial), 'castle-pave-walk');

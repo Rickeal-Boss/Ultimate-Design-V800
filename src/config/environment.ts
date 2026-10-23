@@ -30,28 +30,16 @@ export interface EnvPreset {
   fill: { color: number; intensity: number };
   rim: { color: number; intensity: number };
   softbox: Array<{ pos: [number, number, number]; w: number; h: number; color: number; gain: number; alongZ: boolean }>;
-  /** 按 sculptMaterial.id 或材质族给 envMapIntensity 增益（1 = 保持材质原值） */
-  paintEnvGain: Record<string, number>;
 }
 
 /**
- * 材质族增益的兜底值：未列出的族**不改**（1.0）。
- * 与上一版（亮白石环境取 0.85「一律轻压」）相反：本版是逆光暴云，PMREM 环境整体偏暗，
- * 再压只会把没调过的材质压成死灰。只有明确会被洗白的族才在表里单列。
+ * R28：`paintEnvGain` 死表**删除**（R27 遗留 P0：`resolvePaintEnvGain` 全库零消费，
+ * grep 仅 environment.ts 自引用）。车漆/材质族的 envMapIntensity 现行真源是
+ * spec 工厂产出值 + `V800Adapter.ts` 的 0.55/0.45 硬编码（黑漆压/金属提）——
+ * 语义与旧表一致（黑漆怕洗白 → 压；金属怕死黑 → 提），look-dev 调这两处即可。
+ * 若未来要按材质族细调再接回消费链（Game/Adapter 里乘 envMapIntensity），
+ * 到那时重新加表，不要留无人消费的死配置（铁律 35）。
  */
-export const PAINT_ENV_GAIN_DEFAULT = 1.0;
-
-/**
- * `paintEnvGain` 的语义（**唯一解释，别各自猜**）：
- * 它是**乘在材质现有 envMapIntensity 上的增益**（1.0 = 不改），不是绝对值。
- * 这样 spec 工厂产出的材质参数仍是唯一几何/材质真源，环境侧只做「环境响应修正」。
- * 例：paint-upper 的 spec envMapIntensity=1.0 × 0.62 = 0.62。
- */
-export function resolvePaintEnvGain(materialId: string): number {
-  const preset = ACTIVE_ENV.paintEnvGain;
-  if (materialId in preset) return preset[materialId];
-  return PAINT_ENV_GAIN_DEFAULT;
-}
 
 /** 白石城堡 · 逆光暴风天光（数值依据见文件头采样表；允许 ±10% 微调） */
 const WHITE_CATHEDRAL: EnvPreset = {
@@ -132,36 +120,8 @@ const WHITE_CATHEDRAL: EnvPreset = {
     // 逆光场景里车底最容易死黑（主光从前方掠射，照不到车下），这块板是车底唯一的
     // 向上照明来源；gain 0.9（比亮白石版 1.0 略低，地面本身没被打亮）。
     { pos: [0, 6, 0], w: 200, h: 340, color: 0xe6d5c4, gain: 0.9, alongZ: true }
-  ],
-  /**
-   * 车漆/材质族环境响应修正（语义见 resolvePaintEnvGain）。
-   * 本版逻辑：**黑漆怕洗白 → 压；金属怕死黑 → 提**。允许 look-dev 在 ±0.1 内微调。
-   */
-  paintEnvGain: {
-    // 黑漆/深漆：逆光天空是大面积亮灰晕，反射进黑漆就是一层灰雾，所以要压。
-    // R26h 从 0.52 放回 0.62（保守档）：0.52 时车侧反射带太弱、只剩剪影；
-    // 白石受光面同时受顶置柔光箱 1.3 影响，这两项已带双向复测（白石 +≤6 级为硬约束）。
-    'paint-upper': 0.62,
-    'paint-lower': 0.55,
-    // 镀铬 metalness=1：环境变暗后反射不足会发死灰，1.2 才读得出「金属」
-    chrome: 1.2,
-    // 玻璃维持：深玻 Fresnel 已够，清玻走 opacity≤0.34 的透明路线
-    'glass-dark': 0.8,
-    'glass-clear': 0.72,
-    // 银漆 D 柱饰板 / 轮圈金属漆：随金属族一起提，但比镀铬保守（它们有哑面基底）
-    'dpillar-silver': 1.05,
-    'wheel-alloy': 1.1,
-    // 哑黑/轮胎：漫反射为主，暗环境需要一点点 env 才不糊成一片
-    tire: 0.8,
-    'matte-black': 0.9,
-    'housing-dark': 0.95,
-    // 内饰：车内本来就暗，保持原值即可
-    'leather-dark': 1.0,
-    'leather-warm': 1.0,
-    wood: 1.0,
-    crystal: 1.1,
-    'bronze-dark': 1.1
-  }
+  ]
+  // R28：paintEnvGain 死表已删（零消费，见 EnvPreset 接口注释；铁律 35 死配置零容忍）。
 };
 
 export const ENV_PRESETS: Record<string, EnvPreset> = {

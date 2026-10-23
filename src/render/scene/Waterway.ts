@@ -21,9 +21,8 @@
  * 是**物理契约**（vitest 盯着）。视觉层停用 ≠ 改契约，两边都保持原值。
  * 相应地 `Road.buildGround` 也不再为 RIVER 挖洞（改为给御桥峡谷走廊挖洞）。
  *
- * ⚠ 遗留项（需几何线接手）：castle.ts 的 `RAIL_SEGMENTS` / `PAVE_SEGMENTS` 仍在
- *   z ∈ [−370, −530] 留空给「Waterway 的 0.55m 桥侧矮墙」。矮墙随本类一起没了，
- *   这段 160m 现在只有素路面、没有路侧 —— 几何线重建城内大街时会覆盖。
+ * R28 备注：旧注释提到的 castle.ts `RAIL_SEGMENTS` / `PAVE_SEGMENTS` 已不存在
+ * （R27 castle 重写时移除，grep 0 命中）——该遗留项已自然消失，勿据此改代码。
  */
 import * as THREE from 'three';
 

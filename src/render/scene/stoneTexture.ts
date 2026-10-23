@@ -65,7 +65,7 @@ export const STONE_HEX: Record<StoneKind, { base: string; light: string; dark: s
   wall: { base: '#c0bdba', light: '#cfcdca', dark: '#8f8c89', mortar: '#a6a29f' },
   floor: { base: '#454342', light: '#4e4b49', dark: '#3c3b3a', mortar: '#333230' },
   rock: { base: '#655b4c', light: '#83796e', dark: '#51422f', mortar: '#3e3428' },
-  gold: { base: '#a7843c', light: '#deceb0', dark: '#927a47', mortar: '#39301f' }
+  gold: { base: '#c9a227', light: '#f0d45c', dark: '#8f7330', mortar: '#39301f' }
 };
 
 /**

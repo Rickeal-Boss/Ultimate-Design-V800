@@ -1,11 +1,11 @@
 /**
  * 游戏会话状态机（原版 ng 类语义移植 + 新滑条交互）。
  * MENU → COUNTDOWN(3,2,1) → ACCEL（油门滑条）→ BRAKE（刹车滑条，油门锁定 0）
- * → STOPPED（成功）/ CRASHED（撞路障）→ Result。
+ * → STOPPED（成功）/ CRASHED（撞撞击面——R28 语义=主殿正面）→ Result。
  *
  * 踏板断裂不再翻滚（玩法改版 决策①）：踏板脱开后由紧急制动安全冗余以满载 1/4 力度
  * 接管至停车。冗余刹停仍是「失败」（制动系统已失效），但车辆获救 —— 结算档位
- * `brake_pedal_failed`；翻滚演出只保留给撞路障。
+ * `brake_pedal_failed`；翻滚演出只保留给撞撞击面（R28=主殿正面，枚举值 'barrier' 冻结）。
  * 物理推进全部委托 physics/ 纯函数。
  */
 import { BRAKE, MS_TO_KMH, TRACK, calcScore } from '../config/physics';
@@ -22,7 +22,8 @@ import { createVehicleState, stepVehicle, VehicleState } from '../physics/Vehicl
 export type Phase = 'menu' | 'countdown' | 'accel' | 'brake' | 'stopped' | 'crashed';
 /**
  * 失败原因。
- * - `barrier`：撞上路障（唯一会触发 cannon 翻滚演出的结局）
+ * - `barrier`：撞上撞击面（R28 语义=主殿正面；枚举值冻结，tests/redundancy.test.ts
+ *   断言 `reason === 'barrier'`，不许改名）——唯一会触发 cannon 翻滚演出的结局
  * - `brake_pedal_failed`：踏板断裂、冗余制动把车拖停（判负，但不翻滚）
  */
 export type CrashReason = 'barrier' | 'brake_pedal_failed';
@@ -69,7 +70,7 @@ export interface SessionInput {
 }
 
 const COUNTDOWN_SECONDS = 3;
-/** 车头初始位置与路障距离基准的偏移（原版 eg=2.7） */
+/** 车头初始位置与撞击面距离基准的偏移（原版 eg=2.7；R28 语义=主殿正面，契约冻结） */
 const START_OFFSET_M = 2.7;
 /** 采样间隔（原版 tg=0.04） */
 const SAMPLE_INTERVAL = 0.04;
@@ -126,6 +127,7 @@ export class StateMachine {
     return this.speedKmh >= this.profile.maxSpeedKmh * 0.995;
   }
 
+  /** 距撞击面剩余 m（R28 语义=距主殿正面；字段名冻结不动） */
   get distanceToBarrier(): number {
     return TRACK.barrierDistance - START_OFFSET_M - this.vehicle.distance;
   }
@@ -261,7 +263,7 @@ export class StateMachine {
       this.sampleTimer -= SAMPLE_INTERVAL;
       this.recordSample();
     }
-    // 断裂不再直接失败：车辆继续行驶、由冗余制动接管，直至停下或撞路障
+    // 断裂不再直接失败：车辆继续行驶、由冗余制动接管，直至停下或撞撞击面（主殿）
     if (!this.checkBarrier(events) && this.vehicle.speed <= BRAKE.stopSpeed) {
       this.vehicle.speed = 0;
       this.phase = 'stopped';
@@ -281,6 +283,10 @@ export class StateMachine {
     });
   }
 
+  /**
+   * 纯数值触发（契约冻结）：distanceToBarrier<=0 即撞，不依赖任何网格/物理体。
+   * R28 语义：撞击面=主殿正面（r28Layout.CRASH_WALL），枚举值 'barrier' 不许改名。
+   */
   private checkBarrier(events: GameEvent[]): boolean {
     if (this.distanceToBarrier > 0) return false;
     this.crash('barrier', events);

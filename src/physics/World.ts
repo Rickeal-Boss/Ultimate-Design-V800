@@ -1,6 +1,12 @@
 /**
  * cannon-es 世界封装（仅碰撞/翻滚用——纵向动力学走 Vehicle 纯函数）。
- * 撞路障翻滚：刚体台车 + 分段静态地面 + 分段护栏 + 路障块（撞路障时激活为动态刚体）。
+ * 撞主殿翻滚：刚体台车 + 分段静态地面 + 分段护栏 + 主殿正面静态撞击墙（R28 换皮）。
+ *
+ * R28 路障改主殿（.qa/r28_audit.md §2）：旧「路障块 mass 650 动态刚体链」整段删除，
+ * 撞击体换皮为 r28Layout.CRASH_WALL 静态墙（z=−1300，正面半宽 24 / 半高 12）。
+ * 玩法契约全冻结只换皮：`TRACK.barrierDistance=1300`、`CrashReason='barrier'`（枚举值
+ * 不许改名）、`START_OFFSET_M=2.7`、翻滚初速度 velocity(0,1.2,-speedMs) /
+ * angularVelocity(−0.6,0.3,1.6)（演出能量来源）全部原样保留。
  *
  * R14 分段世界（修「翻滚出桥外不掉下去」）：旧实现是一个无限 Plane @ y=0 +
  * 两侧 600m 静态长墙 —— 车在任何位置都不会坠落。现在按河谷几何铺静态盒：
@@ -8,13 +14,16 @@
  *   · 桥面段（z −530..−370）：只有 x ±7.0 的窄条（顶面 y=0），两侧 0.5m 矮墙
  *   · 河床：x ±150 / z ±80 的大盒，顶面 y=−1.45（与可见河床一致）
  * 车翻过桥侧矮墙 → 落水（水面 y=−0.14，几乎与桥面平齐）→ 阻尼 + 半浮力 → 沉到底床静止。
+ * 撞击点 z≈−1297（车根）落在「南岸整幅地面」段上，行为正确；RIVER_* 分段冻结不动。
  *
- * 玩法改版（决策①）：踏板断裂不再翻滚 —— 冗余制动接管至停车，翻滚只留给撞路障，
- * 故 `brake_snap` 分支与其「凭空赋予侧向+翻转角速度」的能量来源问题一并删除。
+ * 玩法改版（决策①）：踏板断裂不再翻滚 —— 冗余制动接管至停车，翻滚只留给撞主殿撞击面
+ * （CrashReason='barrier' 枚举冻结），故 `brake_snap` 分支与其「凭空赋予侧向+翻转
+ * 角速度」的能量来源问题一并删除。
  */
 import * as CANNON from 'cannon-es';
 import * as THREE from 'three';
 import { GRAVITY, TRACK, VEHICLE } from '../config/physics';
+import { CRASH_WALL } from '../render/scene/r28Layout';
 
 /** 水面 y（与 render/scene/Road.ts 的 RIVER.waterY 同源，改动必须同步） */
 const WATER_Y = -0.14;
@@ -27,11 +36,6 @@ const DECK_HALF_X = 7.0;
 export interface CrashImpact {
   strength: number; // 0~1
   position: THREE.Vector3;
-}
-
-interface BarrierPair {
-  mesh: THREE.Object3D;
-  body: CANNON.Body;
 }
 
 /**
@@ -51,8 +55,6 @@ export class World {
   private world: CANNON.World | null = null;
   private carBody: CANNON.Body | null = null;
   private carRoot: THREE.Object3D | null = null;
-  private barriers: BarrierPair[] = [];
-  private barrierHome = new Map<THREE.Object3D, { p: THREE.Vector3; q: THREE.Quaternion }>();
   private time = 0;
   private lastImpactAt = 0;
   /** P4：crash 段每帧复用向量，避免逐帧分配 */
@@ -75,9 +77,11 @@ export class World {
    * 开始一次翻滚模拟。
    * @param carRoot 车模根节点（其 position/quaternion 会被物理接管）
    * @param speedMs 撞击瞬间的车速 m/s
-   * @param barrierMeshes 路障块网格（转为动态刚体）
+   * @param debrisMeshes 撞击碎片（R28 预留占位：主殿实心撞击无飞散块，传入暂不消费；
+   *   原 mass 650 动态盒链已按 .qa/r28_audit.md §2.2 整段删除）
    */
-  begin(carRoot: THREE.Object3D, speedMs: number, barrierMeshes: THREE.Object3D[]): void {
+  begin(carRoot: THREE.Object3D, speedMs: number, debrisMeshes: THREE.Object3D[] = []): void {
+    void debrisMeshes; // 预留占位（签名冻结）；碎片演出如需恢复再接动态刚体链
     this.reset();
     this.active = true;
     this.time = 0;
@@ -91,11 +95,20 @@ export class World {
     this.world = world;
 
     // 分段静态世界（见文件头）：全部用 Box，SAP broadphase 下长条盒开销可忽略
-    const addStatic = (hx: number, hy: number, hz: number, x: number, y: number, z: number): void => {
+    const addStatic = (
+      hx: number,
+      hy: number,
+      hz: number,
+      x: number,
+      y: number,
+      z: number,
+      material?: CANNON.Material
+    ): void => {
       const body = new CANNON.Body({
         type: CANNON.Body.STATIC,
         shape: new CANNON.Box(new CANNON.Vec3(hx, hy, hz)),
-        position: new CANNON.Vec3(x, y, z)
+        position: new CANNON.Vec3(x, y, z),
+        material
       });
       world.addBody(body);
     };
@@ -121,12 +134,28 @@ export class World {
       addStatic(0.16, 0.25, RIVER_HOLE_HALF_Z, side * 7.3, 0.25, RIVER_CENTER_Z);
     }
 
-    // 台车（撞路障时动态路障块一起激活）；盒体带 z 偏移精确对位视觉车体中心
+    // ── 主殿正面静态墙（R28 撞击面换皮，.qa/r28_audit.md §2）────────────────
+    // 数值只走 r28Layout.CRASH_WALL（主理人持有、r28Layout.ts:384），禁止自定义
+    // 或从 mesh 包围盒反推（物理/几何解耦）。车根 z≈−1297.3、车鼻触面 z≈−1300，
+    // 落在「南岸整幅地面」段（上方南岸 addStatic）上，行为正确；RIVER_* 冻结不动。
+    // 墙专属 ContactMaterial：撞刚性墙比撞 650kg 飞散块反弹更硬（块会退让吸能、
+    // 墙不让）——「车↔墙」restitution 0.18→0.05、friction 0.42→0.6，只调墙；
+    // 车体初速度 velocity/angularVelocity 是演出能量来源，契约冻结不许动。
+    // 观感调优（过猛/过软）只准动这一对 ContactMaterial 参数。
+    const wallMaterial = new CANNON.Material('crashWall');
+    addStatic(CRASH_WALL.halfW, CRASH_WALL.halfH, 0.6, 0, CRASH_WALL.halfH, CRASH_WALL.z, wallMaterial);
+
+    // 台车（撞主殿后与静态墙/地面碰撞翻滚）；盒体带 z 偏移精确对位视觉车体中心
+    const carMaterial = new CANNON.Material('crashCar');
+    world.addContactMaterial(
+      new CANNON.ContactMaterial(carMaterial, wallMaterial, { friction: 0.6, restitution: 0.05 })
+    );
     const car = new CANNON.Body({
       mass: VEHICLE.totalMassKg,
       position: new CANNON.Vec3(carRoot.position.x, CAR_BODY_Y, carRoot.position.z),
       linearDamping: 0.04,
-      angularDamping: 0.08
+      angularDamping: 0.08,
+      material: carMaterial
     });
     car.addShape(new CANNON.Box(HALF_EXTENTS), new CANNON.Vec3(0, 0, CAR_BOX_Z_OFFSET));
     car.quaternion.set(
@@ -135,18 +164,10 @@ export class World {
       carRoot.quaternion.z,
       carRoot.quaternion.w
     );
+    // ✓ 翻滚初速度/初角速度 = 契约冻结（演出能量来源，r28_audit §2.3）
     car.velocity.set(0, 1.2, -speedMs);
     car.angularVelocity.set(-0.6, 0.3, 1.6);
-    for (const mesh of barrierMeshes) {
-      this.barrierHome.set(mesh, { p: mesh.position.clone(), q: mesh.quaternion.clone() });
-      const block = new CANNON.Body({
-        mass: 650,
-        shape: new CANNON.Box(new CANNON.Vec3(0.95, 0.5, 0.35)),
-        position: new CANNON.Vec3(mesh.position.x, mesh.position.y, mesh.position.z)
-      });
-      world.addBody(block);
-      this.barriers.push({ mesh, body: block });
-    }
+    // （原 barrierMeshes → mass 650 动态盒链：整段删除，主殿实心撞击无飞散块）
     car.addEventListener('collide', (event: { contact: CANNON.ContactEquation }) => {
       const impact = Math.abs(event.contact.getImpactVelocityAlongNormal());
       if (impact < 2.5 || this.time - this.lastImpactAt < 0.12) return;
@@ -192,10 +213,6 @@ export class World {
     // 台车碰撞盒中心在半高以上，落回车模原点
     const down = this.downV.set(0, -CAR_BODY_Y, 0).applyQuaternion(this.carRoot.quaternion);
     this.carRoot.position.set(body.position.x + down.x, body.position.y + down.y, body.position.z + down.z);
-    for (const { mesh, body: b } of this.barriers) {
-      mesh.position.set(b.position.x, b.position.y, b.position.z);
-      mesh.quaternion.set(b.quaternion.x, b.quaternion.y, b.quaternion.z, b.quaternion.w);
-    }
   }
 
   /** 翻滚中的车速 m/s（HUD 显示用） */
@@ -210,21 +227,15 @@ export class World {
   }
 
   reset(): void {
-    for (const { mesh } of this.barriers) {
-      const home = this.barrierHome.get(mesh);
-      if (home) {
-        mesh.position.copy(home.p);
-        mesh.quaternion.copy(home.q);
-      }
-    }
-    this.barriers = [];
-    this.barrierHome.clear();
     this.world = null;
     this.carBody = null;
     this.carRoot = null;
     this.active = false;
     this.submerged = false;
     this.time = 0;
+    // 必须一并清零：否则重玩时 time 归零而 lastImpactAt 残留上次终值，
+    // `time - lastImpactAt < 0.12` 恒成立 → 整段翻滚撞击反馈被吞
+    this.lastImpactAt = 0;
   }
 
   dispose(): void {

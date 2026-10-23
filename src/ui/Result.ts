@@ -1,7 +1,8 @@
 /**
- * 结算：成功 / 踏板断裂 / 撞路障三种文案 + 曲线图（踏板力/速度/距离）
+ * 结算：成功 / 踏板断裂 / 撞主殿三种文案 + 曲线图（踏板力/速度/距离）
  * + 本机最佳成绩（localStorage）。
  * 曲线图移植原版 $g（新增距离曲线）。
+ * R28：内部 CrashReason 仍冻结为 'barrier'（tests 断言），用户文案已换皮「撞上主殿」。
  */
 import { BRAKE } from '../config/physics';
 import { getVehicleProfile, resolveVehicleId, type VehicleId } from '../config/vehicles';
@@ -196,9 +197,9 @@ export class Result {
       this.title.className = 'result-title warn';
       this.subtitle.textContent = `踏板在 ${BRAKE.breakForceN} N 处断裂，紧急制动安全冗余以 25% 力度把车拖停 —— 判负`;
     } else {
-      this.title.textContent = '撞上路障';
+      this.title.textContent = '撞上主殿';
       this.title.className = 'result-title fail';
-      this.subtitle.textContent = '没能在路障前刹停，再果断一点';
+      this.subtitle.textContent = '没能在主殿前刹停，再果断一点';
     }
     const hasRun = result.v0Kmh > 0;
     const stats: Array<[string, string]> = [
