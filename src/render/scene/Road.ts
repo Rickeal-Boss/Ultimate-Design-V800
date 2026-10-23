@@ -1,13 +1,27 @@
 /**
- * 路面与路侧：宽 14m 双车道（车道 3.6m）、Canvas 沥青贴图 + 车道线、
- * 2600m 处路障、护栏 + 反光柱、路灯、施工/封闭标牌、终点警示灯。
- * 移植自原版 hg/gg/_g/vg/yg/bg/xg，语义一致。
+ * 路面与路侧：宽 14m 石板铺装大道、2600m 处路障 + 终点警示灯。
+ * 移植自原版 hg/gg/_g/vg/yg/bg/xg 的**几何语义**（路面 / 路缘 / 路障 / 警示灯），
+ * 材质语汇在 R26–R27 两轮换过：
+ *
+ *  R26：关掉金属波形梁护栏 + 黑色双臂路灯杆（改由 castle 的石栏板 + 栏板灯柱接管）。
+ *  R27（本轮，用户指令「先去除以前的旧版环境残留，完全使用新环境模型」）：
+ *   ① 沥青贴图 + 车道虚线/中线/白边线/黄边线 → 全部删除，改**石板铺装**贴图；
+ *   ② 施工/封闭/玩法标牌（现代反光牌 + 金属立杆）→ 全部删除；
+ *      只保留路障（1300m）与终点警示灯（玩法契约，不可动）；
+ *   ③ 大地面不再给 RIVER 开槽（旧河流水面已停用），改为给**御桥峡谷走廊**开槽
+ *      （|x| ≤ VIADUCT.totalHalf / z ∈ [VIADUCT.zFar, VIADUCT.zNear]），
+ *      峡谷内衬岩壁由 Terrain.ts 负责（本文件只负责"不铺地面"）。
+ *
+ * ⚠ `RIVER` 常量块是**冻结契约**：`src/physics/World.ts` 有一份同名的河谷开槽数值
+ *   （RIVER_CENTER_Z = −450），几何线/物理线会 import。本轮视觉层停用河谷≠改契约，
+ *   故 RIVER 的字段与数值一个都不许动。
  */
 import * as THREE from 'three';
 import { mergeSafe } from '../../util/geo';
 import { TRACK } from '../../config/physics';
 import { canvasTexture, makeCanvas, paintNoise, textTexture } from '../../util/canvasTex';
 import { makeLcg } from '../../util/math';
+import { VIADUCT } from './r27Layout';
 
 /**
  * 河谷几何契约（R14）：Road 与 Waterway 共用同一组开槽数值。
@@ -20,6 +34,11 @@ import { makeLcg } from '../../util/math';
  * R18：水面由 −4.4 抬到 −0.14（桥面下 0.11m）、河床由 −5.6 收到 −1.45。
  * 水面与岸坡的交线因此贴近槽口（±147.5 / ±77.5），水线之外只剩 2.5m 干坡，
  * 不会再出现「一大片棕色坡面把水挡住」的画面。
+ *
+ * ⚠ R27 冻结说明：这组数值**只作为几何/物理契约存在**，视觉层已经不再开槽 ——
+ * 新布局里 z≈−450 落在城内大街（INNER.zNear=−365.5 → INNER.zFar=−1350）范围内，
+ * 是实体地面。Waterway 的护坡/水面/桥面已在类内部置为空操作；Road.buildGround
+ * 也不再为 RIVER 挖洞。改这里不会有任何画面效果，但**会**破坏物理契约的同步口径。
  */
 export const RIVER = {
   /** 河谷/桥梁中心 z */
@@ -56,8 +75,7 @@ export const RIVER = {
 } as const;
 
 /** 地表细节贴图（土/砾石噪点，近白灰度 → 只提供细节，色相由 material.color 决定） */
-export function createSoilTexture(): THREE.CanvasTexture {
-  const size = 256;
+export function createSoilTexture(): THREE.CanvasTexture {  const size = 256;
   const [canvas, ctx] = makeCanvas(size, size);
   ctx.fillStyle = '#f2eee8';
   ctx.fillRect(0, 0, size, size);
@@ -87,29 +105,60 @@ export function createSoilTexture(): THREE.CanvasTexture {
   return tex;
 }
 
-/** 沥青 + 车道线贴图（移植原版 zh，1024×880） */
+/**
+ * 石板铺装贴图（R27，取代 R13–R26 的「沥青 + 车道线」）。
+ *
+ * 删掉的东西（用户判定的旧版环境残留，现代公路语汇）：
+ *   · #2a2a2d 沥青底 + 三车道深色轮辙带（±3.6 / 0）
+ *   · 车道虚线（±1.8，半幅 440px 断续）
+ *   · 白色边线（±5.4）与黄色边线（±6.6）
+ * 留下的东西：石块拼缝 + 逐块条石的明暗抖动（**石块拼缝（非连续路面）**，
+ * vision §01 `7cd7329c` 明文要求）。
+ *
+ * 色：R27_PALETTE.roadDark `#413f3d`（StoneFloor albedo，L≈64 = 白石 L≈220 的 0.29）。
+ * 铁律：`roadDark` 是**深炭**，做成中灰整条大道会相对参考图发白。
+ * 细节对比 4.7（白石 6.9 / 岩石 13.7）⇒ 铺装的明暗抖动必须比岩石弱一档。
+ *
+ * 尺度：贴图横向 1024px = 路宽 14m ⇒ 73.1px/m；纵向 880px = 一个 repeat 周期，
+ * 由调用方 repeat.set(1, length/12) 定为 12m ⇒ 73.3px/m。两向密度一致，
+ * 故 2.4m 条石（与 castleKit 的 BRIDGE.paveTile 同尺度）≈ 176px 正方形。
+ */
 function roadTexture(anisotropy: number): THREE.CanvasTexture {
   const size = 1024;
-  const [canvas, ctx] = makeCanvas(size, 880);
-  ctx.fillStyle = '#2a2a2d';
-  ctx.fillRect(0, 0, size, 880);
-  paintNoise(ctx, size, 880, 60000, 0.22);
-  const lanePx = size / 14;
-  const px = (m: number): number => size / 2 + m * lanePx;
-  ctx.fillStyle = 'rgba(30,30,32,0.55)';
-  for (const m of [-3.6, 0, 3.6]) {
-    ctx.fillRect(px(m - 0.9), 0, 0.5 * lanePx, 880);
-    ctx.fillRect(px(m + 0.4), 0, 0.5 * lanePx, 880);
+  const height = 880;
+  const [canvas, ctx] = makeCanvas(size, height);
+  ctx.fillStyle = '#413f3d';
+  ctx.fillRect(0, 0, size, height);
+  paintNoise(ctx, size, height, 60000, 0.22);
+
+  const pxPerM = size / TRACK.roadWidth;
+  const tile = pxPerM * 2.4; // 2.4m 条石
+  const random = makeLcg(4471);
+
+  // 逐块条石的明暗抖动（±11%，低于白石的 ±13% —— 铺装细节对比 4.7 更弱）
+  for (let y = 0; y < height; y += tile) {
+    for (let x = -tile; x < size + tile; x += tile) {
+      const g = Math.floor(-14 + random() * 28);
+      ctx.fillStyle = `rgba(${128 + g},${128 + g},${128 + g},0.16)`;
+      ctx.fillRect(x, y, tile, tile);
+    }
   }
-  const lineW = 0.16 * lanePx;
-  ctx.fillStyle = '#e9e6dc';
-  ctx.fillRect(px(-5.4) - lineW / 2, 0, lineW, 880);
-  ctx.fillRect(px(5.4) - lineW / 2, 0, lineW, 880);
-  ctx.fillStyle = '#f2c94c';
-  ctx.fillRect(px(-6.6) - lineW / 2, 0, lineW, 880);
-  ctx.fillRect(px(6.6) - lineW / 2, 0, lineW, 880);
-  ctx.fillStyle = '#e9e6dc';
-  for (const m of [-1.8, 1.8]) ctx.fillRect(px(m) - lineW / 2, 0, lineW, 440);
+  // 灰缝：错缝砌（每行错半块），缝色比石材暗一档
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = 'rgba(22,21,20,0.5)';
+  for (let row = 0, y = 0; y <= height; y += tile, row += 1) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(size, y);
+    ctx.stroke();
+    for (let x = (row % 2 ? tile / 2 : 0) - tile; x < size + tile; x += tile) {
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x, y + tile);
+      ctx.stroke();
+    }
+  }
+
   const tex = canvasTexture(canvas);
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.RepeatWrapping;
@@ -147,24 +196,21 @@ export class Road {
     const roadLength = roadStart - roadEnd;
     const roadCenter = (roadStart + roadEnd) / 2;
 
-    // 大地（R14：绕河谷开槽，4 块拼合并为 1 DC）
+    // 大地（R27：改为绕**御桥峡谷走廊**开槽，4 块拼合并为 1 DC）
     this.buildGround(scene, roadCenter);
 
     // 主路面
     const tex = roadTexture(anisotropy);
     tex.repeat.set(1, roadLength / 12);
-    // R18：黄昏环境反射在低机位掠射角下把整幅沥青洗成浅棕「沙地」
-    // （envMapIntensity 0.9 + roughness 0.38 的菲涅耳镜像）。A/B 实证
-    // verify/r18c_base vs verify/r18c（同机位 #eye=-4.8,1.35,7.5,0,0.55,0）：
-    // 前景路面 (80,47,35)→(62,39,33)，棕色收敛、标线回清，故定稿 0.45/0.50。
-    // 只动主路面材质；路肩/护栏/标线（贴图内）不动。
     const road = new THREE.Mesh(
       new THREE.PlaneGeometry(TRACK.roadWidth, roadLength),
       new THREE.MeshStandardMaterial({
         map: tex,
-        roughness: 0.5,
-        metalness: 0.08,
-        envMapIntensity: 0.45
+        // 干石材（不是湿沥青镜面）：逆光低太阳（仰角 12°）下 0.5/0.45 会把整片路面
+        // 打成一条反光镜（verify/r26c/chase.png 实证）。石板是哑光糙面 ⇒ 0.82/0.04。
+        roughness: 0.82,
+        metalness: 0.04,
+        envMapIntensity: 0.15
       })
     );
     road.rotation.x = -Math.PI / 2;
@@ -174,21 +220,34 @@ export class Road {
     scene.add(road);
 
     this.buildCurbs(scene, roadCenter, roadLength);
-    this.buildGuardrails(scene);
-    this.buildStreetLamps(scene, roadStart);
-    this.buildSigns(scene);
+    // R26 起：金属波形梁护栏 / 黑色双臂路灯杆已删除（ castle 石栏板 + 栏板灯柱接管）。
+    // R27 起：施工/封闭/玩法标牌（现代反光牌 + 金属立杆）也已删除 —— 用户判定为
+    // 旧版环境残留。保留的只有 buildBarriers（1300m 路障）与 buildWarningLights
+    // （终点警示灯），二者是玩法契约。碰撞护栏在 physics 里独立存在，不受影响。
     this.buildBarriers(scene);
     this.buildWarningLights(scene);
   }
 
   /**
-   * 大地：在原 3000×6000 平面上挖出河谷槽口（x ±150 / z −530..−370），
-   * 拆成「远岸(北) / 近岸(南) / 西岸条 / 东岸条」四块后用 mergeSafe 合为 1 mesh。
-   * 四块与槽内护坡在槽口边缘同点同位（y=−0.02），接缝埋在护坡棱线上。
+   * 大地：在 3000×6000 平面上挖出**御桥峡谷走廊**，拆成四块后 mergeSafe 合为 1 mesh。
+   *
+   * R14–R26 挖的是 RIVER 河谷槽口（x ±150 / z −530..−370）；R27 河谷已停用、
+   * 那一段归城内大街（实体地面），改为挖御桥走廊：
+   *   |x| ≤ VIADUCT.totalHalf (16.72) 且 z ∈ [VIADUCT.zFar (−358.5), VIADUCT.zNear (60)]
+   * 理由（用户 + 几何线共同约束）：
+   *   ① 御桥是**高架桥**，桥面 y=0 与路面同高 ⇒ 走廊里再铺一层 y=−0.02 的地面会
+   *      与桥面结构 z-fighting；
+   *   ② 地面盖住走廊就看不见桥下 60m 峡谷（VIADUCT.gorgeDepth），"高架桥"读不出来。
+   *
+   * ⚠ 只挖 `ground`，**不挖 `road` 本体**（|x| ≤ 7.4 的行车面）：物理地面 y=0 全程
+   *   存在，车照旧稳稳跑；视觉上挖空只是露出下方峡谷（峡谷内衬岩壁见 Terrain.ts）。
+   *
+   * 四块与峡谷内衬在槽口边缘同点同位（y=−0.02），接缝埋在崖口棱线上。
    */
   private buildGround(scene: THREE.Scene, center: number): void {
-    const holeNear = RIVER.centerZ + RIVER.holeHalfZ; // -370（车行上游侧）
-    const holeFar = RIVER.centerZ - RIVER.holeHalfZ; // -530
+    const holeNear = VIADUCT.zNear; // +60（车行上游侧 = 车后方）
+    const holeFar = VIADUCT.zFar; // -358.5（= GATE.z，城门中心）
+    const holeHalfX = VIADUCT.totalHalf; // 16.72
     const southEdge = center - 3000; // -3870
     const northEdge = center + 3000; // 2130
 
@@ -206,29 +265,34 @@ export class Road {
       uv.needsUpdate = true;
       return g;
     };
-    // 北块（车行上游侧整幅）
+    // 北块（车后方整幅，z ∈ [+60, +2130]）
     pieces.push(slab(3000, northEdge - holeNear, 0, (northEdge + holeNear) / 2));
-    // 南块（路障一侧整幅）
+    // 南块（城门以南整幅，z ∈ [−3870, −358.5]，含原河谷段 —— 那里已恢复实体地面）
     pieces.push(slab(3000, holeFar - southEdge, 0, (southEdge + holeFar) / 2));
-    // 西 / 东两块（槽口 ±150 之外）
-    const sideW = 1500 - RIVER.holeHalfX;
+    // 西 / 东两块（走廊 ±16.72 之外，z ∈ [−358.5, +60]）
+    const sideW = 1500 - holeHalfX;
     for (const side of [-1, 1]) {
-      pieces.push(
-        slab(
-          sideW,
-          RIVER.holeHalfZ * 2,
-          side * (RIVER.holeHalfX + sideW / 2),
-          RIVER.centerZ
-        )
-      );
+      pieces.push(slab(sideW, holeNear - holeFar, side * (holeHalfX + sideW / 2), (holeNear + holeFar) / 2));
     }
+    // R26：地面贴图曾经完全没有 repeat —— 256² 的土壤噪点被拉伸到 ~2000m 见方的
+    // 大地上，等于一张纯色（俯瞰图 verify/r26b/aerial.png 里整片死褐色，无任何细节）。
+    // 现在按 8m 一格平铺（约 250 次重复），让地面在 100m 高空也能读出颗粒与斑块。
+    const soil = createSoilTexture();
+    soil.wrapS = THREE.RepeatWrapping;
+    soil.wrapT = THREE.RepeatWrapping;
+    soil.repeat.set(250, 250);
+    soil.anisotropy = 8;
     const ground = new THREE.Mesh(
       mergeSafe(pieces),
       new THREE.MeshStandardMaterial({
-        color: 0x8a7c72,
-        map: createSoilTexture(),
-        roughness: 0.62,
-        metalness: 0.05
+        // R26：大地从「暖棕沙漠土」(0x8a7c72) 收到偏中性的石灰岩基色 0x5c544b。
+        // 参考图里城堡外的地面是灰褐岩体（受光 #a5947d），旧土色在新冷调天光下
+        // 会整片发橙、把白石衬成脏黄，故整体降饱和降亮度；贴图仍复用土壤噪点，
+        // 只提供 8m 尺度的细节，不提供色相。
+        color: 0x5c544b,
+        map: soil,
+        roughness: 0.72,
+        metalness: 0.03
       })
     );
     ground.name = 'ground';
@@ -244,116 +308,6 @@ export class Road {
       curb.receiveShadow = true;
       scene.add(curb);
     }
-  }
-
-  /**
-   * 护栏（R14 分段）：x=±8.1 的波形梁在河谷段必须断开 —— 桥面只到 ±7.4，
-   * 跨河继续铺护栏会悬在河面上。断口正好落在桥台（z=−370 / −530），
-   * 桥段改由 Waterway 的 0.55m 桥侧矮墙接管。
-   */
-  private buildGuardrails(scene: THREE.Scene): void {
-    const railMat = new THREE.MeshStandardMaterial({ color: 0xb8bcbe, metalness: 0.6, roughness: 0.55 });
-    const postMat = new THREE.MeshStandardMaterial({ color: 0x8b8d90, metalness: 0.7, roughness: 0.45 });
-    const sideX = TRACK.roadWidth / 2 + 1.1;
-    const gapNear = RIVER.centerZ + RIVER.holeHalfZ; // -370
-    const gapFar = RIVER.centerZ - RIVER.holeHalfZ; // -530
-    const startZ = 260;
-    const endZ = -(TRACK.barrierDistance + 700); // -2000
-    const segments: readonly (readonly [number, number])[] = [
-      [startZ, gapNear],
-      [gapFar, endZ]
-    ];
-
-    // 立柱 z 序列：4m 一根，跳过河谷段（断口两侧各留 1 根）
-    const postZ: number[] = [];
-    for (let z = startZ; z >= endZ; z -= 4) {
-      if (z < gapNear && z > gapFar) continue;
-      postZ.push(z);
-    }
-    const instanced = new THREE.InstancedMesh(new THREE.BoxGeometry(0.12, 0.8, 0.12), postMat, postZ.length * 2);
-    const m = new THREE.Matrix4();
-    let i = 0;
-    for (const side of [-1, 1]) {
-      for (const [from, to] of segments) {
-        const len = from - to;
-        const rail = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.32, len), railMat);
-        rail.position.set(side * sideX, 0.66, (from + to) / 2);
-        rail.castShadow = true;
-        scene.add(rail);
-      }
-      for (const z of postZ) {
-        m.makeTranslation(side * (sideX + 0.1), 0.4, z);
-        instanced.setMatrixAt(i++, m);
-      }
-    }
-    instanced.count = i;
-    instanced.castShadow = true;
-    scene.add(instanced);
-  }
-
-  private buildStreetLamps(scene: THREE.Scene, roadStart: number): void {
-    const poleMat = new THREE.MeshStandardMaterial({ color: 0x3a4244, metalness: 0.8, roughness: 0.4 });
-    const lampMat = new THREE.MeshStandardMaterial({
-      color: 0x222222,
-      emissive: 0xff8f2a,
-      emissiveIntensity: 3.2
-    });
-    const sideX = TRACK.roadWidth / 2 + 2.2;
-    const gapNear = RIVER.centerZ + RIVER.holeHalfZ; // -370
-    const gapFar = RIVER.centerZ - RIVER.holeHalfZ; // -530
-    const total = Math.floor((TRACK.barrierDistance + 700) / 45);
-    // 先收集落点（灯杆 x=±9.2 在桥面 ±7.4 之外，河谷段必须整根不立）
-    const spots: { side: number; z: number }[] = [];
-    for (const side of [-1, 1]) {
-      for (let n = 0; n < total; n++) {
-        const z = roadStart - n * 45 - (side > 0 ? 45 / 2 : 0);
-        if (z < gapNear + 5 && z > gapFar - 5) continue;
-        spots.push({ side, z });
-      }
-    }
-    const poles = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.09, 0.14, 9, 8), poleMat, spots.length);
-    const arms = new THREE.InstancedMesh(new THREE.BoxGeometry(2.4, 0.1, 0.1), poleMat, spots.length);
-    const lamps = new THREE.InstancedMesh(new THREE.BoxGeometry(0.9, 0.12, 0.35), lampMat, spots.length);
-    const m = new THREE.Matrix4();
-    let i = 0;
-    for (const s of spots) {
-      m.makeTranslation(s.side * sideX, 4.5, s.z);
-      poles.setMatrixAt(i, m);
-      m.makeTranslation(s.side * (sideX - 1.15), 8.95, s.z);
-      arms.setMatrixAt(i, m);
-      m.makeTranslation(s.side * (sideX - 2.1), 8.85, s.z);
-      lamps.setMatrixAt(i, m);
-      i++;
-    }
-    poles.castShadow = true;
-    scene.add(poles, arms, lamps);
-  }
-
-  private buildSigns(scene: THREE.Scene): void {
-    const poleMat = new THREE.MeshStandardMaterial({ color: 0x7c7c7c, metalness: 0.8, roughness: 0.4 });
-    const makeSign = (z: number, lines: string[], bg: string, fg: string, side: number): void => {
-      const tex = textTexture(lines, bg, fg);
-      const board = new THREE.Mesh(
-        new THREE.PlaneGeometry(4, 2),
-        new THREE.MeshStandardMaterial({
-          map: tex,
-          roughness: 0.5,
-          emissive: 0xffffff,
-          emissiveMap: tex,
-          emissiveIntensity: 0.25
-        })
-      );
-      board.position.set(side * (TRACK.roadWidth / 2 + 3.2), 4.2, z);
-      scene.add(board);
-      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 4.2, 8), poleMat);
-      pole.position.set(side * (TRACK.roadWidth / 2 + 3.2), 2.1, z - 0.05);
-      pole.castShadow = true;
-      scene.add(pole);
-    };
-    const barrierZ = -TRACK.barrierDistance;
-    for (const d of [1500, 1000, 500]) makeSign(barrierZ + d, ['前方施工', `${d} m`], '#0f6b3a', '#ffffff', 1);
-    for (const d of [300, 200, 100]) makeSign(barrierZ + d, ['道路封闭', `${d} m`], '#f2b21b', '#1a1a1a', 1);
-    makeSign(-80, ['极限刹车挑战', '100 km/h 后可刹车'], '#14325c', '#ffffff', -1);
   }
 
   private buildBarriers(scene: THREE.Scene): void {

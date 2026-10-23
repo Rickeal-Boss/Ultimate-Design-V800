@@ -20,6 +20,7 @@ import { ContactShadow } from '../render/scene/ContactShadow';
 
 import { Lighting } from '../render/scene/Lighting';
 import { Road } from '../render/scene/Road';
+import { Castle } from '../render/scene/castle';
 import { Terrain } from '../render/scene/Terrain';
 import { Waterway } from '../render/scene/Waterway';
 import { clamp, damp, lerp } from '../util/math';
@@ -76,6 +77,7 @@ export class Game {
   private readonly lighting: Lighting;
   private readonly contactShadow: ContactShadow;
   private readonly road: Road;
+  private readonly castle: Castle;
   private readonly waterway: Waterway;
   private readonly car: CarLike;
   /** 活动车型档位（URL #vehicle= > localStorage > v800） */
@@ -177,6 +179,7 @@ export class Game {
     this.contactShadow = new ContactShadow(this.scene);
     this.road = new Road(this.scene, this.renderer.capabilities.getMaxAnisotropy());
     new Terrain(this.scene);
+    this.castle = new Castle(this.scene, quality);
     this.waterway = new Waterway(this.scene);
     this.car = this.createCar();
     this.interiorViews = this.readInteriorViews();
@@ -323,6 +326,42 @@ export class Game {
           });
         }
       }
+    }
+
+    // ---- QA 钩子 · R26 环境验收：世界坐标自由机位 + 城堡预算读数 ----
+    // 为什么必须有它：`preview.html` 是纯车模预览页（自建迷你 scene），拍不到
+    // Castle/Road/Terrain/天空；而 `#eye=` 只能覆盖 cabin 机位、要整页 reload 才生效。
+    // 这里直接摆相机 + 同帧 render + 读 canvas，一次加载拍任意多个机位。
+    // 用法：page.evaluate(() => window.__v800EnvShot('x', 0,3,60, 0,10,-300))
+    {
+      const cam = this.rig.camera;
+      const gl = this.renderer;
+      (window as unknown as Record<string, unknown>).__v800EnvShot = (
+        _name: string,
+        x: number, y: number, z: number,
+        tx: number, ty: number, tz: number,
+        fov = 55
+      ): string => {
+        // 环境机位动辄 400m 视线：near 必须抬到 1，far 覆盖到 3000（天空球在 5000）
+        cam.fov = fov;
+        cam.near = 1;
+        // far 必须大于天空球半径（5000）：天空 shader 把 gl_Position 写成 z=w
+        // （永远贴在远平面），球体顶点本身若超出 far 会被裁掉 —— 抬头看天顶时
+        // 顶部那一圈就整片丢失，露出后面未定义的缓冲（实测呈品红色带）。
+        cam.far = 20000;
+        cam.position.set(x, y, z);
+        cam.lookAt(tx, ty, tz);
+        cam.updateProjectionMatrix();
+        // 天空球每帧跟着相机平移（Environment.update）。同帧摆相机后如果不补这一步，
+        // 天空球还停在上一个机位中心 —— 大跨度跳机位时球体会被甩到相机背后，
+        // 截出来就是「黑天」（dev-b 在 verify/r26d 实测过一次）。
+        this.env.update(cam.position);
+        gl.render(this.scene, cam);
+        return gl.domElement.toDataURL('image/png');
+      };
+      // 预算读数（dev-2 报告遗留项 4）：tri/DC 由 castle 自己累计
+      (window as unknown as Record<string, unknown>).__v800CastleStats = (): unknown =>
+        this.castle.getCastleStats();
     }
   }
 
@@ -809,6 +848,7 @@ export class Game {
     this.sliders.dispose();
     this.postfx.dispose();
     this.contactShadow.dispose();
+    this.castle.dispose();
     this.waterway.dispose();
     this.crashWorld.dispose();
     this.car.dispose();

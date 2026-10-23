@@ -1,0 +1,4 @@
+[info] [stoneTexture] floor 512² weather=0.40 像素 57.1ms / 总 60.4ms（第 1 套）
+[info] [stoneTexture] ashlar 512² weather=0.35 像素 40.3ms / 总 43.2ms（第 2 套）
+[info] [stoneTexture] wall 512² weather=0.50 像素 30.0ms / 总 33.1ms（第 3 套）
+[info] [stoneTexture] gold 512² weather=0.30 像素 22.5ms / 总 25.9ms（第 4 套）

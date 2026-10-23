@@ -1,0 +1,888 @@
+{
+ "camPos": [
+  -0.4,
+  1.2,
+  -0.72
+ ],
+ "ancestor": {
+  "rootY": 0,
+  "bodyY": 0
+ },
+ "upHits": [
+  {
+   "comp": "cabin-roof-carpet",
+   "mat": null,
+   "dist": 0.462
+  },
+  {
+   "comp": "batch/leather-ivory",
+   "mat": "leather-ivory",
+   "dist": 0.469
+  },
+  {
+   "comp": "headliner-front",
+   "mat": "headliner-suede",
+   "dist": 0.49
+  }
+ ],
+ "grid": [
+  {
+   "ndc": [
+    -0.8,
+    -0.9
+   ],
+   "hits": [
+    {
+     "comp": "root",
+     "mat": "paint-upper",
+     "dist": 0.726,
+     "pt": [
+      -0.839,
+      0.89,
+      -1.208
+     ],
+     "vis": false,
+     "cabinHidable": false
+    },
+    {
+     "comp": "batch/leather-warm",
+     "mat": "leather-warm",
+     "dist": 0.834,
+     "pt": [
+      -0.905,
+      0.844,
+      -1.281
+     ],
+     "vis": true,
+     "cabinHidable": false
+    },
+    {
+     "comp": "bridge-pave",
+     "mat": "",
+     "dist": 2.781,
+     "pt": [
+      -2.082,
+      0.012,
+      -2.589
+     ],
+     "vis": true,
+     "cabinHidable": false
+    },
+    {
+     "comp": "road",
+     "mat": "",
+     "dist": 2.809,
+     "pt": [
+      -2.099,
+      0,
+      -2.608
+     ],
+     "vis": true,
+     "cabinHidable": false
+    },
+    {
+     "comp": "ground",
+     "mat": "",
+     "dist": 2.856,
+     "pt": [
+      -2.128,
+      -0.02,
+      -2.639
+     ],
+     "vis": true,
+     "cabinHidable": false
+    }
+   ]
+  },
+  {
+   "ndc": [
+    -0.4,
+    -0.9
+   ],
+   "hits": [
+    {
+     "comp": "root",
+     "mat": "paint-upper",
+     "dist": 0.615,
+     "pt": [
+      -0.617,
+      0.89,
+      -1.205
+     ],
+     "vis": false,
+     "cabinHidable": false
+    },
+    {
+     "comp": "tire-fl",
+     "mat": "tire",
+     "dist": 0.995,
+     "pt": [
+      -0.751,
+      0.698,
+      -1.505
+     ],
+     "vis": true,
+     "cabinHidable": false
+    },
+    {
+     "comp": "wheel-fl",
+     "mat": "tire",
+     "dist": 1.055,
+     "pt": [
+      -0.772,
+      0.668,
+      -1.552
+     ],
+     "vis": false,
+     "cabinHidable": false
+    },
+    {
+     "comp": "rim-fl",
+     "mat": "wheel-alloy",
+     "dist": 1.099,
+     "pt": [
+      -0.787,
+      0.646,
+      -1.586
+     ],
+     "vis": false,
+     "cabinHidable": false
+    },
+    {
+     "comp": "rim-spokes-fl",
+     "mat": "wheel-alloy",
+     "dist": 1.178,
+     "pt": [
+      -0.815,
+      0.606,
+      -1.649
+     ],
+     "vis": false,
+     "cabinHidable": false
+    },
+    {
+     "comp": "rim-spokes-fl",
+     "mat": "wheel-alloy",
+     "dist": 1.308,
+     "pt": [
+      -0.861,
+      0.541,
+      -1.751
+     ],
+     "vis": false,
+     "cabinHidable": false
+    }
+   ]
+  },
+  {
+   "ndc": [
+    0,
+    -0.9
+   ],
+   "hits": [
+    {
+     "comp": "root",
+     "mat": "paint-upper",
+     "dist": 0.573,
+     "pt": [
+      -0.395,
+      0.89,
+      -1.202
+     ],
+     "vis": false,
+     "cabinHidable": false
+    },
+    {
+     "comp": "steering",
+     "mat": "wood",
+     "dist": 0.58,
+     "pt": [
+      -0.395,
+      0.886,
+      -1.208
+     ],
+     "vis": true,
+     "cabinHidable": false
+    },
+    {
+     "comp": "batch/paint-upper",
+     "mat": "paint-upper",
+     "dist": 1.699,
+     "pt": [
+      -0.383,
+      0.281,
+      -2.149
+     ],
+     "vis": true,
+     "cabinHidable": false
+    },
+    {
+     "comp": "contact-shadow",
+     "mat": "",
+     "dist": 2.183,
+     "pt": [
+      -0.378,
+      0.02,
+      -2.556
+     ],
+     "vis": true,
+     "cabinHidable": false
+    },
+    {
+     "comp": "bridge-pave",
+     "mat": "",
+     "dist": 2.198,
+     "pt": [
+      -0.378,
+      0.012,
+      -2.568
+     ],
+     "vis": true,
+     "cabinHidable": false
+    },
+    {
+     "comp": "road",
+     "mat": "",
+     "dist": 2.22,
+     "pt": [
+      -0.378,
+      0,
+      -2.587
+     ],
+     "vis": true,
+     "cabinHidable": false
+    }
+   ]
+  },
+  {
+   "ndc": [
+    0.4,
+    -0.9
+   ],
+   "hits": [
+    {
+     "comp": "root",
+     "mat": "paint-upper",
+     "dist": 0.615,
+     "pt": [
+      -0.172,
+      0.89,
+      -1.199
+     ],
+     "vis": false,
+     "cabinHidable": false
+    },
+    {
+     "comp": "batch/wood",
+     "mat": "wood",
+     "dist": 0.693,
+     "pt": [
+      -0.143,
+      0.851,
+      -1.26
+     ],
+     "vis": false,
+     "cabinHidable": true
+    },
+    {
+     "comp": "batch/wood",
+     "mat": "wood",
+     "dist": 0.794,
+     "pt": [
+      -0.106,
+      0.8,
+      -1.339
+     ],
+     "vis": false,
+     "cabinHidable": true
+    },
+    {
+     "comp": "batch/chrome",
+     "mat": "chrome",
+     "dist": 0.806,
+     "pt": [
+      -0.102,
+      0.794,
+      -1.348
+     ],
+     "vis": true,
+     "cabinHidable": false
+    },
+    {
+     "comp": "tunnel-front",
+     "mat": "wood",
+     "dist": 0.827,
+     "pt": [
+      -0.094,
+      0.783,
+      -1.365
+     ],
+     "vis": true,
+     "cabinHidable": false
+    },
+    {
+     "comp": "batch/paint-upper",
+     "mat": "paint-upper",
+     "dist": 1.832,
+     "pt": [
+      0.279,
+      0.277,
+      -2.148
+     ],
+     "vis": true,
+     "cabinHidable": false
+    }
+   ]
+  },
+  {
+   "ndc": [
+    0.8,
+    -0.9
+   ],
+   "hits": [
+    {
+     "comp": "root",
+     "mat": "paint-upper",
+     "dist": 0.726,
+     "pt": [
+      0.05,
+      0.89,
+      -1.197
+     ],
+     "vis": false,
+     "cabinHidable": false
+    },
+    {
+     "comp": "batch/wood",
+     "mat": "wood",
+     "dist": 0.822,
+     "pt": [
+      0.11,
+      0.849,
+      -1.26
+     ],
+     "vis": false,
+     "cabinHidable": true
+    },
+    {
+     "comp": "batch/wood",
+     "mat": "wood",
+     "dist": 0.936,
+     "pt": [
+      0.181,
+      0.8,
+      -1.335
+     ],
+     "vis": false,
+     "cabinHidable": true
+    },
+    {
+     "comp": "rim-spokes-fr",
+     "mat": "wheel-alloy",
+     "dist": 1.773,
+     "pt": [
+      0.701,
+      0.443,
+      -1.885
+     ],
+     "vis": false,
+     "cabinHidable": false
+    },
+    {
+     "comp": "rim-fr",
+     "mat": "wheel-alloy",
+     "dist": 1.805,
+     "pt": [
+      0.72,
+      0.429,
+      -1.906
+     ],
+     "vis": false,
+     "cabinHidable": false
+    },
+    {
+     "comp": "tire-fr",
+     "mat": "tire",
+     "dist": 1.817,
+     "pt": [
+      0.728,
+      0.424,
+      -1.914
+     ],
+     "vis": true,
+     "cabinHidable": false
+    }
+   ]
+  },
+  {
+   "ndc": [
+    0,
+    -0.7
+   ],
+   "hits": [
+    {
+     "comp": "root",
+     "mat": "paint-upper",
+     "dist": 0.689,
+     "pt": [
+      -0.393,
+      0.89,
+      -1.335
+     ],
+     "vis": false,
+     "cabinHidable": false
+    },
+    {
+     "comp": "dash-lower",
+     "mat": "leather-ivory",
+     "dist": 0.986,
+     "pt": [
+      -0.39,
+      0.756,
+      -1.6
+     ],
+     "vis": true,
+     "cabinHidable": false
+    },
+    {
+     "comp": "batch/paint-upper",
+     "mat": "paint-upper",
+     "dist": 1.607,
+     "pt": [
+      -0.383,
+      0.477,
+      -2.154
+     ],
+     "vis": true,
+     "cabinHidable": false
+    },
+    {
+     "comp": "batch/paint-lower",
+     "mat": "paint-lower",
+     "dist": 1.673,
+     "pt": [
+      -0.382,
+      0.447,
+      -2.214
+     ],
+     "vis": true,
+     "cabinHidable": false
+    },
+    {
+     "comp": "bridge-pave",
+     "mat": "",
+     "dist": 2.64,
+     "pt": [
+      -0.372,
+      0.012,
+      -3.077
+     ],
+     "vis": true,
+     "cabinHidable": false
+    },
+    {
+     "comp": "road",
+     "mat": "",
+     "dist": 2.667,
+     "pt": [
+      -0.372,
+      0,
+      -3.101
+     ],
+     "vis": true,
+     "cabinHidable": false
+    }
+   ]
+  },
+  {
+   "ndc": [
+    0,
+    -0.5
+   ],
+   "hits": [
+    {
+     "comp": "steering-spokes",
+     "mat": "leather-ivory",
+     "dist": 0.566,
+     "pt": [
+      -0.394,
+      1.005,
+      -1.251
+     ],
+     "vis": true,
+     "cabinHidable": false
+    },
+    {
+     "comp": "dash-upper",
+     "mat": "leather-dark",
+     "dist": 0.885,
+     "pt": [
+      -0.39,
+      0.896,
+      -1.55
+     ],
+     "vis": true,
+     "cabinHidable": false
+    },
+    {
+     "comp": "root",
+     "mat": "paint-upper",
+     "dist": 0.901,
+     "pt": [
+      -0.39,
+      0.89,
+      -1.566
+     ],
+     "vis": false,
+     "cabinHidable": false
+    },
+    {
+     "comp": "batch/chrome",
+     "mat": "chrome",
+     "dist": 0.917,
+     "pt": [
+      -0.39,
+      0.885,
+      -1.58
+     ],
+     "vis": true,
+     "cabinHidable": false
+    },
+    {
+     "comp": "dash-lower",
+     "mat": "leather-ivory",
+     "dist": 0.938,
+     "pt": [
+      -0.39,
+      0.878,
+      -1.6
+     ],
+     "vis": true,
+     "cabinHidable": false
+    },
+    {
+     "comp": "batch/paint-upper",
+     "mat": "paint-upper",
+     "dist": 1.363,
+     "pt": [
+      -0.385,
+      0.731,
+      -2
+     ],
+     "vis": true,
+     "cabinHidable": false
+    }
+   ]
+  },
+  {
+   "ndc": [
+    0,
+    -0.3
+   ],
+   "hits": [
+    {
+     "comp": "batch/paint-upper",
+     "mat": "paint-upper",
+     "dist": 0.534,
+     "pt": [
+      -0.394,
+      1.08,
+      -1.24
+     ],
+     "vis": true,
+     "cabinHidable": false
+    },
+    {
+     "comp": "batch/paint-upper",
+     "mat": "paint-upper",
+     "dist": 0.586,
+     "pt": [
+      -0.394,
+      1.069,
+      -1.291
+     ],
+     "vis": true,
+     "cabinHidable": false
+    },
+    {
+     "comp": "tri-screen",
+     "mat": "screen-ui",
+     "dist": 0.749,
+     "pt": [
+      -0.392,
+      1.032,
+      -1.45
+     ],
+     "vis": true,
+     "cabinHidable": false
+    },
+    {
+     "comp": "dash-upper",
+     "mat": "leather-dark",
+     "dist": 0.937,
+     "pt": [
+      -0.389,
+      0.99,
+      -1.633
+     ],
+     "vis": true,
+     "cabinHidable": false
+    },
+    {
+     "comp": "root",
+     "mat": "paint-upper",
+     "dist": 1.385,
+     "pt": [
+      -0.384,
+      0.89,
+      -2.069
+     ],
+     "vis": false,
+     "cabinHidable": false
+    },
+    {
+     "comp": "batch/paint-upper",
+     "mat": "paint-upper",
+     "dist": 1.656,
+     "pt": [
+      -0.381,
+      0.829,
+      -2.334
+     ],
+     "vis": true,
+     "cabinHidable": false
+    }
+   ]
+  },
+  {
+   "ndc": [
+    0,
+    0
+   ],
+   "hits": [
+    {
+     "comp": "tri-screen",
+     "mat": "screen-ui",
+     "dist": 0.715,
+     "pt": [
+      -0.392,
+      1.181,
+      -1.435
+     ],
+     "vis": true,
+     "cabinHidable": false
+    },
+    {
+     "comp": "windshield",
+     "mat": "glass-clear",
+     "dist": 0.842,
+     "pt": [
+      -0.39,
+      1.178,
+      -1.561
+     ],
+     "vis": false,
+     "cabinHidable": false
+    },
+    {
+     "comp": "bridge-pave",
+     "mat": "",
+     "dist": 44.729,
+     "pt": [
+      0.142,
+      0.012,
+      -45.43
+     ],
+     "vis": true,
+     "cabinHidable": false
+    },
+    {
+     "comp": "road",
+     "mat": "",
+     "dist": 45.181,
+     "pt": [
+      0.147,
+      0,
+      -45.881
+     ],
+     "vis": true,
+     "cabinHidable": false
+    },
+    {
+     "comp": "ground",
+     "mat": "",
+     "dist": 45.934,
+     "pt": [
+      0.157,
+      -0.02,
+      -46.634
+     ],
+     "vis": true,
+     "cabinHidable": false
+    }
+   ]
+  },
+  {
+   "ndc": [
+    -0.5,
+    -0.55
+   ],
+   "hits": [
+    {
+     "comp": "gauge-screen",
+     "mat": "gauge-ui",
+     "dist": 0.886,
+     "pt": [
+      -0.807,
+      0.909,
+      -1.451
+     ],
+     "vis": true,
+     "cabinHidable": false
+    },
+    {
+     "comp": "root",
+     "mat": "paint-upper",
+     "dist": 0.944,
+     "pt": [
+      -0.834,
+      0.89,
+      -1.499
+     ],
+     "vis": false,
+     "cabinHidable": false
+    },
+    {
+     "comp": "dash-upper",
+     "mat": "leather-dark",
+     "dist": 1.013,
+     "pt": [
+      -0.866,
+      0.867,
+      -1.556
+     ],
+     "vis": true,
+     "cabinHidable": false
+    },
+    {
+     "comp": "mirror-housing",
+     "mat": "r23-mirror-body",
+     "dist": 1.442,
+     "pt": [
+      -1.063,
+      0.726,
+      -1.91
+     ],
+     "vis": true,
+     "cabinHidable": false
+    },
+    {
+     "comp": "mirror-housing",
+     "mat": "r23-mirror-body",
+     "dist": 1.493,
+     "pt": [
+      -1.086,
+      0.71,
+      -1.952
+     ],
+     "vis": true,
+     "cabinHidable": false
+    },
+    {
+     "comp": "bridge-pave",
+     "mat": "",
+     "dist": 3.618,
+     "pt": [
+      -2.062,
+      0.012,
+      -3.705
+     ],
+     "vis": true,
+     "cabinHidable": false
+    }
+   ]
+  },
+  {
+   "ndc": [
+    0.5,
+    -0.55
+   ],
+   "hits": [
+    {
+     "comp": "dash-vent-center",
+     "mat": "chrome",
+     "dist": 0.685,
+     "pt": [
+      -0.072,
+      0.975,
+      -1.277
+     ],
+     "vis": true,
+     "cabinHidable": false
+    },
+    {
+     "comp": "batch/wood",
+     "mat": "wood",
+     "dist": 0.792,
+     "pt": [
+      -0.021,
+      0.94,
+      -1.364
+     ],
+     "vis": false,
+     "cabinHidable": true
+    },
+    {
+     "comp": "root",
+     "mat": "paint-upper",
+     "dist": 0.944,
+     "pt": [
+      0.052,
+      0.89,
+      -1.488
+     ],
+     "vis": false,
+     "cabinHidable": false
+    },
+    {
+     "comp": "dash-upper",
+     "mat": "leather-dark",
+     "dist": 1.023,
+     "pt": [
+      0.09,
+      0.864,
+      -1.552
+     ],
+     "vis": true,
+     "cabinHidable": false
+    },
+    {
+     "comp": "batch/chrome",
+     "mat": "chrome",
+     "dist": 1.032,
+     "pt": [
+      0.094,
+      0.861,
+      -1.56
+     ],
+     "vis": true,
+     "cabinHidable": false
+    },
+    {
+     "comp": "batch/chrome",
+     "mat": "chrome",
+     "dist": 1.057,
+     "pt": [
+      0.106,
+      0.853,
+      -1.58
+     ],
+     "vis": true,
+     "cabinHidable": false
+    }
+   ]
+  }
+ ],
+ "occCount": 2,
+ "occHidden": 2
+}

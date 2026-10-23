@@ -878,6 +878,46 @@ export function createR7CarAdapter(tier: QualityTier = 'high'): CarLike {
     console.info(`[R7Adapter] 座舱遮挡稳健扫描 → ${swept} mesh / ${cloneBySrc.size} 材质克隆`);
   }
 
+  // ---- R27：内饰件整体抬升（治 body-lower 壳顶「腰带台面」吞掉方向盘/仪表台）----
+  // 病根（.qa/r27_pick.mjs 逐三角射线 + 侧视轮廓实测）：body-lower 是连续侧视轮廓
+  // 单壳挤出，轮廓上沿（腰带线）在座舱区 z-2.05..+0.86 全程顶在 y≈1.074~1.093 ——
+  // 一块比仪表台顶面（dash-upper 0.962）还高 13cm 的实体台面。驾驶眼点
+  // (0.30, 1.285, -0.09) 只在台面上方 0.19m，指向仪表/方向盘的射线先命中台面：
+  // NDC(0,-0.8) 首命中壳顶 0.30m，方向盘（0.83m）整块被挡，只剩顶缘一小弧。
+  // V800 同款壳顶不挡，因其仪表台前伸到腰带前缘之外（dash z1.55..2.01 > 腰线前缘
+  // z1.05），而 R7 仪表台整块藏在台面下方（台面前缘 z0.86 > 仪表后缘 z0.716）。
+  // 外壳几何禁改（profile 上沿 = 外观侧视腰线，动它侧窗/腰带脱节），故在装配层把
+  // 内饰件抬到台面之上：抬升量 0.26m = 眼点−(台面前缘) 视线余量 ≥6cm（仪表顶
+  // 1.222 > 视线阈值 1.106；方向盘毂心 1.184 > 1.123）。必须在合批前做——合批会把
+  // 世界矩阵烘进几何。steering 是 pivot，子节点 hub/badge 随动，转向旋转不受影响。
+  {
+    const R27_INTERIOR_LIFT = 0.26;
+    const LIFT_IDS = [
+      'dash-upper',
+      'dash-lower',
+      'dash-chrome-strip',
+      'dash-vent',
+      'center-screen',
+      'center-screen-frame',
+      'cluster-screen',
+      'rear-screen',
+      'steering',
+      'center-console',
+      'console-armrest',
+    ] as const;
+    let lifted = 0;
+    for (const id of LIFT_IDS) {
+      const node = byId.get(id);
+      if (!node) {
+        console.warn('[R7Adapter] R27 抬升缺件：', id);
+        continue;
+      }
+      node.position.y += R27_INTERIOR_LIFT;
+      lifted += 1;
+    }
+    console.info(`[R7Adapter] R27 内饰抬升 +${R27_INTERIOR_LIFT}m → ${lifted}/${LIFT_IDS.length} 件`);
+  }
+
   const mergeResult = batchMergeStatic(model, {
     excludeObjects: dynamicNodes,
     excludeMaterialIds: UV_CONTENT_MATERIAL_IDS,
@@ -885,28 +925,13 @@ export function createR7CarAdapter(tier: QualityTier = 'high'): CarLike {
   });
   wireBatchPaintShadow(mergeResult);
 
-  // ---- R18：座舱地板衬毯（覆盖 body-lower 挤出壳顶面，消灭副驾「中央隔板」）----
-  // 病根（落地审查 §6）：body-lower 壳顶面 y=1.094（paint-green）在副驾眼点(1.285)下方
-  // 0.19m，NDC(0,-0.3) 首命中即它（0.670m），画面下半读作一块绿色体漆硬板。壳顶单材质
-  // 无法单独隐藏。处置：壳顶上方铺深色内饰地毯，车内看到深色地板而非体漆。合批后新增，
-  // 不进 batch，+1 DC。
-  {
-    root.updateMatrixWorld(true);
-    const carpetMat = new THREE.MeshStandardMaterial({
-      color: 0x22201d,
-      roughness: 0.96,
-      metalness: 0.0
-    });
-    // 世界坐标：x 居中 ±0.93、y 壳顶 1.094+8mm、z 后舱(-1.55)到中控屏框前缘(0.70)
-    const carpet = new THREE.Mesh(new THREE.BoxGeometry(1.86, 0.012, 2.28), carpetMat);
-    const wp = new THREE.Vector3(0, 1.102, -0.43);
-    body.worldToLocal(wp);
-    carpet.position.copy(wp);
-    carpet.name = 'cabin-floor-carpet';
-    carpet.castShadow = false;
-    carpet.receiveShadow = false;
-    body.add(carpet);
-  }
+  // ---- R27：移除 R18 座舱地板衬毯（冗余且与抬升后的方向盘相交）----
+  // R18 衬毯是为遮 body-lower 壳顶亮色体漆而加的浮板（y1.102，眼点下 0.18m）。
+  // R19f 之后壳顶在车内机位已整体换成暗色内舱漆（setPaintShadow 材质克隆，实测
+  // .qa/r27_carpet_test.mjs：隐藏衬毯后 bottom 带仅 +5~9 级，即衬毯本就只是同色
+  // 浮板），衬毯既冗余又有害：① 浮板在 NDC(0,-0.8) 首命中 0.30m，把 R27 抬升后
+  // 方向盘的下弧（y≈1.0~1.1 @z0.56..0.71）整段切掉；② 与抬升后的方向盘几何相交。
+  // 删除后座舱读作「暗色壳顶台面 + 抬升内饰」，与 V800 同构。
 
   // ---- 运行时状态 ----
   let heat = 0;

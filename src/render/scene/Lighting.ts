@@ -1,21 +1,21 @@
 /**
  * 光照：DirectionalLight 主光（shadow 2048，正交 ±28 texel 对齐，bias −4e-4 / normalBias .03）
- * + HemisphereLight 环境补光 + 冷调无阴影补光。texel 对齐移植自原版 pg 的 update。
+ * + HemisphereLight 环境补光 + 冷调无阴影补光 + rim 轮廓光。texel 对齐移植自原版 pg 的 update。
  *
- * P3 调光（黄昏基调）：
- * - 主光暖色低角度（~4500K 观感，0xffd2a2 / 3.3）
- * - 半球光冷调平衡：天空冷蓝灰 + 地面暖反照
- * - 追加一盏冷调补光（无阴影，零额外阴影开销），防止暗部死黑
+ * R26：颜色/强度全部来自 `src/config/environment.ts` 的 ACTIVE_ENV（白石哥特教堂黄金时刻）。
+ * **结构不动**：texel 对齐、补光反方位、rim 位置公式都是前几轮实拍验证过的，
+ * 这里只换参数，不换结构 —— 改结构等于把之前验证过的阴影抖动/轮廓线结论全部作废。
  */
 import * as THREE from 'three';
 import type { QualitySettings } from '../../config/quality';
+import { ACTIVE_ENV } from '../../config/environment';
 
 export class Lighting {
   readonly sun: THREE.DirectionalLight;
   readonly sunDirection: THREE.Vector3;
   private readonly fill: THREE.DirectionalLight;
   private readonly fillTarget = new THREE.Object3D();
-  /** P0-3 rim 轮廓光：冷白低角掠过车尾暗侧，勾一条轮廓亮线（无阴影，零额外开销） */
+  /** rim 轮廓光：冷白低角掠过车尾暗侧，勾一条轮廓亮线（无阴影，零额外开销） */
   private readonly rim: THREE.DirectionalLight;
   private readonly rimTarget = new THREE.Object3D();
   private readonly mapSize: number;
@@ -25,14 +25,16 @@ export class Lighting {
   private readonly aligned = new THREE.Vector3();
 
   constructor(scene: THREE.Scene, quality: QualitySettings, sunDirection: THREE.Vector3) {
+    const preset = ACTIVE_ENV;
     this.mapSize = quality.shadowMapSize;
     this.ortho = quality.shadowOrtho;
     this.sunDirection = sunDirection.clone();
 
-    // 环境补光（冷调天光 + 地面暖反照，平衡黄昏主光）
-    scene.add(new THREE.HemisphereLight(0xa9c2dd, 0x4a3226, 0.5));
+    // 环境补光：冷天光 + 地面暖反照。白石教堂靠这盏灯把背光面从「黑」托到「灰白」，
+    // 所以 intensity 0.55（旧黄昏版 0.5）——背光面是白石的体积感来源，不是要被压掉的暗部。
+    scene.add(new THREE.HemisphereLight(preset.hemi.sky, preset.hemi.ground, preset.hemi.intensity));
 
-    const sun = new THREE.DirectionalLight(0xffd2a2, 3.3);
+    const sun = new THREE.DirectionalLight(preset.sun.color, preset.sun.intensity);
     sun.castShadow = true;
     sun.shadow.mapSize.set(this.mapSize, this.mapSize);
     const cam = sun.shadow.camera;
@@ -49,17 +51,15 @@ export class Lighting {
     this.sun = sun;
 
     // 冷调补光：与主光反方位、抬高入射角，无阴影（环境反射与暗部细节来源）
-    this.fill = new THREE.DirectionalLight(0x8fa9c9, 0.4);
+    this.fill = new THREE.DirectionalLight(preset.fill.color, preset.fill.intensity);
     this.fill.castShadow = false;
     scene.add(this.fill);
     scene.add(this.fillTarget);
     this.fill.target = this.fillTarget;
 
-    // P0-3 rim 轮廓光：冷白 0xcfe0ff，从车后侧低角入射（太阳反方位的侧面），
-    // 掠过车身暗侧边缘形成一条冷光轮廓线（展厅感关键）。无阴影、强度 0.8 ——
-    // 黑漆漫反射弱（roughness 0.42），0.6 实拍轮廓线不可读（t9 实证），提到 0.8。
-    // 只勾轮廓不抢黄昏主光的暖调。
-    this.rim = new THREE.DirectionalLight(0xcfe0ff, 0.8);
+    // rim 轮廓光：冷白，从车后侧低角入射，掠过车身暗侧边缘形成一条冷光轮廓线。
+    // 白石环境整体更亮，0.7 才既勾得出轮廓又不把暗侧提成灰（旧黑漆版 0.8）。
+    this.rim = new THREE.DirectionalLight(preset.rim.color, preset.rim.intensity);
     this.rim.castShadow = false;
     scene.add(this.rim);
     scene.add(this.rimTarget);

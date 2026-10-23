@@ -67,14 +67,16 @@ export function createWaterBasinTexture(): THREE.CanvasTexture {
   const random = makeLcg(246813);
 
   const grad = ctx.createLinearGradient(0, 0, 0, h);
-  // R17：提亮加饱和（暗青 #173a42/#4a7d78 在黄昏暖光下被洗成沙色——消去法实证
-  // verify/r17/water/w_00 红探针：能存活的是高饱和色）。青绿亮度抬一档、饱和度加倍，
-  // 暖光 × 青绿 = 仍读得出「水」。
-  grad.addColorStop(0, '#5FB8AE');
-  grad.addColorStop(0.18, '#3A8F94');
-  grad.addColorStop(0.5, '#1E7585');
-  grad.addColorStop(0.82, '#3A8F94');
-  grad.addColorStop(1, '#5FB8AE');
+  // R26 环境大改：R17 那套「提亮加饱和 + 自发光青绿」是为了对抗**黄昏暖光**把暗青
+  // 洗成沙色。R26 换成冷调天光后这条前提消失了 —— 亮青绿在新环境里反而成了整张
+  // 画面唯一的饱和色，俯瞰时像一块荧光塑料（verify/r26b/aerial.png 实证）。
+  // 现在改成**冷板岩色**：明度低、饱和度低，靠天空反射与法线流动读出"水"，
+  // 与白石/炭灰路面同属一个冷灰族，只在色相上偏青。
+  grad.addColorStop(0, '#33555a');
+  grad.addColorStop(0.18, '#2a4a52');
+  grad.addColorStop(0.5, '#1b333b');
+  grad.addColorStop(0.82, '#2a4a52');
+  grad.addColorStop(1, '#33555a');
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, w, h);
 
@@ -83,20 +85,20 @@ export function createWaterBasinTexture(): THREE.CanvasTexture {
     const y = random() * h;
     const x = random() * w;
     const len = 40 + random() * 180;
-    const a = 0.04 + random() * 0.09;
-    ctx.fillStyle = `rgba(150,215,212,${a.toFixed(3)})`;
+    const a = 0.03 + random() * 0.06;
+    ctx.fillStyle = `rgba(150,190,196,${a.toFixed(3)})`;
     ctx.beginPath();
     ctx.ellipse(x, y, len / 2, 0.8 + random() * 1.8, 0, 0, Math.PI * 2);
     ctx.fill();
   }
 
-  // 霞光碎斑
-  for (let i = 0; i < 90; i++) {
+  // 霞光碎斑（保留但压低：冷天光下只剩一点点暖反光，多了就脏）
+  for (let i = 0; i < 60; i++) {
     const y = random() * h;
     const x = random() * w;
     const len = 8 + random() * 34;
-    const a = 0.04 + random() * 0.08;
-    ctx.fillStyle = `rgba(216,150,104,${a.toFixed(3)})`;
+    const a = 0.02 + random() * 0.04;
+    ctx.fillStyle = `rgba(206,176,150,${a.toFixed(3)})`;
     ctx.fillRect(x, y, len, 0.8 + random() * 1.4);
   }
 

@@ -78,8 +78,13 @@ const POSE: ModePose = {
  * leather-warm 合批（含菱格座椅）世界 z 从 −0.456 起，眼点 −0.58 正好贴着靠背，
  * 车里看到的那块「中央隔板实体模块」就是它（挂上参考图后被读成一面绗缝大墙）。
  * 眼点前移 27cm 到 −0.85 越过靠背，并略降 5cm，正前方视野才落到仪表台+路面上。
+ *
+ * R27（用户反馈「V800 车内视角需要抬高一些」）：y 1.20 → 1.34。坐姿眼点应高于
+ * 腰带线（greenhouse-glass 下沿 1.095）约 0.25m（实车约 0.25~0.30m），原 1.20 只高出
+ * 0.10m，仪表台/方向盘占比过大、前方路面被 cowl 吃掉；抬到 1.34 后视线越过 cowl
+ * （z1.63, y1.108）的余量从 9cm 增到 19cm，路面视野显著扩大（三机位截图复核）。
  */
-const CABIN_EYE: readonly [number, number, number] = [-0.40, 1.20, -0.72];
+const CABIN_EYE: readonly [number, number, number] = [-0.40, 1.34, -0.72];
 const CABIN_TARGET: readonly [number, number, number] = [-0.30, 0.98, -9];
 
 /**
