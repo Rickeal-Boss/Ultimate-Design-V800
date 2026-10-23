@@ -33,7 +33,20 @@ export interface HudInput {
 
 export interface HudCallbacks {
   onSelectView?: (mode: CameraMode) => void;
+  /** 自由探索模式：点「结束探索」（R29） */
+  onExitFree?: () => void;
 }
+
+/** 自由探索操作说明卡（纯数据，便于与 FreeDrive 的按键表对账） */
+export const FREE_HELP_ROWS: ReadonlyArray<readonly [string, string]> = [
+  ['W / ↑', '油门'],
+  ['S / ↓', '刹车 · 停稳后倒车'],
+  ['A / D · ← / →', '转向'],
+  ['Space', '手刹（强力制动）'],
+  ['R', '复位到城门外'],
+  ['Esc', '结束探索'],
+  ['H', '显示 / 隐藏本卡']
+];
 
 /**
  * HUD 视角按钮组（5 视角，crash 为自动机位不设按钮）。
@@ -151,6 +164,13 @@ export class Hud {
   private distance: HTMLElement;
   private regen: HTMLElement;
   private score: HTMLElement;
+  /** 挑战模式中段数值组（自由探索时整组隐藏） */
+  private mid: HTMLElement;
+  /** 自由探索顶栏：「自由探索」标签 + 「结束探索」按钮 */
+  private freeBar: HTMLElement;
+  /** 自由探索操作说明卡（3s 后自动淡出，H 键可召回） */
+  private freeHelp: HTMLElement;
+  private freeHelpTimer = 0;
   private forceFill: HTMLElement;
   private forceValue: HTMLElement;
   private forceBox: HTMLElement;
@@ -205,6 +225,7 @@ export class Hud {
     left.append(this.speed, speedUnit, this.gear, tempWrap);
 
     const mid = el('div', 'hud-mid');
+    this.mid = mid;
     this.timer = el('div', 'hud-timer mono', '0.000s');
     this.distance = el('div', 'hud-distance mono', '0m');
     this.regen = el('div', 'hud-regen mono', '回收 0 kW');
@@ -219,6 +240,29 @@ export class Hud {
     track.append(this.forceFill);
     forceWrap.append(forceLabel, track, this.forceValue);
     this.forceBox = forceWrap;
+
+    // ---- 自由探索（R29）：顶栏 + 操作说明卡 ----
+    // 挑战模式专属件（踏板力条 / 中段计时距离 / 制动温度 / 切入刹车）在自由模式下全部隐藏，
+    // 只留速度 + 挡位（hud-left）与视角按钮组 —— 踏板力/距离统计属挑战玩法语义，不通用。
+    this.freeBar = el('div', 'free-bar hidden');
+    const freeTag = el('div', 'free-tag', '自由探索');
+    const exitButton = el('button', 'free-exit-btn') as HTMLButtonElement;
+    exitButton.type = 'button';
+    exitButton.textContent = '结束探索';
+    exitButton.addEventListener('click', () => callbacks.onExitFree?.());
+    this.freeBar.append(freeTag, exitButton);
+
+    this.freeHelp = el('div', 'free-help hidden');
+    const helpTitle = el('div', 'fh-title', '操作说明');
+    const helpGrid = el('div', 'fh-grid');
+    for (const [key, desc] of FREE_HELP_ROWS) {
+      helpGrid.append(el('span', 'k', key), el('span', 'd', desc));
+    }
+    const helpClose = el('button', 'fh-close') as HTMLButtonElement;
+    helpClose.type = 'button';
+    helpClose.textContent = '×';
+    helpClose.addEventListener('click', () => this.hideFreeHelp());
+    this.freeHelp.append(helpTitle, helpGrid, helpClose);
 
     // 视角按钮组（顶部居中）；V800 5 个 / R7 7 个（多三个内饰机位）
     const viewGroup = el('div', 'view-group');
@@ -259,8 +303,71 @@ export class Hud {
       this.toast,
       this.redundancyBadge,
       this.thermalBanner,
-      this.cutInButton
+      this.cutInButton,
+      this.freeBar,
+      this.freeHelp
     );
+  }
+
+  /**
+   * 切换自由探索 HUD（R29）。
+   * 自由模式下隐藏挑战专属件（踏板力条 / 计时·距离·回收·得分 / 制动温度 / 切入刹车），
+   * 显示「自由探索」顶栏与操作说明卡；说明卡 3s 后自动淡出。
+   */
+  setFreeMode(active: boolean): void {
+    setVisible(this.forceBox, !active);
+    setVisible(this.mid, !active);
+    setVisible(this.tempBox, !active);
+    setVisible(this.cutInButton, !active);
+    setVisible(this.freeBar, active);
+    if (active) {
+      this.gear.classList.remove('braking');
+      this.showFreeHelp(3000);
+    } else {
+      this.hideFreeHelp();
+    }
+  }
+
+  /** 自由探索每帧刷新（只写速度 + 挡位，其余挑战件已隐藏） */
+  updateFree(speedKmh: number, gear: 'D' | 'R'): void {
+    const speedText = `${Math.round(speedKmh)}`;
+    if (speedText !== this.lastSpeedText) {
+      this.speed.textContent = speedText;
+      this.lastSpeedText = speedText;
+    }
+    this.setText(this.gear, gear);
+    this.gear.classList.toggle('reverse', gear === 'R');
+  }
+
+  /**
+   * 显示操作说明卡；`autoHideMs > 0` 时在该时长后淡出（CSS transition 0.6s）。
+   * 淡出后卡片仍占位（pointer-events 关闭），按 H 可召回。
+   */
+  showFreeHelp(autoHideMs = 0): void {
+    window.clearTimeout(this.freeHelpTimer);
+    this.freeHelpTimer = 0;
+    setVisible(this.freeHelp, true);
+    // 先摘掉 fade 再强制回流，避免「刚隐藏又立刻显示」时 transition 不重启
+    this.freeHelp.classList.remove('fade');
+    void this.freeHelp.offsetWidth;
+    if (autoHideMs > 0) {
+      this.freeHelpTimer = window.setTimeout(() => this.freeHelp.classList.add('fade'), autoHideMs);
+    }
+  }
+
+  hideFreeHelp(): void {
+    window.clearTimeout(this.freeHelpTimer);
+    this.freeHelpTimer = 0;
+    this.freeHelp.classList.add('fade');
+  }
+
+  /** H 键：淡出态召回 / 显示态隐藏 */
+  toggleFreeHelp(): void {
+    if (this.freeHelp.classList.contains('fade') || this.freeHelp.classList.contains('hidden')) {
+      this.showFreeHelp(0);
+    } else {
+      this.hideFreeHelp();
+    }
   }
 
   /** 踏板断裂 → 冗余制动接管：徽标常驻、踏板力条置灰显示「踏板脱开」 */

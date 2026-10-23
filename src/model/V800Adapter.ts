@@ -1695,6 +1695,13 @@ function createQuiltTileTexture(
   return createProceduralSurface(size, 0.55, sample);
 }
 
+/**
+ * R29（外部审查 O1）阴影 caster 白名单：只有**车体外壳**和**4 个轮子**投影。
+ * 判据是材质 id 而不是组件 id —— 合批后组件 id 已丢失（batchMerge 不写
+ * userData.sculptComponent），按 `material.userData.sculptMaterial.id` 建表才拿得到批次件。
+ */
+const SHADOW_CASTER_MATERIAL_IDS = new Set<string>(['paint-upper', 'paint-lower']);
+
 export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
   const model = createZunjieV800LuxuryMPVModel({ textureSize: carTextureSizeFor(tier) });
   const runtime = model.userData.runtime as ProceduralModelRuntime | undefined;
@@ -3949,6 +3956,41 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
     };
     mk(1.86, 0.95, 1.098, 1.52, 'cabin-floor-carpet'); // 前段：中控/脚坑上方
     mk(1.86, 2.15, 1.668, -0.45, 'cabin-roof-carpet'); // 舱段：凹槽顶面（z 0.575..-1.525，避开前坡转角）
+  }
+
+  // ---- R29（外部审查 O1）：阴影 caster 白名单 ----
+  // 工厂给**每个** mesh 都写了 `castShadow = options.castShadow ?? true`（185 件全开），
+  // 合批后仍由 batchMerge 按 b.cast 逐批继承 ⇒ 90 个 caster 全部进 shadow pass。
+  // 但阴影相机是正交 ±28m / 2048²，texel = 56/2048 ≈ 27.3mm：徽标、齿环、悬浮轮标、
+  // 后视镜、内饰件要么被车体剪影完全包住，要么只占 1~2 个 texel —— 对成品像素零贡献，
+  // 却是 shadow pass 里 90 次 draw call + 顶点变换的来源。
+  // 白名单：车体外壳（paint-upper / paint-lower）+ 4 个轮子（轮胎/轮圈/轮心盖）。
+  {
+    const wheelKeep = new Set<THREE.Object3D>();
+    for (const w of wheels) w.spin.traverse((o) => wheelKeep.add(o));
+    let kept = 0;
+    let dropped = 0;
+    model.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      if (!mesh.castShadow) return; // 已被前序逻辑关掉的（占位件/地毯/迎宾毯…）不动
+      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      const isShell = mats.some(
+        (mt) =>
+          SHADOW_CASTER_MATERIAL_IDS.has(
+            (mt as THREE.MeshPhysicalMaterial | undefined)?.userData?.sculptMaterial?.id ?? ''
+          )
+      );
+      if (wheelKeep.has(mesh) || isShell) {
+        kept += 1;
+        return;
+      }
+      mesh.castShadow = false;
+      dropped += 1;
+    });
+    if (typeof window !== 'undefined' && window.location.hash.includes('shadowcaster')) {
+      console.info(`[V800Adapter] #shadowcaster：保留 ${kept} / 剔除 ${dropped}`);
+    }
   }
 
   // ---- QA 钩子：#uvassert —— 图集串味验证（三角形-矩形相交法）----

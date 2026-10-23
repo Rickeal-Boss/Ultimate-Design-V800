@@ -616,6 +616,139 @@ body {
   margin-bottom: 12px;
 }
 
+/* ---------- 自由探索（R29） ---------- */
+/* 次级按钮：沿用既有 .btn 骨架与 --cream/--line token，只做「非主行动」的视觉降权 */
+.btn.ghost {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(241, 220, 174, 0.32);
+  color: var(--cream);
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+.btn.ghost:hover {
+  background: rgba(255, 255, 255, 0.13);
+  border-color: rgba(241, 220, 174, 0.55);
+}
+
+/* 菜单里的自由探索单独一排，不与「开始挑战 / 音效」抢视觉权重 */
+.btn-row-sub {
+  margin-top: 10px;
+}
+
+/* 自由探索顶栏（标签 + 结束探索），占用挑战模式 hud-mid 的位置 */
+.free-bar {
+  position: absolute;
+  top: 16px;
+  right: 18px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  pointer-events: auto;
+}
+
+.free-tag {
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  letter-spacing: 2px;
+  color: var(--blue);
+  background: rgba(48, 200, 255, 0.16);
+  border: 1px solid rgba(48, 200, 255, 0.5);
+}
+
+.free-exit-btn {
+  padding: 7px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.45);
+  color: var(--cream);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.free-exit-btn:hover {
+  color: #fff;
+  background: rgba(210, 60, 30, 0.8);
+  border-color: var(--orange);
+}
+
+/* 半透明操作说明卡（3s 后淡出，H 键召回，× 手动关闭） */
+.free-help {
+  position: absolute;
+  left: 20px;
+  bottom: 24px;
+  width: 252px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(12, 8, 10, 0.62);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(3px);
+  font-size: 12px;
+  line-height: 1.7;
+  pointer-events: auto;
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+
+.free-help.fade {
+  opacity: 0;
+  transform: translateY(8px);
+  pointer-events: none;
+}
+
+.fh-title {
+  font-size: 12px;
+  letter-spacing: 2px;
+  opacity: 0.7;
+  margin-bottom: 6px;
+}
+
+.fh-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 3px 10px;
+  align-items: center;
+}
+
+.fh-grid .k {
+  padding: 1px 7px;
+  border-radius: 5px;
+  font-size: 11px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.09);
+  border: 1px solid var(--line);
+}
+
+.fh-grid .d {
+  opacity: 0.85;
+}
+
+.fh-close {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  width: 20px;
+  height: 20px;
+  line-height: 1;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--cream);
+  font-size: 13px;
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.fh-close:hover {
+  opacity: 1;
+}
+
+/* 倒车挡位：与刹车挡（--orange）区分，用冷色 */
+.hud-gear.reverse {
+  color: var(--blue);
+  border-color: var(--blue);
+}
+
 @media (max-width: 640px) {
   .result-stats {
     grid-template-columns: repeat(3, 1fr);
@@ -625,5 +758,11 @@ body {
   }
   .countdown {
     font-size: 72px;
+  }
+  .free-help {
+    left: 12px;
+    bottom: 14px;
+    width: 220px;
+    font-size: 11px;
   }
 }

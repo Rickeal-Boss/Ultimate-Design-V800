@@ -181,9 +181,14 @@ export class Terrain {
   constructor(scene: THREE.Scene) {
     // 远景岩环（BackSide：从圈内看）。R28 半径内收 2600/2200 → 1600/1200 + 环顶
     // 混雾（缺陷 B），见 buildRing。
+    // ⚠ R29 更正（实测定罪）：1200 环在 z=−1200 处横穿城内大街，把 z=−1300 的主殿
+    // **整栋遮住**（verify/r29_check/inner_street.png：街尽头是一团土黄山体，主殿不可见；
+    // 用户截图 6/7 的「雾气色块遮挡」即此物，不是雾）。两个环一律推到主殿之后：
+    //   2600 环 → z=−2600 处（主殿后 1300m）、2000 环 → z=−2000 处（后 700m），
+    // 既保留「城堡靠山」的天际线，又不再侵入 z∈[−365, −1300] 的行车走廊与视线。
     const sky = emptyPatch();
-    this.buildRing(sky, 1600, 260, 3813444, ROCK_FAR, 0.34);
-    this.buildRing(sky, 1200, 170, 4864582, ROCK_NEAR, 0.5);
+    this.buildRing(sky, 2600, 320, 3813444, ROCK_FAR, 0.34);
+    this.buildRing(sky, 2000, 210, 4864582, ROCK_NEAR, 0.5);
     const skyline = new THREE.Mesh(toGeometry(sky), this.material(ROCK_GAIN_FAR, THREE.BackSide));
     skyline.name = 'terrain-skyline';
     skyline.frustumCulled = false;

@@ -73,6 +73,8 @@ const CALIPER_HEAT_HEX = 0x8c1114;
 
 /** 需要隐藏的 macro 容器占位几何（只隐藏它们**自身**的 mesh，不动子树） */
 const CONTAINER_MESH_IDS = ['root', 'cabin-interior'] as const;
+/** R29（O1）阴影 caster 白名单：R7 车体壳只有一支 paint-green，其余同 V800 判据 */
+const SHADOW_CASTER_MATERIAL_IDS = new Set<string>(['paint-green']);
 
 /** 合批时必须保护的动态件（另有内置 /^wheel-/ 等模式兜底） */
 const DYNAMIC_EXCLUDE_IDS = [
@@ -924,6 +926,37 @@ export function createR7CarAdapter(tier: QualityTier = 'high'): CarLike {
     mergeTarget: model,
   });
   wireBatchPaintShadow(mergeResult);
+
+  // ---- R29（外部审查 O1）：阴影 caster 白名单（与 V800Adapter 同构）----
+  // 工厂给每个 mesh 都写了 castShadow ?? true ⇒ 130+ 件全部进 shadow pass；
+  // 阴影相机正交 ±28m / 2048² ⇒ texel 27.3mm，徽标/齿环/悬浮标/后视镜/内饰
+  // 只占 1~2 texel 或被车体剪影包住，对成品像素零贡献。只留车体壳 + 4 轮。
+  {
+    const wheelKeep = new Set<THREE.Object3D>();
+    for (const w of wheels) w.spin.traverse((o) => wheelKeep.add(o));
+    let kept = 0;
+    let dropped = 0;
+    model.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh || !mesh.castShadow) return;
+      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      const isShell = mats.some(
+        (mt) =>
+          SHADOW_CASTER_MATERIAL_IDS.has(
+            (mt as THREE.MeshPhysicalMaterial | undefined)?.userData?.sculptMaterial?.id ?? ''
+          )
+      );
+      if (wheelKeep.has(mesh) || isShell) {
+        kept += 1;
+        return;
+      }
+      mesh.castShadow = false;
+      dropped += 1;
+    });
+    if (typeof window !== 'undefined' && window.location.hash.includes('shadowcaster')) {
+      console.info(`[R7Adapter] #shadowcaster：保留 ${kept} / 剔除 ${dropped}`);
+    }
+  }
 
   // ---- R27：移除 R18 座舱地板衬毯（冗余且与抬升后的方向盘相交）----
   // R18 衬毯是为遮 body-lower 壳顶亮色体漆而加的浮板（y1.102，眼点下 0.18m）。

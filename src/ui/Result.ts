@@ -3,6 +3,7 @@
  * + 本机最佳成绩（localStorage）。
  * 曲线图移植原版 $g（新增距离曲线）。
  * R28：内部 CrashReason 仍冻结为 'barrier'（tests 断言），用户文案已换皮「撞上主殿」。
+ * R29：底部按钮排改为「再来一次 + 自由探索」，后者进键盘自由驾驶模式（见 core/FreeDrive）。
  */
 import { BRAKE } from '../config/physics';
 import { getVehicleProfile, resolveVehicleId, type VehicleId } from '../config/vehicles';
@@ -149,12 +150,19 @@ export class Result {
   private chartCanvas: HTMLCanvasElement;
   private bestLabel: HTMLElement;
   private retryButton: HTMLButtonElement;
+  /** 自由探索（R29）：结算页次级按钮，点了进自由驾驶模式 */
+  private freeButton: HTMLButtonElement;
   /** 当前车型（结算文案 + 最佳成绩分桶） */
   readonly vehicleId: VehicleId;
   /** 窗口事件句柄（dispose 时统一解绑，避免 HMR 累积泄漏——审查 B-2） */
   private readonly onResize = (): void => this.redraw();
 
-  constructor(onRetry: () => void, onClick: () => void) {
+  /**
+   * @param onRetry 「再来一次」
+   * @param onClick 任意按钮的公共音效钩子（解锁 AudioContext + UI 点击音）
+   * @param onFreeExplore 「自由探索」（R29，可选；未传时不渲染该按钮）
+   */
+  constructor(onRetry: () => void, onClick: () => void, onFreeExplore?: () => void) {
     this.root = byId('result');
     this.vehicleId = resolveVehicleId();
     const panel = el('div', 'panel result-panel');
@@ -169,11 +177,21 @@ export class Result {
     this.retryButton = el('button', 'btn primary') as HTMLButtonElement;
     this.retryButton.type = 'button';
     this.retryButton.textContent = '再来一次';
-    panel.append(this.title, this.subtitle, this.statsGrid, chartBox, this.bestLabel, this.retryButton);
+    this.freeButton = el('button', 'btn ghost') as HTMLButtonElement;
+    this.freeButton.type = 'button';
+    this.freeButton.textContent = '自由探索';
+    // 两枚按钮同排（.btn-row 内 .btn{flex:1} 自动等分），自由探索用次级样式
+    const btnRow = el('div', 'btn-row');
+    btnRow.append(this.retryButton, this.freeButton);
+    panel.append(this.title, this.subtitle, this.statsGrid, chartBox, this.bestLabel, btnRow);
     this.root.append(panel);
     this.retryButton.addEventListener('click', () => {
       onClick();
       onRetry();
+    });
+    this.freeButton.addEventListener('click', () => {
+      onClick();
+      onFreeExplore?.();
     });
     this.root.addEventListener('pointerdown', (e) => e.stopPropagation());
     window.addEventListener('resize', this.onResize);

@@ -8,6 +8,7 @@ import { BRAKE, CRASH, MS_TO_KMH, REDUNDANCY, VEHICLE } from '../config/physics'
 import { getVehicleProfile, resolveVehicleId, type InteriorViews } from '../config/vehicles';
 import { AdaptiveQuality, type QualitySettings, type QualityTier } from '../config/quality';
 import { World } from '../physics/World';
+import type { VehicleState } from '../physics/Vehicle';
 import { FxSystems } from '../fx';
 import { cycleViewsFor, CameraRig, isInteriorMode } from '../render/CameraRig';
 import type { CameraMode } from '../render/CameraRig';
@@ -30,7 +31,8 @@ import { Menu } from '../ui/Menu';
 import { Result } from '../ui/Result';
 import { Sliders } from '../ui/Sliders';
 import { Loop } from './Loop';
-import type { GameEvent, RunResult } from './StateMachine';
+import { FREE_START, FreeDrive, type FreeDriveEvent } from './FreeDrive';
+import type { GameEvent, RunResult, Sample } from './StateMachine';
 import { StateMachine } from './StateMachine';
 
 const PHYSICS_HZ = 120;
@@ -46,6 +48,50 @@ const REDUNDANT_BRAKE_LIGHT = 4.5;
  * 都必须保留该偏航、只清俯仰/横滚——清零即整车调头（2026-10-17 外部审查实锤）。
  */
 const MODEL_BASE_YAW = Math.PI;
+
+/**
+ * 自由探索（R29）机位选择：用 `side` 而不是 `chase`。
+ * 原因：chase 在 CameraRig 里是 **世界系**偏移（local: false），车头转向后相机会留在
+ * 世界 +Z 侧 = 「车横着开、镜头不跟着转」。`side` 是 **车体局部**偏移（local: true），
+ * 相机随 root.quaternion（= heading）旋转 —— 这才是转向自由驾驶需要的跟随第三人称，
+ * 且它天然支持鼠标拖拽环绕 + 滚轮缩放（CameraRig 的外部机位分支）。
+ * 代价：side 的默认构图偏侧后方（偏移 4.6 侧 / 0.6 后 / 1.5 高，FOV 45），
+ * 比 chase 更「转播机位」一点，但这是不改 CameraRig 前提下唯一正确跟随的既有模式。
+ */
+const FREE_CAMERA_MODE = 'free' as const;
+
+/**
+ * QA 专用（DEV only）：合成一局「200 km/h 成功刹停」的结算数据。
+ * 只为 headless 截图把结算面板弹出来（真实一局要跑 30 s+ 且时序不可控）；
+ * 不进任何玩法逻辑，构建产物不含。
+ */
+function syntheticResult(): RunResult {
+  const total = 5.6;
+  const samples: Sample[] = [];
+  for (let i = 0; i <= 48; i++) {
+    const t = (i / 48) * total;
+    const k = 1 - t / total;
+    samples.push({
+      t,
+      speedKmh: 200 * k * k,
+      force: 1450 * Math.min(1, t / 0.35),
+      distance: 170 * (1 - k * k * k)
+    });
+  }
+  return {
+    success: true,
+    reason: undefined,
+    degraded: false,
+    snapTime: null,
+    redundancyDistance: null,
+    v0Kmh: 200,
+    stopSeconds: total,
+    stopDistance: 170,
+    peakForce: 1450,
+    score: Math.round((200 * 200) / total),
+    samples
+  };
+}
 
 /** 帧探针记录（perf-r14，字段全部是原始量，判据在离线脚本里算） */
 interface FrameProbeRecord {
@@ -95,6 +141,11 @@ export class Game {
   private readonly sliders: Sliders;
   private readonly loop: Loop;
   private readonly qualityGovernor: AdaptiveQuality;
+  /**
+   * 自由探索驾驶器（R29）。非 null 即处于自由探索模式 —— 这是模式判据的唯一真源，
+   * tick / frame 都按它分流，退出时置 null 并 detach（键盘监听随之解绑）。
+   */
+  private freeDrive: FreeDrive | null = null;
 
   private time = 0;
   /** 窗口事件句柄（dispose 时统一解绑，避免 HMR 泄漏） */
@@ -249,18 +300,21 @@ export class Game {
 
     // ---- UI ----
     this.hud = new Hud({
-      onSelectView: (mode) => this.selectView(mode)
+      onSelectView: (mode) => this.selectView(mode),
+      onExitFree: () => this.exitFreeExplore()
     });
     this.menu = new Menu(
       () => this.startRun(),
-      () => this.sfx.setMuted(!this.sfx.isMuted)
+      () => this.sfx.setMuted(!this.sfx.isMuted),
+      () => this.enterFreeExplore()
     );
     this.result = new Result(
       () => this.startRun(),
       () => {
         this.sfx.unlock();
         this.sfx.uiClick();
-      }
+      },
+      () => this.enterFreeExplore()
     );
     this.sliders = new Sliders({
       onCutInBrake: () => this.engageBrake(),
@@ -325,6 +379,30 @@ export class Game {
             console.info(`[QA] #view=${mode} 已切换`);
           });
         }
+      }
+    }
+
+    // ---- QA 钩子 · R29 自由探索 ----
+    // 为什么要它：① 结算面板要跑完一整局才出现（#autodrive 也要 30 s+），headless 截图
+    // 需要确定性入口；② SwiftShader 下真人按键时序不可控，键盘必须能脚本化驱动。
+    // 全部只在 DEV 生效，构建产物不含。
+    if (import.meta.env.DEV) {
+      (window as unknown as Record<string, unknown>).__v800Free = {
+        enter: (): void => this.enterFreeExplore(),
+        exit: (): void => this.exitFreeExplore(),
+        state: (): unknown => this.freeDrive?.snapshot() ?? null,
+        press: (code: string, down: boolean): void => this.freeDrive?.press(code, down),
+        teleport: (x: number, z: number, heading: number): void =>
+          this.freeDrive?.teleport(x, z, heading),
+        /** 直接弹结算面板（合成一局成功刹停），供结算页截图 */
+        showResult: (): void => {
+          this.menu.show(false);
+          this.hud.setVisible(false);
+          this.result.show(syntheticResult());
+        }
+      };
+      if (window.location.hash.includes('freedrive')) {
+        requestAnimationFrame(() => this.enterFreeExplore());
       }
     }
 
@@ -453,6 +531,197 @@ export class Game {
     this.forceBrakeTick = true;
   }
 
+  // ==================== 自由探索模式（R29） ====================
+
+  /**
+   * 进入自由探索：隐藏结算/菜单 → 车辆复位到城门外起点 → 绑定键盘 → 切跟随机位。
+   * 挑战态（会话状态机 / 踏板 / 撞击结算）整体让位给 core/FreeDrive 的运动学驾驶器。
+   */
+  private enterFreeExplore(): void {
+    this.sfx.unlock();
+    this.sfx.uiClick();
+    this.result.hide();
+    this.menu.show(false);
+    this.hud.hideToast();
+    this.hud.showCountdown(null);
+    // 挂着结算延迟就进自由模式会在几秒后把结算面板弹回来 —— 必须先清
+    this.pendingResult = null;
+    this.crashElapsed = 0;
+    this.forceBrakeTick = false;
+    this.settleTimer = 0;
+    this.snapCamTimer = 0;
+    this.snapCamReturn = null;
+    this.brakeFlash = 0;
+    this.fx.clear();
+    this.crashWorld.reset();
+    this.sm.toMenu();
+    this.sliders.reset();
+    this.sliders.hideCutIn();
+    this.sliders.root.style.display = 'none';
+    this.hud.setRedundancyActive(false);
+
+    // 车模复位（resetVisuals 保住 body 基准偏航 π，只清俯仰/横滚）
+    this.resetVisuals();
+    this.car.resetPedal();
+    this.car.setBrakeHeat(0);
+    this.car.setBrakeLights(1.6);
+    this.car.setHeadlights(true);
+    this.car.root.position.set(FREE_START.x, 0, FREE_START.z);
+    this.car.root.rotation.set(0, FREE_START.heading, 0);
+
+    const fd = new FreeDrive({ maxSpeedKmh: this.profile.maxSpeedKmh });
+    fd.onEvent = (e) => this.onFreeEvent(e);
+    fd.attach();
+    this.freeDrive = fd;
+
+    this.hud.setVisible(true);
+    this.hud.setFreeMode(true);
+    this.hud.updateFree(0, 'D');
+    this.hud.showToast(
+      '自由探索：W/S 油门刹车 · A/D 转向 · Space 手刹 · R 复位 · Esc 结束',
+      false,
+      3600
+    );
+    this.rig.setMode(FREE_CAMERA_MODE);
+    this.hud.setActiveView(FREE_CAMERA_MODE);
+    this.cycleIndex = 0;
+  }
+
+  /**
+   * 退出自由探索 → **回到菜单**（不直接重开一局）。
+   * 理由：自由探索没有成绩语义，玩家从结算页进来时刚看过一次结算；直接丢进倒计时
+   * 等于替玩家做了「再来一次」的决定。回菜单把「重开挑战 / 再探索一次 / 换车」三个
+   * 选择都留给他 —— 与结算页「再来一次」按钮的语义区分开，不重复。
+   */
+  private exitFreeExplore(): void {
+    if (!this.freeDrive) return;
+    this.freeDrive.detach();
+    this.freeDrive = null;
+    this.hud.setFreeMode(false);
+    this.hud.hideToast();
+    this.hud.setVisible(false);
+    this.sliders.root.style.display = '';
+    this.sliders.reset();
+    this.sliders.showCutIn();
+    this.pendingResult = null;
+    this.brakeFlash = 0;
+    this.fx.clear();
+    this.crashWorld.reset();
+    this.sm.toMenu();
+    // 车辆位姿与相机复位（resetVisuals 内含 root 归零 + body 回到基准偏航 π）
+    this.resetVisuals();
+    this.car.resetPedal();
+    this.car.setBrakeHeat(0);
+    this.car.setBrakeLights(1.6);
+    this.car.setHeadlights(false);
+    this.car.setSteer(0);
+    this.car.updateCluster(0, 0, 0, 'P');
+    this.sfx.updateEngine(0, false);
+    this.sfx.updateWind(0);
+    this.sfx.updateSqueal(0, 0);
+    this.sfx.updateRegen(false);
+    this.rig.setMode('orbit');
+    this.hud.setActiveView('orbit');
+    this.hud.setRedundancyActive(false);
+    this.menu.show(true);
+    this.sfx.uiClick();
+  }
+
+  /** 自由探索事件（撞击 / 复位 / 退出 / 帮助卡），由 FreeDrive 去抖后派发 */
+  private onFreeEvent(e: FreeDriveEvent): void {
+    switch (e) {
+      case 'hall':
+        // 复用挑战模式「撞上主殿」文案（R28 换皮后的用户口径）
+        this.hud.showToast('撞上主殿！', true, 1800);
+        this.sfx.impact(0.6);
+        this.rig.addShake(0.45);
+        vibrate([40, 30, 90]);
+        break;
+      case 'wall':
+        this.sfx.impact(0.22);
+        this.rig.addShake(0.16);
+        break;
+      case 'reset':
+        this.hud.showToast('已复位到城门外', false, 1400);
+        break;
+      case 'help':
+        this.hud.toggleFreeHelp();
+        this.sfx.uiClick();
+        break;
+      case 'exit':
+        this.exitFreeExplore();
+        break;
+    }
+  }
+
+  /** 自由探索渲染帧：车体位姿 / 车轮 / 音效 / 相机 / HUD（不碰挑战链路） */
+  private frameFree(dt: number): void {
+    const fd = this.freeDrive;
+    if (!fd) return;
+    const s = fd.state;
+    const absSpeed = Math.abs(s.speed);
+    const speedKmh = absSpeed * MS_TO_KMH;
+    const reverse = s.speed < -0.2;
+    const braking = s.handbrake || (s.brake > 0 && s.speed > 0.2);
+
+    // ---- 车体位姿 ----
+    // root 承载偏航（root.quaternion 同时喂给 CameraRig 的 local 机位）；
+    // body 只承载基准偏航 π + 视觉俯仰/侧倾（基准偏航由 resetVisuals 写入，此处不动）。
+    this.car.root.position.set(s.x, 0, s.z);
+    this.car.root.rotation.y = s.heading;
+    this.car.body.rotation.x = s.pitch;
+    this.car.body.rotation.z = s.roll;
+    // 车轮：弧长 = v·dt（有符号，倒车反转）；前轮转角走适配层既有 setSteer
+    this.car.spinWheels(s.speed * dt, dt);
+    this.car.setSteer(s.steer);
+    this.car.setBrakeLights(braking ? 8 : 1.6);
+    this.car.setHeadlights(true);
+    this.car.updateCluster(speedKmh, 0, Math.abs(s.accel) / 9.81, reverse ? 'R' : 'D');
+    this.car.update(this.rig.camera, dt);
+
+    // ---- 灯光 / 接地阴影 / 水面 ----
+    const focus = this.car.root.position;
+    this.lighting.update(focus);
+    this.contactShadow.update(this.car.body);
+    this.waterway.update(this.time);
+
+    // ---- 特效 / 音效（Sfx 的 spool 一阶滞后常量不动，只喂速度）----
+    this.fx.update(dt, {
+      carRoot: this.car.root,
+      brakeIntensity: braking && absSpeed > 3 ? 0.35 : 0,
+      speedMs: absSpeed,
+      braking: braking && absSpeed > 3
+    });
+    this.sfx.updateEngine(speedKmh, s.throttle > 0);
+    this.sfx.updateWind(absSpeed / (VEHICLE.maxSpeedKmh / MS_TO_KMH));
+    this.sfx.updateSqueal(0, absSpeed);
+    this.sfx.updateRegen(false);
+
+    // ---- 相机 + 后处理 ----
+    this.rig.update(dt, focus, absSpeed, this.car.root.quaternion);
+    this.syncInteriorOcclusion();
+    this.env.update(this.rig.camera.position);
+    this.postfx.setSpeedBlur(Math.min(1, absSpeed / 72) ** 1.6 * 0.07);
+    this.postfx.setFlash(0);
+
+    // ---- HUD（只写速度 + 挡位，踏板力/距离统计属挑战语义，不显示）----
+    this.hud.updateFree(speedKmh, reverse ? 'R' : 'D');
+    this.renderTail(dt, null);
+  }
+
+  /**
+   * 车内机位遮挡切换（前挡 / 第一排座椅 / 车漆内舱暗面）：
+   * 仅在模式变化时写，零每帧开销。自由探索也能切到 cabin 系机位，故两模式共用。
+   */
+  private syncInteriorOcclusion(): void {
+    const wantHide = isInteriorMode(this.rig.mode);
+    if (wantHide === this.windshieldHidden) return;
+    this.windshieldHidden = wantHide;
+    for (const m of this.windshieldMeshes) m.visible = !wantHide;
+    for (const m of this.cabinOccluderMaterials) m.visible = !wantHide;
+    this.paintShadow?.(wantHide);
+  }
+
   /**
    * 自由视角输入（决策③）：画布上拖拽 = 环绕/转头，滚轮 = 缩放，双击 = 回正。
    * 滑条与视角按钮是独立 DOM 且已各自 setPointerCapture，事件不会冒泡到此处，
@@ -507,18 +776,18 @@ export class Game {
     canvas.addEventListener('contextmenu', (e) => e.preventDefault(), opts);
   }
 
-  /** V 键：ACCEL/BRAKE 段按车型循环（V800 5 档 / R7 7 档） */
+  /** V 键：ACCEL/BRAKE 段按车型循环（V800 5 档 / R7 7 档）；自由探索段不受 phase 门禁 */
   private cycleCamera(): void {
-    if (this.sm.phase !== 'accel' && this.sm.phase !== 'brake') return;
+    if (!this.freeDrive && this.sm.phase !== 'accel' && this.sm.phase !== 'brake') return;
     this.cycleIndex = (this.cycleIndex + 1) % this.cycleViews.length;
     this.rig.setMode(this.cycleViews[this.cycleIndex]);
     this.hud.setActiveView(this.cycleViews[this.cycleIndex]);
     this.sfx.uiClick();
   }
 
-  /** HUD 视角按钮：直接切到指定视角（HUD 只渲染本车存在的按钮） */
+  /** HUD 视角按钮：直接切到指定视角（HUD 只渲染本车存在的按钮）；自由探索段不受 phase 门禁 */
   private selectView(mode: CameraMode): void {
-    if (this.sm.phase !== 'accel' && this.sm.phase !== 'brake') return;
+    if (!this.freeDrive && this.sm.phase !== 'accel' && this.sm.phase !== 'brake') return;
     const idx = this.cycleViews.indexOf(mode);
     if (idx >= 0) this.cycleIndex = idx;
     this.rig.setMode(mode);
@@ -528,6 +797,11 @@ export class Game {
 
   /** 固定步长物理推进（1/120s） */  private tick(step: number): void {
     if (this.probeFrames !== null) this.probeTicks++;
+    // 自由探索：整条挑战链路（会话状态机 / 踏板 / 撞击结算）全部让位给运动学驾驶器
+    if (this.freeDrive) {
+      this.freeDrive.step(step);
+      return;
+    }
     this.prevDistance = this.sm.vehicle.distance;
     // 自动切入：加速段达到电子限速稳态（仅 #autodrive；正常玩法限速只钳速不断动力）
     if (this.autoDrive && this.sm.phase === 'accel' && this.sm.atLimiter) this.forceBrakeTick = true;
@@ -639,6 +913,11 @@ export class Game {
   /** 渲染帧：视觉更新 + 后处理 + HUD（结构要素 4：渲染循环内部） */
   private frame(dt: number, alpha: number): void {
     this.time += dt;
+    // R29：自由探索走独立分支（驾驶器 / 车体位姿 / HUD 全不同），帧尾渲染共用
+    if (this.freeDrive) {
+      this.frameFree(dt);
+      return;
+    }
     let simDt = dt;
 
     if (this.sm.phase === 'crashed' && this.crashWorld.active) {
@@ -729,17 +1008,10 @@ export class Game {
     // ---- 相机与后处理 ----
     this.rig.update(dt, focus, vehicle.speed, this.car.root.quaternion);
     // 车内机位遮挡切换（前挡从内部看是灰板）：仅在模式变化时写，零每帧开销
-    const wantHide = isInteriorMode(this.rig.mode);
-    if (wantHide !== this.windshieldHidden) {
-      this.windshieldHidden = wantHide;
-      for (const m of this.windshieldMeshes) m.visible = !wantHide;
-      // 第一排座椅：车内视角不画自己的座椅（否则正前方是两块绗缝大板）。
-      // R15c 实证：按对象隐藏会被合批吞并 → 走独占材质，整批开关。
-      for (const m of this.cabinOccluderMaterials) m.visible = !wantHide;
-      // R19：车漆内舱暗面 —— 车内机位把 body-lower/root 切到 BackSide（只画反面=深色内舱），
-      // 离开时切回 FrontSide（只画正面=外观）。零每帧开销，与遮挡材质同一时机。
-      this.paintShadow?.(wantHide);
-    }
+    // 第一排座椅：车内视角不画自己的座椅（否则正前方是两块绗缝大板）。
+    // R15c 实证：按对象隐藏会被合批吞并 → 走独占材质，整批开关。
+    // R19：车漆内舱暗面 —— 车内机位把 body-lower/root 切到 BackSide，离开时切回 FrontSide。
+    this.syncInteriorOcclusion();
     const speedBlur =
       pedaling && this.sm.phase !== 'countdown' ? Math.min(1, vehicle.speed / 72) ** 1.6 * 0.07 : 0;
     this.postfx.setSpeedBlur(speedBlur);
@@ -803,6 +1075,14 @@ export class Game {
     this.sliders.setCutInEnabled(this.sm.canBrake || braking, this.sm.canBrake && !braking);
     this.sliders.render(dt);
 
+    this.renderTail(dt, vehicle, alpha);
+  }
+
+  /**
+   * 帧尾（挑战模式与自由探索共用）：后处理渲染 → 自适应画质 → 帧探针。
+   * @param vehicle 挑战模式的车辆状态；自由探索传 null（帧探针只在挑战链路有意义）
+   */
+  private renderTail(dt: number, vehicle: VehicleState | null, alpha = 0): void {
     // ---- 渲染（结构要素 1 的最终呈现）----
     this.postfx.render();
 
@@ -815,7 +1095,7 @@ export class Game {
     void this.lastImpactStrength;
 
     // ---- perf-r14 帧探针（DEV only；读后清零 info 保证读数是整帧累计）----
-    if (this.probeFrames !== null) {
+    if (this.probeFrames !== null && vehicle !== null) {
       const info = this.renderer.info;
       const cam = this.rig.camera;
       this.probeFrames.push({
@@ -859,6 +1139,9 @@ export class Game {
     window.removeEventListener('orientationchange', this.onOrientation);
     this.lookAbort?.abort();
     this.lookAbort = null;
+    // 自由探索的键盘监听必须随 dispose 一起解绑（否则 HMR / 重建时在 window 上累积）
+    this.freeDrive?.detach();
+    this.freeDrive = null;
     this.loop.dispose();
     this.sfx.dispose();
     this.fx.dispose();

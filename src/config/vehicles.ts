@@ -8,6 +8,8 @@
  * profile 里只有两项会真正改变物理：
  *   - `brakeBreakable`     → BrakeModel.stepPedal 第五参（false：踏板钳在 breakForceN，不断）
  *   - `brakeTempGainScale` → Vehicle.stepVehicle 第四参（制动盘升温倍率）
+ *     ⚠️ R29：V800 由 1 → **0.75**（外部审查 B1，热切断破坏制动单调性），
+ *        R7 保持 100 不动 ⇒ R7 的热行为逐位不变。两档的比值不再是 100。
  *
  * ⚠️ 未接线项（需主理人确认后再动）：`massKg` / `maxSpeedKmh` / 三围目前是**元数据 +
  * 限速判据**，尚未接入纵向动力学：stepVehicle 仍用 config/physics.ts 的 VEHICLE 常量
@@ -58,7 +60,23 @@ export const VEHICLE_PROFILES: Record<VehicleId, VehicleProfile> = {
     name: '尊界V800',
     subtitle: '行政旗舰 MPV · 390kW 双电机 · 计算质量 3300kg',
     brakeBreakable: true,
-    brakeTempGainScale: 1,
+    /**
+     * R29 外部审查 B1：由 **1 降为 0.75**。
+     *
+     * 改前症状（同源无头仿真 tools/r29_thermal_sweep.ts，200km/h 单把刹停）：
+     *   b=0.90 → 5.633s / 170.9m / 峰值T 0.972 / 0 次热切断
+     *   b=0.95 → 7.350s / 176.3m / 峰值T 1.000 / 1 次热切断（96% 行程处）
+     *   b=0.97 → 7.350s / 181.4m / 峰值T 1.000 / 1 次热切断（93% 行程处）
+     * 即 **深踩反而慢 30%（t(0.97)/t(0.90)=1.3047）**，与「踩得越深刹得越快」的
+     * 单调性契约再次冲突；且热切断区（≈0.94+）与踏板断裂阈值 0.98 几乎重叠，
+     * 最优带被挤在 0.90~0.93 的窄缝里。
+     *
+     * 0.75 后：单次 200→0 满刹的摩擦功折算 ΔT 由 1.2 降到 **0.9**（< 红区 1.0），
+     * 单把刹停不再触发热切断 → b∈[0.5,0.97] 全程单调不增（见 tests/thermalMonotonic.test.ts）。
+     * 热切断玩法**保留**给两类场景：① R7（本档 ×100，未改动，热行为逐位不变）；
+     * ② 跨局/连续重刹（盘温未降到 thermalRearmTemp 0.6 以下就再踩）。
+     */
+    brakeTempGainScale: 0.75,
     massKg: 3300,
     maxSpeedKmh: 200,
     lengthM: 5.495,

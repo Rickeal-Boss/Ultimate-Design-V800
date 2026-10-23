@@ -23,3 +23,6 @@ npm-debug.log*
 
 # Windows 保留名目录（由 `2>nul` 重定向误建，系统级无法删除）
 nul/
+
+# R29：esbuild 打出的探针 bundle（779KB，可由 .mjs 构建脚本再生，不入库）
+tools/r29_probe_bundle.mjs

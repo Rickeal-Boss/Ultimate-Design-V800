@@ -20,9 +20,12 @@ const R7 = VEHICLE_PROFILES.r7;
 const V800 = VEHICLE_PROFILES.v800;
 
 describe('档位元数据', () => {
-  it('V800 可断裂 / 升温 ×1；R7 不可断裂 / 升温 ×100，热参数两者一致', () => {
+  it('V800 可断裂 / 升温 ×0.75（R29 B1）；R7 不可断裂 / 升温 ×100，热参数两者一致', () => {
+    // R29（外部审查 B1）：V800 升温倍率 1 → 0.75 —— ×1 下单把 200→0 深刹会越过红区、
+    // 吃一次 2s 热切断，使 b=0.95/0.97 比 b=0.90 慢 30%（破坏制动单调性）。
+    // 0.75 下单把满停 ΔT 峰值 0.767 < 红区 1.0，详见 tests/thermalMonotonic.test.ts。
     expect(V800.brakeBreakable).toBe(true);
-    expect(V800.brakeTempGainScale).toBe(1);
+    expect(V800.brakeTempGainScale).toBe(0.75);
     expect(R7.brakeBreakable).toBe(false);
     expect(R7.brakeTempGainScale).toBe(100);
     // 过热策略共用同一份常量（阈值/冷却/重布防/断力时长不随车型变化）
@@ -76,12 +79,18 @@ describe('制动盘升温倍率', () => {
     return v.brakeTemp;
   };
 
-  it('R7 温升是 V800 的 100 倍（±0.5%，封顶前窗口）', () => {
-    const base = run(V800);
+  it('升温倍率锚在 ×1 基线上：V800 = 0.75×，R7 = 100×（R29 B1 后不再互为 100 倍）', () => {
+    // R29 之前本用例断言「R7 / V800 = 100」；V800 降到 0.75 后该比值变成 133.3，
+    // 比值口径不再表达「R7 相对 BRAKE.brakeTempGain 的绝对倍率」。
+    // 改为**对 ×1 基线取比值**：既锁住 R7 的绝对升温（100×，热玩法不受本轮改动波及），
+    // 也锁住 V800 的新标定（0.75×）。
+    const base1 = run({ ...V800, brakeTempGainScale: 1 }); // ×1 基线（BRAKE.brakeTempGain 原值）
+    const v800 = run(V800);
     const hot = run(R7);
-    expect(base).toBeGreaterThan(0);
+    expect(base1).toBeGreaterThan(0);
     expect(hot).toBeLessThan(1.5); // 确认没封顶，倍率口径成立
-    expect(hot / base).toBeCloseTo(100, 1);
+    expect(hot / base1).toBeCloseTo(100, 1); // R7 绝对升温倍率不变
+    expect(v800 / base1).toBeCloseTo(0.75, 6); // V800 新标定
   });
 
   it('R7 满踩在一帧级时间内就进红区并触发 2s 热保护', () => {

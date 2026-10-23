@@ -133,7 +133,12 @@ export class Menu {
   private startButton: HTMLButtonElement;
   private readonly cards = new Map<VehicleId, HTMLElement>();
 
-  constructor(onStart: () => void, onToggleMute: () => boolean) {
+  /**
+   * @param onStart 开始挑战
+   * @param onToggleMute 音效开关
+   * @param onFreeExplore 自由探索（R29 可选入口；结算页的同名按钮是主入口）
+   */
+  constructor(onStart: () => void, onToggleMute: () => boolean, onFreeExplore?: () => void) {
     this.root = byId('menu');
 
     const panel = el('div', 'panel menu-panel');
@@ -176,6 +181,16 @@ export class Menu {
     });
     btnRow.append(this.startButton, muteButton);
     panel.append(title, subtitle, pickLabel, pick, rules, btnRow);
+    // 自由探索（R29 次级入口）：与开始挑战同排的次级按钮，不抢主按钮视觉权重
+    if (onFreeExplore) {
+      const freeButton = el('button', 'btn ghost') as HTMLButtonElement;
+      freeButton.type = 'button';
+      freeButton.textContent = '自由探索';
+      freeButton.addEventListener('click', () => onFreeExplore());
+      const freeRow = el('div', 'btn-row btn-row-sub');
+      freeRow.append(freeButton);
+      panel.append(freeRow);
+    }
     this.root.append(panel);
 
     this.startButton.addEventListener('click', onStart);

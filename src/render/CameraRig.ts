@@ -22,6 +22,12 @@ export type CameraMode =
   | 'cabinPassenger'
   | 'cabinRear'
   | 'side'
+  /** R29 自由探索专用：**车体局部**跟随第三人称（在车后 9.5m / 高 3.4m）。
+   *  为什么不复用 chase：chase 是 `local:false`（世界系偏移），车头一转向相机就
+   *  留在世界 +Z 侧 =「车横着开镜头不跟」；side 虽是 local 但只在车侧 4.6m，
+   *  自由驾驶时整屏都是车身（verify/r29_free/c_free_driving.png 实证）。
+   *  本机位把 local 跟随与第三人称距离合到一起，专供自由探索。 */
+  | 'free'
   | 'crash';
 
 /** V 键在 ACCEL/BRAKE 段可循环的视角（orbit 仅供菜单/结算） */
@@ -159,6 +165,15 @@ const MODES: Record<CameraMode, (speed: number, portrait: boolean, time: number)
   cabinDriver: () => setInteriorPose('driver'),
   cabinPassenger: () => setInteriorPose('passenger'),
   cabinRear: () => setInteriorPose('rear'),
+  free: () => {
+    // 自由探索：车后 9.5m / 高 3.4m 的局部跟随（转向时整体绕车旋转）
+    POSE.offset.set(0, 3.4, 9.5);
+    POSE.look.set(0, 1.3, -9);
+    POSE.fov = 60;
+    POSE.k = 3;
+    POSE.near = 0.1;
+    POSE.local = true;
+  },
   side: () => {
     // 车侧平行跟拍机位
     POSE.offset.set(4.6, 1.5, 0.6);
