@@ -30,6 +30,13 @@ export interface QualitySettings {
   envMapSize: number;
   /** 车模程序化贴图边长（px）：high 1024 / medium 512 / low 256 */
   carTextureSize: number;
+  /**
+   * R30 城堡贴图**同步上架**边长（px）。构造 Castle 时所有石材族先用这个小尺寸同步生成
+   * （保证 high 档启动同步段不被打满），首帧后再按 `stoneTextureSize(kind,tier)` 的
+   * **目标尺寸**分片重烘 + 热替换（见 stoneTexture.bakeStoneMapsAsync / castle.ts）。
+   * 256² 全族同步合计 ~50ms，是「先上架后升级」策略的同步档口径。
+   */
+  castleTexSyncSize: number;
   isMobile: boolean;
   gpuClass: GpuClass;
 }
@@ -53,7 +60,8 @@ const TIERS: Record<QualityTier, Omit<QualitySettings, 'tier' | 'isMobile' | 'gp
     bloom: true,
     bloomScale: 1,
     envMapSize: 900,
-    carTextureSize: 1024
+    carTextureSize: 1024,
+    castleTexSyncSize: 256
   },
   medium: {
     pixelRatio: Math.min(window.devicePixelRatio, 1.5),
@@ -65,7 +73,8 @@ const TIERS: Record<QualityTier, Omit<QualitySettings, 'tier' | 'isMobile' | 'gp
     bloom: true,
     bloomScale: 0.5,
     envMapSize: 512,
-    carTextureSize: 512
+    carTextureSize: 512,
+    castleTexSyncSize: 256
   },
   low: {
     pixelRatio: 1,
@@ -77,7 +86,8 @@ const TIERS: Record<QualityTier, Omit<QualitySettings, 'tier' | 'isMobile' | 'gp
     bloom: false,
     bloomScale: 0.5,
     envMapSize: 256,
-    carTextureSize: 256
+    carTextureSize: 256,
+    castleTexSyncSize: 256
   }
 };
 

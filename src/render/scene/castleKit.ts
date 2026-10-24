@@ -33,6 +33,23 @@ import { mergeSafe } from '../../util/geo';
 import { STONE_TILE_METERS } from './stoneTexture';
 import type { StoneKind } from './stoneTexture';
 import {
+  blindArcadeRow,
+  capitalCollar,
+  corniceBand,
+  corridorCrossing,
+  corridorGallery,
+  corridorRun,
+  crocketRun,
+  finialOrnament,
+  flyingButtress,
+  mapParts,
+  pour,
+  statueNicheX,
+  statueNicheZ,
+  traceryWindowX,
+  traceryWindowZ
+} from './castleDetail';
+import {
   GATE,
   GATE_DECOR,
   HALL_BRAZIER,
@@ -120,6 +137,27 @@ const R29_WING_EXT = { xEnd: 95, h: 29 };
 /** 远景剪影带（|x| 内缘 / 外缘、z 范围）—— 纯盒体，wall 桶 */
 const R29_SKYLINE = { xIn: 120, xOut: 175, zNear: -430, zFar: -1430 };
 
+/* ═══════════════════ R30 构件库复刻 + 内部加密连廊（A 线自有常量） ═══════════════════
+ * FBX 构件库（`.qa/r30_fbx/*.json`）复刻 + 用户令「检查城堡内部：建筑少且矮、
+ * 无连廊」。预算口径 r30_plan §4：castle high ≤260k / frame ≤360k（R29 基线实测
+ * 181,342 tri / 7 DC，探针 tools/r29_corridor_probe.mjs）。增量纪律：
+ *   ① 花格窗**换装** lancetWindow（182 → ≤120 tri/扇，城内 360 扇净省 ≈66/扇）；
+ *   ② 新件一律 box/spire/extrude 廉价件，单件 tri 上限见 castleDetail 文件头；
+ *   ③ 全部进既有 5 桶（ashlar/wall/gold/dark/flame）——**不新增桶类型**
+ *      （castle.ts 不在本轮白名单，新桶不会被合并 ⇒ DC 必爆）；
+ *   ④ 低配档不裁这些体量（铁律 33：只降装饰密度——卷叶跳过、瓶柱减半）。
+ * 行车走廊铁律：|x|≤8 / y≤4.5 / z∈[−1300,60] 严禁新件侵入（连廊楼面一律 ≥6.5m，
+ * 街面拱廊柱列落在 |x|≥11 区内；判据 r29_corridor_probe.mjs）。
+ */
+/** 城内街面低拱廊（连廊主体）：楼面 8.2m（>走廊 4.5 且低于街窗基座 8.5） */
+const R30_ARCADE = { floorY: 8.2, width: 3.5, pitch: 8.8, rise: 3.6 } as const;
+/** 街区角塔（每街区每侧 2 座，落在块两端 ∓22.5；深 5 只咬连墙外端 3m，窗已避让） */
+const R30_CORNER = { h: 31, w: 8, d: 5 } as const;
+/** 第三排中央高塔（块心、后排二排位；R29 78 → R30 84，天际线再上一层） */
+const R30_REAR_CORE = { h: 84, w: 15 } as const;
+/** 跨街封闭拱顶连廊 z（块心 k=3/8/13，确定性；避开门洞带与广场带） */
+const R30_CROSSINGS = [-526.5, -756.5, -986.5] as const;
+
 /* ═══════════════════ 基础几何 ═══════════════════ */
 
 /**
@@ -127,7 +165,7 @@ const R29_SKYLINE = { xIn: 120, xOut: 175, zNear: -430, zFar: -1430 };
  * 用局部**位置**而非 0..1 参数化，是为了让相邻构件的砌缝在世界里连续；
  * 硬切换的接缝落在 90° 棱上（石构件的棱本来就有硬阴影），看不出来。
  */
-function planarUV(geo: THREE.BufferGeometry, tile: number): void {
+export function planarUV(geo: THREE.BufferGeometry, tile: number): void {
   const pos = geo.getAttribute('position') as THREE.BufferAttribute;
   const nor = geo.getAttribute('normal') as THREE.BufferAttribute | undefined;
   const uv = new Float32Array(pos.count * 2);
@@ -159,7 +197,7 @@ function planarUV(geo: THREE.BufferGeometry, tile: number): void {
 /** 轴对齐方块（12 tri）。中心点 + 三边尺寸。
  *  R29：允许 `'dark'`（近黑内衬/窗缝）—— 它不属于石材质族（无 TILE 口径），
  *  UV 只用于占位（dark 材质无贴图），因此给 1.0 兜底即可。 */
-function box(
+export function box(
   kind: CastleKind | 'dark',
   w: number,
   h: number,
@@ -175,7 +213,7 @@ function box(
 }
 
 /** 绕 z 轴旋转的方块（双坡屋顶 / 辐射金刺）。12 tri。 */
-function boxRot(
+export function boxRot(
   kind: CastleKind,
   w: number,
   h: number,
@@ -196,7 +234,7 @@ function boxRot(
  * 多棱锥 / 棱台（尖塔 / 宝瓶柱 / 火盆焰）：锥 = 16 tri（8 面 + 底），棱台（开口）= 16 tri。
  * topRadius ≤ 0 → 圆锥。低配：多棱统一钳到 4 面。
  */
-function spire(
+export function spire(
   kind: CastleKind,
   radiusBottom: number,
   radiusTop: number,
@@ -221,7 +259,7 @@ function spire(
  * 收分方柱（桥墩束柱 / 灯柱柱身）：4 面棱台，面朝轴（thetaStart = π/4）。
  * r = 宽 / √2（4 边形外接半径 → 面宽）。
  */
-function pierColumn(
+export function pierColumn(
   wBottom: number,
   wTop: number,
   h: number,
@@ -290,7 +328,7 @@ function archByRadius(
   return pts;
 }
 
-function pointedArch(
+export function pointedArch(
   halfW: number,
   springY: number,
   rise: number,
@@ -309,7 +347,7 @@ function pointedArch(
  */
 
 /** ExtrudeGeometry 收尾：补法线 + 米制 UV（尖拱件共用） */
-function finishArch(g: THREE.BufferGeometry, tile: number): THREE.BufferGeometry {
+export function finishArch(g: THREE.BufferGeometry, tile: number): THREE.BufferGeometry {
   g.computeVertexNormals();
   planarUV(g, tile);
   return g;
@@ -372,7 +410,7 @@ function archWallOuter(
 }
 
 /** 券线（archivolt）：沿拱背的等厚环带（外圈与内圈共享拱顶 ⇒ 真等厚）。 */
-function archBand(
+export function archBand(
   halfW: number,
   springY: number,
   rise: number,
@@ -397,7 +435,7 @@ function archBand(
 }
 
 /** 实心尖拱板（尖拱窗背板 / 盲龛底）：y 从 0 起、顶到 springY+rise+cusp。 */
-function archPlate(
+export function archPlate(
   halfW: number,
   springY: number,
   rise: number,
@@ -452,20 +490,13 @@ function archWallOuterX(
   return g;
 }
 
-/** 实心尖拱板 · x 向居中挤出版（尖拱窗背板用）。 */
-function archPlateX(
-  halfW: number,
-  springY: number,
-  rise: number,
-  depth: number,
-  segPerHalf = 6,
-  cusp = 0
-): THREE.BufferGeometry {
-  const g = archPlate(halfW, springY, rise, depth, segPerHalf, cusp);
-  g.rotateY(Math.PI / 2);
-  g.translate(depth / 2, 0, 0);
-  return g;
-}
+/**
+ * ── R30 清理 ───────────────────────────────────────────────────────────────
+ * `archPlateX`（x 向居中挤出的实心尖拱板）随 lancetWindowX 整族删除而失去唯一
+ * 调用点（尖拱窗背板改走 castleDetail.traceryWindow 的 archPlate + 局部旋转），
+ * 按 noUnusedLocals 纪律一并删除；`archBandX` / `archWallOuterX` 仍被御桥主券/
+ * 侧拱占用（保留）。
+ */
 
 /* ═══════════════════ ① 御桥：扁拱 + 双层桥面 + 通天柱列 ═══════════════════ */
 
@@ -838,13 +869,15 @@ export function makeGate(): StoneBuckets {
       b.ashlar.push(box('ashlar', merlonStep * 0.62, 1.1, 1.3, mx, towerH + 0.55, zFront - 0.9));
       b.ashlar.push(spire('ashlar', 0.32, 0, 0.5, 4, mx, towerH + 1.1, zFront - 0.9));
     }
-    // 塔面尖拱窗 ×2（券框 ashlar + 背板 dark；塔脸朝 +z ⇒ 用 Z 向窗）
+    // 塔面花格窗 ×2（R30 换装：金框 + 双棂 + 拱肩光 = 120 tri/扇；塔脸朝 +z ⇒ 用 Z 向窗）
     for (const wy of [12, 27]) {
-      const win = lancetWindowZ(1.2, 7.5, 0.3, 1.0, 0.5, 0.3);
-      win.frame.translate(cx, wy, zFront);
-      b.ashlar.push(win.frame);
-      win.plate.translate(cx, wy, zFront);
-      b.dark.push(win.plate);
+      pour(
+        b,
+        mapParts(
+          traceryWindowZ({ halfW: 1.2, rise: 7.5, cusp: 1.0, frameOut: 0.5, plateBack: 0.3, mullions: 2, lights: true }),
+          (g) => g.translate(cx, wy, zFront)
+        )
+      );
     }
     // 塔面竖向金线 ×2
     for (const ox of [-1, 1] as const) {
@@ -959,6 +992,50 @@ export function makeGate(): StoneBuckets {
       b.flame.push(flame(0.36, 0.6, cx, 2.2, cz));
     }
   }
+
+  /* ── R30 构件库复刻（castleDetail；FBX SM_Gat Contrforce/Window/Decor 语汇）────
+   * ① 飞扶壁 ×2：SM_Gat Contrforce3_Full（1.68×18.21×0.73）的飞拱读法——外墩立在
+   *    门楼前脸之前（z≈zFront+5.2，|x|≈10.1 的步道位上、**>走廊 8**），飞拱向后
+   *    向上落到中央石体量前脸（y 8→29），与既有金飞拱（y 26）共同承担参考图门楼
+   *    双墩的飞拱构图。
+   *    形体局部：墙面 x=0、向 +x 伸出、depth 沿 z；立面朝 +z ⇒ **rotateY(−π/2)**
+   *    把「伸出轴」对到世界 +z（墩 therefore 落在立面之前）、「厚度轴」对到世界 x。
+   * ② 卷叶 ×20：大门尖拱斜边（12）+ 金飞拱斜边（8）。
+   * ③ 雕像龛 ×4：双塔前脸上带（y 38，菱形金章 34 之上、檐口 41.5 之下）。 */
+  for (const side of [-1, 1] as const) {
+    const fb = flyingButtress({
+      baseY: 0,
+      springY: 8,
+      topY: 29,
+      reach: 6,
+      depth: 1.1,
+      band: 0.66,
+      pierW: 1.7,
+      pinnacle: true
+    });
+    pour(b, mapParts(fb, (g) => g.rotateY(-Math.PI / 2).translate(side * 10.1, 0, zFront)));
+  }
+  // 门洞三层金券的最外挑面在 zFront+0.55 ⇒ 卷叶坐在其外（+0.07）
+  pour(
+    b,
+    mapParts(
+      crocketRun({ halfW: openHalf, rise, count: 6, size: 0.42, cusp, side: 'both' }),
+      (g) => g.translate(0, 0, zFront + 0.62)
+    )
+  );
+  // 金飞拱外挑面在 zFront+0.85 ⇒ 卷叶坐在其外
+  pour(
+    b,
+    mapParts(
+      crocketRun({ halfW: openHalf + towerW, rise: 5.2, count: 4, size: 0.3, cusp: 0.4, side: 'both' }),
+      (g) => g.translate(0, 26, zFront + 0.92)
+    )
+  );
+  for (const side of [-1, 1] as const) {
+    const cx = side * (openHalf + towerW / 2);
+    const nishe = statueNicheZ({ halfW: 0.85, rise: 2.6, cusp: 0.5 });
+    pour(b, mapParts(nishe, (g) => g.translate(cx, 37.5, zFront - 0.05)));
+  }
   return b;
 }
 
@@ -1012,13 +1089,15 @@ export function makeTowerGroup(): StoneBuckets {
     for (const ox of [-1, 1] as const) {
       b.gold.push(box('gold', 0.4, shaftTop - 44.5, 0.18, ox * (w / 2 - 0.5), (44.5 + shaftTop) / 2, zFront - 0.12));
     }
-    // 钟楼尖拱窗 ×1（钟上方）
+    // 钟楼尖拱窗 ×1（钟上方）—— R30 换装花格窗（金框 + 双棂 + 拱肩光）
     {
-      const win = lancetWindowZ(1.1, 5.2, 0.3, 0.7, 0.5, 0.3);
-      win.frame.translate(0, 69, zFront);
-      win.plate.translate(0, 69, zFront);
-      b.ashlar.push(win.frame);
-      b.dark.push(win.plate);
+      pour(
+        b,
+        mapParts(
+          traceryWindowZ({ halfW: 1.1, rise: 5.2, cusp: 0.7, frameOut: 0.5, plateBack: 0.3, mullions: 2, lights: true }),
+          (g) => g.translate(0, 69, zFront)
+        )
+      );
     }
   }
 
@@ -1061,11 +1140,14 @@ export function makeTowerGroup(): StoneBuckets {
       b.gold.push(box('gold', 0.3, 30, 0.16, cx + ox * (w / 2 - 0.4), 20, zFront - 0.1));
     }
     {
-      const win = lancetWindowZ(0.8, 4.6, 0.26, 0.6, 0.45, 0.28);
-      win.frame.translate(cx, 44, zFront);
-      win.plate.translate(cx, 44, zFront);
-      b.ashlar.push(win.frame);
-      b.dark.push(win.plate);
+      // R30 换装花格窗（铃塔身窗，前脸）
+      pour(
+        b,
+        mapParts(
+          traceryWindowZ({ halfW: 0.8, rise: 4.6, cusp: 0.6, frameOut: 0.45, plateBack: 0.28, mullions: 2, lights: true }),
+          (g) => g.translate(cx, 44, zFront)
+        )
+      );
     }
   }
 
@@ -1104,19 +1186,20 @@ export function makeTowerGroup(): StoneBuckets {
         b.ashlar.push(box('ashlar', w, 1.2, 8 / merlons / 2, cx, h + 1.4, mz));
         b.gold.push(spire('gold', 0.22, 0, 0.4, 4, cx, h + 2, mz));
       }
-      // 尖拱窗 ×3（墙内壁朝路心）
+      // 尖拱窗 ×3（墙内壁朝路心）—— R30 换装花格窗（金框 + 双棂 + 拱肩光）
       for (let i = 0; i < 3; i += 1) {
         const wz = gz - 2.8 + i * 2.8;
-        const win = lancetWindowX(0.85, 5.0, 0.26, 0.7, 0.45, 0.3);
         // 先镜像（局部 z=0 居中）再平移到世界位——反序会让 −side 窗落到 −wz
-        if (side < 0) {
-          win.frame.rotateY(Math.PI);
-          win.plate.rotateY(Math.PI);
-        }
-        win.frame.translate(side * xIn, 3.2, wz);
-        win.plate.translate(side * xIn, 3.2, wz);
-        b.ashlar.push(win.frame);
-        b.dark.push(win.plate);
+        pour(
+          b,
+          mapParts(
+            traceryWindowX({ halfW: 0.85, rise: 5.0, cusp: 0.7, frameOut: 0.45, plateBack: 0.3, mullions: 2, lights: true }),
+            (g) => {
+              if (side < 0) g.rotateY(Math.PI);
+              return g.translate(side * xIn, 3.2, wz);
+            }
+          )
+        );
       }
       // 竖向金饰条 ×2（翼墙外棱）
       for (const ox of [-1, 1] as const) {
@@ -1180,6 +1263,50 @@ export function makeTowerGroup(): StoneBuckets {
         b.gold.push(box('gold', 0.3, 40, 0.16, ax + gx, 22, gz + 4.6));
       }
       b.dark.push(box('dark', 0.7, 6, 1.8, ax, 46, gz + 4.5));
+    }
+  }
+
+  /* ── R30 构件库复刻（castleDetail；SM_Gat/Det Contrforce/Window/Decor/Beam 语汇）──
+   * ① 翼墙盲拱列 ×2 行：参考图构件 2 的 identity（矮墙尖拱凹龛）落到门楼翼墙内壁
+   *    （窗带之上 y 12..18，避开街面三扇花格窗与竖向金饰条）。
+   * ② 钟室拱卷叶 ×20（双铃塔 ×10）：沿钟室尖拱斜边等距小金卷叶。
+   * ③ 铃塔外侧雕像龛 ×4：铃塔侧壁外棱（y 40，Decor 家族语汇）。
+   * ④ 细尖塔纹章顶饰 ×2：塔冠金尖之上（y≈68.4）的金色放射纹章。
+   * ⑤ 翼墙顶连廊 ×2（城门楼↔翼墙之间）：楼面 32m（垛口 31.6 之上），
+   *    内缘咬合门楼塔墩外侧面（|x|=17.5）⇒「城门楼与翼墙之间」的高架廊道。 */
+  {
+    for (const side of [-1, 1] as const) {
+      const xIn = GATE.halfW; // 17.5（翼墙内缘 = 门楼半宽）
+      // ① 盲拱列（4 龛，龛心距 2.2 ⇒ 跨 6.6m，落在 8m 墙深内）
+      pour(
+        b,
+        mapParts(blindArcadeRow({ count: 4, halfW: 0.55, rise: 5.6, pitch: 2.2, cusp: 0.5 }), (g) => {
+          if (side < 0) g.rotateY(Math.PI);
+          return g.translate(side * xIn, 12, gz);
+        })
+      );
+      // ③ 铃塔外侧雕像龛（铃塔身宽 w+0.6 ⇒ 外侧面 |x| = bell.x + (w+0.6)/2）
+      const bellCx = side * TOWER_GROUP.bell.x;
+      pour(
+        b,
+        mapParts(statueNicheX({ halfW: 0.72, rise: 2.5, cusp: 0.5 }), (g) => {
+          if (side > 0) g.rotateY(Math.PI); // +x 面朝外 ⇒ 镜像
+          return g.translate(side * (TOWER_GROUP.bell.x + (TOWER_GROUP.bell.w + 0.6) / 2), 40, gz);
+        })
+      );
+      // ⑤ 翼墙顶连廊（内缘咬门楼塔墩）
+      pour(b, mapParts(corridorGallery({ len: 7, width: 36, floorY: 32 }), (g) => g.translate(side * 36, 0, gz)));
+      // ② 钟室拱卷叶（只做 +side 时 bellCx 已在循环里——这里按 cx 逐铃塔产）
+      pour(
+        b,
+        mapParts(
+          crocketRun({ halfW: TOWER_GROUP.bell.bellOpenH * 0.42, rise: TOWER_GROUP.bell.bellOpenH * 0.72, count: 5, size: 0.3, cusp: 0.6 }),
+          (g) => g.translate(bellCx, TOWER_GROUP.bell.bellY, zFront + 0.55)
+        )
+      );
+      // ④ 细尖塔纹章顶饰
+      const spx = side * TOWER_GROUP.spire.x;
+      pour(b, mapParts(finialOrnament({ r: 0.55 }), (g) => g.translate(spx, 68.4, gz)));
     }
   }
   return b;
@@ -1259,11 +1386,14 @@ export function makeMainHall(): StoneBuckets {
       const baySpan = (halfFront - (openHalf + 3.2)) / bays;
       for (let i = 0; i < bays; i += 1) {
         const wx = side * (openHalf + 3.2 + baySpan * (i + 0.62));
-        const win = lancetWindowZ(1.0, 6.0, 0.3, 0.8, 0.5, 0.32);
-        win.frame.translate(wx, 6.5, zFront);
-        win.plate.translate(wx, 6.5, zFront);
-        b.ashlar.push(win.frame);
-        b.dark.push(win.plate);
+        // R30 换装花格窗（金框 + 双棂 + 拱肩光；原 lancetWindow 182 tri → 120 tri）
+        pour(
+          b,
+          mapParts(
+            traceryWindowZ({ halfW: 1.0, rise: 6.0, cusp: 0.8, frameOut: 0.5, plateBack: 0.32, mullions: 2, lights: true }),
+            (g) => g.translate(wx, 6.5, zFront)
+          )
+        );
         // 每开间一根竖向金饰条（参考图的"金线拉高"语言）
         b.gold.push(box('gold', 0.42, frontH - 9, 0.18, wx + side * 2.1, (frontH - 9) / 2 + 4, zFront - 0.1));
         // 开间之间的壁柱（白石竖带，制造竖向节奏而不是一块平墙）
@@ -1327,18 +1457,20 @@ export function makeMainHall(): StoneBuckets {
         b.gold.push(spire('gold', 0.2, 0, 0.38, 4, cx, wingH + 1.8, mz));
       }
       // 尖拱窗列（朝路心；R29 由 3 扇扩到 5 扇，跟上 frontDepth 30 的纵深）
+      // R30 换装花格窗（金框 + 双棂 + 拱肩光）
       for (let i = 0; i < 5; i += 1) {
         const wz = zMidFront - 11 + i * 5.5;
-        const win = lancetWindowX(0.9, 5.6, 0.28, 0.75, 0.45, 0.3);
         // 先镜像再平移（反序会让 −side 窗落到 −wz）
-        if (side < 0) {
-          win.frame.rotateY(Math.PI);
-          win.plate.rotateY(Math.PI);
-        }
-        win.frame.translate(side * wingInner, 6, wz);
-        win.plate.translate(side * wingInner, 6, wz);
-        b.ashlar.push(win.frame);
-        b.dark.push(win.plate);
+        pour(
+          b,
+          mapParts(
+            traceryWindowX({ halfW: 0.9, rise: 5.6, cusp: 0.75, frameOut: 0.45, plateBack: 0.3, mullions: 2, lights: true }),
+            (g) => {
+              if (side < 0) g.rotateY(Math.PI);
+              return g.translate(side * wingInner, 6, wz);
+            }
+          )
+        );
       }
       // 竖向金饰条 ×2（翼墙外棱）
       for (const ox of [-1, 1] as const) {
@@ -1367,13 +1499,16 @@ export function makeMainHall(): StoneBuckets {
       b.gold.push(box('gold', 1.8, 0.4, 0.4, 0, ridgeY + 2.4, cz));
     }
     // 后排尖拱窗 ×8（朝 +z 面；R29 由 4 扇铺到 ±0.36×facadeW，跟上 210m 立面）
+    // R30 换装花格窗（无拱肩光的 96 tri 版——后排属远景带，节流）
     for (let i = 0; i < 8; i += 1) {
       const wx = -facadeW * 0.36 + (i * facadeW * 0.72) / 7;
-      const win = lancetWindowZ(0.85, 5.2, 0.26, 0.7, 0.45, 0.3);
-      win.frame.translate(wx, 5, zBack + (depth - frontDepth));
-      win.plate.translate(wx, 5, zBack + (depth - frontDepth));
-      b.ashlar.push(win.frame);
-      b.dark.push(win.plate);
+      pour(
+        b,
+        mapParts(
+          traceryWindowZ({ halfW: 0.85, rise: 5.2, cusp: 0.7, frameOut: 0.45, plateBack: 0.3, mullions: 2 }),
+          (g) => g.translate(wx, 5, zBack + (depth - frontDepth))
+        )
+      );
     }
   }
 
@@ -1405,48 +1540,94 @@ export function makeMainHall(): StoneBuckets {
       }
     }
   }
+
+  /* ── R30 构件库复刻（castleDetail；SM_Det Contrforce/Decor/Cornice 语汇）────────
+   * ① 飞扶壁 ×6（每侧 3 座）：FBX Contrforce 家族的核心语汇落到主殿正立面——
+   *    广场上的外墩（|x| = 13.5/21.5/29.5，墩在立面之前 z≈zFront+5.3）飞拱升至
+   *    殿身 y≈78，与开间壁柱错开半个节拍 ⇒ 参考图主立面的"扶壁节奏"。
+   *    ⚠ 探针纪律：墩/拱全部 |x|≥12.2（>走廊 8）、y≥2.7；落点在立面 z=zFront
+   *    （minZ −1300.7 < 白名单 −1298 ⇒ 探针跳过，属设计内贴面件）。
+   * ② 翼墙盲拱列 ×14（每侧 7 龛）：参考图构件 2 identity 落到两翼内壁（窗带之上）。
+   * ③ 大龛拱卷叶 ×16：沿门龛尖拱斜边等距小金卷叶（cusp 1.1 同门龛）。
+   * ④ 雕像龛 ×5：正立面开间起点 |x|=13（窗顶之上 y 40）+ 冠座前脸。
+   * ⑤ 纹章顶饰 ×1：尖顶冠金尖之上（y≈131）的金色放射纹章（天际线收口）。
+   * ⑥ 翼墙顶连廊 ×2（主殿两翼之间 wingInner 44→wingOuter 105）：楼面 64m，
+   *    沿两翼顶（垛口 64.6 之上）贯通 wingOuter。 */
+  {
+    // ① 飞扶壁 ×6（每侧 3 座）。形体局部：墙面 x=0、向 +x 伸出、depth 沿 z；
+    //    立面朝 +z ⇒ rotateY(−π/2)：伸出轴 → 世界 +z（墩落在广场之前 z≈zFront+5.3）、
+    //    厚度轴 → 世界 x（墩宽 2.6 沿街向）⇒ 真 3D 飞扶壁（墩-拱-落点），
+    //    不是贴在立面上的平面弧板。
+    for (const side of [-1, 1] as const) {
+      for (const wx of [13.5, 21.5, 29.5]) {
+        const fb = flyingButtress({
+          baseY: 2.7,
+          springY: 12,
+          topY: 78,
+          reach: 7,
+          depth: 1.4,
+          band: 0.8,
+          pierW: 2.6,
+          pinnacle: true
+        });
+        pour(b, mapParts(fb, (g) => g.rotateY(-Math.PI / 2).translate(side * wx, 0, zFront)));
+      }
+    }
+    // ② 翼墙盲拱列（7 龛/侧，窗带 6..11.6 之上 y 14 起）
+    for (const side of [-1, 1] as const) {
+      pour(
+        b,
+        mapParts(blindArcadeRow({ count: 7, halfW: 0.62, rise: 6.4, pitch: 3.4, cusp: 0.55 }), (g) => {
+          if (side < 0) g.rotateY(Math.PI);
+          return g.translate(side * wingInner, 14, zMidFront);
+        })
+      );
+    }
+    // ③ 大龛拱卷叶（金券最外挑面 zFront+0.65 ⇒ 坐在其外）
+    pour(
+      b,
+      mapParts(
+        crocketRun({ halfW: clearW / 2, rise: clearH - 2.4, count: 8, size: 0.4, cusp: 1.1 }),
+        (g) => g.translate(0, 2.4, zFront + 0.65)
+      )
+    );
+    // ④ 雕像龛 ×5（正立面开间起点 |x|=13、窗顶之上 y 40）+ 冠座前脸
+    for (const side of [-1, 1] as const) {
+      pour(
+        b,
+        mapParts(statueNicheZ({ halfW: 0.8, rise: 3.0, cusp: 0.5 }), (g) => g.translate(side * 13, 40, zFront - 0.05))
+      );
+    }
+    // 冠座（y 96..101、路侧面 z = zMidFront+4.5）前脸
+    pour(
+      b,
+      mapParts(statueNicheZ({ halfW: 0.8, rise: 3.0, cusp: 0.5 }), (g) => g.translate(0, 97.5, zMidFront + 4.4))
+    );
+    // ⑤ 纹章顶饰（冠尖 130..132.4 之上）
+    pour(b, mapParts(finialOrnament({ r: 0.7 }), (g) => g.translate(0, crownH + 2.6, zMidFront)));
+    // ⑥ 翼墙顶连廊（翼墙顶 62 + 叠涩 0.6 + 金线 0.24 + 垛口 1.2 ≈ 64 ⇒ 楼面 64.8）
+    for (const side of [-1, 1] as const) {
+      pour(
+        b,
+        mapParts(corridorGallery({ len: frontDepth - 4, width: 56, floorY: 64.8 }), (g) =>
+          g.translate(side * (wingInner + wingOuter) / 2, 0, zMidFront)
+        )
+      );
+    }
+  }
   return b;
 }
 
 /**
- * 局部约定：墙面在 x=0、墙体向 +x 延伸；券框外挑到 x ∈ [−frameOut, 0]（朝街面），
- * 背板嵌进墙体 x ∈ [0, plateBack]。窗台随框一起外挑。
+ * ── R30 窗语汇换装说明（lancetWindow → castleDetail.traceryWindowX/Z）──────────
+ * 原 `lancetWindowX/Z`（券框 7 段 + 背板 6 段 + 窗台 ≈182 tri/扇）已**整族删除**：
+ * 全部 399 个挂载点（城门塔 4 / 塔群 5 / 主殿 26 / 城内 360 + 角塔 40）换成
+ * `castleDetail.traceryWindowX/Z`（金框 3 段 + 背板 2 段 + 竖棂 + 拱肩光，
+ * 96~120 tri/扇）—— FBX Window 全系的「尖拱 + 分格 + 金框」语汇（r30_plan §2
+ * 差距清单第 3 项），同时城内街面净省 ≈66 tri/扇。
+ * ⚠ 删除后 archPlateX 只余 makeViaduct 的尖拱窗背板一处在用；archBandX 仍被
+ *   御桥主券/侧拱占用（两函数保留）。
  */
-function lancetWindowX(
-  halfW: number,
-  rise: number,
-  band: number,
-  cusp: number,
-  frameOut: number,
-  plateBack: number
-): { frame: THREE.BufferGeometry; plate: THREE.BufferGeometry } {
-  const frame = archBandX(halfW, 0, rise, band, frameOut, 7, cusp, 0.45); // x ∈ [−f/2, f/2]
-  frame.translate(-frameOut / 2, 0, 0); // x ∈ [−frameOut, 0]
-  const sill = box('ashlar', frameOut + 0.2, 0.3, 2 * (halfW + band) + 0.3, -frameOut / 2, 0.15, 0);
-  const plate = archPlateX(halfW - band * 0.6, 0, rise, plateBack, 7, cusp); // x ∈ [−p/2, p/2]
-  plate.translate(plateBack / 2, 0, 0); // x ∈ [0, plateBack]
-  return { frame: mergeSafe([frame, sill]), plate };
-}
-
-/**
- * 尖拱窗单元 · **±z 朝向墙**（城门塔楼前脸用）：拱宽沿 x、厚度沿 z。
- * 局部约定：墙面在 z=0、墙体向 −z 延伸；券框外挑到 z ∈ [0, frameOut]（朝来车），
- * 背板嵌进墙体 z ∈ [−plateBack, 0]。
- */
-function lancetWindowZ(
-  halfW: number,
-  rise: number,
-  band: number,
-  cusp: number,
-  frameOut: number,
-  plateBack: number
-): { frame: THREE.BufferGeometry; plate: THREE.BufferGeometry } {
-  const frame = archBand(halfW, 0, rise, band, frameOut, 7, cusp, 0.45); // z ∈ [−f, 0]
-  frame.rotateY(Math.PI); // z ∈ [0, frameOut]
-  const sill = box('ashlar', 2 * (halfW + band) + 0.3, 0.3, frameOut + 0.2, 0, 0.15, frameOut / 2);
-  const plate = archPlate(halfW - band * 0.6, 0, rise, plateBack, 6, cusp); // z ∈ [−p, 0]
-  return { frame: mergeSafe([frame, sill]), plate };
-}
 
 /* ═══════════════════ ⑥ 城内大街 ═══════════════════ */
 
@@ -1470,7 +1651,8 @@ function lancetWindowZ(
  *   side=−1（右侧楼，世界 x = −faceHalf − 局部 x）先 rotateY(π) 再 translate(−faceHalf, 0, zc)。
  * rotateY(π) 同时翻转 x 与 z —— 本函数所有形体都对块心 z 对称（窗 ±4.2/0、
  * 屋顶居中、金线 ±4.6），镜像后集合不变；rotZ 的坡向符号也随镜像自动翻正。
- * 注意：lancetWindowX 的券框朝 −x 外挑，左右两侧因此都恰好朝街面。
+ * R30：窗语汇换装为 castleDetail.traceryWindowX（券框朝 −x 外挑，左右两侧因此
+ * 都恰好朝街面）；新增街面低拱廊 / 街区角塔 / 山面体积 / 隔街区盲拱列（见下）。
  * 旧版直接算世界坐标，结果殿身把 12.5 排到了 x（进深）上：前脸跑到 13.25、
  * 窗框整体埋进墙体一扇不剩，坡屋顶出挑 2.6m —— 已由本配方纠正。
  */
@@ -1520,11 +1702,14 @@ export function makeInnerCity(): StoneBuckets {
         b.ashlar.push(put(spire('ashlar', 1.0, 0, 2.6, 8, 0.9, 8.1, oz, Math.PI / 8)));
       }
       for (const wz of [-4.2, 0, 4.2]) {
-        const win = lancetWindowX(0.9, 6.2, 0.28, 0.8, 0.45, 0.28);
-        win.frame.translate(0, 8.5, wz);
-        win.plate.translate(0, 8.5, wz);
-        b.ashlar.push(put(win.frame));
-        b.dark.push(put(win.plate));
+        // R30 换装花格窗（城内街立面主干：金框 + 双棂，96 tri/扇；原 lancet 182）
+        pour(
+          b,
+          mapParts(
+            traceryWindowX({ halfW: 0.9, rise: 6.2, cusp: 0.8, frameOut: 0.45, plateBack: 0.28, mullions: 2 }),
+            (g) => put(g.translate(0, 8.5, wz))
+          )
+        );
       }
       for (const sz of [-4.6, 4.6]) {
         b.gold.push(put(box('gold', 0.3, 17, 0.16, -0.08, 9.5, sz)));
@@ -1564,11 +1749,14 @@ export function makeInnerCity(): StoneBuckets {
         b.ashlar.push(put(box('ashlar', 9, 0.9, 9, depth / 2, 36.45, tzC))); // 檐口叠涩
         b.ashlar.push(put(spire('ashlar', 3.1, 0, 9.5, 8, depth / 2, 36.9, tzC, Math.PI / 8))); // 尖顶
         for (const wy of [8, 26]) {
-          const win = lancetWindowX(0.75, 5.6, 0.26, 0.7, 0.45, 0.28);
-          win.frame.translate(0, wy, tzC);
-          win.plate.translate(0, wy, tzC);
-          b.ashlar.push(put(win.frame));
-          b.dark.push(put(win.plate));
+          // R30 换装花格窗（塔身窗）
+          pour(
+            b,
+            mapParts(
+              traceryWindowX({ halfW: 0.75, rise: 5.6, cusp: 0.7, frameOut: 0.45, plateBack: 0.28, mullions: 2 }),
+              (g) => put(g.translate(0, wy, tzC))
+            )
+          );
         }
         for (const sz of [-3.2, 3.2]) {
           b.gold.push(put(box('gold', 0.3, 34, 0.16, -0.08, 18, tzC + sz)));
@@ -1596,15 +1784,146 @@ export function makeInnerCity(): StoneBuckets {
           b.ashlar.push(put(box('ashlar', depth, 1.1, 0.8, depth / 2, linkH + 1.05, mz)));
           b.ashlar.push(put(spire('ashlar', 0.34, 0, 0.5, 4, depth / 2, linkH + 1.6, mz)));
         }
-        // 连墙开一扇尖拱窗（窗高 5.4+cusp 0.7 ⇒ 基座 1.8、顶 7.9，不出墙顶）
-        const win = lancetWindowX(0.8, 5.4, 0.26, 0.7, 0.45, 0.28);
-        win.frame.translate(0, 1.8, lz);
-        win.plate.translate(0, 1.8, lz);
-        b.ashlar.push(put(win.frame));
-        b.dark.push(put(win.plate));
+        // 连墙开一扇花格窗（R30 换装；窗高 5.4+cusp 0.7 ⇒ 基座 1.8、顶 7.9，不出墙顶）
+        // R30 位移：窗从墙心移到「内端 5m 处」——街区角塔（R30，z=∓22.5、深 5）
+        // 会咬掉连墙外端 3m，窗放内端才不被埋（winZ：link1 = za+5，link2 = zb−5）
+        const winZ = li === 0 ? za + 5 : zb - 5;
+        pour(
+          b,
+          mapParts(
+            traceryWindowX({ halfW: 0.8, rise: 5.4, cusp: 0.7, frameOut: 0.45, plateBack: 0.28, mullions: 2 }),
+            (g) => put(g.translate(0, 1.8, winZ))
+          )
+        );
         // R29 深色窗缝 ×3（远读节拍，12 tri/条，不用 lancetWindow）
         for (const sz of [-len / 3, 0, len / 3]) {
           b.dark.push(put(box('dark', 0.4, 4.6, 1.5, -0.08, 8.6, lz + sz)));
+        }
+        // R30 檐口带（castleDetail.corniceBand：FBX Cornice_2 18.30×1.41×0.68 分层檐口）
+        // 落在连墙上带（叠涩 14.0..14.5 之下 y 11.5 起）⇒ 参考图矮墙的"檐口饰带"分层读法
+        pour(b, mapParts(corniceBand({ len: len + 0.6, proj: 0.6, h: 1.2 }), (g) => put(g.translate(-0.15, 11.5, lz))));
+      }
+
+      /* ── R30 ① 内部加密 + 街面连廊（用户令「检查城堡内部：建筑少且矮、无连廊」）──
+       * ① 街区角塔 ×2：块两端（局部 z=∓22.5，深 5 只咬连墙外端 3m——连墙窗已避让到
+       *    内端）31m 塔身 + 尖顶 + 金压顶 + 深色窗缝 + 金饰条 + 花格窗 + 柱头环 +
+       *    檐口带 + 雕像龛；块首塔隔街区再加纹章顶饰。沿街每 23m 一座塔 ⇒
+       *    「塔-墙-塔」连续节奏（建筑少且矮的对症解；低配档不裁，铁律 33）。
+       * ② 街面低拱廊（连廊主体）：楼面 8.2m（>走廊 4.5、低于街窗基座 8.5），
+       *    柱列/栏板全部落在 |x|≥10.9 区内（**不占 |x|<8 行车走廊**），沿街连接
+       *    本块全部建筑前脸（殿/塔/连墙/角塔）⇒「沿街连接各建筑」。
+       * ③ 连墙飞扶壁 ×2（每连墙 1 座）：FBX Contrforce 语汇落到矮连墙——外墩在
+       *    拱廊之外（|x|≈9.7，>走廊 8），飞拱跨过拱廊楼面（8.2）落到连墙上带
+       *    （y 9.5→11.9）。⚠ 挂载与 put() 惯例相反：扶壁伸出轴要朝**街心**，
+       *    故 side=+1 预 rotateY(π)、side=−1 直达（put 只给 side<0 镜像）。
+       * ④ 前排塔盲拱列（隔街区）：参考图构件 1/2 的 identity（尖拱凹龛）落到两座
+       *    前排塔街面上带（y 18，塔窗 8..15.4 与 26..31.6 之间）。
+       * ⑤ 殿山面体积：坡顶山墙三棱柱（8 tri）+ 山尖小顶 + 斜边卷叶 ×2/边。 */
+      {
+        const ctH = R30_CORNER.h;
+        const ctw = R30_CORNER.w;
+        const ctd = R30_CORNER.d;
+        /** 街区角塔（ctz = 块内 z；finial = 是否加纹章顶饰） */
+        const cornerTower = (ctz: number, finial: boolean): void => {
+          b.ashlar.push(put(box('ashlar', ctw + 1.2, 1.2, ctd + 1.2, ctw / 2, 0.6, ctz)));
+          b.ashlar.push(put(box('ashlar', ctw, ctH - 1.2 - 2.6, ctd, ctw / 2, 1.2 + (ctH - 3.8) / 2, ctz)));
+          b.ashlar.push(put(box('ashlar', ctw + 1.4, 0.8, ctd + 1.4, ctw / 2, ctH - 1.6, ctz)));
+          b.ashlar.push(put(spire('ashlar', ctw * 0.62, 0, 6.5, 8, ctw / 2, ctH - 1.2, ctz, Math.PI / 8)));
+          b.gold.push(put(box('gold', ctw + 1.6, 0.22, ctd + 1.6, ctw / 2, ctH - 0.75, ctz)));
+          b.dark.push(put(box('dark', 0.6, 5.5, 1.6, -0.06, ctH * 0.4, ctz)));
+          b.gold.push(put(box('gold', 0.3, ctH - 4, 0.16, -0.08, (ctH - 4) / 2 + 2, ctz + ctd / 2 - 0.3)));
+          // 塔尖柱头环（castleDetail.capitalCollar：收分托石 + 金箍，坐在尖顶根部）
+          pour(b, mapParts(capitalCollar({ r: ctw * 0.5, h: 0.5 }), (g) => put(g.translate(ctw / 2, ctH - 1.4, ctz))));
+          // 檐口带（castleDetail.corniceBand：FBX Cornice_2 分层檐口，塔身中带上沿）
+          pour(b, mapParts(corniceBand({ len: ctd + 1.6, proj: 0.55, h: 1.0 }), (g) => put(g.translate(0, ctH - 4.5, ctz))));
+          pour(
+            b,
+            mapParts(
+              traceryWindowX({ halfW: 0.6, rise: 4.4, cusp: 0.7, frameOut: 0.4, plateBack: 0.26, mullions: 2 }),
+              (g) => put(g.translate(0, 8, ctz))
+            )
+          );
+          pour(
+            b,
+            mapParts(statueNicheX({ halfW: 0.62, rise: 2.4, cusp: 0.5 }), (g) => put(g.translate(0, 16, ctz)))
+          );
+          if (finial) pour(b, mapParts(finialOrnament({ r: 0.5 }), (g) => put(g.translate(ctw / 2, ctH + 5.6, ctz))));
+        };
+        cornerTower(-(blockLen / 2 - 0.5), k % 2 === 0);
+        cornerTower(blockLen / 2 - 0.5, false);
+        // ② 街面低拱廊（连廊主体；局部 x∈[−4.5,−1.0] ⇒ 世界 |x|∈[11.0,14.5]）
+        pour(
+          b,
+          mapParts(
+            corridorRun({
+              len: blockLen - 2,
+              width: R30_ARCADE.width,
+              floorY: R30_ARCADE.floorY,
+              pitch: R30_ARCADE.pitch,
+              archRise: R30_ARCADE.rise
+            }),
+            (g) => put(g.translate(-1.0, 0, 0))
+          )
+        );
+        // ③ 连墙飞扶壁（每连墙 1 座；形体局部墙在 x=0、向 +x 伸，而街面在 −x）
+        for (const [za, zb] of links) {
+          if (zb - za <= 1) continue;
+          const lz = (za + zb) / 2;
+          const fb = flyingButtress({
+            baseY: 0,
+            springY: 9.5,
+            topY: 11.9,
+            reach: 6.5,
+            depth: 1.0,
+            band: 0.55,
+            pierW: 1.4,
+            pinnacle: false
+          });
+          pour(b, mapParts(fb, (g) => (side > 0 ? g.rotateY(Math.PI) : g).translate(side * faceHalf, 0, zc + lz)));
+        }
+        // ④ 前排塔盲拱列（隔街区，两座前排塔街面上带 y 18）
+        if (k % 2 === 0) {
+          for (const tz of [-blockLen / 4, blockLen / 4]) {
+            pour(
+              b,
+              mapParts(blindArcadeRow({ count: 3, halfW: 0.5, rise: 4.2, pitch: 2.3, cusp: 0.5 }), (g) =>
+                put(g.translate(0, 18, tz))
+              )
+            );
+          }
+        }
+        // ⑤ 殿山面体积（三棱柱 + 山尖小顶 + 斜边卷叶 ×2/边）
+        for (const gz2 of [-(hallW / 2 - 0.15), hallW / 2 - 0.15]) {
+          const shape = new THREE.Shape();
+          shape.moveTo(0.25, wallTop - 0.15);
+          shape.lineTo(depth - 0.25, wallTop - 0.15);
+          shape.lineTo(depth / 2, ridgeY + 0.12);
+          shape.closePath();
+          const gable = new THREE.ExtrudeGeometry(shape, {
+            depth: 0.3,
+            bevelEnabled: false,
+            curveSegments: 1,
+            steps: 1
+          });
+          gable.translate(0, 0, -0.15);
+          b.ashlar.push(put(finishArch(gable, STONE_TILE_METERS.ashlar).translate(0, 0, gz2)));
+          b.ashlar.push(put(spire('ashlar', 0.42, 0, 1.5, 6, depth / 2, ridgeY + 0.1, gz2)));
+          // 山墙斜边卷叶 ×2/边（金，参考图坡顶金饰）
+          for (const e of [
+            [
+              [0.45, wallTop - 0.1],
+              [depth / 2, ridgeY + 0.05]
+            ],
+            [
+              [depth - 0.45, wallTop - 0.1],
+              [depth / 2, ridgeY + 0.05]
+            ]
+          ] as const) {
+            pour(
+              b,
+              mapParts(crocketRun({ pts: e, count: 2, size: 0.15 }), (g) => put(g.translate(0, 0, gz2)))
+            );
+          }
         }
       }
 
@@ -1640,6 +1959,45 @@ export function makeInnerCity(): StoneBuckets {
           b.ashlar.push(put(spire('ashlar', 6.5, 0, 15, 8, r2x, r2.towerH + 1.2, oz, Math.PI / 8)));
           b.dark.push(put(box('dark', 0.5, 5, 3, r2.xIn + 0.05, r2.towerH * 0.8, oz)));
         }
+        /* ── R30 ② 第三排中央高塔（块心、第三排位；R29 78 → R30 84）────────────
+         * 用户令「第三排更高体量」：在第三排两座 78m 塔之间补一座 84m 中央高塔，
+         * 把街区天际线从"双峰"改"三峰"，内街纵深感更强。形制同 r2 塔（檐口 +
+         * 12m 尖顶 + 金压顶 + 深色窗缝）+ 一扇花格窗（朝街面）+ 隔街区一尊雕像龛。 */
+        const rc = R30_REAR_CORE;
+        const rcTop = rc.h - 1.4 - 12;
+        b.ashlar.push(put(box('ashlar', rc.w + 1.6, 1.4, rc.w + 1.6, r2x, 0.7, 0)));
+        b.ashlar.push(put(box('ashlar', rc.w, rcTop, rc.w, r2x, 1.4 + rcTop / 2, 0)));
+        b.ashlar.push(put(box('ashlar', rc.w + 1.8, 1.0, rc.w + 1.8, r2x, rc.h - 12.4, 0)));
+        b.ashlar.push(put(spire('ashlar', rc.w * 0.5, 0, 12, 8, r2x, rc.h - 12, 0, Math.PI / 8)));
+        b.gold.push(put(box('gold', rc.w + 2, 0.24, rc.w + 2, r2x, rc.h - 11.8, 0)));
+        b.dark.push(put(box('dark', 0.7, 6, 2.0, r2.xIn + 0.05, rc.h * 0.55, 0)));
+        pour(
+          b,
+          mapParts(
+            traceryWindowX({ halfW: 0.62, rise: 4.6, cusp: 0.7, frameOut: 0.4, plateBack: 0.26, mullions: 2 }),
+            (g) => put(g.translate(0, 26, 0))
+          )
+        );
+        if (k % 2 === 0) {
+          pour(
+            b,
+            mapParts(statueNicheX({ halfW: 0.62, rise: 2.6, cusp: 0.5 }), (g) => put(g.translate(0, 40, 0)))
+          );
+        }
+        /* ── R30 ③ 第四排远景体量（隔街区，局部 x 43..58）────────────────────────
+         * 参考图"建筑丰富"的最外层：近景塔 → 中景墙 → 远景塔簇的第四层进深。
+         * 纯天际线（墙 40 + 双塔 88 + 尖顶 + 深色窗缝），box/spire 廉价件。 */
+        if (k % 2 === 0) {
+          const r4x = 50.5;
+          const r4w = 15;
+          b.wall.push(put(box('wall', r4w, 40, blockLen, r4x, 20, 0)));
+          for (const oz of [-14, 14]) {
+            b.ashlar.push(put(box('ashlar', r4w, 88, 16, r4x, 44, oz)));
+            b.ashlar.push(put(box('ashlar', r4w + 2, 1.2, 18, r4x, 88.6, oz)));
+            b.ashlar.push(put(spire('ashlar', 6.5, 0, 14, 8, r4x, 89.2, oz, Math.PI / 8)));
+            b.dark.push(put(box('dark', 0.6, 6, 2.4, 43.05, 60, oz)));
+          }
+        }
       }
 
       /* ── 火盆 ×2（连墙墙根，探出街面 0.7）── */
@@ -1669,6 +2027,15 @@ export function makeInnerCity(): StoneBuckets {
         b.gold.push(spire('gold', 0.5, 0, 2.4, 6, side * (s.xIn + span * 0.72), hOut + 15.8, z - 12));
       }
     }
+  }
+
+  /* ── R30 ③ 跨街封闭拱顶连廊 ×3（连廊 · 跨路连接两侧）────────────────────────
+   * z = 块心 k=3/8/13（确定性，避开门洞带 z∈[−372,−345] 与广场带 [−1285.5,−1300]）；
+   * 跨度 21m（|x|≤10.5）正好搭到两侧街面拱廊屋顶外棱（|x|≈10.6）。
+   * 楼面 12m + 胸墙 2m + 筒拱 1.7m ⇒ 全部几何 y ≥ 11.75 > 走廊上沿 4.5m
+   * （r29_corridor_probe 判据：车从拱顶廊下穿过不侵廊）。 */
+  for (const cz of R30_CROSSINGS) {
+    pour(b, mapParts(corridorCrossing({ span: 21, width: 4.4, floorY: 12, rise: 1.7 }), (g) => g.translate(0, 0, cz)));
   }
   return b;
 }

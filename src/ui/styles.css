@@ -291,7 +291,12 @@ body {
 .cutin-btn {
   position: absolute;
   left: 50%;
-  bottom: 160px;
+  /* R30-D3（审查项②「中央提示框与力条叠字」）：160 → 192。
+   * 判据（800×450 实测 rect）：.force 盒高 152（label 15 + track 110 + value 15 +
+   * 间距 12）、bottom 24 ⇒ 盒顶在 H−176；按钮底边在 H−160 时与 .force-label
+   * （盒顶 H−176 起 15px 区）重叠 16px —— 该重叠**与分辨率无关**（全是 bottom
+   * 固定偏移），低分屏只是最拥挤。192 > 176+16 ⇒ 全分辨率按钮底边高于力条盒顶。 */
+  bottom: 192px;
   transform: translateX(-50%);
 }
 
@@ -749,6 +754,169 @@ body {
   border-color: var(--blue);
 }
 
+/* ---------- 低高度视口（R30-D3：800×450 实测叠压三项 + 滑条出画） ----------
+ * 判据均为 puppeteer 800×450 实测 rect（.qa 外临时探针，2026-10-24）：
+ *   ① .force-value [280,411,240,15] 与 #credits [0,411,800,39] 同带重叠
+ *      （credits 在 800px 宽换行成 3 行、高 39px；.force bottom:24 盒底 426 > 411）；
+ *   ② .cutin-btn 与 .force-label 重叠（已由全局 bottom:192 修复，这里再放宽间距）；
+ *   ③ .menu-panel scrollHeight 781 vs clientHeight 408 ⇒「开始挑战」整行不可见
+ *      （.result-panel 同病：按钮行被裁）⇒ 压缩 + flex 重排 + 规则区内部滚动；
+ *   附：.sliders 栈高 480 > 450 视口 ⇒ 油门滑条整条出画（top=−100）⇒ 缩短滑条。
+ * 只用 bottom/max-height 媒体查询，不动桌面（>560px 高）布局。 */
+@media (max-height: 560px) {
+  /* ① 踏板力数值避开版权行：力条组件抬到版权行上方 + 收紧（credits 39px ⇒ 72 净空） */
+  .force {
+    bottom: 72px;
+  }
+  .force-track {
+    height: 76px;
+  }
+  .force-label {
+    font-size: 10px;
+    margin-bottom: 4px;
+  }
+  .force-value {
+    font-size: 11px;
+  }
+  /* ② 力条抬高后（盒顶 H−183）按钮再让 17px */
+  .cutin-btn {
+    bottom: 200px;
+    padding: 8px 16px;
+  }
+  /* 附：滑条组缩短 + 收紧间距，两条滑条完整可见（栈高 480 → 323） */
+  .sliders {
+    bottom: 60px;
+    gap: 10px;
+  }
+  .slider {
+    height: 120px;
+  }
+  .cutin-btn2 {
+    padding: 8px 14px;
+    font-size: 13px;
+  }
+  .slider-hint {
+    font-size: 10px;
+  }
+  /* ③ 菜单：压缩 + flex 重排（规则区内部滚动、按钮行钉底不被裁） */
+  .panel {
+    padding: 14px 16px;
+  }
+  .menu-title {
+    font-size: 20px;
+    letter-spacing: 3px;
+  }
+  .menu-sub {
+    margin: 4px 0 10px;
+    font-size: 12px;
+  }
+  .menu-rules-label {
+    font-size: 11px;
+    margin-bottom: 4px;
+  }
+  .vehicle-pick {
+    margin-bottom: 10px;
+  }
+  /* 低高度下卡片只保留 车名/副标题/差异标签（三条 diff  bullets 是 259px 卡片的主高度）；
+   * 车型差异的关键规则在 menu-rules ④ 仍有全文，信息不丢失 */
+  .vehicle-card .vc-diff {
+    display: none;
+  }
+  .vehicle-card .vc-name {
+    font-size: 13px;
+  }
+  .vehicle-card .vc-sub {
+    font-size: 10px;
+    margin: 1px 0 4px;
+  }
+  .vehicle-card .vc-tag {
+    font-size: 9px;
+    margin-top: 4px;
+  }
+  .menu-panel {
+    display: flex;
+    flex-direction: column;
+  }
+  .menu-rules {
+    flex: 1 1 auto;
+    min-height: 48px;
+    overflow: auto;
+    font-size: 11px;
+    line-height: 1.55;
+    padding: 8px 0;
+    margin-bottom: 10px;
+  }
+  .btn-row,
+  .btn-row-sub {
+    flex-shrink: 0;
+  }
+  .btn {
+    padding: 9px 0;
+    font-size: 13px;
+  }
+  /* ③ 结算面板同症：图表压缩 + 按钮行钉底 */
+  .result-title {
+    font-size: 20px;
+    margin-bottom: 4px;
+  }
+  .result-sub {
+    font-size: 12px;
+    margin-bottom: 10px;
+  }
+  .result-stats {
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+  .stat {
+    padding: 6px 2px;
+  }
+  .stat-label {
+    font-size: 9px;
+  }
+  .stat-value {
+    font-size: 12px;
+  }
+  .chart-box {
+    margin-bottom: 10px;
+  }
+  .chart {
+    height: 104px;
+  }
+  .chart-label {
+    font-size: 10px;
+    margin-bottom: 4px;
+  }
+  .best-label {
+    font-size: 11px;
+    margin-bottom: 8px;
+  }
+  .result-panel {
+    display: flex;
+    flex-direction: column;
+  }
+  .result-panel .btn-row {
+    flex-shrink: 0;
+  }
+  /* HUD 其余件微收（速度/倒计时/toast/徽标/帮助卡），避免低高度下相互挤碰 */
+  .hud-speed {
+    font-size: 34px;
+  }
+  .countdown {
+    font-size: 60px;
+  }
+  .toast {
+    font-size: 12px;
+  }
+  .redundancy-badge {
+    top: 24%;
+  }
+  .free-help {
+    bottom: 56px;
+    width: 210px;
+    font-size: 11px;
+  }
+}
+
 @media (max-width: 640px) {
   .result-stats {
     grid-template-columns: repeat(3, 1fr);
@@ -759,9 +927,20 @@ body {
   .countdown {
     font-size: 72px;
   }
+  /* R30-D3：窄屏（含手机竖屏）credits 换行更高（~3 行 ≈49px）——
+     力条组同步抬高避让，否则 .force-value 会压版权行（同①判据，宽度维度） */
+  .force {
+    bottom: 64px;
+  }
+  .force-track {
+    height: 80px;
+  }
+  .cutin-btn {
+    bottom: 200px;
+  }
   .free-help {
     left: 12px;
-    bottom: 14px;
+    bottom: 60px;
     width: 220px;
     font-size: 11px;
   }

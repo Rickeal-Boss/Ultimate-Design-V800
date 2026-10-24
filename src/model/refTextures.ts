@@ -1,5 +1,5 @@
 /**
- * refTextures.ts —— R15-2 参考图贴图接线（src/assets/ref/*.jpg → 车模材质）
+ * refTextures.ts —— R15-2 参考图贴图接线（原 src/assets/ref/*.jpg → R30-L1 起全部程序化 canvas 生成）
  *
  * 背景：`.img2threejs` 侧长期执行「零外部资产」铁律，内饰一直是纯色 / 程序化 Canvas 贴图。
  * R15 用户指令明确要求接 6 张实拍参考图，本模块是这条指令的**唯一**落地口：
@@ -14,7 +14,16 @@
  *   3. 输出 UV 一律落在自己声明的矩形内并 clamp —— 对「未预料 UV 范围」安全。
  *   4. 各向异性 ≤ 8x：平铺单元按图幅宽高比反算重复次数（见 `repeatsFor`），
  *      逐三角形实测 `distortion`（世界每 UV 的 u/v 比 ÷ 图幅宽高比），报告里给 max 值。
- *   5. 优雅降级：贴图加载失败 / 缺文件 / 无 DOM → 保持现有程序化贴图，不抛错不黑屏。
+ *   5. 优雅降级：贴图生成失败 / 无 DOM → 保持现有程序化贴图，不抛错不黑屏。
+ *
+ * ★ R30-L1（发布前硬条件，合规）：原 7 张 `src/assets/ref/*.jpg` 随 dist 上 GitHub Pages
+ *   公开分发，许可口径从「仓库存放」升级为「内容分发」（外部审查 §6-1 最高优先级风险）。
+ *   本模块改为**程序化 canvas 生成等价纹理**（§1.5 七枚 painter）：配色由原 jpg 经 PIL
+ *   统计吸色（主色簇 / 亮度 / 饱和度 / 对比度，数值记录在各 painter 头注），**不复制
+ *   原图像素**；纹样结构（菱格缝线 / 皮面颗粒 / 星空点阵 / UI 布局 / 灯带）按原图的
+ *   构图特征程序化重绘。jpg 文件本身不在本模块删除（由主理人统一处理，防并行冲突）。
+ *   加载路径从「TextureLoader 异步解码」改为「canvas 同步生成」，首屏少 7 次图片
+ *   请求与解码；`preloadReferenceTextures` 契约保留（立即 resolved）。
  *
  * 调用位置（硬契约）：必须在 V800Adapter 的「R12b 内饰材质纯化（终局覆盖）」**之后**、
  * `batchMergeStatic()` **之前**。纯化会撤掉 map；合批会把同材质 mesh 压成一个 ——
@@ -22,14 +31,6 @@
  */
 
 import * as THREE from 'three';
-
-import seatQuiltUrl from '../assets/ref/seat-quilt.jpg';
-import seatCushionUrl from '../assets/ref/seat-cushion.jpg';
-import leatherPlainUrl from '../assets/ref/leather-plain.jpg';
-import headlinerStarUrl from '../assets/ref/headliner-star.jpg';
-import screenCockpitUrl from '../assets/ref/screen-cockpit.jpg';
-import tailLampUrl from '../assets/ref/tail-lamp.jpg';
-import triScreenUiUrl from '../assets/ref/tri-screen-ui.jpg';
 
 /* ================================================================
  * 0. 类型
@@ -104,27 +105,28 @@ export interface UvAspectReport {
 }
 
 /* ================================================================
- * 1. 资产元数据（尺寸为实测值，用于 repeat 反算与自检）
+ * 1. 资产元数据（尺寸为 authoring 值，用于 repeat 反算与自检）
  * ================================================================ */
 
 interface RefImageMeta {
   id: RefImageId;
-  url: string;
-  /** 实测像素宽（与文件一致；加载后会复核，不符仅 warn） */
+  /** R30-L1：程序化 painter 名（替代原 jpg url；配色吸色依据见 §1.5 各 painter 头注） */
+  painter: string;
+  /** authoring 像素宽（与 painter 画布一致；生成后会复核，不符仅 warn） */
   width: number;
   height: number;
 }
 
-const REF_IMAGE_META: Record<RefImageId, RefImageMeta> = {
-  'seat-quilt': { id: 'seat-quilt', url: seatQuiltUrl, width: 1024, height: 1024 },
-  'seat-cushion': { id: 'seat-cushion', url: seatCushionUrl, width: 1024, height: 1024 },
-  'leather-plain': { id: 'leather-plain', url: leatherPlainUrl, width: 512, height: 512 },
-  'headliner-star': { id: 'headliner-star', url: headlinerStarUrl, width: 1024, height: 512 },
-  'screen-cockpit': { id: 'screen-cockpit', url: screenCockpitUrl, width: 512, height: 256 },
-  'tail-lamp': { id: 'tail-lamp', url: tailLampUrl, width: 256, height: 512 },
+export const REF_IMAGE_META: Record<RefImageId, RefImageMeta> = {
+  'seat-quilt': { id: 'seat-quilt', painter: 'paintSeatQuilt', width: 1024, height: 1024 },
+  'seat-cushion': { id: 'seat-cushion', painter: 'paintSeatCushion', width: 1024, height: 1024 },
+  'leather-plain': { id: 'leather-plain', painter: 'paintLeatherPlain', width: 512, height: 512 },
+  'headliner-star': { id: 'headliner-star', painter: 'paintHeadlinerStar', width: 1024, height: 512 },
+  'screen-cockpit': { id: 'screen-cockpit', painter: 'paintScreenCockpit', width: 512, height: 256 },
+  'tail-lamp': { id: 'tail-lamp', painter: 'paintTailLamp', width: 256, height: 512 },
   // R17：真车三联屏正视裁剪（087Z 参考图屏体区域，790×110 ≈ 7.18:1 与 tri-screen
   // 1.52×0.212 的 7.17:1 同比）——整幅铺满一屏，forced repeat [1,1] 零拉伸。
-  'tri-screen-ui': { id: 'tri-screen-ui', url: triScreenUiUrl, width: 790, height: 110 },
+  'tri-screen-ui': { id: 'tri-screen-ui', painter: 'paintTriScreenUi', width: 790, height: 110 },
 };
 
 export const REF_IMAGE_IDS: readonly RefImageId[] = Object.keys(REF_IMAGE_META) as RefImageId[];
@@ -136,6 +138,384 @@ function imageAspect(id: RefImageId): number {
 }
 
 const TIER_MAX_SIZE: Record<RefTier, number> = { high: 1024, medium: 768, low: 384 };
+
+/* ================================================================
+ * 1.5 程序化 painter（R30-L1：替代 7 张实拍 jpg 的等价 canvas 纹理）
+ *
+ * 合规口径：原 jpg 随 dist 上 Pages 公开分发 = 内容分发，许可口径升级（外部审查
+ * §6-1 发布前硬条件）。以下 painter **不复制原图像素**：配色取自原 jpg 的 PIL
+ * 统计吸色（主色簇 / meanRGB / 线性亮度 / 饱和度 / 对比度，数值见各 painter 头注），
+ * 纹样按原图构图特征（菱格缝线排布 / 皮面颗粒尺度 / 星空点阵密度 / UI 布局 / 灯带
+ * 分区）程序化重绘。全部确定性（hash 伪随机，无 Math.random）——同一 id 每次生成
+ * 逐位一致，QA 可复现；与 tailLamp 的 paintEaglePanel / frontFascia 的
+ * paintGrillePattern 同族手法（painter 注入，node 无 DOM 时返回 null 降级）。
+ * ================================================================ */
+
+/** 确定性伪随机（node/browser 同一序列；与 tailLamp.ts hash2 同族） */
+function refHash(i: number, j: number): number {
+  const s = Math.sin(i * 127.1 + j * 311.7) * 43758.5453;
+  return s - Math.floor(s);
+}
+
+/** hex 色按系数明暗缩放（>1 变亮），用于同色族微调 */
+function shade(hex: string, k: number): string {
+  const n = parseInt(hex.slice(1), 16);
+  const c = (v: number): number => Math.max(0, Math.min(255, Math.round(v * k)));
+  const r = c((n >> 16) & 255);
+  const g = c((n >> 8) & 255);
+  const b = c(n & 255);
+  return `rgb(${r},${g},${b})`;
+}
+
+/** 确定性颗粒点阵（皮面/麂皮通用）：双层微明暗点，尺度随 step 变化 */
+function paintGrain(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  step: number,
+  alpha: number
+): void {
+  const cols = Math.ceil(w / step);
+  const rows = Math.ceil(h / step);
+  for (let j = 0; j < rows; j += 1) {
+    for (let i = 0; i < cols; i += 1) {
+      const r = refHash(i, j);
+      const x = (i + 0.5) * step;
+      const y = (j + 0.5) * step;
+      const rr = step * (0.18 + r * 0.22);
+      ctx.fillStyle =
+        r > 0.5
+          ? `rgba(255,235,210,${(alpha * (r - 0.5) * 2).toFixed(3)})`
+          : `rgba(20,10,6,${(alpha * (0.5 - r) * 2).toFixed(3)})`;
+      ctx.beginPath();
+      ctx.arc(x, y, rr, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
+/**
+ * ① seat-quilt 菱格绗缝（1024²，tileWorld 0.24 → 椅面 ≈2.2 单元）。
+ * 原 jpg PIL 统计：主色簇 #767153/#738977/#767e65/#634f2d/#8a9f8e（橄榄灰族，
+ * 经 R17 平场重 author），meanRGB(116,118,91)，线性亮度 0.182，饱和度 0.30，std 0.065。
+ * 构图特征：6×6 旋转 45° 泡起菱格 + 深色虚线缝线（高对比，R17 unsharp 口径）+
+ * 平场（无强光照渐变）。染色规则随后把它归一到策展色 leather-warm #6B4437。
+ */
+function paintSeatQuilt(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+  ctx.fillStyle = '#6f6a4e'; // 平场底（缝线之间读出的基底）
+  ctx.fillRect(0, 0, w, h);
+  const n = 6;
+  const cell = w / n;
+  ctx.lineCap = 'round';
+  for (let gy = 0; gy < n; gy += 1) {
+    for (let gx = 0; gx < n; gx += 1) {
+      const cx = (gx + 0.5) * cell;
+      const cy = (gy + 0.5) * cell;
+      const r = refHash(gx, gy);
+      // 泡起单元：菱形，亮度平场微变（±8%，禁大渐变——R17 定罪）
+      ctx.fillStyle = shade('#7d7a5c', 0.86 + r * 0.16);
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - cell * 0.45);
+      ctx.lineTo(cx + cell * 0.45, cy);
+      ctx.lineTo(cx, cy + cell * 0.45);
+      ctx.lineTo(cx - cell * 0.45, cy);
+      ctx.closePath();
+      ctx.fill();
+      // 泡起柔光：上亮下暗（读作充气感，不破坏平场）
+      const g = ctx.createRadialGradient(cx, cy - cell * 0.12, 0, cx, cy, cell * 0.44);
+      g.addColorStop(0, 'rgba(255,244,214,0.10)');
+      g.addColorStop(1, 'rgba(24,18,10,0.16)');
+      ctx.fillStyle = g;
+      ctx.fill();
+      // 缝线：菱形边框虚线（深色高对比，线宽随图幅缩放）
+      ctx.strokeStyle = 'rgba(38,28,16,0.88)';
+      ctx.lineWidth = Math.max(2, w * 0.0032);
+      ctx.setLineDash([w * 0.011, w * 0.0075]);
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - cell * 0.45);
+      ctx.lineTo(cx + cell * 0.45, cy);
+      ctx.lineTo(cx, cy + cell * 0.45);
+      ctx.lineTo(cx - cell * 0.45, cy);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+  // 细皮革颗粒（确定性，弱对比）
+  paintGrain(ctx, w, h, w / 220, 0.05);
+}
+
+/**
+ * ② seat-cushion 皮面近景细纹（1024²，tileWorld 0.13 → 头枕 ≈2 单元；低档不用）。
+ * 原 jpg PIL 统计：主色簇 #995c37/#a66944/#794220/#b67952/#c78a62（焦糖棕），
+ * meanRGB(158,99,62)，线性亮度 0.175，饱和度 0.62，std 0.073。
+ * 构图特征：细密鹅卵石皮纹（近景），颗粒尺度 ≈ 图幅 1/90；无大结构。
+ */
+function paintSeatCushion(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+  ctx.fillStyle = '#9c6039'; // 焦糖棕底
+  ctx.fillRect(0, 0, w, h);
+  const step = w / 90;
+  const cols = Math.ceil(w / step);
+  const rows = Math.ceil(h / step);
+  for (let j = 0; j < rows; j += 1) {
+    for (let i = 0; i < cols; i += 1) {
+      const r = refHash(i, j);
+      const x = (i + 0.5) * step;
+      const y = (j + 0.5) * step;
+      const rr = step * (0.3 + r * 0.2);
+      // 皮纹颗粒：两族明暗交替 + 间隙深色
+      ctx.fillStyle = shade('#a66944', 0.78 + r * 0.4);
+      ctx.beginPath();
+      ctx.arc(x, y, rr, 0, Math.PI * 2);
+      ctx.fill();
+      if (r > 0.62) {
+        ctx.fillStyle = 'rgba(199,138,98,0.5)'; // 高光粒
+        ctx.beginPath();
+        ctx.arc(x - rr * 0.25, y - rr * 0.25, rr * 0.4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+  // 稀疏细褶皱（近景皮面张力纹）
+  ctx.strokeStyle = 'rgba(74,40,22,0.28)';
+  ctx.lineWidth = Math.max(1, w * 0.0016);
+  for (let i = 0; i < 26; i += 1) {
+    const y0 = refHash(i, 7) * h;
+    const amp = h * (0.01 + refHash(i, 8) * 0.03);
+    ctx.beginPath();
+    ctx.moveTo(0, y0);
+    ctx.bezierCurveTo(w * 0.3, y0 - amp, w * 0.6, y0 + amp, w, y0 - amp * 0.4);
+    ctx.stroke();
+  }
+}
+
+/**
+ * ③ leather-plain 素皮革（512²，tileWorld 0.6 → 门板 ≈2×1 单元）。
+ * 原 jpg PIL 统计：主色簇 #ad6c4a/#a25b3a/#7d4021/#c58a68/#b67859（焦糖棕），
+ * meanRGB(163,98,66)，线性亮度 0.181，饱和度 0.61，std 0.072。
+ * 构图特征：比 seat-cushion 更粗的荔枝纹（中景），颗粒尺度 ≈ 图幅 1/46。
+ */
+function paintLeatherPlain(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+  ctx.fillStyle = '#a25b3a';
+  ctx.fillRect(0, 0, w, h);
+  const step = w / 46;
+  const cols = Math.ceil(w / step);
+  const rows = Math.ceil(h / step);
+  for (let j = 0; j < rows; j += 1) {
+    for (let i = 0; i < cols; i += 1) {
+      const r = refHash(i + 31, j + 17);
+      const x = (i + 0.5) * step;
+      const y = (j + 0.5) * step;
+      const rr = step * (0.34 + r * 0.24);
+      ctx.fillStyle = shade('#b67859', 0.72 + r * 0.5);
+      ctx.beginPath();
+      ctx.arc(x, y, rr, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(60,30,16,0.30)'; // 粒间隙
+      ctx.beginPath();
+      ctx.arc(x + rr * 0.5, y + rr * 0.5, rr * 0.55, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
+/**
+ * ④ headliner-star 星空顶（1024×512 2:1，tileWorld 1.05 → 顶棚 ≈1×2 单元）。
+ * 原 jpg PIL 统计：主色簇 #3e232f/#412530/#3f212e/#381e29/#442a33（深红棕麂皮），
+ * meanRGB(63,36,47)，线性亮度 0.025（极暗），饱和度 0.44，std 0.009。
+ * 构图特征：深暗麂皮底 + 稀疏星点（小半径、微亮度抖动）。albedo 只挂本图，
+ * starlight 程序化 emissiveMap 星点阵保留做叠层发光（规则表 note）。
+ */
+function paintHeadlinerStar(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+  ctx.fillStyle = '#3e232f'; // 深红棕麂皮底
+  ctx.fillRect(0, 0, w, h);
+  paintGrain(ctx, w, h, w / 300, 0.05); // 麂皮绒感
+  // 星点：确定性稀疏撒点（密度 ≈ 图幅 1/5200 一个星）
+  const stars = Math.round((w * h) / 5200);
+  for (let s = 0; s < stars; s += 1) {
+    const r = refHash(s, 3);
+    const r2 = refHash(s, 4);
+    const x = r * w;
+    const y = r2 * h;
+    const rad = Math.max(0.6, w * 0.0012) * (0.5 + refHash(s, 5) * 1.4);
+    const a = 0.35 + refHash(s, 6) * 0.5;
+    // 微光晕 + 星点
+    const g = ctx.createRadialGradient(x, y, 0, x, y, rad * 3);
+    g.addColorStop(0, `rgba(255,246,224,${a.toFixed(3)})`);
+    g.addColorStop(1, 'rgba(255,246,224,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(x, y, rad * 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = `rgba(255,250,235,${Math.min(1, a + 0.25).toFixed(3)})`;
+    ctx.beginPath();
+    ctx.arc(x, y, rad, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+/**
+ * ⑤ screen-cockpit 中控屏 UI 截屏（512×256 2:1，tileWorld 0.45 → 小屏单幅）。
+ * 原 jpg PIL 统计：主色簇 #7c3b1c/#1d120f/#ca875f/#f3bb8f/#fae3c2，
+ * meanRGB(151,106,77)，线性亮度 0.269，饱和度 0.49，std 0.266（UI 高对比）。
+ * 构图特征：近黑底 + 暖亮信息卡/进度条/地图色块。albedo 压暗、emissive 承担亮屏
+ * 观感（规则表 channels map+emissiveMap + emissiveWhite）。
+ */
+function paintScreenCockpit(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+  ctx.fillStyle = '#1d120f'; // 近黑屏底
+  ctx.fillRect(0, 0, w, h);
+  // 主信息卡（暖亮）
+  const card = (x: number, y: number, cw: number, ch: number, fill: string): void => {
+    ctx.fillStyle = fill;
+    ctx.beginPath();
+    const r = Math.min(cw, ch) * 0.12;
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + cw, y, x + cw, y + ch, r);
+    ctx.arcTo(x + cw, y + ch, x, y + ch, r);
+    ctx.arcTo(x, y + ch, x, y, r);
+    ctx.arcTo(x, y, x + cw, y, r);
+    ctx.closePath();
+    ctx.fill();
+  };
+  // 地图色块（左下，暖棕）
+  card(w * 0.06, h * 0.42, w * 0.4, h * 0.48, '#7c3b1c');
+  ctx.strokeStyle = 'rgba(250,227,194,0.5)';
+  ctx.lineWidth = Math.max(1, h * 0.012);
+  ctx.beginPath();
+  ctx.moveTo(w * 0.1, h * 0.8);
+  ctx.bezierCurveTo(w * 0.2, h * 0.6, w * 0.3, h * 0.86, w * 0.42, h * 0.62);
+  ctx.stroke();
+  // 右侧信息卡组（上/下两块，亮暖）
+  card(w * 0.54, h * 0.1, w * 0.4, h * 0.3, '#f3bb8f');
+  card(w * 0.54, h * 0.48, w * 0.4, h * 0.14, '#ca875f');
+  // 进度条（底部，亮）
+  ctx.fillStyle = 'rgba(250,227,194,0.85)';
+  ctx.fillRect(w * 0.54, h * 0.74, w * 0.4 * 0.62, h * 0.07);
+  ctx.fillStyle = 'rgba(250,227,194,0.25)';
+  ctx.fillRect(w * 0.54 + w * 0.4 * 0.62, h * 0.74, w * 0.4 * 0.38, h * 0.07);
+  // 文字感横条（信息卡内）
+  ctx.fillStyle = 'rgba(29,18,15,0.55)';
+  ctx.fillRect(w * 0.58, h * 0.2, w * 0.3, h * 0.045);
+  ctx.fillRect(w * 0.58, h * 0.29, w * 0.2, h * 0.045);
+}
+
+/**
+ * ⑥ tail-lamp 尾灯发光纹理（256×512 1:2 竖图，tileWorld 0.05 → 灯带 ≈2.4×0.4 单元）。
+ * 原 jpg PIL 统计：主色簇 #110e14/#45363e/#411a21/#88787d/#c9baaa，
+ * meanRGB(81,63,67)，线性亮度 0.105，饱和度 0.34，std 0.160。
+ * 构图特征：近黑底 + 中部深红灯带 + 亮暖反光条。map/emissiveMap 同源 +
+ * emissiveWhite ⇒ 亮带即发光带（规则表 emissiveIntensity 1.2）。
+ */
+function paintTailLamp(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+  ctx.fillStyle = '#110e14'; // 近黑底
+  ctx.fillRect(0, 0, w, h);
+  // 上部暗场（灯罩环境）
+  const gTop = ctx.createLinearGradient(0, 0, 0, h);
+  gTop.addColorStop(0, 'rgba(69,54,62,0.9)');
+  gTop.addColorStop(0.35, 'rgba(17,14,20,0.15)');
+  gTop.addColorStop(1, 'rgba(17,14,20,0.15)');
+  ctx.fillStyle = gTop;
+  ctx.fillRect(0, 0, w, h);
+  // 主灯带（中部深红，上下微内收）
+  const band = (cy: number, bh: number, bright: string): void => {
+    const g = ctx.createLinearGradient(0, cy - bh / 2, 0, cy + bh / 2);
+    g.addColorStop(0, 'rgba(17,14,20,0)');
+    g.addColorStop(0.5, bright);
+    g.addColorStop(1, 'rgba(17,14,20,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, cy - bh / 2, w, bh);
+  };
+  band(h * 0.42, h * 0.1, 'rgba(158,42,52,0.95)'); // 主红带
+  band(h * 0.56, h * 0.05, 'rgba(120,30,40,0.8)'); // 次红带
+  // 亮暖反光条（灯带上下沿，读作灯内反射）
+  ctx.fillStyle = 'rgba(201,186,170,0.5)';
+  ctx.fillRect(0, h * 0.365, w, Math.max(1, h * 0.006));
+  ctx.fillRect(0, h * 0.475, w, Math.max(1, h * 0.004));
+  // 下部暗场渐变
+  const gBot = ctx.createLinearGradient(0, h * 0.7, 0, h);
+  gBot.addColorStop(0, 'rgba(17,14,20,0)');
+  gBot.addColorStop(1, 'rgba(65,26,33,0.55)');
+  ctx.fillStyle = gBot;
+  ctx.fillRect(0, h * 0.7, w, h * 0.3);
+}
+
+/**
+ * ⑦ tri-screen-ui 三联屏正视 UI（790×110 ≈ 7.18:1，forced repeat [1,1] 零平铺）。
+ * 原 jpg PIL 统计：主色簇 #0a0808/#dabca8/#925a3b/#532714/#2b1c16，
+ * meanRGB(110,80,64)，线性亮度 0.176，饱和度 0.43，std 0.223。
+ * 构图特征：三联分屏（两块竖分隔）+ 每屏暖亮主卡 + 小部件。map+emissiveMap 同源，
+ * emissiveWhite ⇒ 亮卡即亮屏（规则表 emissiveIntensity 0.9）。
+ */
+function paintTriScreenUi(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+  ctx.fillStyle = '#0a0808'; // 近黑底
+  ctx.fillRect(0, 0, w, h);
+  const gap = w * 0.006;
+  const zoneW = (w - gap * 2) / 3;
+  const zone = (idx: number): [number, number] => [idx * (zoneW + gap), zoneW];
+  // 左屏：主卡（暖亮）+ 底部进度
+  let [zx, zw] = zone(0);
+  ctx.fillStyle = '#dabca8';
+  ctx.fillRect(zx, h * 0.14, zw, h * 0.5);
+  ctx.fillStyle = '#925a3b';
+  ctx.fillRect(zx + zw * 0.12, h * 0.24, zw * 0.5, h * 0.1);
+  ctx.fillStyle = 'rgba(218,188,168,0.85)';
+  ctx.fillRect(zx, h * 0.74, zw * 0.68, h * 0.09);
+  ctx.fillStyle = 'rgba(218,188,168,0.22)';
+  ctx.fillRect(zx + zw * 0.68, h * 0.74, zw * 0.32, h * 0.09);
+  // 中屏：大地图卡（暖棕）+ 路径线
+  [zx, zw] = zone(1);
+  ctx.fillStyle = '#532714';
+  ctx.fillRect(zx, h * 0.1, zw, h * 0.8);
+  ctx.strokeStyle = 'rgba(218,188,168,0.8)';
+  ctx.lineWidth = Math.max(1, h * 0.03);
+  ctx.beginPath();
+  ctx.moveTo(zx + zw * 0.15, h * 0.78);
+  ctx.bezierCurveTo(zx + zw * 0.4, h * 0.4, zx + zw * 0.6, h * 0.85, zx + zw * 0.88, h * 0.3);
+  ctx.stroke();
+  // 右屏：双信息条（一亮一暗）
+  [zx, zw] = zone(2);
+  ctx.fillStyle = '#dabca8';
+  ctx.fillRect(zx, h * 0.18, zw, h * 0.26);
+  ctx.fillStyle = '#925a3b';
+  ctx.fillRect(zx, h * 0.54, zw, h * 0.26);
+  // 三屏顶部统一细亮条（读作屏体内边框）
+  ctx.fillStyle = 'rgba(218,188,168,0.35)';
+  ctx.fillRect(0, 0, w, Math.max(1, h * 0.02));
+}
+
+/** painter 类型（QA/测试可复用导出，与 tailLamp.paintEaglePanel 同族） */
+export type RefPainter = (ctx: CanvasRenderingContext2D, w: number, h: number) => void;
+
+/** painter 注册表（id → 程序化绘制；尺寸取 REF_IMAGE_META 声明值） */
+export const REF_PAINTERS: Record<RefImageId, RefPainter> = {  'seat-quilt': paintSeatQuilt,
+  'seat-cushion': paintSeatCushion,
+  'leather-plain': paintLeatherPlain,
+  'headliner-star': paintHeadlinerStar,
+  'screen-cockpit': paintScreenCockpit,
+  'tail-lamp': paintTailLamp,
+  'tri-screen-ui': paintTriScreenUi
+};
+
+/**
+ * 程序化生成参考图纹理（R30-L1）。无 DOM（node 单测 / SSR）返回 null —— 调用方
+ * 按既有优雅降级路径保持程序化贴图。画布尺寸 = 声明 authoring 尺寸，随后由
+ * downscaleIfNeeded 按质量档二次采样。
+ */
+function makeProceduralRefTexture(id: RefImageId): THREE.CanvasTexture | null {
+  if (!hasDom()) return null;
+  const meta = REF_IMAGE_META[id];
+  const painter = REF_PAINTERS[id];
+  if (!painter) return null;
+  const canvas = document.createElement('canvas');
+  canvas.width = meta.width;
+  canvas.height = meta.height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  painter(ctx, canvas.width, canvas.height);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
 
 /* ================================================================
  * 2. 规则表（改贴图落点只改这里）
@@ -377,7 +757,7 @@ const REF_RULES: readonly RefRule[] = [
 ];
 
 /* ================================================================
- * 3. 贴图加载（每图只加载一次并缓存；失败静默降级）
+ * 3. 贴图生成（每图只生成一次并缓存；R30-L1 起程序化同步生成，失败静默降级）
  * ================================================================ */
 
 type LoadStatus = 'loading' | 'ready' | 'failed';
@@ -469,50 +849,48 @@ function downscaleIfNeeded(tex: THREE.Texture, maxSize: number): THREE.Texture {
 }
 
 /**
- * 开始加载（幂等）。加载结果只写缓存，不直接改材质 —— 由 `applyReferenceTextures`
- * 决定挂不挂；未就绪的规则保持原程序化贴图，图到之后由 `pendingWires` 补挂。
+ * 开始「加载」（幂等）。R30-L1 起为**程序化同步生成**：canvas painter 直接出图，
+ * 无网络请求、无异步解码 —— 首次调用即 ready。加载结果只写缓存，不直接改材质 ——
+ * 由 `applyReferenceTextures` 决定挂不挂；生成失败（无 DOM）时规则保持原程序化
+ * 贴图，`pendingWires` 机制保留（测试注入路径仍走它）。
  */
 function ensureLoad(id: RefImageId, maxSize: number, anisotropy: number): void {
   if (texCache.has(id)) return;
   const entry: CacheEntry = { status: 'loading', tex: null, maxSize, anisotropy };
   texCache.set(id, entry);
-  const url = REF_IMAGE_META[id].url;
   try {
-    const loader = new THREE.TextureLoader();
-    loader.load(
-      url,
-      (tex) => {
-        let out = downscaleIfNeeded(tex, maxSize);
-        applyTextureSettings(out, anisotropy);
-        // 尺寸复核：声明值只用来反算 repeat，实际图幅不符要出声（不阻断）
-        const img = out.image as { width?: number; height?: number } | null | undefined;
-        const aw = img?.width ?? 0;
-        const ah = img?.height ?? 0;
-        if (aw > 0 && ah > 0) {
-          const declared = imageAspect(id);
-          const actual = aw / ah;
-          if (Math.abs(actual - declared) / declared > 0.02) {
-            console.warn(
-              `[refTextures] ${id} 图幅宽高比实测 ${actual.toFixed(3)} ≠ 声明 ${declared.toFixed(3)}，` +
-                `repeat 反算会偏（distortion 约 ×${(actual / declared).toFixed(2)}）`
-            );
-          }
-        }
-        out.needsUpdate = true;
-        entry.tex = out;
-        entry.status = 'ready';
-        flushPending();
-      },
-      undefined,
-      () => {
-        entry.status = 'failed';
-        console.warn(`[refTextures] ${id} 加载失败，保持程序化贴图（优雅降级）`);
-        flushPending();
+    const raw = makeProceduralRefTexture(id);
+    if (!raw) {
+      // 无 DOM / painter 缺失：静默失败（Node 单测、SSR）—— 与旧 jpg 加载失败同路径
+      entry.status = 'failed';
+      flushPending();
+      return;
+    }
+    const out = downscaleIfNeeded(raw, maxSize);
+    applyTextureSettings(out, anisotropy);
+    // 尺寸复核：声明值只用来反算 repeat，实际图幅不符要出声（不阻断）。
+    // R30-L1：程序化画布按声明值 authoring，本断言恒真 —— 保留作 painter 改动时的守卫。
+    const img = out.image as { width?: number; height?: number } | null | undefined;
+    const aw = img?.width ?? 0;
+    const ah = img?.height ?? 0;
+    if (aw > 0 && ah > 0) {
+      const declared = imageAspect(id);
+      const actual = aw / ah;
+      if (Math.abs(actual - declared) / declared > 0.02) {
+        console.warn(
+          `[refTextures] ${id} 图幅宽高比实测 ${actual.toFixed(3)} ≠ 声明 ${declared.toFixed(3)}，` +
+            `repeat 反算会偏（distortion 约 ×${(actual / declared).toFixed(2)}）`
+        );
       }
-    );
+    }
+    out.needsUpdate = true;
+    entry.tex = out;
+    entry.status = 'ready';
+    flushPending();
   } catch {
-    // 无 DOM / 无 fetch（Node 单测、SSR）：静默失败
     entry.status = 'failed';
+    console.warn(`[refTextures] ${id} 程序化生成失败，保持程序化贴图（优雅降级）`);
+    flushPending();
   }
 }
 

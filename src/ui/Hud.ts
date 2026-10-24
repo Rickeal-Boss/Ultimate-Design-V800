@@ -5,7 +5,7 @@
 import { BRAKE, VEHICLE } from '../config/physics';
 import { resolveVehicleId, type VehicleId } from '../config/vehicles';
 import type { CameraMode } from '../render/CameraRig';
-import { byId, el, setVisible } from './dom';
+import { byId, blurIfInside, el, setVisible } from './dom';
 
 export interface HudInput {
   speedKmh: number;
@@ -377,6 +377,9 @@ export class Hud {
   }
 
   setVisible(visible: boolean): void {
+    // B6 a11y（R30-D2）：隐藏时撤焦点（判据见 dom.ts blurIfInside 注释）——
+    // 视角/切入刹车/结束探索按钮隐藏后若保持焦点，按空格会重触其 click。
+    if (!visible) blurIfInside(this.root);
     setVisible(this.root, visible);
   }
 

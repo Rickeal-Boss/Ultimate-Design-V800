@@ -25,10 +25,12 @@
  *   ★ 局部坐标系约定（本文件）：group 原点 = 车门蒙皮上的支杆根部（inboard 基准），
  *     +X = 车外侧（outboard）、+Y = 上、+Z = 车头向前；镜壳中心在 group 内偏移 HEAD_OFFSET_X 向外。
  *
- * 左右镜像（★ 反射不是旋转，与 tailLamp 同律）：
- *   左侧 = 规范件（outboard +X）；右侧 = group.scale.x = -1（纯 −x 反射，非旋转）。
- *   反射会翻转三角形绕序 → 所有材质统一 DoubleSide 兜底（R21-C 同律）。
- *   右侧经 −x 反射后：outboard→−X、镜面法线 X 分量取反 → 自然仍朝车内(inboard)与车尾(rear)。
+ * 左右镜像（R30-C1 起改为**几何烘焙**，与 tailLamp 同律）：
+ *   左侧 = 规范件（outboard +X）；右侧 = mirrorGeometryX 烘焙进几何（旧写法为
+ *   group.scale.x = -1 反射）。烘焙含绕序反转 + 法线 x 取反，故材质可全部
+ *   FrontSide（本部件 4 件全是封闭实心：挤出镜壳 / 胶囊支杆 / 挤出 accent / 厚玻璃板），
+ *   不再需要 DoubleSide 兜底。
+ *   右侧烘焙后：outboard→−X、镜面法线 X 分量取反 → 自然仍朝车内(inboard)与车尾(rear)。
  *
  * 几何构成（每材质 1 mesh，共 5 mesh/侧；tri 预算一对合计 ≤1600）：
  *   mirrorBodyMat   （独占 r23-mirror-body）   圆润流线镜壳（rounded-rect 挤出，弧段锁 4）
@@ -114,14 +116,14 @@ export interface MirrorMaterials {
 }
 
 export interface MirrorOptions {
-  /** 'right' 用 group.scale.x = -1 做 −x 反射（非旋转） */
+  /** 'right' 用 mirrorGeometryX 烘焙进几何（R30-C1，替代 scale.x=-1 反射） */
   side?: 'left' | 'right';
   /** 复用外部材质实例（接线时左右必须共用同一份） */
   materials?: MirrorMaterials;
 }
 
 export interface MirrorResult {
-  /** 在支杆根部局部系原点构建的 Group（右侧已含 scale.x=-1 镜像） */
+  /** 在支杆根部局部系原点构建的 Group（右侧已含烘焙镜像，无负尺度） */
   group: THREE.Group;
   /** 本部件用到的 3 个独占材质 */
   materials: MirrorMaterials;
@@ -186,7 +188,8 @@ export function createMirrorMaterials(): MirrorMaterials {
     id: string,
     params: THREE.MeshPhysicalMaterialParameters
   ): THREE.MeshPhysicalMaterial => {
-    const m = new THREE.MeshPhysicalMaterial({ side: THREE.DoubleSide, ...params });
+    // R30-C1：4 件全为封闭实心（镜壳挤出 / 胶囊支杆 / accent 挤出 / 厚玻璃板）→ FrontSide
+    const m = new THREE.MeshPhysicalMaterial({ side: THREE.FrontSide, ...params });
     m.userData.sculptMaterial = { id };
     m.name = id;
     return m;
@@ -287,6 +290,76 @@ function buildGlass(): THREE.BufferGeometry {
 }
 
 /* ================================================================
+ * 4.5 左右镜像：子树烘焙（R30-C1，替代 group.scale.x = -1）
+ * ================================================================ */
+
+/**
+ * 把 group 子树按 x=0 平面**整体烘焙镜像**（含子节点变换）。
+ * 为什么不能只烘几何：本部件镜壳头是子 Group（head.position.x = HEAD_OFFSET_X），
+ * group.scale.x=-1 会连子节点 position 一起镜像，只烘几何不烘变换会把头留在原侧、
+ * 与支杆撕裂（R30-C 首版实测右镜 bbox 宽 0.367 ≠ 左 0.261）。
+ * 做法：对每个后代节点，把「S_x · 相对 group 的局部矩阵」烘进几何（applyMatrix4
+ * 含法线矩阵），随后把该节点局部变换复位为单位阵；det<0 ⇒ 同步反转三角形绕序
+ * （索引几何换 index 2/3 项，非索引几何交换每三角第 2、3 顶点全部属性）。
+ * group 自身 transform 不动（调用方设的 position 保持）。
+ * 世界位姿与旧 scale.x=-1 逐位一致（左右 bbox 对称，探针实证 .qa/r30c）。
+ */
+function bakeSubtreeMirrorX(group: THREE.Object3D): void {
+  const S = new THREE.Matrix4().makeScale(-1, 1, 1);
+  group.updateMatrixWorld(true);
+  const items: Array<{ node: THREE.Object3D; rel: THREE.Matrix4 }> = [];
+  const walk = (node: THREE.Object3D, parentRel: THREE.Matrix4): void => {
+    node.updateMatrix();
+    const rel = new THREE.Matrix4().multiplyMatrices(parentRel, node.matrix);
+    items.push({ node, rel });
+    for (const c of node.children) walk(c, rel);
+  };
+  walk(group, new THREE.Matrix4()); // group 自身矩阵不计入（其 position 由调用方设置）
+  for (const { node, rel } of items) {
+    if (node === group) continue;
+    node.position.set(0, 0, 0);
+    node.quaternion.identity();
+    node.scale.set(1, 1, 1);
+    node.updateMatrix();
+    const mesh = node as THREE.Mesh;
+    if (!mesh.isMesh) continue;
+    // S_x · rel：位置与法线一次烘入（applyMatrix4 走 normal matrix = (M)⁻ᵀ）
+    mesh.geometry.applyMatrix4(new THREE.Matrix4().multiplyMatrices(S, rel));
+    // det(S_x·rel) < 0 ⇒ 三角形绕序反转（否则 FrontSide 下外面被剔除）
+    const g = mesh.geometry;
+    const index = g.getIndex();
+    if (index) {
+      const arr = index.array;
+      for (let i = 0; i < arr.length; i += 3) {
+        const t = arr[i + 1];
+        arr[i + 1] = arr[i + 2];
+        arr[i + 2] = t;
+      }
+      index.needsUpdate = true;
+    } else {
+      const pos = g.getAttribute('position') as THREE.BufferAttribute;
+      for (let i = 0; i < pos.count; i += 3) {
+        for (const name of Object.keys(g.attributes)) {
+          const attr = g.attributes[name] as THREE.BufferAttribute;
+          const n = attr.itemSize;
+          const a = attr.array as Float32Array;
+          for (let k = 0; k < n; k += 1) {
+            const i1 = (i + 1) * n + k;
+            const i2 = (i + 2) * n + k;
+            const t = a[i1];
+            a[i1] = a[i2];
+            a[i2] = t;
+          }
+        }
+      }
+    }
+    g.computeBoundingBox();
+    g.computeBoundingSphere();
+  }
+  group.updateMatrixWorld(true);
+}
+
+/* ================================================================
  * 5. 主构造
  * ================================================================ */
 
@@ -324,9 +397,9 @@ export function createMirror(options: MirrorOptions = {}): MirrorResult {
   // 支杆直接挂在 group（跨度：支杆根部 x=0 → 镜壳 inboard 面 x≈0.075）
   addTo(group, armGeo, materials.chrome, 'mirror-arm');
 
-  // ★ 左右镜像：纯 −x 反射，非旋转（DoubleSide 兜绕序翻转）
+  // ★ 左右镜像：子树烘焙（R30-C1，替代 scale.x=-1 负尺度；含子节点变换，绕序已随烘焙反转）
   if (side === 'right') {
-    group.scale.x = -1;
+    bakeSubtreeMirrorX(group);
   }
 
   // tri 统计

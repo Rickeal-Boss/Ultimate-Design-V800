@@ -36,17 +36,72 @@
  *   不可单独寻址/联动。接线时把 headlamp-l/r pivot 传进 batchMergeStatic 的
  *   excludeObjects（或 excludeIds:['headlamp-l','headlamp-r']），整棵子树退出合批。
  *   左右共用同一材质实例（见上）→ 仅左右各 1 组 DC，无额外开销。
- *   材质统一 side=DoubleSide：本部件含薄件（DRL 刃/透镜玻璃/星点），且右侧用
- *   group.scale.x=-1 做 −x 镜像（非旋转），DoubleSide 同时兜住镜像后的绕序翻转。
+ *   材质统一 side=FrontSide（R30-C1）：本部件全部为封闭实心挤出体 / 盒体，右侧镜像
+ *   已改为**几何烘焙**（见 mirrorGeometryX），不再有负尺度绕序翻转，无需 DoubleSide 兜底。
  *
  * 几何约定（与 project 铁律一致）：
  *   · profile / 轮廓一律 CCW（shoelace > 0），ExtrudeGeometry 据此前向法线才会朝外；
  *   · 挤出沿 +z（0→depth），不居中（与工厂挤出件同律，front face = z=depth）；
- *   · 右侧镜像用 group.scale.x = -1（纯镜像，无 rotation）；
+ *   · 右侧镜像用 mirrorGeometryX 烘焙进几何（R30-C1：替代 group.scale.x = -1 负尺度，
+ *     世界 bbox 与旧写法逐位一致，见 .qa/r30c 探针）；
  *   · ≤ 2.5k tri/侧（实测 ≈ 540/侧，见 .qa/r21_headlamp.mjs 输出）。
  */
 import * as THREE from 'three';
 import { mergeSafe } from '../../util/geo';
+
+/* ================================================================
+ * 0.5 左右镜像：几何烘焙（R30-C1，替代 group.scale.x = -1）
+ * ================================================================ */
+
+/**
+ * 把几何按 x=0 平面**烘焙镜像**。为什么替代负尺度：
+ * `group.scale.x = -1` 的行列式为负 → 三角形屏幕绕序翻转，FrontSide 下外面被剔除、
+ * 法线内翻，R21 起被迫全组 DoubleSide 兜底（shadow/fragment 双倍开销）。烘焙三件套：
+ *   ① position.x 取反；
+ *   ② 三角形绕序反转 —— 索引几何只换 index 的第 2/3 项（顶点被多三角共享，绝不能
+ *      改顶点数据）；非索引几何交换每三角第 2、3 顶点的**全部属性**（保持顶点 tuples
+ *      完整，等价于换绕序）；
+ *   ③ normal.x 取反（镜像法线 = M(n)，与反转后的绕序朝向一致）。
+ * 世界位姿与旧 scale.x=-1 逐位一致（左右件 bbox 关于车体对称，探针实证）。
+ */
+function mirrorGeometryX(g: THREE.BufferGeometry): THREE.BufferGeometry {
+  const pos = g.getAttribute('position') as THREE.BufferAttribute;
+  const nrm = g.getAttribute('normal') as THREE.BufferAttribute | undefined;
+  for (let i = 0; i < pos.count; i += 1) {
+    pos.setX(i, -pos.getX(i));
+    if (nrm) nrm.setX(i, -nrm.getX(i));
+  }
+  pos.needsUpdate = true;
+  if (nrm) nrm.needsUpdate = true;
+  const index = g.getIndex();
+  if (index) {
+    const arr = index.array;
+    for (let i = 0; i < arr.length; i += 3) {
+      const t = arr[i + 1];
+      arr[i + 1] = arr[i + 2];
+      arr[i + 2] = t;
+    }
+    index.needsUpdate = true;
+  } else {
+    for (let i = 0; i < pos.count; i += 3) {
+      for (const name of Object.keys(g.attributes)) {
+        const attr = g.attributes[name] as THREE.BufferAttribute;
+        const n = attr.itemSize;
+        const a = attr.array as Float32Array;
+        for (let k = 0; k < n; k += 1) {
+          const i1 = (i + 1) * n + k;
+          const i2 = (i + 2) * n + k;
+          const t = a[i1];
+          a[i1] = a[i2];
+          a[i2] = t;
+        }
+      }
+    }
+  }
+  g.computeBoundingBox();
+  g.computeBoundingSphere();
+  return g;
+}
 
 /* ================================================================
  * 0. 局部系常量（与工厂 headlamp-l 挤出件逐位一致）
@@ -81,14 +136,14 @@ export interface HeadLampMaterials {
 }
 
 export interface HeadLampOptions {
-  /** 左右镜像：'right' 用 group.scale.x = -1 做 −x 镜像（非旋转） */
+  /** 左右镜像：'right' 用 mirrorGeometryX 烘焙进几何（R30-C1，替代 scale.x=-1 负尺度） */
   side?: 'left' | 'right';
   /** 复用外部材质实例（接线时必须左右共用同一份，否则合批无法左右并 DC） */
   materials?: HeadLampMaterials;
 }
 
 export interface HeadLampResult {
-  /** 在 headlamp 局部系原点构建的 Group（右侧已含 scale.x=-1 镜像） */
+  /** 在 headlamp 局部系原点构建的 Group（右侧已含烘焙镜像，无负尺度） */
   group: THREE.Group;
   /** 本部件用到的 6 个独占材质 */
   materials: HeadLampMaterials;
@@ -171,7 +226,8 @@ function at(g: THREE.BufferGeometry, x: number, y: number, z: number): THREE.Buf
 
 export function createHeadLampMaterials(): HeadLampMaterials {
   const mk = (id: string, params: THREE.MeshStandardMaterialParameters): THREE.MeshStandardMaterial => {
-    const m = new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, ...params });
+    // R30-C1：全部件均为封闭实心挤出体/盒体 → FrontSide（镜像已烘焙进几何，无绕序翻转）
+    const m = new THREE.MeshStandardMaterial({ side: THREE.FrontSide, ...params });
     m.userData.sculptMaterial = { id };
     return m;
   };
@@ -269,9 +325,12 @@ export function createHeadLamp(options: HeadLampOptions = {}): HeadLampResult {
   addMesh(coreGeo, materials.lensCore, 'hl-lens-core');
   addMesh(starGeo, materials.star, 'hl-star');
 
-  // ---- 4.6 左右镜像：纯 −x 镜像，非旋转 ----
+  // ---- 4.6 左右镜像：烘焙进几何（R30-C1，替代 group.scale.x = -1）----
   if (side === 'right') {
-    group.scale.x = -1;
+    group.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (m.isMesh) mirrorGeometryX(m.geometry);
+    });
   }
 
   // ---- 4.7 统计 tri 数 ----

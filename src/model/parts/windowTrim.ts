@@ -14,7 +14,9 @@
  *   **不动**；本部件的 D 柱银包面只是叠在其外侧（外扩 ~8mm），不与之干涉。
  *
  * 坐标系（与车身世界系一致，y 上正、z 车头为正）：
- *   x = ±外侧（side=1 → +x 为左/驾驶侧；side=-1 用 group.scale.x=-1 纯镜像）
+ *   x = ±外侧（side=1 → +x 为左/驾驶侧；side=-1 用 mirrorGeometryX 烘焙镜像，
+ *   R30-C1 起替代 group.scale.x=-1 负尺度 —— 烘焙含绕序反转，chrome 封闭环带可
+ *   安全 FrontSide；左右件世界 bbox 对称，探针实证 .qa/r30c）
  *   本 Group 不带任何 position 偏移，直接挂到 root 级（或用 root 的子节点）。
  *
  * ── 几何实测依据（R22 探针对 factory 产物做射线扫描，见
@@ -36,11 +38,62 @@
  *   · profile / 绕序：本件不用 ExtrudeGeometry，全部手写三角面 + computeVertexNormals
  *     （非索引 → 每面平面法线，chrome 才有硬边高光）；构建末尾做**全局绕序校正**
  *     （首三角法线 x<0 则整体翻转），保证外侧法线朝 +x。
- *   · 材质独占：r22-trim-chrome / r22-trim-dpillar，零外部图；
+ *   · 材质独占：r22-trim-chrome / r22-glass-band，零外部图；
  *     userData.sculptMaterial.id 供 V800Adapter 建表（勿并入共享批次）。
+ *     R30-C1：chrome 是闭合环带扫出体（3 带 × 闭合路径，封闭实心）→ FrontSide；
+ *     glass-band 是单面 ShapeGeometry 填充（车内外两侧都可能入画）→ 保留 DoubleSide。
  *   · ≤900 tri/侧（实测见 verify/r22/windowtrim/README.md）。
  */
 import * as THREE from 'three';
+
+/* ================================================================
+ * 0.5 左右镜像：几何烘焙（R30-C1，替代 group.scale.x = -1）
+ * ================================================================ */
+
+/**
+ * 把几何按 x=0 平面**烘焙镜像**（position.x / normal.x 取反 + 三角形绕序反转）。
+ * 负尺度会翻转屏幕绕序（FrontSide 下外面被剔除），R22 起被迫 DoubleSide 兜底；
+ * 烘焙后 chrome 封闭环带可安全 FrontSide。世界位姿与旧 scale.x=-1 逐位一致
+ * （左右件世界 bbox 关于车体对称，探针实证 .qa/r30c）。
+ */
+function mirrorGeometryX(g: THREE.BufferGeometry): THREE.BufferGeometry {
+  const pos = g.getAttribute('position') as THREE.BufferAttribute;
+  const nrm = g.getAttribute('normal') as THREE.BufferAttribute | undefined;
+  for (let i = 0; i < pos.count; i += 1) {
+    pos.setX(i, -pos.getX(i));
+    if (nrm) nrm.setX(i, -nrm.getX(i));
+  }
+  pos.needsUpdate = true;
+  if (nrm) nrm.needsUpdate = true;
+  const index = g.getIndex();
+  if (index) {
+    const arr = index.array;
+    for (let i = 0; i < arr.length; i += 3) {
+      const t = arr[i + 1];
+      arr[i + 1] = arr[i + 2];
+      arr[i + 2] = t;
+    }
+    index.needsUpdate = true;
+  } else {
+    for (let i = 0; i < pos.count; i += 3) {
+      for (const name of Object.keys(g.attributes)) {
+        const attr = g.attributes[name] as THREE.BufferAttribute;
+        const n = attr.itemSize;
+        const a = attr.array as Float32Array;
+        for (let k = 0; k < n; k += 1) {
+          const i1 = (i + 1) * n + k;
+          const i2 = (i + 2) * n + k;
+          const t = a[i1];
+          a[i1] = a[i2];
+          a[i2] = t;
+        }
+      }
+    }
+  }
+  g.computeBoundingBox();
+  g.computeBoundingSphere();
+  return g;
+}
 
 /* ================================================================
  * 0. 常量
@@ -63,7 +116,6 @@ export const GLASS_PROUD = 0.002;
 /** 材质 id（独占，供 V800Adapter 建表；勿与共享材质合并） */
 export const TRIM_MATERIAL_ID = {
   chrome: 'r22-trim-chrome',
-  pillar: 'r22-trim-dpillar',
   glass: 'r22-glass-band',
 } as const;
 
@@ -72,10 +124,8 @@ export const TRIM_MATERIAL_ID = {
  * ================================================================ */
 
 export interface WindowTrimMaterials {
-  /** 镀铬包边（高金属度低粗糙，硬边高光） */
+  /** 镀铬包边（高金属度低粗糙，硬边高光；R30-C1 起 FrontSide —— 闭合环带扫出体） */
   chrome: THREE.MeshStandardMaterial;
-  /** D 柱银色/香槟铬包面（拉丝感，略高于 chrome 粗糙度） */
-  pillar: THREE.MeshStandardMaterial;
 }
 
 export type PathPt = { z: number; y: number; w: number };
@@ -215,7 +265,8 @@ export const OUTER_X: number[] = [
 
 export function createWindowTrimMaterials(): WindowTrimMaterials {
   const mk = (id: string, params: THREE.MeshStandardMaterialParameters): THREE.MeshStandardMaterial => {
-    const m = new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, ...params });
+    // R30-C1：chrome 为闭合环带扫出体（封闭实心）→ FrontSide（镜像已烘焙进几何）
+    const m = new THREE.MeshStandardMaterial({ side: THREE.FrontSide, ...params });
     m.name = id;
     m.userData.sculptMaterial = { id };
     return m;
@@ -226,12 +277,6 @@ export function createWindowTrimMaterials(): WindowTrimMaterials {
       metalness: 1.0,
       roughness: 0.11,
       envMapIntensity: 1.35,
-    }),
-    pillar: mk(TRIM_MATERIAL_ID.pillar, {
-      color: 0xd6d7db,
-      metalness: 1.0,
-      roughness: 0.24,
-      envMapIntensity: 1.15,
     }),
   };
 }
@@ -409,9 +454,31 @@ function buildGlassBandGeometry(): THREE.BufferGeometry {
 }
 
 /**
+ * 玻璃带材质工厂（R30-C4 导出：左右两侧共用同一实例，避免同参材质重复 new）。
+ * 单面 ShapeGeometry 填充（车内外两侧都可能入画：车外读作暗玻璃、座舱机位读作
+ * 侧窗）→ 保留 DoubleSide（不转 FrontSide）。
+ */
+export function createGlassBandMaterial(): THREE.MeshPhysicalMaterial {
+  const m = new THREE.MeshPhysicalMaterial({
+    color: 0x0a0c10,
+    metalness: 0.35,
+    roughness: 0.06,
+    transparent: true,
+    opacity: 0.86,
+    envMapIntensity: 1.6,
+    clearcoat: 1.0,
+    clearcoatRoughness: 0.08,
+    side: THREE.DoubleSide, // 单面件：车内外两侧可见，保留双面
+  });
+  m.name = TRIM_MATERIAL_ID.glass;
+  m.userData.sculptMaterial = { id: TRIM_MATERIAL_ID.glass };
+  return m;
+}
+
+/**
  * 生成一侧的侧窗玻璃带。
- * @param side +1 左（+x）；-1 右（scale.x=-1 纯镜像，与 createWindowTrim 同律）
- * @param material 可选：复用同一份材质实例（左右共用 → 1 DC）
+ * @param side +1 左（+x）；-1 右（mirrorGeometryX 烘焙镜像，R30-C1 起替代 scale.x=-1）
+ * @param material 可选：复用同一份材质实例（左右共用 → 1 个材质实例，R30-C4）
  * @returns Group（局部系 = 车身世界系；userData.sculptComponent.id='greenhouse-glass' 便于接线）
  */
 export function createGlassBand(side: 1 | -1, material?: THREE.Material): THREE.Group {
@@ -420,24 +487,7 @@ export function createGlassBand(side: 1 | -1, material?: THREE.Material): THREE.
   group.userData.sculptComponent = { id: 'greenhouse-glass' };
   group.userData.r22 = { part: 'window-glass', side, replaces: 'greenhouse-glass' };
 
-  const mat =
-    material ??
-    (() => {
-      const m = new THREE.MeshPhysicalMaterial({
-        color: 0x0a0c10,
-        metalness: 0.35,
-        roughness: 0.06,
-        transparent: true,
-        opacity: 0.86,
-        envMapIntensity: 1.6,
-        clearcoat: 1.0,
-        clearcoatRoughness: 0.08,
-        side: THREE.DoubleSide,
-      });
-      m.name = TRIM_MATERIAL_ID.glass;
-      m.userData.sculptMaterial = { id: TRIM_MATERIAL_ID.glass };
-      return m;
-    })();
+  const mat = material ?? createGlassBandMaterial();
 
   const mesh = new THREE.Mesh(buildGlassBandGeometry(), mat);
   mesh.name = 'trim-glass-band';
@@ -445,7 +495,13 @@ export function createGlassBand(side: 1 | -1, material?: THREE.Material): THREE.
   mesh.receiveShadow = false;
   group.add(mesh);
 
-  if (side === -1) group.scale.x = -1;
+  if (side === -1) {
+    // R30-C1：烘焙镜像（含绕序反转）替代 scale.x=-1；DoubleSide 玻璃带不受影响
+    group.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (m.isMesh) mirrorGeometryX(m.geometry);
+    });
+  }
   group.updateMatrixWorld(true);
   return group;
 }
@@ -469,7 +525,7 @@ export function countGlassTriangles(group: THREE.Object3D): number {
 /**
  * 生成一侧的「侧窗铬框 + D 柱银包面」。
  *
- * @param side  +1 = 左侧（+x，驾驶侧）；-1 = 右侧（用 scale.x=-1 纯镜像）
+ * @param side  +1 = 左侧（+x，驾驶侧）；-1 = 右侧（mirrorGeometryX 烘焙镜像，R30-C1）
  * @param materials 可选：复用外部材质实例（左右**必须**共用同一份，否则 DC 翻倍）
  * @returns Group（局部系 = 车身世界系，无 position 偏移）
  */
@@ -497,7 +553,13 @@ export function createWindowTrim(side: 1 | -1, materials?: WindowTrimMaterials):
   // 注：D 柱银包面改由 spec dpillar-l/r（transform 修正 + dpillar-silver 材质）承担，
   // 此处不再挂手写银包面，避免与 spec 件双几何 z-fighting（R22-D 定罪结论）。
 
-  if (side === -1) group.scale.x = -1;
+  if (side === -1) {
+    // R30-C1：烘焙镜像（含绕序反转）替代 scale.x=-1 负尺度
+    group.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (m.isMesh) mirrorGeometryX(m.geometry);
+    });
+  }
   group.updateMatrixWorld(true);
   return group;
 }

@@ -71,6 +71,19 @@ const HEAD_BASE_INTENSITY = 1.9;
 const HEAD_DIM_INTENSITY = 0.18;
 const CALIPER_HEAT_HEX = 0x8c1114;
 
+/**
+ * N-5（复审 P3）：R7 尾灯常亮待机档（brakeLevel 口径）。
+ * 双车静态约定统一前：V800 构造即 brakeTarget = TAIL_BASE(2.5) 常亮待机（preview
+ * 车尾特写红≈1759），R7  brakeTarget = 0（静态 emissive = 2.0×0.55 = 1.1，特写红≈0/27）
+ * —— 只污染 preview/QA 静态截图基线（游戏内 Game 构造时 setBrakeLights(1.6) 两车都覆盖）。
+ * 统一口径「都常亮待机」：由 V800 待机读数 2.5 反解 R7 的 brakeLevel 初值：
+ *   2.5 = brakeBaseIntensity(2.0) × (BRAKE_BASE_INTENSITY(0.55) + brakeLevel)
+ *   ⇒ brakeLevel = 2.5 / 2.0 − 0.55 = 0.7
+ * 静态 emissiveIntensity = 2.0 × (0.55 + 0.7) = 2.5，与 V800 同读数；行驶中
+ * setBrakeLights(1.6) 覆盖后 damp 收敛到 2.0×(0.55+1.6)=4.3，与旧行为逐位一致。
+ */
+const R7_TAIL_STANDBY_LEVEL = 0.7;
+
 /** 需要隐藏的 macro 容器占位几何（只隐藏它们**自身**的 mesh，不动子树） */
 const CONTAINER_MESH_IDS = ['root', 'cabin-interior'] as const;
 /** R29（O1）阴影 caster 白名单：R7 车体壳只有一支 paint-green，其余同 V800 判据 */
@@ -920,6 +933,75 @@ export function createR7CarAdapter(tier: QualityTier = 'high'): CarLike {
     console.info(`[R7Adapter] R27 内饰抬升 +${R27_INTERIOR_LIFT}m → ${lifted}/${LIFT_IDS.length} 件`);
   }
 
+  // ---- R30-C4：同参材质去重（Map 缓存键 = 材质 id + 参数签名，与 V800Adapter 同构）----
+  // 外部审查 P0「材质实例复用」的适配层落地：同一 userData.sculptMaterial.id +
+  // 同一参数签名（含贴图实例 uuid）的多个实例合并为一个。保 id 驱动逻辑不破（铁律：
+  // 适配器全链按材质 id 建表 —— matById / batchMerge 分桶 / 灯光联动 / refTextures
+  // 克隆缓存都按 id 寻址，合并同 id 同参实例对它们透明）。
+  // 跳过名单（实例级行为件，语义上必须独立）：cabinHidable（座舱遮挡克隆，运行时
+  // material.visible=false 整批不画）/ cabinPaintShadow（内舱暗面克隆）/ refTexture
+  // （参考图贴图克隆，UV 已按目标 mesh 重写过）/ 无 sculptMaterial.id 的贴花材质。
+  // 保留策略 = 遍历首见实例（与 matById「先序先命中」同序 ⇒ 适配器持有引用恒为保留侧）。
+  {
+    const SCULPT_SIG_KEYS = [
+      'side', 'transparent', 'opacity', 'alphaTest', 'depthWrite', 'color', 'emissive',
+      'emissiveIntensity', 'metalness', 'roughness', 'envMapIntensity', 'clearcoat',
+      'clearcoatRoughness', 'flatShading', 'iridescence', 'sheen', 'transmission', 'thickness'
+    ] as const;
+    const TEX_KEYS = ['map', 'emissiveMap', 'normalMap', 'roughnessMap', 'alphaMap', 'aoMap', 'metalnessMap'] as const;
+    const signatureOf = (m: THREE.Material): string => {
+      const p = m as unknown as Record<string, unknown>;
+      const parts = SCULPT_SIG_KEYS.map((k) => {
+        const v = p[k];
+        if (v && typeof v === 'object' && 'getHexString' in (v as object)) {
+          return `${k}:${(v as THREE.Color).getHexString()}`;
+        }
+        return `${k}:${String(v)}`;
+      });
+      const tex = TEX_KEYS.map((k) => {
+        const t = p[k] as THREE.Texture | null | undefined;
+        return t ? t.uuid : '-';
+      });
+      return `${m.type}|${parts.join(',')}|${tex.join(',')}`;
+    };
+    const keep = new Map<string, THREE.Material>();
+    const reassign: Array<{ mesh: THREE.Mesh; from: THREE.Material; to: THREE.Material }> = [];
+    root.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      const arr = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      for (const mt of arr) {
+        if (!mt) continue;
+        const ud = mt.userData as {
+          sculptMaterial?: { id?: string };
+          cabinHidable?: boolean;
+          cabinPaintShadow?: boolean;
+          refTexture?: unknown;
+        };
+        if (ud.cabinHidable || ud.cabinPaintShadow || ud.refTexture) continue;
+        const id = ud.sculptMaterial?.id;
+        if (!id) continue; // 无 id 材质不并（贴花/车牌各承载不同贴图）
+        const key = `${id}|${signatureOf(mt)}`;
+        const hit = keep.get(key);
+        if (!hit) {
+          keep.set(key, mt);
+          continue;
+        }
+        if (hit !== mt) reassign.push({ mesh, from: mt, to: hit });
+      }
+    });
+    for (const r of reassign) {
+      if (Array.isArray(r.mesh.material)) {
+        r.mesh.material = r.mesh.material.map((m) => (m === r.from ? r.to : m));
+      } else if (r.mesh.material === r.from) {
+        r.mesh.material = r.to;
+      }
+    }
+    if (reassign.length > 0) {
+      console.info(`[R7Adapter] R30-C4 同参材质去重：${reassign.length} 个 mesh 引用合并`);
+    }
+  }
+
   const mergeResult = batchMergeStatic(model, {
     excludeObjects: dynamicNodes,
     excludeMaterialIds: UV_CONTENT_MATERIAL_IDS,
@@ -968,8 +1050,9 @@ export function createR7CarAdapter(tier: QualityTier = 'high'): CarLike {
 
   // ---- 运行时状态 ----
   let heat = 0;
-  let brakeLevel = 0;
-  let brakeTarget = 0;
+  // N-5：尾灯构造即常亮待机（与 V800 TAIL_BASE=2.5 统一静态口径，推导见 R7_TAIL_STANDBY_LEVEL）
+  let brakeLevel = R7_TAIL_STANDBY_LEVEL;
+  let brakeTarget = R7_TAIL_STANDBY_LEVEL;
   let snapT = 0;
   let headLevel = headBaseIntensity;
   let headTarget = headBaseIntensity;

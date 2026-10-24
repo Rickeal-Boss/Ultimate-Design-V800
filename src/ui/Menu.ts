@@ -14,7 +14,7 @@ import {
   type VehicleId,
   type VehicleProfile
 } from '../config/vehicles';
-import { byId, el, setVisible } from './dom';
+import { byId, blurIfInside, el, setVisible } from './dom';
 
 /** 差异说明：一句话讲清「这辆车为什么玩法不同」（菜单卡片正文） */
 const VEHICLE_DIFF: Record<VehicleId, string[]> = {
@@ -206,6 +206,10 @@ export class Menu {
   }
 
   show(visible: boolean): void {
+    // B6 a11y（R30-D2）：隐藏时撤掉面板内焦点 —— 「开始挑战」等按钮隐藏后若
+    // 保持焦点，进行段按空格会重新触发其 click（startRun 重开一局），
+    // 判据与推导见 dom.ts blurIfInside 注释。
+    if (!visible) blurIfInside(this.root);
     setVisible(this.root, visible);
   }
 }

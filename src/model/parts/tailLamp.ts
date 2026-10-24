@@ -63,8 +63,12 @@
  * 几何约定（与 project 铁律一致）：
  *   · profile / 轮廓一律 CCW（shoelace > 0），ExtrudeGeometry 前向法线朝外；
  *   · 挤出沿 +z（0→depth），本文件各层用 translate 落位（见上表）；
- *   · 右侧镜像用 group.scale.x = -1（纯 −x 镜像，非旋转）；材质统一 DoubleSide
- *     兜住镜像绕序翻转（R21-C 同律）；
+ *   · 右侧镜像用 mirrorGeometryX 烘焙进几何（R30-C1：替代 group.scale.x = -1 负尺度）。
+ *     与外层 rotY(π) 容器的复合仍是 R_y(π)·M_x = S_z(−1)，与旧写法逐位一致
+ *     （左右件世界 bbox 对称，探针实证 .qa/r30c）；
+ *   · housing / chrome / red 均为封闭实心挤出体 → FrontSide（R30-C1）；
+ *     gold 鹰形点阵屏是**单面 PlaneGeometry**（emissive 屏，正反两面都可能入画），
+ *     保留 DoubleSide；
  *   · ≤ 2.5k tri/侧（实测 ≈ 0.9k，见 .qa/r21_taillamp.mjs 输出）。
  *
  * 鹰形点阵屏（tri 预算优先贴图方案）：
@@ -75,6 +79,54 @@
  */
 import * as THREE from 'three';
 import { mergeSafe } from '../../util/geo';
+
+/* ================================================================
+ * 2.5 左右镜像：几何烘焙（R30-C1，替代 group.scale.x = -1）
+ * ================================================================ */
+
+/**
+ * 把几何按 x=0 平面**烘焙镜像**（position.x / normal.x 取反 + 三角形绕序反转）。
+ * 负尺度会翻转屏幕绕序（FrontSide 下外面被剔除），R21 起被迫 DoubleSide 兜底；
+ * 烘焙后与外层 rotY(π) 的复合 R_y(π)·M_x = S_z(−1)，与旧 scale.x=-1 写法逐位一致。
+ */
+function mirrorGeometryX(g: THREE.BufferGeometry): THREE.BufferGeometry {
+  const pos = g.getAttribute('position') as THREE.BufferAttribute;
+  const nrm = g.getAttribute('normal') as THREE.BufferAttribute | undefined;
+  for (let i = 0; i < pos.count; i += 1) {
+    pos.setX(i, -pos.getX(i));
+    if (nrm) nrm.setX(i, -nrm.getX(i));
+  }
+  pos.needsUpdate = true;
+  if (nrm) nrm.needsUpdate = true;
+  const index = g.getIndex();
+  if (index) {
+    const arr = index.array;
+    for (let i = 0; i < arr.length; i += 3) {
+      const t = arr[i + 1];
+      arr[i + 1] = arr[i + 2];
+      arr[i + 2] = t;
+    }
+    index.needsUpdate = true;
+  } else {
+    for (let i = 0; i < pos.count; i += 3) {
+      for (const name of Object.keys(g.attributes)) {
+        const attr = g.attributes[name] as THREE.BufferAttribute;
+        const n = attr.itemSize;
+        const a = attr.array as Float32Array;
+        for (let k = 0; k < n; k += 1) {
+          const i1 = (i + 1) * n + k;
+          const i2 = (i + 2) * n + k;
+          const t = a[i1];
+          a[i1] = a[i2];
+          a[i2] = t;
+        }
+      }
+    }
+  }
+  g.computeBoundingBox();
+  g.computeBoundingSphere();
+  return g;
+}
 
 /* ================================================================
  * 0. 局部系常量（锚点口径见头部注释；改灯罩尺寸只动这里）
@@ -144,7 +196,7 @@ export interface TailLampMaterials {
 }
 
 export interface TailLampOptions {
-  /** 'right' 用 group.scale.x = -1 做 −x 镜像（非旋转） */
+  /** 'right' 用 mirrorGeometryX 烘焙进几何（R30-C1，替代 scale.x=-1 负尺度） */
   side?: 'left' | 'right';
   /** 复用外部材质实例（接线时左右必须共用同一份） */
   materials?: TailLampMaterials;
@@ -153,7 +205,7 @@ export interface TailLampOptions {
 }
 
 export interface TailLampResult {
-  /** 在 taillamp pivot 局部系原点构建的 Group（右侧已含 scale.x=-1 镜像） */
+  /** 在 taillamp pivot 局部系原点构建的 Group（右侧已含烘焙镜像，无负尺度） */
   group: THREE.Group;
   /** 本部件用到的 4 个独占材质 */
   materials: TailLampMaterials;
@@ -394,20 +446,25 @@ export function createTailLampMaterials(eagleTexture?: THREE.Texture | null): Ta
     id: string,
     params: THREE.MeshStandardMaterialParameters
   ): THREE.MeshStandardMaterial => {
-    const m = new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, ...params });
+    // R30-C1：封闭实心挤出体走 FrontSide；单面件（gold 鹰屏）由调用方显式保留 DoubleSide
+    const m = new THREE.MeshStandardMaterial({ side: THREE.FrontSide, ...params });
     m.userData.sculptMaterial = { id };
     return m;
   };
   const tex = eagleTexture === undefined ? makeEaglePanelTexture() : eagleTexture;
+  // gold 鹰形点阵屏是单面 PlaneGeometry（emissive 屏）—— 保留 DoubleSide：
+  // 撞车/自由探索等非常规机位可能从屏背侧入画，FrontSide 会整屏消失（C1 特写主视觉）。
   const gold = tex
     ? mk(TAIL_LAMP_MATERIAL_IDS.gold, {
         // map 与 emissiveMap 同源：暗底乘白 emissive 仍暗，金点发光 —— 待机低亮度
+        side: THREE.DoubleSide,
         color: 0xffffff, map: tex, emissive: 0xffffff, emissiveMap: tex,
         emissiveIntensity: TAIL_LAMP_STANDBY.gold, metalness: 0.1, roughness: 0.5
       })
     : mk(TAIL_LAMP_MATERIAL_IDS.gold, {
         // 无图降级（node shim）：只保留暗底 + 弱金光，保证 QA 几何校验可跑。
         // R23 look-dev：emissiveIntensity 由 0.35 → 0.50（≈×1.45，与带图口径同比例）
+        side: THREE.DoubleSide,
         color: 0x0f0c06, emissive: 0xd9a84e, emissiveIntensity: 0.50,
         metalness: 0.1, roughness: 0.5
       });
@@ -489,9 +546,12 @@ export function createTailLamp(options: TailLampOptions = {}): TailLampResult {
   addMesh(bladeGeo, materials.red, 'tl-blades');
   addMesh(eagleGeo, materials.gold, 'tl-eagle');
 
-  // ---- 5.6 左右镜像：纯 −x 镜像，非旋转（DoubleSide 兜绕序）----
+  // ---- 5.6 左右镜像：烘焙进几何（R30-C1，替代 scale.x=-1）----
   if (side === 'right') {
-    group.scale.x = -1;
+    group.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (m.isMesh) mirrorGeometryX(m.geometry);
+    });
   }
 
   // ---- 5.7 tri 统计 ----

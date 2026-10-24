@@ -551,14 +551,16 @@ export function createWheelHubMaterials(emblemTex?: THREE.Texture | null): Wheel
     id: string,
     params: THREE.MeshStandardMaterialParameters
   ): THREE.MeshStandardMaterial => {
-    const m = new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, ...params });
+    // R30-C1：revolve 封闭实体默认 FrontSide；单面件（emblem 徽标圆面）显式保留 DoubleSide
+    const m = new THREE.MeshStandardMaterial({ side: THREE.FrontSide, ...params });
     m.userData.sculptMaterial = { id };
     m.name = id;
     return m;
   };
   const tex = emblemTex === undefined ? makeWheelEmblemTexture() : emblemTex;
   const cap = new THREE.MeshPhysicalMaterial({
-    side: THREE.DoubleSide,
+    // R30-C1：cap 是 revolve 封闭实体（平顶+收边黑亮圆盖）→ FrontSide
+    side: THREE.FrontSide,
     color: 0x090a0c,
     metalness: 0.82,
     roughness: 0.1,
@@ -587,6 +589,10 @@ export function createWheelHubMaterials(emblemTex?: THREE.Texture | null): Wheel
     cap,
     emblem: tex
       ? mk(WHEEL_HUB_MATERIAL_IDS.emblem, {
+          // 徽标圆面是单面 ShapeGeometry（浮在盖顶 0.3mm，UV 归一到 canvas）——
+          // 保留 DoubleSide：轮子高可见度主视觉件，防内侧/掠射机位被剔（alphaTest 裁掉
+          // 透明底后实际开销≈一个圆面）
+          side: THREE.DoubleSide,
           color: 0xffffff,
           map: tex,
           emissive: 0xffffff,
@@ -599,6 +605,7 @@ export function createWheelHubMaterials(emblemTex?: THREE.Texture | null): Wheel
         })
       : mk(WHEEL_HUB_MATERIAL_IDS.emblem, {
           // 无图降级（node shim / 无 DOM）
+          side: THREE.DoubleSide,
           color: 0xcfd6de,
           emissive: 0x8f9aa6,
           emissiveIntensity: 0.35,

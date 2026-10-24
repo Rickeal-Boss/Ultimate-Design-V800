@@ -22,7 +22,12 @@ import {
   type TailLampMaterials
 } from './parts/tailLamp';
 import { createHeadLamp, createHeadLampMaterials, type HeadLampMaterials } from './parts/headLamp';
-import { createWindowTrim, createWindowTrimMaterials, createGlassBand } from './parts/windowTrim';
+import {
+  createWindowTrim,
+  createWindowTrimMaterials,
+  createGlassBand,
+  createGlassBandMaterial
+} from './parts/windowTrim';
 import { createWheelHub, createWheelHubMaterials, type WheelHubSide } from './parts/wheelHub';
 import {
   createRoofPod,
@@ -32,6 +37,7 @@ import {
 import { createFrontFascia } from './parts/frontFascia';
 import { createMirrors, MIRROR_HIDE_IDS } from './parts/mirror';
 import { createBadgeCore } from './parts/badgeCore';
+import { createQuarterPatch, QUARTER_PATCH_MATERIAL_ID } from './parts/quarterPatch';
 import {
   createZunjieV800LuxuryMPVModel,
   type ProceduralModelRuntime,
@@ -3638,7 +3644,10 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
       // tailLamp.ts 头部注释假设「taillamp pivot 自带 rotY(π)」与真实场景不符——
       // 场景中 pivot 无旋转（preview 世界车尾 = +Z，pivot 世界 z=+2.839 恒等变换），
       // 直接挂会把整灯内缩 ~4cm 且鹰形屏法线朝车内。故套一层 rotY(π) 外层容器：
-      // 内层 group 保持 rotation=0 / scale.x=-1（镜像与 QA 契约不破），外层只转 π。
+      //   R30-C1 起内层 group 的右侧镜像改为**几何烘焙**（mirrorGeometryX：position.x /
+      //   normal.x 取反 + 绕序反转），不再有 scale.x=-1 负尺度；烘焙镜像与外层 rotY(π)
+      //   的复合 R_y(π)·M_x = S_z(−1)，与旧「内层 scale.x=-1 + 外层 rotY(π)」逐位一致
+      //   （左右件世界 bbox 对称，.qa/r30c 探针实证）——QA 契约不破。
       const tl = createTailLamp({ side, materials: tailLampMats });
       const wrap = new THREE.Group();
       wrap.name = `taillamp-${side === 'left' ? 'l' : 'r'}-hand-wrap`;
@@ -3709,6 +3718,8 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
   // —— R22-C 镀铬窗框 + 玻璃带（手写几何；替换 window-belt-*，chrome-belt-* 间距过挤一并隐）——
   {
     const trimMats = createWindowTrimMaterials();
+    // R30-C4：玻璃带材质只建一次、左右共用（旧写法每侧各 new 一份同参材质 → 2 实例）
+    const glassMat = createGlassBandMaterial();
     for (const side of [1, -1] as const) {
       const wbId = side === 1 ? 'window-belt-l' : 'window-belt-r';
       const cbId = side === 1 ? 'chrome-belt-l' : 'chrome-belt-r';
@@ -3720,11 +3731,11 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
       const trim = createWindowTrim(side, trimMats);
       model.add(trim);
       r22Exclude.push(trim);
-      const glass = createGlassBand(side);
+      const glass = createGlassBand(side, glassMat);
       model.add(glass);
       r22Exclude.push(glass);
     }
-    console.info('[V800Adapter] R22-C 镀铬窗框 + 玻璃带接线完成（左右）');
+    console.info('[V800Adapter] R22-C 镀铬窗框 + 玻璃带接线完成（左右；玻璃带材质共用 1 实例）');
   }
 
   // ═══ R23 手写部件接线（车顶传感模块 / 前脸面板+MAEXTRO字标 / 外后视镜）═══
@@ -3882,6 +3893,93 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
             `tri=${core.triangleCount}`
         );
       }
+    }
+  }
+
+  // ---- R30-C3：侧围后部破洞补面（parts/quarterPatch.ts）----
+  // 外部深度审计 P1：C/D 柱与尾窗间内凹缺面（侧围后部楔形空洞，|x|∈[0.95,1.01]、
+  // y∈[1.05,1.17]、z∈[−2.78,−2.66]，射线探针实证该域首命中全空=外部透视进车内）。
+  // spec/工厂禁改 ⇒ 按 R20/R22 手写件先例补封闭面片：与 R24-B 同窗口（合批前）、
+  // 独占材质 r30-quarter-paint 进 excludeObjects（+1 DC，双侧合并 1 mesh）。
+  {
+    const patch = createQuarterPatch();
+    model.add(patch.group);
+    r24Exclude.push(patch.group);
+    console.info(
+      `[V800Adapter] R30-C3 侧围后部补面完成：${patch.triangleCount} tri（双侧，` +
+        `材质 ${QUARTER_PATCH_MATERIAL_ID}）`
+    );
+  }
+
+  // ---- R30-C4：同参材质去重（Map 缓存键 = 材质 id + 参数签名）----
+  // 外部审查 P0「材质实例复用（77 → 40 以内）」的适配层落地：同一
+  // userData.sculptMaterial.id + 同一参数签名（含**贴图实例 uuid**）的多个材质实例
+  // 合并为一个实例。保 id 驱动逻辑不破（铁律：适配器全链按材质 id 建表 —— matById /
+  // batchMerge 分桶 / 灯光联动 / refTextures 克隆缓存都按 id 寻址，合并同 id 同参实例
+  // 对它们透明）。
+  // 跳过名单（实例级行为件，语义上必须独立，合并即毁功能）：
+  //   · cabinHidable     —— 座舱遮挡克隆，运行时 material.visible=false 整批不画；
+  //   · cabinPaintShadow —— 内舱暗面克隆，setPaintShadow 切换；
+  //   · refTexture       —— 参考图贴图克隆（UV 已按目标 mesh 重写过）；
+  //   · 无 sculptMaterial.id 的贴花/地毯材质（license plate / MAEXTRO / carpet）。
+  // 保留策略 = 遍历首见实例（与 matById 的「先序先命中」同序 ⇒ 适配器持有的引用恒为保留侧）。
+  {
+    const SCULPT_SIG_KEYS = [
+      'side', 'transparent', 'opacity', 'alphaTest', 'depthWrite', 'color', 'emissive',
+      'emissiveIntensity', 'metalness', 'roughness', 'envMapIntensity', 'clearcoat',
+      'clearcoatRoughness', 'flatShading', 'iridescence', 'sheen', 'transmission', 'thickness'
+    ] as const;
+    const TEX_KEYS = ['map', 'emissiveMap', 'normalMap', 'roughnessMap', 'alphaMap', 'aoMap', 'metalnessMap'] as const;
+    const signatureOf = (m: THREE.Material): string => {
+      const p = m as unknown as Record<string, unknown>;
+      const parts = SCULPT_SIG_KEYS.map((k) => {
+        const v = p[k];
+        if (v && typeof v === 'object' && 'getHexString' in (v as object)) {
+          return `${k}:${(v as THREE.Color).getHexString()}`;
+        }
+        return `${k}:${String(v)}`;
+      });
+      const tex = TEX_KEYS.map((k) => {
+        const t = p[k] as THREE.Texture | null | undefined;
+        return t ? t.uuid : '-';
+      });
+      return `${m.type}|${parts.join(',')}|${tex.join(',')}`;
+    };
+    const keep = new Map<string, THREE.Material>();
+    const reassign: Array<{ mesh: THREE.Mesh; from: THREE.Material; to: THREE.Material }> = [];
+    root.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      const arr = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      for (const mt of arr) {
+        if (!mt) continue;
+        const ud = mt.userData as {
+          sculptMaterial?: { id?: string };
+          cabinHidable?: boolean;
+          cabinPaintShadow?: boolean;
+          refTexture?: unknown;
+        };
+        if (ud.cabinHidable || ud.cabinPaintShadow || ud.refTexture) continue;
+        const id = ud.sculptMaterial?.id;
+        if (!id) continue; // 无 id 材质不并（贴花/地毯各承载不同贴图）
+        const key = `${id}|${signatureOf(mt)}`;
+        const hit = keep.get(key);
+        if (!hit) {
+          keep.set(key, mt);
+          continue;
+        }
+        if (hit !== mt) reassign.push({ mesh, from: mt, to: hit });
+      }
+    });
+    for (const r of reassign) {
+      if (Array.isArray(r.mesh.material)) {
+        r.mesh.material = r.mesh.material.map((m) => (m === r.from ? r.to : m));
+      } else if (r.mesh.material === r.from) {
+        r.mesh.material = r.to;
+      }
+    }
+    if (reassign.length > 0) {
+      console.info(`[V800Adapter] R30-C4 同参材质去重：${reassign.length} 个 mesh 引用合并`);
     }
   }
 

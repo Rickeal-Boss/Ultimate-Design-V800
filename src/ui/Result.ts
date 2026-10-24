@@ -8,7 +8,7 @@
 import { BRAKE } from '../config/physics';
 import { getVehicleProfile, resolveVehicleId, type VehicleId } from '../config/vehicles';
 import type { RunResult } from '../core/StateMachine';
-import { byId, el, setVisible } from './dom';
+import { byId, blurIfInside, el, setVisible } from './dom';
 
 const COLOR_SPEED = '#f1dcae';
 const COLOR_FORCE = '#ff6a3d';
@@ -280,6 +280,9 @@ export class Result {
   }
 
   hide(): void {
+    // B6 a11y（R30-D2）：隐藏时撤焦点（判据见 dom.ts blurIfInside 注释）——
+    // 「再来一次」点击后重开一局，按钮若保持焦点，加速段按空格会重触它。
+    blurIfInside(this.root);
     setVisible(this.root, false);
   }
 }

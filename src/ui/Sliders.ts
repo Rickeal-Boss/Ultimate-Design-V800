@@ -7,7 +7,7 @@
  */
 import { BRAKE } from '../config/physics';
 import { clamp, damp } from '../util/math';
-import { el } from './dom';
+import { el, isInteractiveTarget } from './dom';
 
 export interface SliderCallbacks {
   onCutInBrake: () => void;
@@ -117,7 +117,12 @@ export class Sliders {
       case 'ArrowDown':
       case 'Space':
         this.keyBrake = down ? 1 : 0;
-        e.preventDefault();
+        // B6 a11y（R30-D2）：聚焦控件（按钮/链接/输入）时**放行** Space 的
+        // 默认行为 = 激活控件（键盘用户用空格点按钮）；仅对非交互目标吞默认
+        // 行为（防页面滚动）。preventDefault 不阻其他监听器 —— FreeDrive 的
+        // 同码处理照常收到事件（R29 审计口径）。隐藏面板的焦点由各面板
+        // hide 出口的 blurIfInside 负责清除（防隐藏按钮被空格误触重开）。
+        if (!isInteractiveTarget(e.target)) e.preventDefault();
         break;
       case 'KeyV':
         if (down && !e.repeat) this.callbacks.onCameraSwitch();

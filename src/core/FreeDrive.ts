@@ -22,6 +22,9 @@
 import { BRAKE, MS_TO_KMH, VEHICLE } from '../config/physics';
 import { dragForce, motorForce, rollForce } from '../physics/Vehicle';
 import { clamp, damp } from '../util/math';
+// B6 a11y（R30-D2）：与 Sliders.onKey 共用「交互目标放行」判据（同一定义，
+// 避免两处选择器列表漂移）。dom.ts 是无依赖叶子工具，不构成循环依赖。
+import { isInteractiveTarget } from '../ui/dom';
 
 /** 计算质量（与 Vehicle.ts 同源：整备 3160 + 载荷 140） */
 const MASS = VEHICLE.totalMassKg;
@@ -300,7 +303,11 @@ export class FreeDrive {
       case 'ArrowRight':
       case 'Space':
         this.keys.add(e.code);
-        e.preventDefault();
+        // B6 a11y（R30-D2）：聚焦控件（结束探索/视角按钮等）时放行 Space 的
+        // 默认行为 = 激活控件，与挑战模式 Sliders.onKey 同口径；仅对非交互
+        // 目标吞默认行为（防页面滚动）。keys.add 照常执行（手刹输入不丢），
+        // preventDefault 不阻其他监听器。
+        if (!isInteractiveTarget(e.target)) e.preventDefault();
         break;
       case 'KeyR':
         if (!e.repeat) this.reset();

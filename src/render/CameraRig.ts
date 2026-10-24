@@ -12,6 +12,11 @@
 import * as THREE from 'three';
 import type { InteriorViews } from '../config/vehicles';
 import { clamp } from '../util/math';
+// R30-D1（N2 修复）：free 机位的世界边界钳位直接复用 FreeDrive 已导出的纯函数
+// corridorHalfWidth 与边界表 BOUNDS —— 相机与车必须钳在**同一条走廊**里，
+// 两套公式必然漂移（车公式在 resolveBounds，相机在 CameraRig，各写一份 =  N2 复发）。
+// FreeDrive 不 import 本文件，无循环依赖。
+import { BOUNDS, corridorHalfWidth } from '../core/FreeDrive';
 
 export type CameraMode =
   | 'orbit'
@@ -228,6 +233,41 @@ function setInteriorPose(slot: keyof InteriorViews): void {
 const YAW_LIMIT = Math.PI * 1.25;
 const PITCH_LIMIT = 1.1;
 
+/**
+ * R30-D1（外部审查 N2）：free 机位的相机世界边界钳位。
+ *
+ * ── 判据可达性证明（本仓库文化：先证明判据可达，再动判据）──
+ * free 是**车体局部**跟随：局部偏移 (0, 3.4, 9.5)（车后 9.5m / 高 3.4m），
+ * 每帧经 carQuat（= root.quaternion = heading）旋转后贴到锚点上。
+ * 城内段街侧建筑前脸在 |x| = 15.5（口径见 FreeDrive.BOUNDS.cityHalfW 注释），
+ * 而车本身被 FreeDrive.resolveBounds 钳在 |x| ≤ 14.5。
+ * 取审查实锤位姿：车贴边 x ≈ +14.5、heading ≈ 90°（forwardOf(π/2) = (−1,0,0)，
+ * 车头朝 −X 行驶）—— 局部 (0,3.4,9.5) 绕 Y 转 90° 得世界 (+9.5, 3.4, 0)，
+ * ⇒ 相机 x ≈ 14.5 + 9.5 = **24.0**，比建筑前脸（15.5）还靠外 8.5m：
+ * 相机整台没入街侧建筑，屏幕上看穿楼板/墙体（N2 原始症状）。
+ * 该构图在城内贴边 + 转向时**每次都会触发**，判据可达且高频，必修。
+ *
+ * ── 修法（复用 corridorHalfWidth 纯函数，不重写公式）──
+ *   ① 侧向：|camX| ≤ corridorHalfWidth(camZ) − 0.8
+ *      （御桥段 12.0 → 相机 ≤ 11.2；城内段 14.5 → 相机 ≤ 13.7）
+ *   ② 纵向：camZ ∈ [BOUNDS.zMin, BOUNDS.zMax]（与车同一 z 硬钳位）
+ * 只作用于 free 机位：chase/crash 是世界系跟随机（主线车恒在桥面轴线 x≈0，
+ * 相机 |x| ≤ 1.6 无可钳）；hood/cabin 系/side 贴车体，不涉世界边界。
+ *
+ * ── 死区/边界 reasoning ──
+ * · 为什么相机也要 0.8m 余量（车只留 1.0m）：9.5m 跟距离被钳时相机会切到
+ *   车身内侧，仅收到 14.5 会与贴边车（半宽 ~1.0m）侧面相交；0.8m 保证相机
+ *   恒在车身包络外，且距建筑前脸 15.5 仍有 1.8m 视线余量（不贴楼板、
+ *   不与楼体 z-fighting）。被钳期间 lookAt 目标（anchor+lookOffset = 车前方
+ *   9m）不变，构图从「车正后方」滑到「车侧前上方」——看得见车与前方街道。
+ * · 为什么先钳 z 再求 halfW：与 FreeDrive.resolveBounds 同序（② z → ③ 侧向），
+ *   分段边界 z = cityZ(−365) 上用钳后 z 求值，分段切换帧无回环/抖动。
+ * · 为什么钳 cam.position 而不钳 this.offset：offset 是阻尼中的机位量，
+ *   外部位姿每帧由 anchor+offset 重算；只改最终位置 = 无状态、不漂移、
+ *   不卡死，车转离墙后相机随阻尼平滑归位。
+ */
+const FREE_CAM_MARGIN = 0.8;
+
 export class CameraRig {
   camera: THREE.PerspectiveCamera;
   mode: CameraMode = 'orbit';
@@ -358,6 +398,15 @@ export class CameraRig {
       const sh = this.shake;
       cam.position.x += sh * (Math.sin(t * 23.3) * 0.6 + Math.sin(t * 41.7 + 1.3) * 0.4) * 0.5;
       cam.position.y += sh * (Math.sin(t * 29.1 + 0.7) * 0.6 + Math.sin(t * 47.9 + 2.1) * 0.4) * 0.5;
+    }
+    // R30-D1（N2）：free 机位世界边界钳位 —— 判据可达性证明与公式推导见
+    // 上方 FREE_CAM_MARGIN 注释块。顺序（先 z 后侧向）与 FreeDrive.resolveBounds
+    // 一致； corridorHalfWidth 用钳后 z 求值，分段边界无回环。
+    if (this.mode === 'free') {
+      const p = cam.position;
+      p.z = clamp(p.z, BOUNDS.zMin, BOUNDS.zMax);
+      const halfW = corridorHalfWidth(p.z) - FREE_CAM_MARGIN;
+      p.x = clamp(p.x, -halfW, halfW);
     }
     cam.lookAt(
       this.anchor.x + this.lookOffset.x,

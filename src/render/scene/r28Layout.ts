@@ -513,7 +513,13 @@ export const QA_VIEWS = {
   /** QA-H 城内大街（街区 20 块 + 广场让位） */
   inner_street: [0, 3.0, -420, 0, 8.0, -800, 62],
   /** QA-I 高空总览（桥→门→街→主殿轴线） */
-  aerial: [120, 160, 60, 0, 0, -500, 50]
+  aerial: [120, 160, 60, 0, 0, -500, 50],
+  /** QA-J 城内连廊（R30 新增）：街面低拱廊 + 跨街封闭拱顶廊（k=3 块心 −526.5）
+   *  相机在路心偏左、略高于拱廊楼面（8.2m），望向 −z 第二座跨街廊（−756.5）——
+   *  连廊连续性 / 拱肋节拍 / 栏板瓶柱的验收机位。⚠ 与 `.qa/r28_env.mjs` /
+   *  `tools/r27_pixel_probe.py` 的 VIEWS 表是两份硬编码（R27 铁律）：复拍前须同步，
+   *  r28_env.mjs 归 QA 线（本轮环境线白名单外，已在交付报告中登记）。 */
+  inner_corridor: [3.5, 6.0, -455, 1.5, 12.5, -700, 62]
 } as const;
 
 /* ═══════════════════ ⑪ 预算红线 ═══════════════════ */
@@ -532,4 +538,31 @@ export const R27_BUDGET = {
   castleTriHigh: 240_000,
   castleDc: 20,
   frameTri: 320_000
+} as const;
+
+/**
+ * R30 预算键（主理人预裁，r30_plan §4；**只增不改** R27_BUDGET 旧值）。
+ *
+ * R29 实测（外部审查 cscap.mjs + tools/r29_corridor_probe.mjs）：castle high
+ * 181,342 tri / 7 DC；场景总 264,870（车模 82,310 + castle 181,342 + terrain
+ * ≈6.8k）；frameTri 旧红线 320k 只剩 16k 余量 ⇒ R30 A 线增量（FBX 构件库复刻 +
+ * 城堡内部加密连廊 ≈ +67k 估算）后必须重定：
+ *   · castleTriHigh 240k → **260k**（R30 增量后预估 ≈248k，含 12k 余量）
+ *   · castleTriLow  170k → **200k**（low 档同几何长度，铁律 33 只降装饰密度）
+ *   · frameTri      320k → **360k**（车 82.3k + castle 248k + terrain 6.8k + road）
+ *   · castleDc 20 不变（新增件全进既有 5 桶 ashlar/wall/gold/dark/flame，
+ *     castle.ts 每族 merge 成 1 mesh ⇒ DC 仍为 7 + 铺装 2）
+ * ⚠ 消费点现状（2026-10-24 grep）：R27_BUDGET 四个键**只被注释引用**（castle.ts
+ *   头注 / castleKit.ts R29 常量注 / Terrain.ts 注 / Game.ts frameTri 口径注），
+ *   无任何测试或断言消费 ⇒ 本键按「无消费则追加常量并在 castleKit 注释引用」处理
+ *   （castleKit.ts R30 常量块头注已引 260k/360k 口径）；若后续 tester 线要接
+ *   预算断言，直接消费本键，勿回改 R27_BUDGET。
+ * ⚠ 前置纪律（R27 规矩）：A 线交付后必须补 low/high 两档观感目检
+ *   （landing-review 执行）—— fill rate 才是瓶颈，关注 overdraw/雾。
+ */
+export const R30_BUDGET = {
+  castleTriLow: 200_000,
+  castleTriHigh: 260_000,
+  castleDc: 20,
+  frameTri: 360_000
 } as const;

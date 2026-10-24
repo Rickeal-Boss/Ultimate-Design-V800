@@ -15,7 +15,6 @@ import type { CameraMode } from '../render/CameraRig';
 import { Postfx } from '../render/Postfx';
 import { createRenderer } from '../render/Renderer';
 import { createV800CarAdapter, type CarLike } from '../model/V800Adapter';
-import { createR7CarAdapter } from '../model/R7Adapter';
 import { Environment } from '../render/scene/Environment';
 import { ContactShadow } from '../render/scene/ContactShadow';
 
@@ -36,6 +35,29 @@ import type { GameEvent, RunResult, Sample } from './StateMachine';
 import { StateMachine } from './StateMachine';
 
 const PHYSICS_HZ = 120;
+
+/**
+ * B5（R30-D4）：R7 适配器按需动态加载（原 L18 静态 import 的改造）。
+ *
+ * 改前：`import { createR7CarAdapter } from '../model/R7Adapter'` 是静态 import ——
+ * R7 模型工厂（createR7Model 六千余行 + R7Adapter 一千余行）被整个拖进主 chunk，
+ * 而一次会话只用一台车（Menu 选车即 location.reload，见 Menu.pick 注释），
+ * V800 玩家永远在下载一份用不到的代码（外部审查估 gzip −150~200KB）。
+ *
+ * 改后：仅当**活动车型**是 r7 时才发起 import()（V800 玩家整个 chunk 不进网络）。
+ * 为什么用顶层 await 预取、而不是在 createCar() 里 await：Game 构造器是同步的
+ * （main.ts 直接 `new Game(...)`，且构造期紧接着就要用 this.car：读内饰机位 /
+ * 挂 scene / 遍历前挡……），把构造器拆成「同步前半 + 异步尾部」是大重构，
+ * 不在本轮窄范围内。顶层 await 让 import() 与 createQualitySettings() 等同步
+ * 装配**并发**起飞，模块求值完成后 `new Game()` 才执行 —— r7 的 chunk 获取
+ * 被 index.html 静态 #loading 屏覆盖；V800 条件为假，await 不执行、零成本。
+ * 走到 createCar() 时 r7 模块必已 resolve（模块求值→构造在同一任务内完成，
+ * 无事件轮次，hash/localStorage 不可能在此期间被改写），故可同步消费。
+ */
+type R7AdapterModule = typeof import('../model/R7Adapter');
+const R7_ADAPTER: R7AdapterModule | null =
+  resolveVehicleId() === 'r7' ? await import('../model/R7Adapter') : null;
+
 /**
  * 冗余制动期间的刹车灯亮度。
  * 断裂后 pedalForce 归零，若沿用 `pedalForce > 1 ? 8 : 1.6` 会让灯掉回怠速 ——
@@ -473,9 +495,16 @@ export class Game {
    * 两车共用同一份 CarLike 契约与材质 ID 语义族，灯光/热量/仪表驱动路径零分叉。
    */
   private createCar(): CarLike {
-    return this.profile.id === 'r7'
-      ? createR7CarAdapter(this.tier)
-      : createV800CarAdapter(this.tier);
+    // B5（R30-D4）：r7 适配器经模块顶层预取（见文件头 R7_ADAPTER 注释），此处同步消费。
+    // 兜底 throw：正常不可达（模块求值与构造同一任务内完成，车型不可能中途被改写）——
+    // 若将来有人破坏该不变式（如把本方法改成异步调用），这里给明确报错而非静默加载错车。
+    if (this.profile.id === 'r7') {
+      if (!R7_ADAPTER) {
+        throw new Error('[Game] r7 适配器未预取：活动车型在模块求值后被改写？');
+      }
+      return R7_ADAPTER.createR7CarAdapter(this.tier);
+    }
+    return createV800CarAdapter(this.tier);
   }
 
   /**

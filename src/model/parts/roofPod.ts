@@ -42,6 +42,8 @@
  *   · 挤出沿 +z(0→depth) 后 rotateX(-π/2) 立起：depth→世界 +Y（高）、
  *     shape-Y(长 0.22)→世界 ∓Z（车前后）、shape-X(宽 0.20)→世界 X（车左右）；
  *   · 车头 = +Z，**勿 rotY(π)**（它不是车尾件）；group 默认 rotation=[0,0,0]；
+ *   · R30-C1：matte 基座+罩是封闭实心挤出体 → FrontSide；glass 顶窗是单面
+ *     ShapeGeometry（内嵌于罩顶）→ 保留 DoubleSide；
  *   · 垫高式：基座（matte）占高 ~60% + 薄传感器罩（matte）~40%，顶面内嵌黑色
  *     玻璃窗口（roofPodGlass，roughness 0.2）；顶面平顶（2–3° 微斜按任务书「可忽略」
  *     省略，避免高度预算超 0.055m）。
@@ -217,7 +219,8 @@ export function createRoofPodMaterials(): RoofPodMaterials {
     id: string,
     params: THREE.MeshStandardMaterialParameters
   ): THREE.MeshStandardMaterial => {
-    const m = new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, ...params });
+    // R30-C1：封闭实心挤出体默认 FrontSide；单面件（glass 顶窗）由调用方显式保留 DoubleSide
+    const m = new THREE.MeshStandardMaterial({ side: THREE.FrontSide, ...params });
     m.userData.sculptMaterial = { id };
     m.name = id;
     return m;
@@ -229,8 +232,11 @@ export function createRoofPodMaterials(): RoofPodMaterials {
       roughness: 0.85,
       metalness: 0.1
     }),
-    // 顶面内嵌黑色玻璃窗口（任务书可选：更亮的黑色玻璃，roughness 0.2）
+    // 顶面内嵌黑色玻璃窗口（任务书可选：更亮的黑色玻璃，roughness 0.2）。
+    // 单面 ShapeGeometry（法线 +Y，内嵌于罩顶）→ 保留 DoubleSide：俯拍/掠射机位下
+    // 单面件绕序边缘可能被剔，双面成本仅 18 tri。
     glass: mk(ROOF_POD_MATERIAL_IDS.glass, {
+      side: THREE.DoubleSide,
       color: 0x060608,
       roughness: 0.2,
       metalness: 0.0,

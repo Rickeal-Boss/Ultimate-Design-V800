@@ -47,7 +47,9 @@
  *   · profile / 轮廓一律 CCW（shoelace>0），ExtrudeGeometry 前向法线朝外；
  *   · 挤出沿 +z（0→depth），position 即挤出底面 z，front face = z+depth（无需 depth/2 补偿，
  *     因本件直接落位到目标 front z，与 headLamp 的 FRONT_Z 写法同律）；
- *   · 材质统一 DoubleSide 兜住镜像/薄件；本件单组、无左右镜像（纯前脸 +Z，非左右分件）；
+ *   · R30-C1：grille / trim / letter 均为封闭实心挤出体/盒体 → FrontSide；
+ *     grilleFace 是单面 PlaneGeometry 点阵面片（贴在实心面板正面）→ 保留 DoubleSide；
+ *   · 本件单组、无左右镜像（纯前脸 +Z，非左右分件）；
  *   · tri 预算：面板+饰条+字标合计 ≤ 2500（实测 ≈ 0.8k，见下方 triangleCount 与报告）。
  */
 import * as THREE from 'three';
@@ -411,7 +413,8 @@ export function createFrontFasciaMaterials(): FrontFasciaMaterials {
     id: string,
     params: THREE.MeshStandardMaterialParameters
   ): THREE.MeshStandardMaterial => {
-    const m = new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, ...params });
+    // R30-C1：封闭实心挤出体/盒体默认 FrontSide；单面件（grilleFace）由调用方显式保留 DoubleSide
+    const m = new THREE.MeshStandardMaterial({ side: THREE.FrontSide, ...params });
     m.userData.sculptMaterial = { id };
     return m;
   };
@@ -419,6 +422,9 @@ export function createFrontFasciaMaterials(): FrontFasciaMaterials {
   // 待机低亮度（standby 1.2）——格栅关闭时读作深色封闭面板，勾边若隐若现。
   const grilleTex = makeGrilleTexture();
   const grilleFace = mk(FRONT_FASCIA_MATERIAL_IDS.grilleFace, {
+    // 单面 PlaneGeometry 点阵面片（贴在实心面板正面，背面即面板）→ 保留 DoubleSide，
+    // 防俯视/掠射角下法线翻转被判剔除（点阵是 albedo+emissive 双通道，双面成本可忽略）
+    side: THREE.DoubleSide,
     color: grilleTex ? 0xffffff : 0x0f0f12,
     map: grilleTex,
     emissive: 0xffffff,
