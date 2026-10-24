@@ -269,6 +269,8 @@ export function blindArcadeRow(o: ArcadeOpts): DetailParts {
 
   for (let i = 0; i < count; i += 1) {
     const zc = (i - (count - 1) / 2) * pitch;
+    // 低配档隔龛布置（铁律 33）：龛衬 + 金环 ≈40 tri/龛，隔龛省半 —— 隔柱节奏不变
+    if (isLowDetail() && i % 2 === 1) continue;
     // ① 近黑内衬桶（嵌进墙体 +x）
     const plate = archPlate(o.halfW - 0.05, 0, o.rise, plateBack, 2, cusp);
     darks.push(archIntoWallX(plate, plateBack).translate(0, 0, zc));
@@ -332,11 +334,14 @@ function traceryWindow(o: TraceryOpts & { face: 'x' | 'z' }): DetailParts {
   const band = o.band ?? 0.22;
   const frameOut = o.frameOut ?? 0.45;
   const plateBack = o.plateBack ?? 0.3;
-  const mullions = o.mullions ?? 2;
+  const low = isLowDetail();
+  // 低配档（铁律 33 装饰密度）：棂与拱肩光整组跳过、券框 3 段→2 段 —— 券框+背板
+  // 的"尖拱窗"识别度保留。实测省 ≈60 tri/扇（城内 ~360 扇 ⇒ ~21k，low 预算回线主力）。
+  const mullions = low ? 0 : (o.mullions ?? 2);
   const faceX = o.face === 'x';
 
-  // ① 金券框（尖拱环 3 段；底边即窗台线）
-  const ring = archBand(halfW, 0, rise, band, frameOut, 3, cusp, 0.45);
+  // ① 金券框（尖拱环；底边即窗台线）
+  const ring = archBand(halfW, 0, rise, band, frameOut, low ? 2 : 3, cusp, 0.45);
   if (faceX) archToFaceX(ring);
   else ring.rotateY(Math.PI); // z∈[0, frameOut]
   p.gold.push(goldUV(ring));
@@ -344,10 +349,10 @@ function traceryWindow(o: TraceryOpts & { face: 'x' | 'z' }): DetailParts {
   const plate = archPlate(halfW - band * 0.55, 0, rise, plateBack, 2, cusp);
   if (faceX) archIntoWallX(plate, plateBack);
   p.dark.push(plate);
-  // ③ 竖棂（石，2~3 枝；顶没入拱环即"棂冠合拱"）
+  // ③ 竖棂（石，2~3 枝；顶没入拱环即"棂冠合拱"）；低配档整组跳过
   const mullW = Math.max(0.1, halfW * 0.13);
   const mullH = rise * 0.74;
-  const offs = mullions >= 3 ? [-halfW * 0.52, 0, halfW * 0.52] : [-halfW * 0.36, halfW * 0.36];
+  const offs = mullions >= 3 ? [-halfW * 0.52, 0, halfW * 0.52] : mullions === 2 ? [-halfW * 0.36, halfW * 0.36] : [];
   const mullionsGeo: THREE.BufferGeometry[] = [];
   for (const off of offs) {
     if (faceX) {
@@ -360,10 +365,11 @@ function traceryWindow(o: TraceryOpts & { face: 'x' | 'z' }): DetailParts {
       );
     }
   }
-  p.ashlar.push(mergeSafe(mullionsGeo));
+  // ⚠ mergeSafe([]) 会让 mergeGeometries 炸 undefined.index —— 低配档棂全跳时数组为空
+  if (mullionsGeo.length) p.ashlar.push(mergeSafe(mullionsGeo));
   mullionsGeo.forEach((g) => g.dispose());
-  // ④ 拱肩小圆光（金，hero 档；6 面开口薄筒 = 12 tri/枚）
-  if (o.lights) {
+  // ④ 拱肩小圆光（金，hero 档；6 面开口薄筒 = 12 tri/枚；低配跳过）
+  if (o.lights && !low) {
     const lr = Math.min(0.17, halfW * 0.2);
     const lightsGeo: THREE.BufferGeometry[] = [];
     for (const off of [-halfW * 0.6, halfW * 0.6]) {
@@ -555,21 +561,23 @@ export function statueNiche(o: {
   if (faceX) archToFaceX(ring);
   else ring.rotateY(Math.PI);
   p.gold.push(goldUV(ring));
-  // ③ 简化雕像（收分身 4 面棱柱 8 tri + 头珠 12 tri）
-  const bodyR = o.halfW * 0.3;
-  const bodyH = o.rise * 0.52;
-  const body = spire('ashlar', bodyR, bodyR * 0.72, bodyH, 4, 0, 0.12, 0);
-  if (faceX) {
-    body.rotateY(Math.PI / 4);
-    body.translate(plateBack * 0.32, 0, 0);
-  } else {
-    body.rotateY(Math.PI / 4);
-    body.translate(0, 0, -plateBack * 0.32);
+  // ③ 简化雕像（收分身 4 面棱柱 8 tri + 头珠 12 tri）；低配档龛保留、像跳过
+  if (!isLowDetail()) {
+    const bodyR = o.halfW * 0.3;
+    const bodyH = o.rise * 0.52;
+    const body = spire('ashlar', bodyR, bodyR * 0.72, bodyH, 4, 0, 0.12, 0);
+    if (faceX) {
+      body.rotateY(Math.PI / 4);
+      body.translate(plateBack * 0.32, 0, 0);
+    } else {
+      body.rotateY(Math.PI / 4);
+      body.translate(0, 0, -plateBack * 0.32);
+    }
+    p.ashlar.push(body);
+    const head = new THREE.CylinderGeometry(o.halfW * 0.16, o.halfW * 0.16, o.halfW * 0.3, 6, 1, true);
+    head.translate(faceX ? plateBack * 0.32 : 0, 0.12 + bodyH + o.halfW * 0.15, faceX ? 0 : -plateBack * 0.32);
+    p.ashlar.push(head);
   }
-  p.ashlar.push(body);
-  const head = new THREE.CylinderGeometry(o.halfW * 0.16, o.halfW * 0.16, o.halfW * 0.3, 6, 1, true);
-  head.translate(faceX ? plateBack * 0.32 : 0, 0.12 + bodyH + o.halfW * 0.15, faceX ? 0 : -plateBack * 0.32);
-  p.ashlar.push(head);
   return p;
 }
 
@@ -682,7 +690,9 @@ export function corridorRun(o: {
     ...Array.from({ length: Math.max(0, n - 1) }, (_, i) => [-(i + 1.5) * pitch, -(i + 0.5) * pitch] as const)
   ];
   const arches: THREE.BufferGeometry[] = [];
-  for (const [za, zb] of gaps) {
+  for (const [zi, [za, zb]] of gaps.entries()) {
+    // 低配档隔拱布置（铁律 33）：柱列与檐口不变，只隔根省拱带
+    if (isLowDetail() && zi % 2 === 1) continue;
     const half = (zb - za) / 2;
     const zc = (za + zb) / 2;
     const g = archBand(half, o.floorY, rise, band, o.width, 2, 0.35, 0.45);

@@ -84,7 +84,11 @@ export const STONE_HEX: Record<StoneKind, { base: string; light: string; dark: s
   wall: { base: '#c0bdba', light: '#dbd8d5', dark: '#8b8683', mortar: '#a6a29f' },
   floor: { base: '#413f3d', light: '#605d59', dark: '#2c2a29', mortar: '#262524' },
   rock: { base: '#655b4c', light: '#83796e', dark: '#51422f', mortar: '#3e3428' },
-  gold: { base: '#c9a227', light: '#f0d45c', dark: '#7d6222', mortar: '#39301f' },
+  // R30b 金色调饱和（铁律 31 ACES 反演）：FBX albedo 实测 R−B +118 是 **tonemap 前**
+  // 的源值；参考全景 7cd7329c 成片金饰实测 R−B 仅 +66（哑光古铜）。旧色 #c9a227
+  // 直填导致成片金饰 R−B +122（verify/r30_phase3 量化），比参考艳一倍 → 全面褪金
+  // 降饱和（B 通道 +45），ACES 后成片 R−B ≈ +70 落进参考带。
+  gold: { base: '#bb9a55', light: '#ecd9a0', dark: '#6f5c39', mortar: '#39301f' },
   // 屋面板岩（冷灰，与白石立面拉开冷暖对比）
   roof: { base: '#565a5e', light: '#767b80', dark: '#33363a', mortar: '#26282b' },
   // 城门木（旧橡木，暖褐）

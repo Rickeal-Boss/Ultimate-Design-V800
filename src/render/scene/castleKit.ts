@@ -947,13 +947,24 @@ export function makeGate(): StoneBuckets {
 
   // ── 金日轮/翼形饰（拱上正中，G1 identity）：竖面金盘 + 12 根辐射金刺 + 双侧翼卷
   // 尺寸按 GATE_DECOR：宽 ≈0.5×门楼全宽（17.5）、高 ≈0.18×门楼高（9.9）。
+  // R30b（Phase 3 目检）：17.5m 金盘在 gate_hero 读作"撑满拱心的光板金币"，参考图
+  // 同位是精巧的放射花饰。直径压到 ≤12.4m 并加花瓣环（低配跳过）→ 读作"饰"不是"盘"。
   const discY = GATE_DECOR.sunDiscYCrown; // 33.5
-  const discR = GATE_DECOR.sunDiscW / 2; // 8.75
+  const discR = Math.min(GATE_DECOR.sunDiscW / 2, 6.2); // 12.4m 直径上限
   const sunDisc = new THREE.CylinderGeometry(discR, discR, 0.7, 24);
   sunDisc.rotateX(Math.PI / 2); // 竖面（朝来车 +z）
   sunDisc.translate(0, discY, zFront - 0.1);
   planarUV(sunDisc, TILE.gold);
   b.gold.push(sunDisc);
+  if (!isLowDetail()) {
+    // 花瓣环（8 瓣，全圆周切向小金板）—— 消解大金盘的"硬币感"
+    for (let i = 0; i < 8; i += 1) {
+      const a = (i / 8) * Math.PI * 2;
+      b.gold.push(
+        boxRot('gold', 0.9, 0.42, 0.5, Math.cos(a) * (discR + 0.28), discY + Math.sin(a) * (discR + 0.28), zFront - 0.16, a + Math.PI / 2)
+      );
+    }
+  }
   for (let i = 0; i < 12; i += 1) {
     const a = Math.PI + (i / 11) * Math.PI; // 上半圆放射
     const spike = boxRot('gold', 1.2, 0.34, 0.7, Math.cos(a) * (discR + 0.7), discY + Math.sin(a) * (discR + 0.7), zFront - 0.06, a + Math.PI / 2);
@@ -1360,14 +1371,26 @@ export function makeMainHall(): StoneBuckets {
     // R29 定尺：随 frontW 比例放大后（88×0.5=44m）日轮在 32m 机位**撑满整个画面**
     // （verify/r29_check/hall_front.png），压掉全部立面信息。改为**绝对上限**：
     // 直径 ≤24m（= 0.27×frontW）、高 ≤11m —— 仍是立面主视觉，但留出两侧开间。
-    const discW = Math.min(frontW * 0.5, 24);
-    const discH = Math.min(frontH * 0.18, 11);
+    // R30b（Phase 3 目检 + 量化）：24m 光板金盘在 hall_front 读作"占位符金币"
+    // （画面金覆盖 16.3% vs 参考 11.8%）。压到 ≤14m（=0.16×frontW）+ 花瓣环（低配
+    // 跳过）—— 让"放射花饰"的语汇回到参考图轨道，同时给立面留出呼吸感。
+    const discW = Math.min(frontW * 0.5, 14);
+    const discH = Math.min(frontH * 0.18, 7);
     const discY = clearH + discH * 0.55; // ≈30.5
     const sunDisc = new THREE.CylinderGeometry(discW / 2, discW / 2, 0.7, 24);
     sunDisc.rotateX(Math.PI / 2);
     sunDisc.translate(0, discY - discH * 0.3, zFront - 0.1);
     planarUV(sunDisc, TILE.gold);
     b.gold.push(sunDisc);
+    if (!isLowDetail()) {
+      // 花瓣环（8 瓣，全圆周切向小金板）—— 消解大金盘的"硬币感"
+      for (let i = 0; i < 8; i += 1) {
+        const a = (i / 8) * Math.PI * 2;
+        b.gold.push(
+          boxRot('gold', 0.9, 0.42, 0.5, Math.cos(a) * (discW / 2 + 0.28), discY - discH * 0.3 + Math.sin(a) * (discW / 2 + 0.28), zFront - 0.16, a + Math.PI / 2)
+        );
+      }
+    }
     for (let i = 0; i < 12; i += 1) {
       const a = Math.PI + (i / 11) * Math.PI; // 上半圆放射
       const spike = boxRot('gold', 1.1, 0.32, 0.7, Math.cos(a) * (discW / 2 + 0.6), discY - discH * 0.3 + Math.sin(a) * (discW / 2 + 0.6), zFront - 0.06, a + Math.PI / 2);
