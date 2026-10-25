@@ -12,6 +12,16 @@
  *   ashlar / wall / gold / dark / flame 各 1 DC；pave-road / pave-walk 2 DC ⇒ 7 DC。
  *   R29 追加 roof / wood / glass / marble 四个**可选桶**（见 EXTRA_BUCKETS）：补桶后每族 +1 DC（≤11）。
  *
+ * ── R31 运行时治理①：按世界 z 分区合批（「700m 长条永不被剔除」的根治）──────
+ *   改前：每族 merge 成 **1 个**横跨 z=+60..−1430 的巨 mesh ⇒ 包围球直径 700m，
+ *   行车时几乎恒与视锥相交 ⇒ 视锥剔除完全失效，全城几何每帧都提交（整帧 321k tri）。
+ *   改后：ashlar 分 6 区、wall 分 3 区（见 ZONE_EDGES_*），每区一个 mesh；
+ *   量小的 gold/dark/flame/roof/wood/glass/marble 保持全局 1 个。
+ *   ⇒ castle 静态 DC 7 → ~18（四桶全亮时），但**可见 tri 大降**（剔除生效）。
+ *   这是「用少量 DC 换大量顶点/填充」的交易，判据是可见 tri 而不是静态 DC
+ *   （R31_BUDGET.castleDc 已按分区后口径抬到 32）。
+ *   跨区几何按 **bbox z 中值**归区，不切割单个几何（A 线构件基本都落在单区内）。
+ *
  * ── R30 纹理热升级（B2 / 启动阻塞 N1）────────────────────────────────────
  * 构造期所有石材族用 `castleTexSyncSize`（256²）**同步上架**（high 档实测同步段
  * ~300ms，其中贴图仅 ~50ms），`scene.add` 后按 `stoneTextureSize(kind,tier)` 的
@@ -21,8 +31,8 @@
  */
 import * as THREE from 'three';
 import { mergeSafe } from '../../util/geo';
-import { makeStoneMaps, stoneTextureSize, bakeStoneMapsAsync, disposeStoneCache } from './stoneTexture';
-import type { StoneKind, StoneMaps, StoneBakeHandle } from './stoneTexture';
+import { makeStoneMaps, stoneTextureSize, bakeStoneMapsAsync, disposeStoneCache, retireStoneMaps } from './stoneTexture';
+import type { StoneKind, StoneMaps, StoneBakeHandle, StoneChannels } from './stoneTexture';
 import type { QualitySettings } from '../../config/quality';
 import {
   setDetailLevel,
@@ -51,8 +61,8 @@ function triCount(geo: THREE.BufferGeometry): number {
 /** 释放一套三张贴图（热升级退役代 / 取消代共用） */
 function disposeMaps(maps: StoneMaps): void {
   maps.map.dispose();
-  maps.normalMap.dispose();
-  maps.roughnessMap.dispose();
+  maps.normalMap?.dispose();
+  maps.roughnessMap?.dispose();
 }
 
 /* ─────────────────────── 材质 ─────────────────────── */
@@ -64,6 +74,60 @@ function disposeMaps(maps: StoneMaps): void {
  */
 const EXTRA_BUCKETS = ['roof', 'wood', 'glass', 'marble'] as const;
 type ExtraBucket = (typeof EXTRA_BUCKETS)[number];
+
+/* ─────────────────── R31 z 分区合批 ─────────────────── */
+
+/**
+ * 分区边界（**降序**；n+1 个边界 ⇒ n 个区）。世界坐标，工厂车头 +Z。
+ * 取值依据 R31 基线地形与建筑分布（.qa/r31_test/r31_geo_probe.json）：
+ *   御桥/门楼 z≈+60..−340（桥 24 跨 + 门楼塔群）｜内城大街 −340..−1470（每街区 80m 一拍）
+ * 6 区按「每区 ≈2~4 个街区」切，单区跨度 ≤300m ⇒ 行车时后方 2~3 个区可被剔除。
+ */
+const ZONE_EDGES_6 = [60, -340, -460, -760, -1060, -1290, -1470] as const;
+/** wall 桶只有 3 区（远景剪影带是整条长盒，切太碎没有收益，反增 DC） */
+const ZONE_EDGES_3 = [60, -460, -1060, -1470] as const;
+type ZoneEdges = readonly number[];
+
+/**
+ * R31 运行时治理②：分区 mesh 的**观看距离显隐**。
+ * 为什么需要它：御桥大道是一条 1500m 直线走廊，chase/cabin 机位沿长轴看向 −Z，
+ * 真实相机 far=12000 ⇒ 正前方整条走廊恒在视锥内，视锥剔除只能剔「已驶过」的区
+ * （B 线实测：入口/中段可见 tri = 全城 356k，只有深段 −1300 才降到 78k）。
+ * 按观看者 z 与各区中心的距离整体开关区 mesh：
+ *   · 阈值触发（观看者移动 <20m 不重算）⇒ 每帧仅一次减法+比较，零遍历开销；
+ *   · 只动 visible，不销毁几何 ⇒ 驶近无重建成本、无 GC 抖动；
+ *   · 区显隐**不参与** getCastleStats（装配期口径）⇒ 预算测试不受动摇；
+ *   · 非分区 mesh（铺装/火盆/extras）不受影响 —— 铺装是道路本体，必须全段可见。
+ * 750m 依据：城门（z≈−358）+ 主殿立面 + 内城入口全部在内；更深处只剩剪影级
+ * 细节（750m 外 20m 塔身 ≈ 1.5° ≈ 17px），pop-in 位于体量亚像素的边缘之外。
+ */
+const ZONE_VIEW_RANGE = 750;
+/** 观看者 z 滞回带：少于该位移不重算显隐（机位微抖/环绕摆动不触发闪烁） */
+const ZONE_VIEW_HYSTERESIS = 20;
+
+/**
+ * 几何归区：**世界 bbox 的 z 中值**（跨区几何按中心点归区，不切割单个几何）。
+ * 越界的极端值夹到首尾区（NaN/空几何一律回 0 区）。
+ */
+export function zoneIndexOf(geo: THREE.BufferGeometry, edges: ZoneEdges): number {
+  if (!geo.boundingBox) geo.computeBoundingBox();
+  const bb = geo.boundingBox;
+  if (!bb) return 0;
+  const cz = (bb.min.z + bb.max.z) * 0.5;
+  if (!Number.isFinite(cz)) return 0;
+  for (let i = 0; i < edges.length - 1; i += 1) {
+    if (cz <= edges[i] && cz > edges[i + 1]) return i;
+  }
+  return cz > edges[0] ? 0 : edges.length - 2;
+}
+
+/** 把一批几何按 z 摊进各区的桶里（空区不建 mesh、不占 DC） */
+function splitByZone(parts: THREE.BufferGeometry[], edges: ZoneEdges): THREE.BufferGeometry[][] {
+  const zones: THREE.BufferGeometry[][] = [];
+  for (let i = 0; i < edges.length - 1; i += 1) zones.push([]);
+  for (const g of parts) zones[zoneIndexOf(g, edges)].push(g);
+  return zones;
+}
 
 /**
  * 各族的**目标有效粗糙度**（effective = material.roughness × roughnessMap.g）。
@@ -90,8 +154,10 @@ const FAMILY_METAL: Record<StoneKind, number> = {
   gold: 0.85,
   roof: 0,
   wood: 0,
-  // 玻璃给一点点 metalness：只为了把掠射角的菲涅耳抬起来，绝不走 transmission（R12 铁律⑤）
-  glass: 0.06,
+  // R31：0.06 → 0。玻璃是电介质，three 的 PBR 对 dielectric 已给 F0=0.04 的菲涅耳，
+  // 再叠 metalness 会把 albedo 染色（metal 的 F0 走 albedo），彩窗会发灰。
+  // 掠射角的「玻璃感」交给 envMapIntensity 1.7 + roughness 0.12 的锐利环境反射。
+  glass: 0,
   marble: 0
 };
 
@@ -105,6 +171,105 @@ const FAMILY_ENV: Record<StoneKind, number> = {
   wood: 0.5,
   glass: 1.7,
   marble: 0.9
+};
+
+/**
+ * R31 各族的 **法线强度**（material.normalScale）。
+ * R29 给 0.55 是因为当时判「缝深了 = 深雕砖墙」。R31 参考图复判：墙是 **0.45m 小砌块 +
+ * 明显灰缝**，审查线实测缝梯度 p95 0.16~0.23 vs 基线 0.136（−40%）⇒ 缝必须更清晰。
+ * 故砌体族抬回 0.85（砌块小了，缝在屏幕上更密，法线再压就是糊成一片）。
+ * 抛光族（marble/玻璃）本来就是平的，normalScale 走 1.0 也只是把细微浮雕托出来。
+ */
+const FAMILY_NORMAL_SCALE: Record<StoneKind, number> = {
+  ashlar: 0.85,
+  wall: 0.85,
+  floor: 0.8,
+  rock: 0.9,
+  gold: 0.7,
+  roof: 1.0,
+  wood: 1.0,
+  glass: 1.0,
+  marble: 1.0
+};
+
+/**
+ * R31 各族的 **风化度（weather）**，取用前先归并到 ≤3 档（WEATHER_STEPS）。
+ * ⚠ 改这里之前先看铁律 35：weather 是 `makeStoneMaps` 缓存键的一部分
+ * （kind|size|seed|weather|repeat）——相近的 0.01 级差异会多产一整套三张贴图，
+ * 这正是「25 张」的成因之一。故一律先量化再取族。
+ */
+const FAMILY_WEATHER: Record<StoneKind, number> = {
+  ashlar: 0.35,
+  wall: 0.5,
+  floor: 0.4,
+  rock: 0.35,
+  gold: 0.3,
+  roof: 0.35,
+  wood: 0.55,
+  glass: 0.35,
+  marble: 0.35
+};
+
+/** R31 weather 归并档位（≤3 档）：0.35 = 常规 / 0.5 = 较旧 / 0.65 = 重风化 */
+const WEATHER_STEPS = [0.35, 0.5, 0.65] as const;
+
+/** 把任意 weather 吸到最近的档位（两档等距时取小值，保持常规档优先） */
+export function quantizeWeather(weather: number): number {
+  let best: number = WEATHER_STEPS[0];
+  let bestD = Math.abs(weather - best);
+  for (const s of WEATHER_STEPS) {
+    const d = Math.abs(weather - s);
+    if (d < bestD) {
+      bestD = d;
+      best = s;
+    }
+  }
+  return best;
+}
+
+/**
+ * R31 贴图数量治理②：次要族**共享主角族的族实例**（kind → 实际取贴图的族）。
+ * wall 与 ashlar 在参考图里是**同一种白石砌体**（差别只在抛光与远近），共享一套
+ * 3 张贴图，再用 `FAMILY_COLOR` 把 wall 压回 R29 实测的灰白色阶（wall L 175.7 vs
+ * ashlar 198.7 ⇒ 线性 ×0.72）。⇒ 净省 3 张贴图，且远景剪影带与近景墙的缝节奏一致。
+ */
+const FAMILY_ALIAS: Partial<Record<StoneKind, StoneKind>> = { wall: 'ashlar' };
+
+/**
+ * 共享族的分色乘子（THREE 的 color 是线性乘子，这里的十六进制是 sRGB 写法）。
+ * 只给共享族用；自有族一律 0xffffff，避免把 R29 吸色的色阶再改一道。
+ */
+const FAMILY_COLOR: Partial<Record<StoneKind, number>> = { wall: 0xdddddd };
+
+/**
+ * R31 贴图数量治理③：各族的**通道预算**（按**贴图族** texKind 取，使 wall 别名 ashlar 后
+ * 自动继承 ashlar 的 'full' 三张，零额外开销）。
+ *   'full'      ：ashlar / gold（主体砌体 + 鎏金，roughMap 承载粗糙度分布）
+ *   'noRough'   ：roof / marble / floor（rough 由 material 直接给定，贴图只管 albedo+normal）
+ *   'albedoOnly'：wood / glass（只留 albedo，法线/粗糙由各自观感通道承载；玻璃靠 envMap 反射、
+ *                 木门靠 albedo 木纹 + 均匀粗糙，不再单独挂图以免超 castleTexCount）
+ * 净效果（稳态，含 wall 共享 ashlar）：ashlar3 + gold3 + roof2 + marble2 + floor2 + wood1 + glass1 = 14 张。
+ */
+const STONE_CHANNELS: Record<StoneKind, StoneChannels> = {
+  ashlar: 'full',
+  wall: 'full',
+  floor: 'noRough',
+  rock: 'full',
+  gold: 'full',
+  roof: 'noRough',
+  wood: 'albedoOnly',
+  glass: 'albedoOnly',
+  marble: 'noRough'
+};
+
+/**
+ * R31 自辉（只有真的需要「自发光」的族才给；自辉会吃 bloom 的阈值判定）。
+ * glass：微发光彩窗 —— 逆光下窗是唯一能自己亮的建筑元素，配合 bloom 出光晕。
+ * 绝不给 marble/roof/wood 加自辉（会糊掉各自的材质身份）。
+ */
+const FAMILY_EMISSIVE: Partial<Record<StoneKind, { color: number; intensity: number }>> = {
+  gold: { color: 0xb8902f, intensity: 0.22 },
+  glass: { color: 0xffd39a, intensity: 0.16 }
 };
 
 /**
@@ -140,6 +305,8 @@ interface FamilySlot {
 interface StoneFamily {
   kind: StoneKind;
   weather: number;
+  /** R31 贴图数量治理③：该族产哪些通道（'full'/'noRough'/'albedoOnly'） */
+  channels: StoneChannels;
   syncSize: number;
   targetSize: number;
   syncMaps: StoneMaps;
@@ -162,6 +329,10 @@ export class Castle {
   private readonly ownedTargets = new Set<StoneMaps>();
   private tris = 0;
   private dc = 0;
+  /** R31 距离显隐账本：分区 mesh + 各区世界 z 中心（addMergedByZone 登记） */
+  private readonly zoneViews: Array<{ mesh: THREE.Mesh; cz: number }> = [];
+  /** 上次显隐重算的观看者 z（NaN = 未算过；滞回带内不重算） */
+  private lastViewerZ = Number.NaN;
   private readonly syncTexSize: number;
   private readonly tier: QualitySettings['tier'];
   private disposed = false;
@@ -211,14 +382,15 @@ export class Castle {
   /* ─────────────────────── R30 热升级 ─────────────────────── */
 
   /** 取/建一个石材族：同步代 256² + 记目标尺寸 + 收集材质槽 */
-  private familyFor(kind: StoneKind, weather: number): StoneFamily {
-    const key = `${kind}|${weather.toFixed(3)}`;
+  private familyFor(kind: StoneKind, weather: number, channels: StoneChannels): StoneFamily {
+    const key = `${kind}|${weather.toFixed(3)}|${channels}`;
     let f = this.families.get(key);
     if (!f) {
-      const syncMaps = makeStoneMaps(kind, { repeat: [1, 1], weather, size: this.syncTexSize });
+      const syncMaps = makeStoneMaps(kind, { repeat: [1, 1], weather, size: this.syncTexSize, channels });
       f = {
         kind,
         weather,
+        channels,
         syncSize: this.syncTexSize,
         targetSize: stoneTextureSize(kind, this.tier),
         syncMaps,
@@ -233,7 +405,7 @@ export class Castle {
   private scheduleUpgrades(): void {
     for (const f of this.families.values()) {
       if (f.targetSize <= f.syncSize) continue;
-      const handle = bakeStoneMapsAsync(f.kind, { size: f.targetSize, weather: f.weather, repeat: [1, 1] });
+      const handle = bakeStoneMapsAsync(f.kind, { size: f.targetSize, weather: f.weather, repeat: [1, 1], channels: f.channels });
       f.handle = handle;
       handle.maps
         .then((target) => {
@@ -262,12 +434,18 @@ export class Castle {
     for (const slot of f.slots) {
       slot.mat.map = target.map;
       slot.mat.normalMap = target.normalMap;
-      if (slot.usesRoughMap) {
+      if (slot.usesRoughMap && target.roughnessMap) {
         slot.mat.roughnessMap = target.roughnessMap;
         slot.mat.roughness = inverseRoughness(slot.targetRough, target.stats.roughMean);
       }
       slot.mat.needsUpdate = true;
     }
+    // R31 贴图数量治理①：**目标代接手后立刻退役同步代**。
+    // 改前两代同时挂在 cache 里且都不释放（石材族 12+12=24 张常驻），
+    // 退役后石材族稳态就是 14 张 —— 这是「25 → ≤14」里最大的一笔。
+    // 安全性：此刻 f.slots 已全部指向目标代，同步代零引用；
+    // 且 retireStoneMaps 会把条目从模块缓存里摘掉（避免 disposeStoneCache 二次 dispose）。
+    retireStoneMaps(f.kind, f.syncSize, f.weather, f.channels);
     const dev = typeof import.meta !== 'undefined' && (import.meta as { env?: { DEV?: boolean } }).env?.DEV;
     if (dev) {
       console.info(
@@ -279,24 +457,42 @@ export class Castle {
 
   /* ─────────────────────── 装配工具 ─────────────────────── */
 
-  /** 石材族通用材质（ashlar/wall/gold/roof/wood/glass/marble），登记热升级槽 */
-  private stoneMaterial(kind: StoneKind, weather: number): THREE.MeshStandardMaterial {
-    const maps = this.familyFor(kind, weather).syncMaps;
+  /**
+   * 石材族通用材质（ashlar/wall/gold/roof/wood/glass/marble），登记热升级槽。
+   *
+   * R31 取族路径：`kind` 只定**视觉**（rough/metal/env/emissive/color），
+   * 贴图走 `FAMILY_ALIAS` 后的族 + 量化后的 weather —— 这是「14 张」账目的执行点。
+   * 铁律 34 在族没有 roughnessMap 时自动退化：material.roughness 直接 = target（有效值）。
+   */
+  private stoneMaterial(kind: StoneKind): THREE.MeshStandardMaterial {
+    const texKind = FAMILY_ALIAS[kind] ?? kind;
+    // R31 贴图数量治理②：weather 取**贴图族** texKind 的档（wall 别名 ashlar ⇒ 与 ashlar 同
+    // weather 0.35 ⇒ 真正共享同一套三张贴图，而非另产一套 ashlar|0.5）。
+    const weather = quantizeWeather(FAMILY_WEATHER[texKind]);
+    const channels = STONE_CHANNELS[texKind];
+    const family = this.familyFor(texKind, weather, channels);
+    const maps = family.syncMaps;
+    const ns = FAMILY_NORMAL_SCALE[kind];
+    const glow = FAMILY_EMISSIVE[kind];
     const mat = new THREE.MeshStandardMaterial({
       map: maps.map,
       normalMap: maps.normalMap,
       roughnessMap: maps.roughnessMap,
-      // R29：1 → 0.55 —— 砌缝法线强度减半（实测 1.0 时读成"深雕砖墙"，参考图是弱缝大板块）
-      normalScale: new THREE.Vector2(0.55, 0.55),
-      color: 0xffffff,
+      normalScale: new THREE.Vector2(ns, ns),
+      color: FAMILY_COLOR[kind] ?? 0xffffff,
       metalness: FAMILY_METAL[kind],
-      // 铁律 34：贴图写的是绝对粗糙度 ⇒ 这里必须是 1/ḡ 反算
-      roughness: inverseRoughness(TARGET_ROUGH[kind], maps.stats.roughMean),
+      // 铁律 34：贴图写的是绝对粗糙度 ⇒ 挂图时必须 1/ḡ 反算；不挂图时 target 就是有效值
+      roughness: maps.roughnessMap
+        ? inverseRoughness(TARGET_ROUGH[kind], maps.stats.roughMean)
+        : TARGET_ROUGH[kind],
       envMapIntensity: FAMILY_ENV[kind],
-      // 金饰自辉：逆光暴云天下金属只有环境反射一条路，自辉只把暗面托离死黑
-      ...(kind === 'gold' ? { emissive: 0xb8902f, emissiveIntensity: 0.22 } : {})
+      ...(glow ? { emissive: glow.color, emissiveIntensity: glow.intensity } : {})
     });
-    this.familyFor(kind, weather).slots.push({ mat, targetRough: TARGET_ROUGH[kind], usesRoughMap: true });
+    family.slots.push({
+      mat,
+      targetRough: TARGET_ROUGH[kind],
+      usesRoughMap: maps.roughnessMap !== null
+    });
     return mat;
   }
 
@@ -311,10 +507,13 @@ export class Castle {
    * 深色缝 ≈#222、块间 #3A3A3A–#606060 由 stoneTexture.prepFloor 生成（.qa/r29_vision.md §2-D）。
    */
   private pavementMaterial(): THREE.MeshStandardMaterial {
-    const maps = this.familyFor('floor', 0.4).syncMaps;
+    // R31：weather 走量化档（0.4 → 0.35），与石材族同规则，避免多产一套贴图
+    const channels: StoneChannels = 'noRough';
+    const maps = this.familyFor('floor', quantizeWeather(FAMILY_WEATHER.floor), channels).syncMaps;
     const mat = new THREE.MeshStandardMaterial({
       map: maps.map,
       normalMap: maps.normalMap,
+      // 不挂 roughnessMap：全国统一 0.8 的干面（R31：族里已不生成 rough 图）
       normalScale: new THREE.Vector2(0.8, 0.8),
       color: 0xffffff,
       metalness: 0,
@@ -326,13 +525,18 @@ export class Castle {
       polygonOffsetFactor: -2,
       polygonOffsetUnits: -2
     });
-    this.familyFor('floor', 0.4).slots.push({ mat, targetRough: 0.9, usesRoughMap: false });
+    this.familyFor('floor', quantizeWeather(FAMILY_WEATHER.floor), channels).slots.push({
+      mat,
+      targetRough: 0.9,
+      usesRoughMap: false
+    });
     return mat;
   }
 
   /** 步道铺装：ashlar 族白石。同样不挂 roughnessMap（水平面掠射会镜，均匀 0.95 全哑光） */
   private walkPavingMaterial(): THREE.MeshStandardMaterial {
-    const maps = this.familyFor('ashlar', 0.35).syncMaps;
+    const channels: StoneChannels = 'full';
+    const maps = this.familyFor('ashlar', 0.35, channels).syncMaps;
     const mat = new THREE.MeshStandardMaterial({
       map: maps.map,
       normalMap: maps.normalMap,
@@ -345,7 +549,11 @@ export class Castle {
       polygonOffsetFactor: -2,
       polygonOffsetUnits: -2
     });
-    this.familyFor('ashlar', 0.35).slots.push({ mat, targetRough: 0.95, usesRoughMap: false });
+    this.familyFor('ashlar', quantizeWeather(FAMILY_WEATHER.ashlar), channels).slots.push({
+      mat,
+      targetRough: 0.95,
+      usesRoughMap: false
+    });
     return mat;
   }
 
@@ -353,8 +561,7 @@ export class Castle {
     const key = `stone:${kind}`;
     const hit = this.matCache.get(key);
     if (hit) return hit as THREE.MeshStandardMaterial;
-    const weather = kind === 'wall' ? 0.5 : kind === 'gold' ? 0.3 : kind === 'wood' ? 0.55 : 0.35;
-    const mat = this.stoneMaterial(kind, weather);
+    const mat = this.stoneMaterial(kind);
     this.matCache.set(key, mat);
     return mat;
   }
@@ -368,7 +575,7 @@ export class Castle {
   }
 
   /** 单几何 → 1 mesh（静态：关自动矩阵、不投影不接收） */
-  private addMesh(geo: THREE.BufferGeometry, mat: THREE.Material, name: string): void {
+  private addMesh(geo: THREE.BufferGeometry, mat: THREE.Material, name: string): THREE.Mesh {
     const mesh = new THREE.Mesh(geo, mat);
     mesh.name = name;
     mesh.castShadow = false;
@@ -378,6 +585,7 @@ export class Castle {
     this.geometries.push(geo);
     this.tris += triCount(geo);
     this.dc += 1;
+    return mesh;
   }
 
   /** 把一个构件集按材质族摊进静态桶（含 R29 可选桶的防御式读取） */
@@ -398,10 +606,16 @@ export class Castle {
 
   /** 静态 mesh 一次性提交（空桶不建 mesh、不占 DC） */
   private commitStatics(): void {
-    this.addMerged(this.statics.ashlar, this.stone('ashlar'), 'castle-ashlar');
-    this.addMerged(this.statics.wall, this.stone('wall'), 'castle-wall');
-    this.addMerged(this.statics.gold, this.stone('gold'), 'castle-gold');
-    this.addMerged(this.statics.dark, this.special('dark', () => tunnelMaterial()), 'castle-dark');
+    // R31：只有两个大桶分区（ashlar 6 区 / wall 3 区）；量小的桶保持全局 1 个，
+    // 分了也不见得被剔除，白增 DC。
+    this.addMergedByZone(this.statics.ashlar, this.stone('ashlar'), 'castle-ashlar', ZONE_EDGES_6);
+    this.addMergedByZone(this.statics.wall, this.stone('wall'), 'castle-wall', ZONE_EDGES_3);
+    // R31 运行时治理①延伸：gold（135k）/ dark（34k）体量远非「量小」，且沿整条御桥+城门+内城
+    // 铺开（bbox 跨整个 z 走廊），若保持全局 1 个 mesh，行车时永不被视锥剔除 ⇒ 每帧全量提交。
+    // 改为按 z 分区（与 ashlar 同 6 区），越过车后的区被剔除（视野前方仍可见，但已过的段不再提交）。
+    // 共享同一材质（stone/dark 各自按 key 缓存）⇒ 贴图张数与 tri 不变，仅 DC 由 1→≤6（仍 < castleDc 32）。
+    this.addMergedByZone(this.statics.gold, this.stone('gold'), 'castle-gold', ZONE_EDGES_6);
+    this.addMergedByZone(this.statics.dark, this.special('dark', () => tunnelMaterial()), 'castle-dark', ZONE_EDGES_6);
     this.addMerged(this.statics.flame, this.special('flame', () => flameMaterial()), 'castle-flame');
     // R29 新族：桶非空才建 mesh（castleKit 未补桶时这里全部跳过 ⇒ DC 不变）
     for (const key of EXTRA_BUCKETS) {
@@ -416,5 +630,55 @@ export class Castle {
     const merged = mergeSafe(parts);
     parts.forEach((p) => p.dispose());
     this.addMesh(merged, mat, name);
+  }
+
+  /**
+   * R31 分区合批：同材族的几何先按世界 z 摊进各区，每区各自 merge 成 1 mesh。
+   * 收益：包围盒从 700m 长条变成 ≤300m 的块 ⇒ 行车时后方/侧后方的区整体被视锥剔除，
+   * 顶点提交与 fill rate 同时下降（fill rate 是本场景的既有瓶颈）。
+   * 空区不建 mesh（不占 DC）—— 所以加分项 DC 是「非空区数」而不是「区数」。
+   */
+  private addMergedByZone(
+    parts: THREE.BufferGeometry[],
+    mat: THREE.Material,
+    namePrefix: string,
+    edges: ZoneEdges
+  ): void {
+    if (parts.length === 0) return;
+    const zones = splitByZone(parts, edges);
+    for (let i = 0; i < zones.length; i += 1) {
+      if (zones[i].length === 0) continue;
+      const merged = mergeSafe(zones[i]);
+      const mesh = this.addMesh(merged, mat, `${namePrefix}-z${i}`);
+      // R31 距离显隐登记：区中心 z 用合并后 bbox（mergeSafe 已 computeBoundingBox）
+      merged.computeBoundingBox();
+      const bb = merged.boundingBox;
+      const cz = bb ? (bb.min.z + bb.max.z) * 0.5 : 0;
+      this.zoneViews.push({ mesh, cz });
+    }
+    parts.forEach((p) => p.dispose());
+  }
+
+  /**
+   * R31 运行时治理②：按观看者世界 z 开关各区 mesh（阈值触发，见 ZONE_VIEW_RANGE）。
+   * Game 帧循环每帧调用一次（内部滞回，多数帧直接返回）；
+   * 首帧（lastViewerZ=NaN）必算一次 ⇒ 不存在「从未显隐」的窗口。
+   */
+  updateViewerZ(z: number): void {
+    if (Number.isFinite(this.lastViewerZ) && Math.abs(z - this.lastViewerZ) < ZONE_VIEW_HYSTERESIS) return;
+    this.lastViewerZ = z;
+    for (const zv of this.zoneViews) {
+      zv.mesh.visible = Math.abs(zv.cz - z) < ZONE_VIEW_RANGE;
+    }
+  }
+
+  /**
+   * QA 自由机位（__v800EnvShot）专用：临时全显 + 重置滞回态。
+   * 自由机位直渲绕过帧循环，不放开就会保留上一个行车机位的显隐态
+   * ⇒ 环境验收截图缺远区件。下一次 updateViewerZ 按真实机位重算。
+   */
+  revealAllZones(): void {
+    for (const zv of this.zoneViews) zv.mesh.visible = true;
+    this.lastViewerZ = Number.NaN;
   }
 }

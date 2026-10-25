@@ -50,11 +50,22 @@ export type StoneKind =
 
 export interface StoneMaps {
   map: THREE.CanvasTexture;
-  normalMap: THREE.CanvasTexture;
-  roughnessMap: THREE.CanvasTexture;
+  /** 非全通道族（glass/wood 等）可为 null：该族只产 albedo，不挂法线/粗糙图 */
+  normalMap: THREE.CanvasTexture | null;
+  /** 非全通道族（roof/marble/floor 等）可为 null：该族 roughness 由 material 直接给定 */
+  roughnessMap: THREE.CanvasTexture | null;
   /** 生成实测统计（给使用方反算 material.roughness / 自检用） */
   stats: StoneStats;
 }
+
+/**
+ * R31 贴图数量治理③：每族的**通道预算**（castle.ts 按族下发，见 STONE_CHANNELS）。
+ * - 'full'      ：map + normalMap + roughnessMap（ashlar / gold 主体）
+ * - 'noRough'   ：map + normalMap（roof / marble / floor：rough 由 material 直接给定）
+ * - 'albedoOnly'：仅 map（glass / wood：只留 albedo，法线/粗糙由其它通道承载观感）
+ * 默认值 'full' ⇒ 既有调用方（car / Terrain）零改动。
+ */
+export type StoneChannels = 'full' | 'noRough' | 'albedoOnly';
 
 export interface StoneOptions {
   /** 贴图边长（2 的幂，默认 512） */
@@ -64,6 +75,8 @@ export interface StoneOptions {
   seed?: number;
   /** 0..1 风化：污渍 + 块间色差（默认 0.35） */
   weather?: number;
+  /** R31 贴图数量治理③：该族产哪些通道（默认 'full'，见 StoneChannels） */
+  channels?: StoneChannels;
 }
 
 /**
@@ -101,27 +114,44 @@ export const STONE_HEX: Record<StoneKind, { base: string; light: string; dark: s
 
 /**
  * 1 张贴图代表的真实边长（米）。改这里之前先看贴图规格：
- * - **ashlar 6.4m**：8 皮 × 3 块的开间（皮高 0.8m、块长 2.13m，大板块弱缝）；
- * - wall 7.2m：5 皮 × 3 块的次级大块灰白墙（皮高 1.44m）；
+ * - **ashlar 1.2m（R31：6.4 → 1.2）**：R29 的 6.4m「大板块弱缝」是**判错的**。
+ *   R31 参考图放大细读的硬结论：墙 = **≈0.45m 见方的小砌块** + 逐块明度抖动 +
+ *   明显灰缝 + 块面倒角高光（`.qa/r31_review/gap_list.md`：石缝梯度 p95 0.16~0.23，
+ *   基线只有 0.136；石面中频梯度只有参考的 1/8 ⇒ 细节尺度整体偏大）。
+ *   1.2m/tile ÷ 3×3 块 = **0.4m 见方**（见 MASONRY.ashlar.rows/cols 同步改 3×3）。
+ *   ⚠ 砌块在 UV 上是方的（castleKit.planarUV 用同一个 tile 除 u/v），
+ *   所以 **rows 必须等于 cols**，否则砌块会被拉成长条（旧 8×3 在 1.2m 下会变成
+ *   0.15m×0.4m 的砖）。
+ *   ⚠ 待定：审查线正在定量测灰缝周期，若最终定到 0.45m 整，
+ *   把本值改 **1.8** 且 MASONRY.ashlar.rows/cols 改 **4×4** 即一步到位（4×0.45=1.8）。
+ * - wall 2.4m（7.2 → 2.4）：次级墙同步改成小砌块（5×5 块 ⇒ 0.48m）。
+ *   ⚠ 本族当前在生产上**不走自己的族**（castle.ts FAMILY_ALIAS 把 wall 并进 ashlar），
+ *   这里保留是为了独立调用（QA/bench）与未来解绑。
  * - floor 3.6m：**乱石板 crazy-paving**（3×3 抖动格 Voronoi，~2.4m 不规则板块；castleKit
- *   paveTile = 本值×2 = 7.2m/张，据 r29_vision §2-D，非旧规则方板）；
+ *   paveTile = 本值×2 = 7.2m/张，据 r29_vision §2-D，非旧规则方板）。**R31 不动**：
+ *   它是 makePaving 的 UV 口径，改它会连带改路面缝距。
  * - rock 3.6m：4×4 乱石坡面；
  * - gold 1.2m：鎏金饰带的细腻刷纹；
- * - roof 2.4m：12 皮 × 8 片板岩瓦；
- * - wood 2.0m：4 块竖向木板；
+ * - roof 1.6m（2.4 → 1.6）：12 皮 × 8 片 ⇒ 每片板岩 0.13×0.2m（真板岩尺度）；
+ * - wood 1.6m（2.0 → 1.6）：4 块竖向木板 ⇒ 板宽 0.4m（真门板尺度）；
  * - glass 1.6m：3 行 × 2 列铅条窗格；
- * - marble 3.2m：抛光石材的脉络尺度（无块缝）。
+ * - marble 2.4m（3.2 → 2.4）：细磨石的脉络尺度（无块缝，竖脉）。
+ *
+ * ⚠ 铁律 35：改本表前先 grep 消费点 —— `castleKit.ts` 在模块初始化时快照了
+ * `{...STONE_TILE_METERS}`（TILE），`castleDetail.ts` 直接读 `STONE_TILE_METERS.*`
+ * 做 UV，`makePaving` 用 `STONE_TILE_METERS.floor * 2` 定铺装缝距。
+ * 改 ashlar/wall 会连带改全城 UV 密度（本轮正是要它更密）。
  */
 export const STONE_TILE_METERS: Record<StoneKind, number> = {
-  ashlar: 6.4,
-  wall: 7.2,
+  ashlar: 1.2,
+  wall: 2.4,
   floor: 3.6,
   rock: 3.6,
   gold: 1.2,
-  roof: 2.4,
-  wood: 2.0,
+  roof: 1.6,
+  wood: 1.6,
   glass: 1.6,
-  marble: 3.2
+  marble: 2.4
 };
 
 /** 按目标边长（米）换算 repeat，省得调用方各自算错 */
@@ -1762,6 +1792,7 @@ export function bakeStoneMapsAsync(kind: StoneKind, opts: StoneBakeOptions = {})
   const seed = (opts.seed ?? DEFAULT_SEED[kind]) >>> 0;
   const weather = clamp01(opts.weather ?? 0.35);
   const repeat = opts.repeat ?? ([1, 1] as [number, number]);
+  const channels = opts.channels ?? 'full';
 
   const bake = createStoneBake(kind, size, seed, weather);
   const band = bandRowsFor(size);
@@ -1820,12 +1851,8 @@ export function bakeStoneMapsAsync(kind: StoneKind, opts: StoneBakeOptions = {})
     return true;
   };
 
-  const buildTextures = (): StoneMaps => ({
-    map: toTexture(pixelCanvas(size, bake.albedo), THREE.SRGBColorSpace, repeat),
-    normalMap: toTexture(pixelCanvas(size, bake.normal), THREE.NoColorSpace, repeat),
-    roughnessMap: toTexture(pixelCanvas(size, bake.rough), THREE.NoColorSpace, repeat),
-    stats: stats ?? bake.finish()
-  });
+  const buildTextures = (): StoneMaps =>
+    assembleStoneMaps(size, bake.albedo, bake.normal, bake.rough, repeat, stats ?? bake.finish(), channels);
 
   const handle: StoneBakeHandle = {
     maps: promise,
@@ -1894,9 +1921,32 @@ function toTexture(
 }
 
 /**
+ * R31 贴图数量治理③：把三张像素图按 `channels` 预算装配成 StoneMaps。
+ * 'albedoOnly' 只产 albedo（normal/rough 为 null）；'noRough' 产 albedo + normal；
+ * 'full' 三张全产。像素计算（makeStonePixelSet）始终全算（stats 需要），
+ * 仅**跳过不挂的 CanvasTexture 创建** —— 这才是 GPU/内存真正省下的部分。
+ */
+function assembleStoneMaps(
+  size: number,
+  albedo: Uint8ClampedArray,
+  normal: Uint8ClampedArray,
+  rough: Uint8ClampedArray,
+  repeat: [number, number],
+  stats: StoneStats,
+  channels: StoneChannels
+): StoneMaps {
+  return {
+    map: toTexture(pixelCanvas(size, albedo), THREE.SRGBColorSpace, repeat),
+    normalMap: channels === 'albedoOnly' ? null : toTexture(pixelCanvas(size, normal), THREE.NoColorSpace, repeat),
+    roughnessMap: channels === 'full' ? toTexture(pixelCanvas(size, rough), THREE.NoColorSpace, repeat) : null,
+    stats
+  };
+}
+
+/**
  * node（无 DOM）兜底：没有 canvas 就不画，返回 1×1 哑纹理。
  */
-function makeFallbackMaps(repeat: [number, number]): StoneMaps {
+function makeFallbackMaps(repeat: [number, number], channels: StoneChannels = 'full'): StoneMaps {
   const stub = { width: 1, height: 1 } as unknown as HTMLCanvasElement;
   const make = (colorSpace: THREE.ColorSpace): THREE.CanvasTexture => {
     const tex = new THREE.CanvasTexture(stub);
@@ -1908,8 +1958,8 @@ function makeFallbackMaps(repeat: [number, number]): StoneMaps {
   };
   return {
     map: make(THREE.SRGBColorSpace),
-    normalMap: make(THREE.NoColorSpace),
-    roughnessMap: make(THREE.NoColorSpace),
+    normalMap: channels === 'albedoOnly' ? null : make(THREE.NoColorSpace),
+    roughnessMap: channels === 'full' ? make(THREE.NoColorSpace) : null,
     stats: {
       lumMean: 0,
       lumStd: 0,
@@ -1934,28 +1984,24 @@ export function makeStoneMaps(kind: StoneKind, opts: StoneOptions = {}): StoneMa
   const seed = (opts.seed ?? DEFAULT_SEED[kind]) >>> 0;
   const weather = clamp01(opts.weather ?? 0.35);
   const repeat = opts.repeat ?? ([1, 1] as [number, number]);
-  const key = `${kind}|${size}|${seed}|${weather.toFixed(3)}|${repeat[0]}x${repeat[1]}`;
+  const channels = opts.channels ?? 'full';
+  const key = `${kind}|${size}|${seed}|${weather.toFixed(3)}|${repeat[0]}x${repeat[1]}|${channels}`;
   const cached = cache.get(key);
   if (cached) return cached;
 
   if (typeof document === 'undefined') {
-    const fallback = makeFallbackMaps(repeat);
+    const fallback = makeFallbackMaps(repeat, channels);
     cache.set(key, fallback);
     return fallback;
   }
 
   const started = typeof performance !== 'undefined' ? performance.now() : Date.now();
   const pixels = makeStonePixelSet(kind, { size, seed, weather });
-  const maps: StoneMaps = {
-    map: toTexture(pixelCanvas(pixels.size, pixels.albedo), THREE.SRGBColorSpace, repeat),
-    normalMap: toTexture(pixelCanvas(pixels.size, pixels.normal), THREE.NoColorSpace, repeat),
-    roughnessMap: toTexture(pixelCanvas(pixels.size, pixels.rough), THREE.NoColorSpace, repeat),
-    stats: pixels.stats
-  };
+  const maps = assembleStoneMaps(size, pixels.albedo, pixels.normal, pixels.rough, repeat, pixels.stats, channels);
   const ended = typeof performance !== 'undefined' ? performance.now() : Date.now();
   buildCount += 1;
   console.info(
-    `[stoneTexture] ${kind} ${size}² weather=${weather.toFixed(2)} 像素 ${pixels.elapsedMs.toFixed(1)}ms / 总 ${(ended - started).toFixed(1)}ms` +
+    `[stoneTexture] ${kind} ${size}² weather=${weather.toFixed(2)} channels=${channels} 像素 ${pixels.elapsedMs.toFixed(1)}ms / 总 ${(ended - started).toFixed(1)}ms` +
       ` | L ${pixels.stats.lumMean.toFixed(0)}±${pixels.stats.lumStd.toFixed(0)} C ${pixels.stats.contrast.toFixed(0)}` +
       ` 颗粒 ${pixels.stats.grain.toFixed(2)} n|xy| ${pixels.stats.normalMag.toFixed(3)} roughMean ${pixels.stats.roughMean.toFixed(3)}（第 ${buildCount} 套）`
   );
@@ -1967,8 +2013,25 @@ export function makeStoneMaps(kind: StoneKind, opts: StoneOptions = {}): StoneMa
 export function disposeStoneCache(): void {
   for (const maps of cache.values()) {
     maps.map.dispose();
-    maps.normalMap.dispose();
-    maps.roughnessMap.dispose();
+    maps.normalMap?.dispose();
+    maps.roughnessMap?.dispose();
   }
   cache.clear();
+}
+
+/**
+ * R31 贴图数量治理：某族「同步代」被目标代接手后，立即从缓存摘掉并释放三张贴图。
+ * 调用方（castle.ts）已确认该族所有材质槽都指向目标代、同步代零引用，故安全。
+ * 只摘 `makeStoneMaps` 默认 seed + repeat 1x1 的键（castle 走的就是这条），不碰其它键。
+ */
+export function retireStoneMaps(kind: StoneKind, size: number, weather: number, channels: StoneChannels = 'full'): void {
+  const seed = DEFAULT_SEED[kind] >>> 0;
+  const key = `${kind}|${size}|${seed}|${weather.toFixed(3)}|1x1|${channels}`;
+  const maps = cache.get(key);
+  if (!maps) return;
+  // 避免 disposeStoneCache 之后二次 dispose（它只清仍挂在 cache 的条目）
+  maps.map.dispose();
+  maps.normalMap?.dispose();
+  maps.roughnessMap?.dispose();
+  cache.delete(key);
 }

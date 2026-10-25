@@ -456,6 +456,9 @@ export class Game {
         // 天空球还停在上一个机位中心 —— 大跨度跳机位时球体会被甩到相机背后，
         // 截出来就是「黑天」（dev-b 在 verify/r26d 实测过一次）。
         this.env.update(cam.position);
+        // R31 治理②：自由机位绕过帧循环 ⇒ 先放开全部分区（否则保留上一个行车
+        // 机位的距离显隐态，环境验收截图缺远区件）；下一帧按真实机位重算。
+        this.castle.revealAllZones();
         gl.render(this.scene, cam);
         return gl.domElement.toDataURL('image/png');
       };
@@ -729,6 +732,8 @@ export class Game {
     // ---- 相机 + 后处理 ----
     this.rig.update(dt, focus, absSpeed, this.car.root.quaternion);
     this.syncInteriorOcclusion();
+    // R31 运行时治理②：城堡分区按观看距离显隐（内部 20m 滞回，零遍历开销）
+    this.castle.updateViewerZ(this.rig.camera.position.z);
     this.env.update(this.rig.camera.position);
     this.postfx.setSpeedBlur(Math.min(1, absSpeed / 72) ** 1.6 * 0.07);
     this.postfx.setFlash(0);
@@ -1041,6 +1046,8 @@ export class Game {
     // R15c 实证：按对象隐藏会被合批吞并 → 走独占材质，整批开关。
     // R19：车漆内舱暗面 —— 车内机位把 body-lower/root 切到 BackSide，离开时切回 FrontSide。
     this.syncInteriorOcclusion();
+    // R31 运行时治理②：城堡分区按观看距离显隐（内部 20m 滞回，零遍历开销）
+    this.castle.updateViewerZ(this.rig.camera.position.z);
     const speedBlur =
       pedaling && this.sm.phase !== 'countdown' ? Math.min(1, vehicle.speed / 72) ** 1.6 * 0.07 : 0;
     this.postfx.setSpeedBlur(speedBlur);

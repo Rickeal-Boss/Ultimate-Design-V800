@@ -1,0 +1,10 @@
+{
+  "tris": 356746,
+  "dc": 27,
+  "castle": {
+    "tris": 356746,
+    "dc": 27
+  },
+  "terrain": null,
+  "road": null
+}

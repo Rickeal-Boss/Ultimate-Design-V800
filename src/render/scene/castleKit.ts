@@ -33,22 +33,32 @@ import { mergeSafe } from '../../util/geo';
 import { STONE_TILE_METERS } from './stoneTexture';
 import type { StoneKind } from './stoneTexture';
 import {
+  apseDrum,
+  bellTower,
   blindArcadeRow,
   capitalCollar,
+  cloisterArcade,
   corniceBand,
   corridorCrossing,
   corridorGallery,
   corridorRun,
   crocketRun,
+  crookedSpire,
+  draperyRelief,
   finialOrnament,
   flyingButtress,
+  gildedScreen,
+  gothicBay,
   mapParts,
+  pinnacleCluster,
   pour,
+  setDeepFar,
   statueNicheX,
   statueNicheZ,
   traceryWindowX,
   traceryWindowZ
 } from './castleDetail';
+import type { ExtraBucketKey } from './castleDetail';
 import {
   GATE,
   GATE_DECOR,
@@ -85,6 +95,17 @@ function emptyBuckets(): StoneBuckets {
 }
 
 /**
+ * R31 可选桶直推（roof/wood/glass/marble）：castle.ts 的 `absorb()` 对这四个键
+ * 做防御式读取，castleKit 只要往桶对象上挂同名数组即自动生效（每桶 +1 DC）。
+ * 注：B 线 z-zone 合批后 castle 静态 DC 实测 ≤ 18，R31_BUDGET.castleDc = 32 留余量。
+ */
+function extra(b: StoneBuckets, key: ExtraBucketKey, g: THREE.BufferGeometry): void {
+  const dst = b as unknown as Record<string, THREE.BufferGeometry[] | undefined>;
+  if (!dst[key]) dst[key] = [];
+  dst[key].push(g);
+}
+
+/**
  * 低配细节档（质量档**只降装饰密度，绝不改几何长度** —— 铁律 33）。
  * 影响：8 面尖塔 → 4 面、卷叶 crocket 跳过、火焰段数降。
  * **不影响**：拱跨数、栏板长度、城门/建筑尺寸、铺装范围。
@@ -116,22 +137,7 @@ type CastleKind = StoneKind;
  * **不复用 lancetWindow**（≈182 tri/扇，铺满必爆预算）。低配档不裁这些体量
  * （铁律 33：低配只降装饰密度，不改几何长度）。
  */
-/** 城内大街后排体量（局部 x，0 = 建筑前脸；前排占 0..8.8） */
-const R29_REAR_ROW = {
-  xIn: 9,
-  xOut: 26,
-  /** 后排连墙高（> 殿 19.4，< 塔 44.3 ⇒ 只在殿上方露出） */
-  wallH: 20,
-  /** 后排塔：[局部 z, 总高]（z 对称成对，rotateY(π) 镜像后左右仍对称） */
-  towers: [
-    [-17, 52],
-    [-6, 66],
-    [7, 58],
-    [17, 48]
-  ] as readonly (readonly [number, number])[]
-};
-/** 第三排（更远更高，纯天际线） */
-const R29_REAR2 = { xIn: 27, xOut: 42, wallH: 26, towerH: 78 };
+/** 城内大街后排体量 → R31 移至 R30_CROSSINGS 之后的 R31 常量块（墙 24 / 塔 +8） */
 /** 门楼翼墙延伸外缘（r28Layout.TOWER_GROUP.wing.xEnd = 55 之外再加） */
 const R29_WING_EXT = { xEnd: 95, h: 29 };
 /** 远景剪影带（|x| 内缘 / 外缘、z 范围）—— 纯盒体，wall 桶 */
@@ -153,10 +159,54 @@ const R29_SKYLINE = { xIn: 120, xOut: 175, zNear: -430, zFar: -1430 };
 const R30_ARCADE = { floorY: 8.2, width: 3.5, pitch: 8.8, rise: 3.6 } as const;
 /** 街区角塔（每街区每侧 2 座，落在块两端 ∓22.5；深 5 只咬连墙外端 3m，窗已避让） */
 const R30_CORNER = { h: 31, w: 8, d: 5 } as const;
-/** 第三排中央高塔（块心、后排二排位；R29 78 → R30 84，天际线再上一层） */
-const R30_REAR_CORE = { h: 84, w: 15 } as const;
 /** 跨街封闭拱顶连廊 z（块心 k=3/8/13，确定性；避开门洞带与广场带） */
 const R30_CROSSINGS = [-526.5, -756.5, -986.5] as const;
+
+/* ═══════════════════ R31 内部建筑群加密（A 线自有常量；数字出处 .qa/r31_a_report.md） ═══════════════════
+ * 用户令：①「加大内部建筑群并检查内部建筑高度与材料丰富度」②「构建时长无限制、
+ * 运行时必须流畅（fill rate 才是瓶颈）」。增量四件（全部结构件，低配不裁，铁律 33）：
+ *   ① 第二进院落带（x 28..44，R29 第三排外移让位）：后殿半圆室 apse（隔块，56m 级
+ *      天际线第三层）+ 钟楼（隔三块，64m 级）+ 中景体量（30m 级）；
+ *   ② 墙顶敞廊（R29 后排墙顶加列柱 + 拱 = 可见回廊 cloister，marble 柱身）；
+ *   ③ 材料丰富度：roof（殿坡顶/后殿锥顶/钟楼四坡顶）、wood（连廊楼面/梁）、
+ *     glass（花格窗玻璃底板，castleDetail 内置）、marble（回廊柱列/钟楼塔身带）
+ *     四可选桶真正点亮 —— castle.ts EXTRA_BUCKETS 防御式读取自动生效，4 DC。
+ *   ④ 主殿两翼飞扶壁（参考图最显著语汇：前排门楼段 ↔ 翼墙的空中连接）。
+ * 走廊纪律：全部新件世界 |x| ≥ 24.5（> 走廊 8），跨街连廊楼面 ≥12 不变。
+ */
+/** R29 后排体量（A 线自有；R31：墙 20→24 加墙顶敞廊、四塔 +8 加高 —— 天际线第二层） */
+const R29_REAR_ROW = {
+  xIn: 9,
+  xOut: 26,
+  /** 后排连墙高（R31 20→24；仍 < 塔 44.3 ⇒ 只在殿上方露出） */
+  wallH: 24,
+  /** 后排塔：[局部 z, 总高]（R31 全体 +8：60/74/66/56） */
+  towers: [
+    [-17, 60],
+    [-6, 74],
+    [7, 66],
+    [17, 56]
+  ] as readonly (readonly [number, number])[]
+};
+/** 第三排（R31 外移 27..42 → 46..61，让位第二进院落带；塔 78 → 82） */
+const R29_REAR2 = { xIn: 46, xOut: 61, wallH: 26, towerH: 82 };
+/** 第三排中央高塔（块心；R31 随第三排外移，84 → 88） */
+const R30_REAR_CORE = { h: 88, w: 15 };
+/** 第二进院落带（R31 新增）：x 范围 / 后殿 / 钟楼 */
+const R31_COURTYARD = {
+  xIn: 28,
+  xOut: 44,
+  /** 后殿（隔块 k%2===0）：半径 / 高（天际线第三层 56m 级；x 收在 37.5 防锥顶咬第三排塔） */
+  apse: { x: 37.5, r: 8, h: 56 },
+  /** 钟楼（隔三块 k%3===0）：宽 / 总高 */
+  bell: { x: 33.5, w: 9, h: 64 },
+  /** 中景体量（无 apse/钟楼的块）：墙高 */
+  midH: 30
+} as const;
+/** 墙顶敞廊（R29 后排墙顶；marble 柱列 + 尖拱） */
+const R31_CLOISTER = { colH: 7.5, depth: 3.0, pitch: 5.2, archRise: 2.9 } as const;
+/** 第四排远景体量（R31 随第三排外移：43..58 → 63..78） */
+const R31_ROW4 = { xIn: 63, xOut: 78, wallH: 40, towerH: 88 };
 
 /* ═══════════════════ 基础几何 ═══════════════════ */
 
@@ -829,6 +879,7 @@ export function makeLamps(): StoneBuckets {
  */
 export function makeGate(): StoneBuckets {
   const b = emptyBuckets();
+  setDeepFar(false);
   const { z, openW, openH, archivoltBandH, totalH, halfW, depth } = GATE;
   const openHalf = openW / 2; // 10
   const halfD = depth / 2; // 7
@@ -1047,6 +1098,8 @@ export function makeGate(): StoneBuckets {
     const nishe = statueNicheZ({ halfW: 0.85, rise: 2.6, cusp: 0.5 });
     pour(b, mapParts(nishe, (g) => g.translate(cx, 37.5, zFront - 0.05)));
   }
+  // A 线 ① 鎏金山花屏（门洞 tympanum reredos：中央拱门后金山花 + 金十字；高效增金饰覆盖）
+  pour(b, mapParts(gildedScreen({ w: 12, h: 16, cross: true }), (g) => g.rotateY(Math.PI / 2).translate(0, 9, zFront + 0.05)));
   return b;
 }
 
@@ -1061,6 +1114,7 @@ export function makeGate(): StoneBuckets {
  */
 export function makeTowerGroup(): StoneBuckets {
   const b = emptyBuckets();
+  setDeepFar(false);
   const gz = GATE.z; // −358.5
   const gd = GATE.depth; // 14
   const zFront = gz + gd / 2; // 门楼前脸 −351.5
@@ -1336,6 +1390,7 @@ export function makeTowerGroup(): StoneBuckets {
  */
 export function makeMainHall(): StoneBuckets {
   const b = emptyBuckets();
+  setDeepFar(false); // 主殿为近景 hero 建筑，不做远区减法
   const { z, depth, frontDepth, frontW, clearW, clearH, frontH, crownH, facadeW, wingInner, wingOuter } = MAIN_HALL;
   const zFront = z; // −1300（立面）
   const zBack = z - depth; // −1360
@@ -1509,14 +1564,14 @@ export function makeMainHall(): StoneBuckets {
     b.ashlar.push(box('ashlar', facadeW - 8, rearH, depth - frontDepth, 0, 1 + rearH / 2, zBack + (depth - frontDepth) / 2));
     b.ashlar.push(box('ashlar', facadeW - 6, 1.2, depth - frontDepth + 1.4, 0, 1 + rearH + 0.6, zBack + (depth - frontDepth) / 2));
     b.gold.push(box('gold', facadeW - 5, 0.24, depth - frontDepth + 1.6, 0, 1 + rearH + 1.4, zBack + (depth - frontDepth) / 2));
-    // 双坡顶（石）
+    // 双坡顶（石 → R31 改 roof 桶：斜面瓦，材料丰富度）
     {
       const cz = zBack + (depth - frontDepth) / 2;
       const run = (facadeW - 8) / 2;
       const ridgeY = 1 + rearH + 4.5;
       for (const rs of [-1, 1] as const) {
         const lx = rs < 0 ? -run / 2 : run / 2;
-        b.ashlar.push(boxRot('ashlar', Math.hypot(run, 4.5), 0.5, depth - frontDepth - 2, lx, (1 + rearH + 1.2 + ridgeY) / 2, cz, -rs * Math.atan2(4.5, run)));
+        extra(b, 'roof', boxRot('roof', Math.hypot(run, 4.5), 0.5, depth - frontDepth - 2, lx, (1 + rearH + 1.2 + ridgeY) / 2, cz, -rs * Math.atan2(4.5, run)));
       }
       b.gold.push(box('gold', 0.4, 3.2, 0.4, 0, ridgeY + 1.6, cz)); // 屋脊金十字
       b.gold.push(box('gold', 1.8, 0.4, 0.4, 0, ridgeY + 2.4, cz));
@@ -1637,6 +1692,66 @@ export function makeMainHall(): StoneBuckets {
         )
       );
     }
+    /* ── R31 ⑦ 两翼飞扶壁 ×4（每侧 2 座；参考图最显著语汇：前排段 ↔ 翼墙空中连接）──
+     * 墩落在翼墙前方广场边（|x| = 52/70，z ≈ zFront+6.5），飞拱升至翼墙顶带
+     * （y 62）。探针纪律：墩/拱全部 |x| ≥ 51（>走廊 8）、y ≥ 2.7。
+     * ⑧ 主尖塔簇 ×2（pinnacleCluster：前排段冠座两肩）+ 祭坛台座（marble）。 */
+    for (const side of [-1, 1] as const) {
+      for (const wx of [52, 70]) {
+        const fb = flyingButtress({
+          baseY: 2.7,
+          springY: 34,
+          topY: 62,
+          reach: 9,
+          depth: 1.5,
+          band: 0.85,
+          pierW: 2.8,
+          pinnacle: true
+        });
+        pour(b, mapParts(fb, (g) => g.rotateY(-Math.PI / 2).translate(side * wx, 0, zFront)));
+      }
+    }
+    for (const side of [-1, 1] as const) {
+      pour(
+        b,
+        mapParts(pinnacleCluster({ w: 4.2, h: 7.5 }), (g) =>
+          g.translate(side * (frontW / 2 - 4), frontH + 3.4, zMidFront)
+        )
+      );
+      // A 线 ① 卷叶尖塔（crockedSpire）：叠在 pinnacleCluster 顶冠之上，密布金卷叶
+      pour(
+        b,
+        mapParts(crookedSpire({ w: 2.2, h: 6.5 }), (g) =>
+          g.translate(side * (frontW / 2 - 4), frontH + 3.4 + 7.5, zMidFront)
+        )
+      );
+    }
+    // A 线 ③ 白色垂幔浮雕（draperyRelief）：主殿正立面两侧悬挂白石材垂幔 + 金系带
+    for (const side of [-1, 1] as const) {
+      pour(
+        b,
+        mapParts(draperyRelief({ w: 10, h: 30, folds: 6 }), (g) =>
+          g.translate(side * (frontW / 2 - 9), 6.5, zFront - 0.05)
+        )
+      );
+    }
+    // A 线 ⑥ 金饰比例提升：正立面金徽章（大金盘）竖向阵列 + 横向金饰带（宽面金，增覆盖）
+    for (let i = 0; i < 6; i += 1) {
+      const my = 16 + i * 11;
+      for (const side of [-1, 1] as const) {
+        const mx = side * (frontW / 2 - 16);
+        const med = new THREE.CylinderGeometry(1.5, 1.5, 0.4, 16);
+        med.rotateX(Math.PI / 2);
+        med.translate(mx, my, zFront - 0.12);
+        planarUV(med, TILE.gold);
+        b.gold.push(med);
+      }
+    }
+    // 大理石墙裙（marble 桶；主殿正立面基座带，贴面 z=zFront+0.08 不凸出撞击面；
+    // R29 广场平整令仍在 —— 不放任何 y>0.02 的广场横穿体块，大理石只上墙面）
+    extra(b, 'marble', box('marble', frontW + 2, 2.6, 0.16, 0, 1.3, zFront + 0.08));
+    // A 线 ① 鎏金山花屏（主殿正立面中央金山花 reredos + 金十字；薄板双面 = 高效增金饰覆盖）
+    pour(b, mapParts(gildedScreen({ w: 14, h: 20, cross: true }), (g) => g.rotateY(Math.PI / 2).translate(0, 12, zFront + 0.15)));
   }
   return b;
 }
@@ -1688,6 +1803,10 @@ export function makeInnerCity(): StoneBuckets {
 
   for (let k = 0; k < blocks; k += 1) {
     const zc = zNear - blockLen / 2 - k * blockLen; // 块中心
+    // A 线 ⑦ 远区 LOD 减法：最远 1/3 街区（最深 z 区）置 DEEP_FAR —— 跳过卷叶 /
+    // 子拱 / 窗棂 / 壁龛立像 / 瓶柱加密等纯装饰密度（几何长度不变，铁律 33）。
+    const far = k >= blocks - Math.floor(blocks / 3);
+    setDeepFar(far);
     for (const side of [-1, 1] as const) {
       /** 局部 → 世界（见上方配方）：side=+1 直达，side=−1 过 rotateY(π) 镜像 */
       const put = <T extends THREE.BufferGeometry>(g: T): T => {
@@ -1708,9 +1827,10 @@ export function makeInnerCity(): StoneBuckets {
       const slopeLen = Math.hypot(run, ridgeY - eaveY); // 4.707
       const slopeAng = Math.atan2(ridgeY - eaveY, run); // 0.213
       for (const rs of [-1, 1] as const) {
-        // rs=−1：檐口朝街面（局部 x 0 端）下倾；rs=+1：檐口朝背侧下倾
+        // rs=−1：檐口朝街面（局部 x 0 端）下倾；rs=+1：檐口朝背侧下倾。
+        // R31：坡顶改 **roof 桶**（斜面瓦）—— 材料丰富度四桶点亮之一。
         const lx = rs < 0 ? (depth / 2 - run) / 2 : (depth / 2 + run) / 2;
-        b.ashlar.push(put(boxRot('ashlar', slopeLen, 0.5, hallW + 1.2, lx, (eaveY + ridgeY) / 2, 0, -rs * slopeAng)));
+        extra(b, 'roof', put(boxRot('roof', slopeLen, 0.5, hallW + 1.2, lx, (eaveY + ridgeY) / 2, 0, -rs * slopeAng)));
       }
       b.ashlar.push(put(box('ashlar', 0.7, 0.5, hallW + 1.2, depth / 2, ridgeY + 0.25, 0))); // 屋脊
       b.gold.push(put(box('gold', 0.28, 2.4, 0.28, depth / 2, ridgeY + 1.7, 0))); // 金十字竖
@@ -1825,6 +1945,11 @@ export function makeInnerCity(): StoneBuckets {
         // R30 檐口带（castleDetail.corniceBand：FBX Cornice_2 18.30×1.41×0.68 分层檐口）
         // 落在连墙上带（叠涩 14.0..14.5 之下 y 11.5 起）⇒ 参考图矮墙的"檐口饰带"分层读法
         pour(b, mapParts(corniceBand({ len: len + 0.6, proj: 0.6, h: 1.2 }), (g) => put(g.translate(-0.15, 11.5, lz))));
+        // A 线 ③ 白色垂幔浮雕（draperyRelief）：连墙窗上悬挂白石材垂幔 + 金系带
+        //     （远区经 DEEP_FAR 折页减半；仅在近/中区铺设，控制 tri）
+        if (!far) {
+          pour(b, mapParts(draperyRelief({ w: len - 2, h: 4.6, folds: 4 }), (g) => put(g.translate(0, 8.4, lz))));
+        }
       }
 
       /* ── R30 ① 内部加密 + 街面连廊（用户令「检查城堡内部：建筑少且矮、无连廊」）──
@@ -1871,6 +1996,11 @@ export function makeInnerCity(): StoneBuckets {
             mapParts(statueNicheX({ halfW: 0.62, rise: 2.4, cusp: 0.5 }), (g) => put(g.translate(0, 16, ctz)))
           );
           if (finial) pour(b, mapParts(finialOrnament({ r: 0.5 }), (g) => put(g.translate(ctw / 2, ctH + 5.6, ctz))));
+          // A 线 ① 卷叶尖塔（crockedSpire）顶冠：白石八棱鼓 + 锥顶 + 锥面金卷叶 + 金尖
+          pour(b, mapParts(crookedSpire({ w: 1.7, h: 5.2 }), (g) => put(g.translate(ctw / 2, ctH + 1.8, ctz))));
+          // A 线 ② 角塔飞扶壁（街面墩 → 塔身，内城塔群语汇拓展；pinnacle:false 控 tri）
+          const cfb = flyingButtress({ baseY: 0, springY: 9, topY: 22, reach: 6, depth: 1.0, band: 0.5, pierW: 1.3, pinnacle: false });
+          pour(b, mapParts(cfb, (g) => put(g.rotateY(Math.PI).translate(0, 0, ctz))));
         };
         cornerTower(-(blockLen / 2 - 0.5), k % 2 === 0);
         cornerTower(blockLen / 2 - 0.5, false);
@@ -1950,20 +2080,45 @@ export function makeInnerCity(): StoneBuckets {
         }
       }
 
-      /* ── R29 后排体量 ×2 排：沿街立面之后的高墙 + 塔簇（天际线成簇）──
-       * 前排最高 = 塔 44.3 / 殿 19.4 ⇒ 后排墙 20 只在殿上方露出、
-       * 后排塔 48~66 高过塔尖，第三排 78 再往后退一层——城市进深感。 */
+      /* ── R29/R31 后排体量 ×3 排：沿街立面之后的高墙 + 第二进院落 + 远景塔簇 ──
+       * R31 天际线五层（用户令「更多、更高、更有层次」，不要一马平川）：
+       *   街墙 24（+墙顶敞廊 31）→ 前排塔 56~74 → 院落后殿/钟楼 56~64 →
+       *   第三排 82~88 → 第四排远景 88。R31 改动：
+       *   ① 后排墙 20→24 + 墙顶敞廊（隔块；marble 柱列 = 材料丰富度主力）；
+       *   ② 第二进院落带 x 28..44（apse 隔块 / 钟楼隔三块 / 中景体量）；
+       *   ③ 第三排外移 27..42 → 46..61（给院落让位），塔 78→82、中央塔 84→88；
+       *   ④ 第四排外移 43..58 → 63..78。
+       * 走廊纪律：全部 |x| ≥ 15.5+9 = 24.5。 */
       {
         const r1 = R29_REAR_ROW;
         const r1x = (r1.xIn + r1.xOut) / 2;
         const r1w = r1.xOut - r1.xIn;
         b.wall.push(put(box('wall', r1w, r1.wallH, blockLen, r1x, r1.wallH / 2, 0)));
         b.ashlar.push(put(box('ashlar', r1w + 0.6, 0.5, blockLen + 0.6, r1x, r1.wallH + 0.25, 0)));
+        // R31 ① 墙顶敞廊（隔块；回廊柱列骑在 24m 墙顶 —— 街面透过前排建筑间隙可见）
+        if (k % 2 === 0) {
+          pour(
+            b,
+            mapParts(
+              cloisterArcade({
+                len: blockLen - 6,
+                depth: R31_CLOISTER.depth,
+                colH: R31_CLOISTER.colH,
+                colR: 0.42,
+                pitch: R31_CLOISTER.pitch,
+                archRise: R31_CLOISTER.archRise
+              }),
+              (g) => put(g.translate(r1.xIn + R31_CLOISTER.depth / 2 - 0.2, r1.wallH + 0.4, 0))
+            )
+          );
+        }
         for (const [oz, th] of r1.towers) {
           b.ashlar.push(put(box('ashlar', r1w + 2, 1.4, 13, r1x, 0.7, oz)));
           b.ashlar.push(put(box('ashlar', r1w, th - 1.4 - th * 0.2, 11, r1x, 1.4 + (th - 1.4 - th * 0.2) / 2, oz)));
           b.ashlar.push(put(box('ashlar', r1w + 1.6, 1, 12.6, r1x, th - th * 0.2 + 0.1, oz)));
           b.ashlar.push(put(spire('ashlar', 5.4, 0, th * 0.2, 8, r1x, th - th * 0.2 + 0.6, oz, Math.PI / 8)));
+          // A 线 ① 卷叶尖塔（crockedSpire）顶冠：后排塔尖收口（远区经 DEEP_FAR 裁卷叶）
+          pour(b, mapParts(crookedSpire({ w: 2.2, h: th * 0.18 }), (g) => put(g.translate(r1x, th - th * 0.1 + 0.6, oz))));
           // 窗缝只落在「前排塔尖(44.3)以上」的可见带里，别做被挡住的废 tri
           if (th > 52) {
             for (const f of [0.35, 0.7]) {
@@ -1971,7 +2126,41 @@ export function makeInnerCity(): StoneBuckets {
             }
           }
         }
-        // 第三排（最远最高，纯天际线体量）
+        /* ── R31 ② 第二进院落带（x 28..44；apse 隔块 / 钟楼隔三块 / 中景体量）────── */
+        {
+          const cy = R31_COURTYARD;
+          if (k % 2 === 0) {
+            // 后殿半圆室（apse；开口朝街 −x，锥顶 roof 桶）
+            pour(
+              b,
+              mapParts(
+                apseDrum({ r: cy.apse.r, h: cy.apse.h, segs: 12, roofRise: cy.apse.h * 0.26 }),
+                (g) => put(g.translate(cy.apse.x, 0, 0))
+              )
+            );
+          } else if (k % 3 === 0) {
+            // 钟楼（WCBell 语录；四坡顶 roof 桶）
+            pour(
+              b,
+              mapParts(bellTower({ w: cy.bell.w, totalH: cy.bell.h }), (g) =>
+                put(g.translate(cy.bell.x, 0, 0))
+              )
+            );
+          } else {
+            // 中景体量（30m 级，补齐院落带天际线不断档）+ 哥特开间（gothicBay 复用单元）
+            b.wall.push(put(box('wall', cy.xOut - cy.xIn - 4, cy.midH, blockLen - 12, (cy.xIn + cy.xOut) / 2, cy.midH / 2, 0)));
+            b.ashlar.push(put(box('ashlar', cy.xOut - cy.xIn - 3, 0.6, blockLen - 11, (cy.xIn + cy.xOut) / 2, cy.midH + 0.3, 0)));
+            b.dark.push(put(box('dark', 0.5, 5, 2.4, cy.xIn + 0.05, cy.midH * 0.62, 0)));
+            pour(
+              b,
+              mapParts(
+                gothicBay({ w: 9, h: cy.midH - 2, winRise: 7.5, winBaseY: 6, pinnacle: true }),
+                (g) => put(g.translate(cy.xIn + 1.2, 0, 0))
+              )
+            );
+          }
+        }
+        // 第三排（R31 外移 46..61，纯天际线体量）
         const r2 = R29_REAR2;
         const r2x = (r2.xIn + r2.xOut) / 2;
         const r2w = r2.xOut - r2.xIn;
@@ -1982,10 +2171,7 @@ export function makeInnerCity(): StoneBuckets {
           b.ashlar.push(put(spire('ashlar', 6.5, 0, 15, 8, r2x, r2.towerH + 1.2, oz, Math.PI / 8)));
           b.dark.push(put(box('dark', 0.5, 5, 3, r2.xIn + 0.05, r2.towerH * 0.8, oz)));
         }
-        /* ── R30 ② 第三排中央高塔（块心、第三排位；R29 78 → R30 84）────────────
-         * 用户令「第三排更高体量」：在第三排两座 78m 塔之间补一座 84m 中央高塔，
-         * 把街区天际线从"双峰"改"三峰"，内街纵深感更强。形制同 r2 塔（檐口 +
-         * 12m 尖顶 + 金压顶 + 深色窗缝）+ 一扇花格窗（朝街面）+ 隔街区一尊雕像龛。 */
+        /* ── R30/R31 第三排中央高塔（块心、第三排位；R31 外移 + 84 → 88）──────── */
         const rc = R30_REAR_CORE;
         const rcTop = rc.h - 1.4 - 12;
         b.ashlar.push(put(box('ashlar', rc.w + 1.6, 1.4, rc.w + 1.6, r2x, 0.7, 0)));
@@ -2007,18 +2193,18 @@ export function makeInnerCity(): StoneBuckets {
             mapParts(statueNicheX({ halfW: 0.62, rise: 2.6, cusp: 0.5 }), (g) => put(g.translate(0, 40, 0)))
           );
         }
-        /* ── R30 ③ 第四排远景体量（隔街区，局部 x 43..58）────────────────────────
-         * 参考图"建筑丰富"的最外层：近景塔 → 中景墙 → 远景塔簇的第四层进深。
-         * 纯天际线（墙 40 + 双塔 88 + 尖顶 + 深色窗缝），box/spire 廉价件。 */
+        // A 线 ① 卷叶尖塔（crockedSpire）顶冠：内城中央高塔收口
+        pour(b, mapParts(crookedSpire({ w: 3.4, h: 9 }), (g) => put(g.translate(r2x, rc.h - 6, 0))));
+        /* ── R30/R31 第四排远景体量（隔块；R31 外移 43..58 → 63..78）────────────── */
         if (k % 2 === 0) {
-          const r4x = 50.5;
-          const r4w = 15;
-          b.wall.push(put(box('wall', r4w, 40, blockLen, r4x, 20, 0)));
+          const r4x = (R31_ROW4.xIn + R31_ROW4.xOut) / 2;
+          const r4w = R31_ROW4.xOut - R31_ROW4.xIn;
+          b.wall.push(put(box('wall', r4w, R31_ROW4.wallH, blockLen, r4x, R31_ROW4.wallH / 2, 0)));
           for (const oz of [-14, 14]) {
-            b.ashlar.push(put(box('ashlar', r4w, 88, 16, r4x, 44, oz)));
-            b.ashlar.push(put(box('ashlar', r4w + 2, 1.2, 18, r4x, 88.6, oz)));
-            b.ashlar.push(put(spire('ashlar', 6.5, 0, 14, 8, r4x, 89.2, oz, Math.PI / 8)));
-            b.dark.push(put(box('dark', 0.6, 6, 2.4, 43.05, 60, oz)));
+            b.ashlar.push(put(box('ashlar', r4w, R31_ROW4.towerH, 16, r4x, R31_ROW4.towerH / 2, oz)));
+            b.ashlar.push(put(box('ashlar', r4w + 2, 1.2, 18, r4x, R31_ROW4.towerH + 0.6, oz)));
+            b.ashlar.push(put(spire('ashlar', 6.5, 0, 14, 8, r4x, R31_ROW4.towerH + 1.2, oz, Math.PI / 8)));
+            b.dark.push(put(box('dark', 0.6, 6, 2.4, R31_ROW4.xIn + 0.05, 60, oz)));
           }
         }
       }

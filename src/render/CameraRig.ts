@@ -287,6 +287,16 @@ export class CameraRig {
   private tmpRight = new THREE.Vector3();
   /** 车型视距微调（profile.cameraScale ?? 1），只作用于外部机位 */
   private viewScale = 1;
+  /**
+   * 涉内机位切换的落位标志（R31 C 线修「座舱黑屏」真因）：
+   * 外部↔内部切换时相机必须穿越车体，指数阻尼的 0.4~8s 过渡期全程相机位于壳体
+   * 内部/背后 —— FrontSide 把外板背面剔除、内舱漆是暗面克隆 ⇒ 满屏黑/暗带，
+   * 数秒后才收敛到正确眼点。R19 起该现象被反复误报为「座舱黑屏回归」
+   * （根因是过渡期而非稳态；QA 截图早于收敛也会采到同一假象）。
+   * 置位后下一帧 offset/lookOffset 直接落位（s=1），不做穿越式过渡；
+   * 外部↔外部切换不受影响，保留原平滑阻尼。
+   */
+  private snapPose = false;
 
   constructor(aspect: number) {
     this.camera = new THREE.PerspectiveCamera(55, aspect, 0.1, 12000);
@@ -307,6 +317,8 @@ export class CameraRig {
   }
 
   setMode(mode: CameraMode): void {
+    // 外部↔内部（或反向）切换：首帧落位，避免相机穿越车体时的满屏黑过渡期
+    if (isInteriorMode(this.mode) !== isInteriorMode(mode)) this.snapPose = true;
     this.mode = mode;
     // 切机位（V 键 / HUD 按钮 / 结算自动机位）时自由视角归零
     this.resetLook();
@@ -387,8 +399,10 @@ export class CameraRig {
     // 却让「车距」变成速度的函数、并把任何 dt 抖动直接写进相对位移。
     // 改为刚性跟随：机位切换的平滑仍由下面的 offset/lookOffset 指数阻尼负责。
     this.anchor.copy(target);
-    // 指数阻尼 → 模式切换约 0.4~0.6s 内收敛，不瞬跳
-    const s = 1 - Math.exp(-dt * pose.k);
+    // 指数阻尼 → 模式切换约 0.4~0.6s 内收敛，不瞬跳；
+    // 涉内机位切换（snapPose）例外：s=1 直接落位，不穿越车体（见字段注释）。
+    const s = this.snapPose ? 1 : 1 - Math.exp(-dt * pose.k);
+    this.snapPose = false;
     this.offset.lerp(off, s);
     this.lookOffset.lerp(look, Math.min(1, s * 1.5));
     cam.position.copy(this.anchor).add(this.offset);

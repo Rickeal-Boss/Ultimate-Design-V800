@@ -1,0 +1,26 @@
+[debug] [vite] connecting...
+[debug] [vite] connected.
+[info] [stoneTexture] floor 256² weather=0.35 channels=noRough 像素 41.8ms / 总 43.2ms | L 67±15 C 51 颗粒 2.13 n|xy| 0.317 roughMean 0.470（第 1 套）
+[info] [stoneTexture] ashlar 256² weather=0.35 channels=full 像素 44.1ms / 总 45.4ms | L 211±17 C 54 颗粒 3.75 n|xy| 0.281 roughMean 0.827（第 2 套）
+[info] [stoneTexture] gold 256² weather=0.35 channels=full 像素 18.7ms / 总 20.3ms | L 126±21 C 67 颗粒 6.09 n|xy| 0.231 roughMean 0.462（第 3 套）
+[info] [stoneTexture] roof 256² weather=0.35 channels=noRough 像素 28.3ms / 总 29.8ms | L 82±18 C 55 颗粒 3.79 n|xy| 0.363 roughMean 0.699（第 4 套）
+[info] [stoneTexture] wood 256² weather=0.50 channels=albedoOnly 像素 22.8ms / 总 23.5ms | L 48±11 C 40 颗粒 2.38 n|xy| 0.234 roughMean 0.758（第 5 套）
+[info] [stoneTexture] glass 256² weather=0.35 channels=albedoOnly 像素 26.5ms / 总 27.3ms | L 171±25 C 94 颗粒 4.19 n|xy| 0.054 roughMean 0.136（第 6 套）
+[info] [stoneTexture] marble 256² weather=0.35 channels=noRough 像素 26.1ms / 总 27.4ms | L 181±19 C 53 颗粒 1.45 n|xy| 0.061 roughMean 0.250（第 7 套）
+[info] [V800Adapter] MAEXTRO badge 垂直居中：铬条 world bbox y 1.0800..1.1500（中心 1.1150）→ badge.y=1.1150
+[info] [V800Adapter] 参考图贴图挂载材质： lamp-red, leather-dark, leather-ivory, leather-warm, screen-ui
+[info] [V800Adapter] cabin occluder 座椅材质克隆 → 10 个 mesh
+[info] [V800Adapter] cabin occluder 中控材质克隆 → 2 个 mesh
+[info] [V800Adapter] 尾门折线几何 → 3580 tri（旧件 28 tri 平板已 dispose）
+[info] [V800Adapter] rear-glass-upper → 克隆 glass-dark（隐私玻璃 opacity 0.80），命中 1 mesh
+[info] [V800Adapter] R21-B/C 手写灯组接线完成：4 个 pivot（尾灯×2 + 前灯×2）
+[info] [V800Adapter] R22-B 涡轮盘轮毂接线完成：4 轮
+[info] [V800Adapter] R22-C 镀铬窗框 + 玻璃带接线完成（左右；玻璃带材质共用 1 实例）
+[info] [V800Adapter] R23-C 车顶传感器模块接线完成（隐 lidar-wedge，挂 root，z=+1.65）
+[info] [V800Adapter] R23-D 前脸面板 + MAEXTRO 字标接线完成（挂 front-end 局部系）
+[info] [V800Adapter] R23-F 外后视镜接线完成（左右一对，MIRROR_MOUNT z=+1.82）
+[info] [V800Adapter] R24-B 徽标发光内芯接线完成：簇 bbox x[-0.045,0.045] y[0.661,0.977] z[-2.506,-2.375] → 内芯 world pos(-0.000,0.825,2.488) tri=64
+[info] [V800Adapter] R30-C3 侧围后部补面完成：72 tri（双侧，材质 r30-quarter-patch）
+[info] [V800Adapter] batch/paint-* 内舱暗面 → 2 个批次
+[info] [V800Adapter] 内舱暗面配对 → 3 组（含合批批次）
+[info] [cabin] 遮挡材质 2 个

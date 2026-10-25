@@ -1,0 +1,77 @@
+{
+  "postfx": {
+    "calls": 160,
+    "tris": 134232
+  },
+  "base": {
+    "calls": 144,
+    "tris": 134216
+  },
+  "baseWithShadow": {
+    "calls": 144,
+    "tris": 134216
+  },
+  "groups": [
+    {
+      "name": "castle",
+      "meshes": 16,
+      "tris": 201274
+    },
+    {
+      "name": "Group",
+      "meshes": 152,
+      "tris": 82382
+    },
+    {
+      "name": "terrain-rock",
+      "meshes": 1,
+      "tris": 2728
+    },
+    {
+      "name": "Mesh",
+      "meshes": 1,
+      "tris": 2208
+    },
+    {
+      "name": "terrain-skyline",
+      "meshes": 1,
+      "tris": 1040
+    },
+    {
+      "name": "Mesh",
+      "meshes": 1,
+      "tris": 12
+    },
+    {
+      "name": "Mesh",
+      "meshes": 1,
+      "tris": 12
+    },
+    {
+      "name": "ground",
+      "meshes": 1,
+      "tris": 8
+    },
+    {
+      "name": "contact-shadow",
+      "meshes": 1,
+      "tris": 2
+    },
+    {
+      "name": "road",
+      "meshes": 1,
+      "tris": 2
+    },
+    {
+      "name": "Mesh",
+      "meshes": 1,
+      "tris": 2
+    }
+  ],
+  "cam": {
+    "x": -1.6536351372059752,
+    "y": 1.5000001512758123,
+    "z": -7.5974139062506465,
+    "fov": 50.18355200000005
+  }
+}

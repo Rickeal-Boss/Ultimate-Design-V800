@@ -17,6 +17,14 @@ export interface QualitySettings {
   shadowMapSize: number;
   /** 阴影正交半径（texel 对齐用） */
   shadowOrtho: number;
+  /**
+   * R31 阴影贴图**更新间隔（帧）**：1 = 每帧重绘，N = 每 N 帧重绘一次。
+   * 冻结阴影更新后帧时降约 60%（.qa/r31_test/baseline.md §5.3）⇒ 2048² 阴影每帧重绘
+   * 是当前最大单项帧成本。节流让阴影贴图从「每帧全量重绘」变成「每 N 帧重绘一次」，
+   * 中间帧直接复用上一张贴图（three 的 `shadow.autoUpdate=false` + `needsUpdate` 门控）。
+   * 焦点跳变（>1.5m，如复位/换场景）与首次 update 强制刷新，避免换场景后阴影错位。
+   */
+  shadowUpdateInterval: number;
   /** EffectComposer 渲染目标 MSAA 采样数 */
   msaaSamples: number;
   bloom: boolean;
@@ -54,8 +62,11 @@ const TIERS: Record<QualityTier, Omit<QualitySettings, 'tier' | 'isMobile' | 'gp
     pixelRatio: Math.min(window.devicePixelRatio, 2),
     minPixelRatio: 1,
     antialias: true,
+    // 构建无限制 ⇒ 2048² 保留（texel 更细）；运行时靠 shadowUpdateInterval 节流，不靠缩尺寸。
     shadowMapSize: 2048,
-    shadowOrtho: 28,
+    // R31：28 → 20。texel 0.027m → 0.019m（更细），同时阴影视锥里的 caster 数下降。
+    shadowOrtho: 20,
+    shadowUpdateInterval: 2,
     msaaSamples: 4,
     bloom: true,
     bloomScale: 1,
@@ -67,8 +78,10 @@ const TIERS: Record<QualityTier, Omit<QualitySettings, 'tier' | 'isMobile' | 'gp
     pixelRatio: Math.min(window.devicePixelRatio, 1.5),
     minPixelRatio: 1,
     antialias: true,
-    shadowMapSize: 1536,
-    shadowOrtho: 28,
+    // R31：1536 → 1024（面积 −55%）；节流间隔 3 帧。
+    shadowMapSize: 1024,
+    shadowOrtho: 20,
+    shadowUpdateInterval: 3,
     msaaSamples: 2,
     bloom: true,
     bloomScale: 0.5,
@@ -80,8 +93,10 @@ const TIERS: Record<QualityTier, Omit<QualitySettings, 'tier' | 'isMobile' | 'gp
     pixelRatio: 1,
     minPixelRatio: 0.75,
     antialias: false,
-    shadowMapSize: 1024,
-    shadowOrtho: 28,
+    // R31：1024 → 768（面积 −44%）；节流间隔 4 帧。
+    shadowMapSize: 768,
+    shadowOrtho: 20,
+    shadowUpdateInterval: 4,
     msaaSamples: 0,
     bloom: false,
     bloomScale: 0.5,

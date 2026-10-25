@@ -1,0 +1,142 @@
+[
+  {
+    "灯组": "刹车灯(尾灯/红带)",
+    "期望": "lamp-red",
+    "命中": "lamp-red"
+  },
+  {
+    "灯组": "头灯内芯",
+    "期望": "lamp-head",
+    "命中": "lamp-head"
+  },
+  {
+    "灯组": "MAEXTRO 字标",
+    "期望": "lamp-mark",
+    "命中": "lamp-mark"
+  },
+  {
+    "灯组": "星空顶",
+    "期望": "starlight",
+    "命中": "starlight"
+  },
+  {
+    "灯组": "金色签名屏",
+    "期望": "lamp-gold",
+    "命中": "lamp-gold"
+  },
+  {
+    "灯组": "轮圈盘面",
+    "期望": "wheel-alloy",
+    "命中": "wheel-alloy"
+  },
+  {
+    "灯组": "尾灯 3+3 灯带贴图",
+    "期望": "housing-dark",
+    "命中": "housing-dark"
+  },
+  {
+    "灯组": "星尘颗粒",
+    "期望": "lamp-star",
+    "命中": "lamp-star"
+  },
+  {
+    "灯组": "头灯 LED 点阵",
+    "期望": "lamp-head",
+    "命中": "lamp-head"
+  },
+  {
+    "灯组": "头灯 3-LED 点阵灯珠(EX-08)",
+    "期望": "led-dot×6",
+    "命中": "remapped×6"
+  },
+  {
+    "灯组": "车名牌镀铬字",
+    "期望": "plate（spec 已移除引用）",
+    "命中": "plate"
+  },
+  {
+    "灯组": "盾徽面板分区贴图",
+    "期望": "lamp-white",
+    "命中": "lamp-white"
+  },
+  {
+    "灯组": "皮革图集(素面+菱格)",
+    "期望": "leather-warm",
+    "命中": "leather-warm"
+  },
+  {
+    "灯组": "皮革色调校准(深Cognac)",
+    "期望": "#7A4034",
+    "命中": "#7A4034"
+  },
+  {
+    "灯组": "座椅打孔区(IN-08)",
+    "期望": "leather-warm 打孔克隆",
+    "命中": "quilt-perf"
+  },
+  {
+    "灯组": "胎面沟槽+胎侧字环(EX-34)",
+    "期望": "tire",
+    "命中": "tire"
+  },
+  {
+    "灯组": "后保反光条分段(EX-31)",
+    "期望": "lamp-red 克隆",
+    "命中": "reflector-clone"
+  },
+  {
+    "灯组": "轮心黑底盾徽(EX-33)",
+    "期望": "lamp-mark 克隆",
+    "命中": "wheel-badge"
+  },
+  {
+    "灯组": "迎宾光毯(EX-09)",
+    "期望": "welcome-carpet",
+    "命中": "welcome-carpet"
+  },
+  {
+    "灯组": "尾门 MAEXTRO 小字(R12-T1)",
+    "期望": "tailgate-maextro",
+    "命中": "tailgate-maextro"
+  },
+  {
+    "灯组": "屏幕家族UI(三联/后排/扶手)",
+    "期望": "screen-ui",
+    "命中": "screen-ui"
+  },
+  {
+    "灯组": "深棕皮革粒面",
+    "期望": "leather-dark",
+    "命中": "leather-dark"
+  },
+  {
+    "灯组": "米白皮革粒面",
+    "期望": "leather-ivory",
+    "命中": "leather-ivory"
+  },
+  {
+    "灯组": "开放木纹",
+    "期望": "wood",
+    "命中": "wood"
+  },
+  {
+    "灯组": "顶棚麂皮",
+    "期望": "headliner-suede",
+    "命中": "headliner-suede"
+  },
+  {
+    "灯组": "窗帘织纹",
+    "期望": "curtain",
+    "命中": "curtain"
+  },
+  {
+    "灯组": "地毯短绒",
+    "期望": "carpet",
+    "命中": "carpet"
+  },
+  {
+    "灯组": "greenhouse 玻璃透射",
+    "期望": "glass-dark",
+    "命中": "trans=0.00"
+  }
+]

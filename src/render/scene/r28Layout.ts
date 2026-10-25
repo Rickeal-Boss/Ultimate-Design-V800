@@ -566,3 +566,9 @@ export const R30_BUDGET = {
   castleDc: 20,
   frameTri: 360_000
 } as const;
+
+/**
+ * ⚠ R31_BUDGET 单一真源已迁至 `src/render/scene/r31Budget.ts`（含 7 键 + 单测消费 +
+ * 完整口径文档）。本文件**不再定义** R31_BUDGET，避免双源冲突（铁律：预算键只准一处定义）。
+ * A 线原写入的 R31_BUDGET 常量（359k/250k/20/465k）已并入 r31Budget.ts。
+ */
