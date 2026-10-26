@@ -8,19 +8,38 @@
  * 全部构件在 castleKit.ts 里**直接产世界坐标几何**，本类只做：按材质族归桶 →
  * 每族 merge 成 1 mesh -> 统计。
  *
- * ── DC 策略 ───────────────────────────────────────────────────────────────
- *   ashlar / wall / gold / dark / flame 各 1 DC；pave-road / pave-walk 2 DC ⇒ 7 DC。
- *   R29 追加 roof / wood / glass / marble 四个**可选桶**（见 EXTRA_BUCKETS）：补桶后每族 +1 DC（≤11）。
+ * ── DC 策略（R32 C-4 核对：实测 27 / 设计上限 28 ≤ castleDc 32）────────────────
+ *   分区合批后每「非空区」1 DC：ashlar ≤6 + wall ≤3 + gold ≤6 + dark ≤6（dark z0
+ *   实测空：门洞暗件全在 z1 以深）+ flame 1 + 四可选桶 ≤4 + 铺装 2 = **27**。
+ *   ⚠ R31 头注「ashlar/wall/gold/dark/flame 各 1 ⇒ 7 DC」与「gold/dark/flame 各 1
+ *     ⇒ 18」都是**过期读数**：R29 点亮四可选桶、R31「治理①延伸」把 gold/dark 也改为
+ *     6 区合批后均未回填头注。逐 mesh 实证清单见 `.qa/r32_tmp_audit/dc_audit.md`；
+ *     代码侧逻辑（splitByZone/emptyBuckets 语义）本身正确，本轮只修注释。
  *
  * ── R31 运行时治理①：按世界 z 分区合批（「700m 长条永不被剔除」的根治）──────
  *   改前：每族 merge 成 **1 个**横跨 z=+60..−1430 的巨 mesh ⇒ 包围球直径 700m，
  *   行车时几乎恒与视锥相交 ⇒ 视锥剔除完全失效，全城几何每帧都提交（整帧 321k tri）。
- *   改后：ashlar 分 6 区、wall 分 3 区（见 ZONE_EDGES_*），每区一个 mesh；
- *   量小的 gold/dark/flame/roof/wood/glass/marble 保持全局 1 个。
- *   ⇒ castle 静态 DC 7 → ~18（四桶全亮时），但**可见 tri 大降**（剔除生效）。
+ *   改后：ashlar/gold/dark 分 6 区、wall 分 3 区（见 ZONE_EDGES_*），每区一个 mesh；
+ *   量小的 flame/四可选桶保持全局 1 个（铺装是道路本体，必须全段可见）。
+ *   ⇒ castle 静态 DC 7 → **27**（四桶全亮 + gold/dark 分区后，设计上限 28），
+ *   但**可见 tri 大降**（剔除生效）。
  *   这是「用少量 DC 换大量顶点/填充」的交易，判据是可见 tri 而不是静态 DC
  *   （R31_BUDGET.castleDc 已按分区后口径抬到 32）。
  *   跨区几何按 **bbox z 中值**归区，不切割单个几何（A 线构件基本都落在单区内）。
+ *
+ * ── R32 运行时治理③：远档 LOD（C-5 主项：同 mesh 换 geometry，DC 不变）────────
+ *   距离显隐（治理②）只能整区摘除，摘不掉「前方 2~3 个区」的高档几何 ⇒ 中段可见
+ *   tri 曾达 318k（同树治理前实测，目标 ≤120k 诉求 / ≥25% 降幅硬指标）。R32 给
+ *   zone mesh 加远档：
+ *   · 近区（<LOD_NEAR_DIST 400m）用 high 全装饰几何；远区换 low「只主体」几何
+ *     （铁律 33：low 只降装饰密度；400m 处高低档差异已降到亚像素 ⇒ 换档不可见）；
+ *   · 远档几何由**第二遍工厂重跑**（setDetailLevel(true)）按同套 ZONE_EDGES 分区
+ *     merge 产出（buildFarTier），high 档才建（low 档城堡无二变体收益）；
+ *   · **同一 mesh 换 geometry 引用** ⇒ 不新增 mesh、静态 DC 仍 27、全显口径
+ *     （getCastleStats.tris）仍按高档计（两档互斥不同画，见 r31Budget.ts 台账①）；
+ *   · 换档带 20m 滞回（LOD_HYSTERESIS），与观看者滞回带同量级，边界不抖。
+ *   实测（六点采样，.qa/r32_tmp_audit/visibletri_audit.md）：治理前（同树）
+ *   222k/222k/318k/266k/178k/83k ⇒ 治理后 98k/160k/181k/181k/172k/83k。
  *
  * ── R30 纹理热升级（B2 / 启动阻塞 N1）────────────────────────────────────
  * 构造期所有石材族用 `castleTexSyncSize`（256²）**同步上架**（high 档实测同步段
@@ -56,6 +75,22 @@ export interface CastleStats {
 function triCount(geo: THREE.BufferGeometry): number {
   const index = geo.getIndex();
   return (index ? index.count : geo.getAttribute('position').count) / 3;
+}
+
+/**
+ * R32 C-4：该几何是否**值得一枚 draw call**（≥1 个三角面）。
+ * 为什么要有它：建桶语义是「空区不占 DC」（`addMerged` / `addMergedByZone` 的
+ * `parts.length === 0` 早退 + `zones[i].length === 0` 跳过），但那只挡了「零个几何」
+ * 这一种空；还有第二种空 —— 区里有几何、merge 后却是**零面**（退化 BufferGeometry
+ * 或全被密度开关裁净）。改前第二种会产出「看不见却占一个静态 DC」的幽灵 mesh，
+ * 还会把不存在的东西算进 `getCastleStats().dc`，让注释与实测再次分家（正是 C-4
+ * 这次审计的根因类型）。
+ * 当前 tree 无此情形（`.qa/r32_tmp_audit/dc_audit.md` 逐 mesh 实测最小面数 =
+ * pave-walk 4 > 0）⇒ 本判定为**只读护栏**，不改变现有数字，由
+ * `tests/r32_zone.test.ts` 的「castle 下每个 mesh tri > 0」断言盯住。
+ */
+function isDrawable(geo: THREE.BufferGeometry): boolean {
+  return triCount(geo) > 0;
 }
 
 /** 释放一套三张贴图（热升级退役代 / 取消代共用） */
@@ -98,12 +133,32 @@ type ZoneEdges = readonly number[];
  *   · 只动 visible，不销毁几何 ⇒ 驶近无重建成本、无 GC 抖动；
  *   · 区显隐**不参与** getCastleStats（装配期口径）⇒ 预算测试不受动摇；
  *   · 非分区 mesh（铺装/火盆/extras）不受影响 —— 铺装是道路本体，必须全段可见。
- * 750m 依据：城门（z≈−358）+ 主殿立面 + 内城入口全部在内；更深处只剩剪影级
- * 细节（750m 外 20m 塔身 ≈ 1.5° ≈ 17px），pop-in 位于体量亚像素的边缘之外。
+ * R32 C-5：750 → **650**（门楼可见性已评估，见下）。650m 依据：
+ *   · 城门楼（z≈−358.5）+ 塔群（clockH 98）在 z0/z1：从起步（cam≈+8，距门楼
+ *     中心 ≈410m）到驶过门楼 650m 全程在带内；驶过 650m 后门楼在车后 ⇒ 视锥外，
+ *     无观感损失。⇒ 门楼可见性不受影响（曾评估的 650 风险点排除）。
+ *   · 弹入点随之内移 100m（主殿 z5 中心 −1373：−623 → −723 处弹入）。这是
+ *     650 制的净成本：主殿（130m 高）弹入时张角 ≈11°，滞回 20m 只防闪烁、
+ *     不防弹入本身。取舍依据：R31 的 750 制本就接受同级弹入（750m 处 ≈10°），
+ *     且雾极轻（FogExp2 12e-5 ⇒ 650m 处仅 0.6%）不提供遮蔽；不收紧则中段 −500
+ *     降幅只有 17~18%（R=750+LOD400 实测 208k），达不到 C-5 的 ≥25% 硬指标。
+ *   · 弹入顺序保持「由近及远」连贯：z4（−523 弹入）先于 z5（−723），街道剖面
+ *     不会出现「远处主殿可见、中间街区开天窗」的断裂。
  */
-const ZONE_VIEW_RANGE = 750;
+const ZONE_VIEW_RANGE = 650;
 /** 观看者 z 滞回带：少于该位移不重算显隐（机位微抖/环绕摆动不触发闪烁） */
 const ZONE_VIEW_HYSTERESIS = 20;
+
+/**
+ * R32 C-5：远档 LOD 的**近/远切换距离**（区中心 ↔ 观看者）。
+ * 400m 依据：low 档裁掉的是卷叶（≈0.3m）/窗棂/子拱/立像/瓶柱密度这类「纯装饰」，
+ * 0.3m 物体在 400m 处 ≈0.43px（1080p / fov55° 下 19.6px每度）⇒ 高低档差异在切换
+ * 点已降到亚像素，换档本身不可见；主体几何（墙身/拱/塔/金带 ≥0.5m）两档都保留。
+ * ⚠ 再压低（<350m）中段收益不变（近区仍须高档）而边界处差异开始可辨，不取。
+ */
+const LOD_NEAR_DIST = 400;
+/** 档位滞回：> D+20 才换远档、< D−20 才换近档，380~420 带内保持原档（防摇摆） */
+const LOD_HYSTERESIS = 20;
 
 /**
  * 几何归区：**世界 bbox 的 z 中值**（跨区几何按中心点归区，不切割单个几何）。
@@ -287,9 +342,11 @@ function tunnelMaterial(): THREE.MeshStandardMaterial {
   return new THREE.MeshStandardMaterial({ color: 0x141110, roughness: 1.0, metalness: 0 });
 }
 
-/** 火盆焰：MeshBasic 不吃光，靠 bloom 出光晕 */
+/** 火盆焰：MeshBasic 不吃光，靠 bloom 出光晕。
+ * R32 落地审查：×1.6 在 250m 外读不出光晕（参考图火盆是显眼暖光源）⇒ ×2.4
+ * 让 bloom 阈值稳定触发；颜色本身不变（暖橙 0xffc27a）。 */
 function flameMaterial(): THREE.MeshBasicMaterial {
-  return new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffc27a).multiplyScalar(1.6) });
+  return new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffc27a).multiplyScalar(2.4) });
 }
 
 /** 一个材质在热升级时要更新的槽位（同族多材质共享同一套目标贴图） */
@@ -329,8 +386,20 @@ export class Castle {
   private readonly ownedTargets = new Set<StoneMaps>();
   private tris = 0;
   private dc = 0;
-  /** R31 距离显隐账本：分区 mesh + 各区世界 z 中心（addMergedByZone 登记） */
-  private readonly zoneViews: Array<{ mesh: THREE.Mesh; cz: number }> = [];
+  /**
+   * R32 C-5：分区 mesh + 各区世界 z 中心 + 近/远两档几何（addMergedByZone 登记）。
+   * `lo` 为空 = 该区无远档变体（如 wall 桶 low=high 零收益、dark 某区 low 为空），
+   * 恒用近档；`tier` 是当前挂载档（mesh.geometry 与之一致）。
+   */
+  private readonly zoneViews: Array<{
+    mesh: THREE.Mesh;
+    cz: number;
+    hi: THREE.BufferGeometry;
+    lo?: THREE.BufferGeometry;
+    tier: 'hi' | 'lo';
+  }> = [];
+  /** R32 C-5：远档变体暂存（buildFarTier 产 → addMergedByZone 消费式取用 → 余量释放） */
+  private readonly farTier = new Map<string, THREE.BufferGeometry>();
   /** 上次显隐重算的观看者 z（NaN = 未算过；滞回带内不重算） */
   private lastViewerZ = Number.NaN;
   private readonly syncTexSize: number;
@@ -353,6 +422,8 @@ export class Castle {
     const pave = makePaving();
     this.addMesh(pave.road, this.special('pave-road', () => this.pavementMaterial()), 'castle-pave-road');
     this.addMesh(pave.walk, this.special('pave-walk', () => this.walkPavingMaterial()), 'castle-pave-walk');
+    // R32 C-5：远档 LOD 变体必须先于 commitStatics 建好（分区配对按 族-zN 键消费）
+    this.buildFarTier();
     this.commitStatics();
     scene.add(this.group);
     // R30：上架后才发起 idle 分片重烘（requestIdleCallback 首帧后自然排到，不占同步段）
@@ -377,6 +448,9 @@ export class Castle {
     this.group.removeFromParent();
     // 释放同步代 + 清模块缓存（stoneTexture 仅 castle 使用 ⇒ 此处收尾安全）
     disposeStoneCache();
+    // R32 C-5：构造期异常路径下未被消费的远档（正常态 commitStatics 已清空）
+    for (const g of this.farTier.values()) g.dispose();
+    this.farTier.clear();
   }
 
   /* ─────────────────────── R30 热升级 ─────────────────────── */
@@ -623,12 +697,83 @@ export class Castle {
       if (!parts || parts.length === 0) continue;
       this.addMerged(parts, this.stone(key), `castle-${key}`);
     }
+    // R32 C-5：没被任何高端区配上的远档（A 线几何漂移致某族 low 区空/high 区非空的
+    // 防御态）⇒ 释放，不占常驻。正常态下这里为空（每个 lo 都被同族同区 high 消费）。
+    for (const g of this.farTier.values()) g.dispose();
+    this.farTier.clear();
+  }
+
+  /**
+   * R32 C-5：远档 LOD 变体几何（铁律 33 合规：low 档只降装饰密度，几何长度不变）。
+   *
+   * 为什么重跑一遍工厂：castleKit 的密度开关是**模块级全局**（setDetailLevel /
+   * isLowDetail），远档「只主体」几何只能以 low 档整体重产一次，再按同一套
+   * ZONE_EDGES_6 分区 merge。工厂无模块级累积状态（grep 实证：castleKit 只有
+   * LOW_DETAIL 一个可变全局，DEEP_FAR 由各工厂自置自复）⇒ 重跑安全。
+   * 成本 = 一倍几何生成（high 档 warm ≈850ms ⇒ 首建 ≈1.7s；用户令「首建时长不限」
+   * 明确豁免）。stoneTexture 缓存键不变（kind|size|weather|repeat 与档无关）⇒ 0 额外贴图。
+   *
+   * 覆盖族：ashlar / gold / dark（三个分区重族，low 档实测降幅 33~54%）。
+   *   · wall 不建变体：剪影带本就极简，low=high（实测 0% 收益）；
+   *   · flame / 四可选桶不建：全局单 mesh（非分区），按距离换档会同时影响全走廊；
+   *   · z0 建但不吃亏：40k tri 常驻换「边界表将来的鲁棒性」（全显口径不计它）。
+   * 仅 high 档构建：low 档城堡整体已是减密度几何，远档=近档，白占内存。
+   */
+  private buildFarTier(): void {
+    if (this.tier !== 'high') return;
+    setDetailLevel(true);
+    const sets = [
+      makeViaduct(),
+      makeParapet(),
+      makeLamps(),
+      makeGate(),
+      makeTowerGroup(),
+      makeInnerCity(),
+      makeMainHall()
+    ];
+    setDetailLevel(false); // 恢复 high：commitStatics 的材质/统计都按 high 口径
+    const low: StoneBuckets = { ashlar: [], wall: [], gold: [], dark: [], flame: [] };
+    for (const s of sets) {
+      low.ashlar.push(...s.ashlar);
+      low.gold.push(...s.gold);
+      low.dark.push(...s.dark);
+    }
+    for (const [family, parts] of [
+      ['ashlar', low.ashlar],
+      ['gold', low.gold],
+      ['dark', low.dark]
+    ] as const) {
+      const zones = splitByZone(parts, ZONE_EDGES_6);
+      for (let i = 0; i < zones.length; i += 1) {
+        if (zones[i].length === 0) continue;
+        const merged = mergeSafe(zones[i]);
+        // 预算法线盒/球：远档是运行中段换入的，不能把首次包围球计算留给换档那一帧
+        merged.computeBoundingBox();
+        merged.computeBoundingSphere();
+        this.farTier.set(`${family}-z${i}`, merged);
+      }
+      for (const g of parts) g.dispose();
+    }
+    // sets 里本轮不用的族（wall/flame/extras）逐一释放，防首建期泄漏
+    for (const s of sets) {
+      for (const g of s.wall) g.dispose();
+      for (const g of s.flame) g.dispose();
+      for (const k of EXTRA_BUCKETS) {
+        const arr = (s as unknown as Partial<Record<ExtraBucket, THREE.BufferGeometry[]>>)[k];
+        if (arr) for (const g of arr) g.dispose();
+      }
+    }
   }
 
   private addMerged(parts: THREE.BufferGeometry[], mat: THREE.Material, name: string): void {
     if (parts.length === 0) return;
     const merged = mergeSafe(parts);
     parts.forEach((p) => p.dispose());
+    // R32 C-4：合并后零面 ⇒ 不建 mesh（见 isDrawable 注）
+    if (!isDrawable(merged)) {
+      merged.dispose();
+      return;
+    }
     this.addMesh(merged, mat, name);
   }
 
@@ -637,6 +782,10 @@ export class Castle {
    * 收益：包围盒从 700m 长条变成 ≤300m 的块 ⇒ 行车时后方/侧后方的区整体被视锥剔除，
    * 顶点提交与 fill rate 同时下降（fill rate 是本场景的既有瓶颈）。
    * 空区不建 mesh（不占 DC）—— 所以加分项 DC 是「非空区数」而不是「区数」。
+   *
+   * R32 C-5：每区配对远档变体（farTier 按 `族-zN` 键消费式取用）——配对成功的区
+   * 获得 lo 几何 + 初始 hi 档；取不到的（A 线几何漂移的防御态）留待在
+   * commitStatics 末尾统一释放。
    */
   private addMergedByZone(
     parts: THREE.BufferGeometry[],
@@ -646,39 +795,77 @@ export class Castle {
   ): void {
     if (parts.length === 0) return;
     const zones = splitByZone(parts, edges);
+    const family = namePrefix.replace(/^castle-/, '');
     for (let i = 0; i < zones.length; i += 1) {
+      // ① 空区（零个几何）不建 mesh —— R31 起就有，是当前 tree 里唯一实际发生的空区形态
       if (zones[i].length === 0) continue;
       const merged = mergeSafe(zones[i]);
+      // ② R32 C-4 补强：**零面区**也不建 mesh。区里有至少一个几何、但 merge
+      //    后无面（A 线某构件退化成空 BufferGeometry / 全被密度开关裁净时）会走到这，
+      //    改前会白占 1 个静态 DC 且把「看不见的东西」算进 getCastleStats.dc。
+      //    当前 tree 无此情形（dc_audit.md 逐 mesh 实测最小 tri = pave-walk 4 > 0），
+      //    本行是防 A 线几何漂移的护栏：零面 mesh 一出现就静默吞掉，不进预算口径。
+      if (!isDrawable(merged)) {
+        merged.dispose();
+        continue;
+      }
       const mesh = this.addMesh(merged, mat, `${namePrefix}-z${i}`);
       // R31 距离显隐登记：区中心 z 用合并后 bbox（mergeSafe 已 computeBoundingBox）
       merged.computeBoundingBox();
       const bb = merged.boundingBox;
       const cz = bb ? (bb.min.z + bb.max.z) * 0.5 : 0;
-      this.zoneViews.push({ mesh, cz });
+      const lo = this.farTier.get(`${family}-z${i}`);
+      if (lo) {
+        this.farTier.delete(`${family}-z${i}`);
+        this.geometries.push(lo); // 双档都进 dispose 账本
+      }
+      this.zoneViews.push({ mesh, cz, hi: merged, lo, tier: 'hi' });
     }
     parts.forEach((p) => p.dispose());
   }
 
   /**
-   * R31 运行时治理②：按观看者世界 z 开关各区 mesh（阈值触发，见 ZONE_VIEW_RANGE）。
+   * R31 运行时治理② + R32 C-5 治理③：按观看者世界 z 开关各区 mesh + 换近/远档。
    * Game 帧循环每帧调用一次（内部滞回，多数帧直接返回）；
    * 首帧（lastViewerZ=NaN）必算一次 ⇒ 不存在「从未显隐」的窗口。
+   * 同一遍遍历里：① 距离显隐（≥ZONE_VIEW_RANGE 整区 visible=false）；
+   * ② 远档 LOD（>D+滞回 换 lo、<D−滞回 换 hi；同 mesh 换 geometry，DC 不变）。
+   * 顺序保证弹入瞬间档位就是新的（先置 visible 再判档）⇒ 无「弹入时是旧档」帧。
    */
   updateViewerZ(z: number): void {
     if (Number.isFinite(this.lastViewerZ) && Math.abs(z - this.lastViewerZ) < ZONE_VIEW_HYSTERESIS) return;
     this.lastViewerZ = z;
     for (const zv of this.zoneViews) {
-      zv.mesh.visible = Math.abs(zv.cz - z) < ZONE_VIEW_RANGE;
+      const d = Math.abs(zv.cz - z);
+      zv.mesh.visible = d < ZONE_VIEW_RANGE;
+      if (!zv.lo) continue;
+      if (zv.tier === 'hi' && d > LOD_NEAR_DIST + LOD_HYSTERESIS) this.setZoneTier(zv, 'lo');
+      else if (zv.tier === 'lo' && d < LOD_NEAR_DIST - LOD_HYSTERESIS) this.setZoneTier(zv, 'hi');
     }
   }
 
+  /** 换档：同 mesh 换 geometry 引用（不增 mesh/DC；两档几何都在 dispose 账本内） */
+  private setZoneTier(
+    zv: { mesh: THREE.Mesh; hi: THREE.BufferGeometry; lo?: THREE.BufferGeometry; tier: 'hi' | 'lo' },
+    tier: 'hi' | 'lo'
+  ): void {
+    if (!zv.lo) return;
+    zv.mesh.geometry = tier === 'hi' ? zv.hi : zv.lo;
+    zv.tier = tier;
+  }
+
   /**
-   * QA 自由机位（__v800EnvShot）专用：临时全显 + 重置滞回态。
+   * QA 自由机位（__v800EnvShot）专用：临时全显 + 重置滞回态 + **全档回近档**。
    * 自由机位直渲绕过帧循环，不放开就会保留上一个行车机位的显隐态
-   * ⇒ 环境验收截图缺远区件。下一次 updateViewerZ 按真实机位重算。
+   * ⇒ 环境验收截图缺远区件。R32 C-5 追加回近档：验收截图要的是**全装饰**几何，
+   * 不能把行车态残留的远档（只主体）几何拍进去。
+   * 下一次 updateViewerZ 按真实机位重算。
    */
   revealAllZones(): void {
-    for (const zv of this.zoneViews) zv.mesh.visible = true;
+    for (const zv of this.zoneViews) {
+      zv.mesh.visible = true;
+      if (zv.tier !== 'hi') this.setZoneTier(zv, 'hi');
+    }
     this.lastViewerZ = Number.NaN;
   }
 }

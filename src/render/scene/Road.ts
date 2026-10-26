@@ -7,7 +7,8 @@
  *  R26：关掉金属波形梁护栏 + 黑色双臂路灯杆（改由 castle 的石栏板 + 栏板灯柱接管）。
  *  R27：① 沥青贴图 + 车道虚线/中线/白边线/黄边线 → 全部删除，改**石板铺装**贴图；
  *       ② 施工/封闭/玩法标牌（现代反光牌 + 金属立杆）删除；
- *       ③ 大地面不再给 RIVER 开槽（旧河流水面已停用），改为给**御桥峡谷走廊**开槽
+ *       ③ 大地面不再给 RIVER 开槽（旧河流水面已停用 —— R32 C-6 起连 `Waterway.ts`
+ *          都整类删除了），改为给**御桥峡谷走廊**开槽
  *          （|x| ≤ VIADUCT.totalHalf / z ∈ [VIADUCT.zFar, VIADUCT.zNear]），
  *          峡谷内衬岩壁由 Terrain.ts 负责（本文件只负责"不铺地面"）。
  *  R28（本轮，V H7「现代施工语汇全部删除」+ audit §1 残留清单）：
@@ -24,8 +25,10 @@
  *          遮挡）；roadEnd=−2000 只作远景地面兜底，curb/路面不越过 −1300。
  *
  * ⚠ `RIVER` 常量块是**冻结契约**：`src/physics/World.ts` 有一份同名的河谷开槽数值
- *   （RIVER_CENTER_Z = −450），几何线/物理线会 import。本轮视觉层停用河谷≠改契约，
- *   故 RIVER 的字段与数值一个都不许动。
+ *   （RIVER_CENTER_Z = −450 / RIVER_HOLE_HALF_Z = 80），物理线会 import（vitest 盯着）。
+ *   「视觉层停用河谷」≠ 改契约：R27 起不再开槽、R32 C-6 已把 `Waterway.ts` /
+ *   `waterTexture.ts` 整类删除，**本常量块仍作为几何/物理契约存在**（详见下方
+ *   `RIVER` 头注），故字段与数值一个都不许动。
  */
 import * as THREE from 'three';
 import { mergeSafe } from '../../util/geo';
@@ -35,21 +38,28 @@ import { makeLcg } from '../../util/math';
 import { MAIN_HALL, R27_PALETTE, VIADUCT } from './r28Layout';
 
 /**
- * 河谷几何契约（R14）：Road 与 Waterway 共用同一组开槽数值。
+ * 河谷几何契约（R14 订立，**R32 C-6 起只剩契约、视觉层实现已删除**）。
  *
  * 旧版水只是「路面两侧 1cm 高的反光地面」，桥是横跨公路的高架，二者无水体关系。
  * R14 把 z≈−450 改造成真正的河谷：Road 的大地面在此开一个矩形槽（x ±150 /
- * z ±80），Waterway 在槽内做「河床 + 四周护坡 + 水面 + 跨河桥面」。
- * 槽口边缘与护坡外缘严格同点同高（y=−0.02），避免看到地面断口。
+ * z ±80），当年由 `src/render/scene/Waterway.ts` 在槽内做「河床 + 四周护坡 +
+ * 水面 + 跨河桥面」。槽口边缘与护坡外缘严格同点同高（y=−0.02），避免看到地面断口。
  *
  * R18：水面由 −4.4 抬到 −0.14（桥面下 0.11m）、河床由 −5.6 收到 −1.45。
- * 水面与岸坡的交线因此贴近槽口（±147.5 / ±77.5），水线之外只剩 2.5m 干坡，
- * 不会再出现「一大片棕色坡面把水挡住」的画面。
  *
- * ⚠ R27 冻结说明：这组数值**只作为几何/物理契约存在**，视觉层已经不再开槽 ——
- * 新布局里 z≈−450 落在城内大街（INNER.zNear=−365.5 → INNER.zFar=−1350）范围内，
- * 是实体地面。Waterway 的护坡/水面/桥面已在类内部置为空操作；Road.buildGround
- * 也不再为 RIVER 挖洞。改这里不会有任何画面效果，但**会**破坏物理契约的同步口径。
+ * ⚠ R27 冻结 + R32 C-6 删除后的现值：
+ *   · R27 起视觉层就不再开槽 —— 新布局里 z≈−450 落在城内大街
+ *     （INNER.zNear=−365.5 → INNER.zFar=−1350）范围内，是实体地面；
+ *     `Road.buildGround` 也不再为 RIVER 挖洞（改为给御桥峡谷走廊挖洞）。
+ *   · **R32 C-6 已删除 `Waterway.ts` 与其配套贴图 `waterTexture.ts`**
+ *     （该类自 R27 起在类内部整类停用 —— 构造不建几何 / update 空转 / dispose 空转，
+ *     长期空跑后一次性删除；`Game.ts` 的 import/字段/构造/update×2/dispose 六条接线
+ *     同步摘除，patch 清单见 `.qa/r32_tmp_audit/c2_closeout.md` §2，
+ *     现存零残留由 `tests/r32_waterway.test.ts` 盯住）。
+ *   · 故本常量块**只作为几何/物理契约存在**，现存消费者是
+ *     `src/physics/World.ts` 的 `RIVER_CENTER_Z = −450` / `RIVER_HOLE_HALF_Z = 80`
+ *     （vitest 盯着），Road 侧保持同名同值与其对账。
+ *   · 改这里不会有任何画面效果，但**会**破坏物理契约的同步口径 ⇒ 数值一个都不许动。
  */
 export const RIVER = {
   /** 河谷/桥梁中心 z */

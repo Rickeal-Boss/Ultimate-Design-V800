@@ -22,7 +22,6 @@ import { Lighting } from '../render/scene/Lighting';
 import { Road } from '../render/scene/Road';
 import { Castle } from '../render/scene/castle';
 import { Terrain } from '../render/scene/Terrain';
-import { Waterway } from '../render/scene/Waterway';
 import { clamp, damp, lerp } from '../util/math';
 import { Hud } from '../ui/Hud';
 import type { HudInput } from '../ui/Hud';
@@ -145,7 +144,6 @@ export class Game {
   private readonly lighting: Lighting;
   private readonly contactShadow: ContactShadow;
   private readonly castle: Castle;
-  private readonly waterway: Waterway;
   private readonly car: CarLike;
   /** 活动车型档位（URL #vehicle= > localStorage > v800） */
   private readonly profile = getVehicleProfile(resolveVehicleId());
@@ -253,7 +251,6 @@ export class Game {
     new Road(this.scene, this.renderer.capabilities.getMaxAnisotropy());
     new Terrain(this.scene);
     this.castle = new Castle(this.scene, quality);
-    this.waterway = new Waterway(this.scene);
     this.car = this.createCar();
     this.interiorViews = this.readInteriorViews();
     this.cabinOccluderMaterials = this.car.cabinOccluderMaterials ?? [];
@@ -711,11 +708,10 @@ export class Game {
     this.car.updateCluster(speedKmh, 0, Math.abs(s.accel) / 9.81, reverse ? 'R' : 'D');
     this.car.update(this.rig.camera, dt);
 
-    // ---- 灯光 / 接地阴影 / 水面 ----
+    // ---- 灯光 / 接地阴影 ----
     const focus = this.car.root.position;
     this.lighting.update(focus);
     this.contactShadow.update(this.car.body);
-    this.waterway.update(this.time);
 
     // ---- 特效 / 音效（Sfx 的 spool 一阶滞后常量不动，只喂速度）----
     this.fx.update(dt, {
@@ -1000,7 +996,6 @@ export class Game {
     this.contactShadow.update(this.car.body);
     this.env.update(this.rig.camera.position);
     // road.update 已摘除（R28，r28_audit §1.2）：警示灯删除后 Road.update 留空壳
-    this.waterway.update(this.time);
 
     // ---- 内饰仪表 ----
     this.car.updateCluster(
@@ -1185,7 +1180,6 @@ export class Game {
     this.postfx.dispose();
     this.contactShadow.dispose();
     this.castle.dispose();
-    this.waterway.dispose();
     this.crashWorld.dispose();
     this.car.dispose();
     this.result.destroy();

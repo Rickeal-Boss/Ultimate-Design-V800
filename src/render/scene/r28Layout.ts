@@ -525,50 +525,20 @@ export const QA_VIEWS = {
 /* ═══════════════════ ⑪ 预算红线 ═══════════════════ */
 
 /**
- * R27 实测 94,072/139,580 tri / 14 DC，占用 55~58%（D：本轮不上调）。
- * R28 删路障/警示灯/崖体为减量（崖体 ~3.2k），主殿增量若 ≤40k 仍在红线内。
- * 触发上调前置：`__v800CastleStats` 实测 high >240k 时，**先做 low/high 两档
- * 观感目检**（R27 遗留 P0）再议，不许先抬红线后补验证。
- * 口径：tri 已装配几何、DC = mesh 数；Terrain/Road 未计入 castle 统计——
- * L4/L5 应把 `__v800CastleStats` 扩成 `__v800EnvStats`（castle+terrain+road）。
- * 整帧瓶颈在 **fill rate 不在顶点**（R27 closeout），主殿大立面关注 overdraw/雾。
+ * R32 C-1：`R27_BUDGET` / `R30_BUDGET` 两个旧预算键已**删除**（R31 起 DEPRECATED，
+ * 全树 grep 确认零代码消费 —— 只有注释引用，删除前证据见 `.qa/r32_tmp_audit/c1_grep.txt`）。
+ * 预算真源唯一落在 `src/render/scene/r31Budget.ts`（7 键 + 单测真消费 + 三口径台账），
+ * 新代码一律 import `R31_BUDGET`，勿在本文件重定义（铁律：预算键只准一处定义）。
+ * 历史读数（留档备查，不作断言依据）：
+ *   R27 实测 94,072/139,580 tri / 14 DC；R29 castle 181,342 tri / 7 DC；
+ *   R30b 238,630 tri / 7 DC；R31 交付 356,746 tri / 27 DC（gold/dark 分区合批后）。
+ * 触发上调前置纪律不变：`__v800CastleStats` 实测 high 越线时，先做 low/high 两档
+ * 观感目检再议，不许先抬红线后补验证；整帧瓶颈在 fill rate 不在顶点（R27 closeout）。
  */
-export const R27_BUDGET = {
-  castleTriLow: 170_000,
-  castleTriHigh: 240_000,
-  castleDc: 20,
-  frameTri: 320_000
-} as const;
 
 /**
- * R30 预算键（主理人预裁，r30_plan §4；**只增不改** R27_BUDGET 旧值）。
- *
- * R29 实测（外部审查 cscap.mjs + tools/r29_corridor_probe.mjs）：castle high
- * 181,342 tri / 7 DC；场景总 264,870（车模 82,310 + castle 181,342 + terrain
- * ≈6.8k）；frameTri 旧红线 320k 只剩 16k 余量 ⇒ R30 A 线增量（FBX 构件库复刻 +
- * 城堡内部加密连廊 ≈ +67k 估算）后必须重定：
- *   · castleTriHigh 240k → **260k**（R30 增量后预估 ≈248k，含 12k 余量）
- *   · castleTriLow  170k → **200k**（low 档同几何长度，铁律 33 只降装饰密度）
- *   · frameTri      320k → **360k**（车 82.3k + castle 248k + terrain 6.8k + road）
- *   · castleDc 20 不变（新增件全进既有 5 桶 ashlar/wall/gold/dark/flame，
- *     castle.ts 每族 merge 成 1 mesh ⇒ DC 仍为 7 + 铺装 2）
- * ⚠ 消费点现状（2026-10-24 grep）：R27_BUDGET 四个键**只被注释引用**（castle.ts
- *   头注 / castleKit.ts R29 常量注 / Terrain.ts 注 / Game.ts frameTri 口径注），
- *   无任何测试或断言消费 ⇒ 本键按「无消费则追加常量并在 castleKit 注释引用」处理
- *   （castleKit.ts R30 常量块头注已引 260k/360k 口径）；若后续 tester 线要接
- *   预算断言，直接消费本键，勿回改 R27_BUDGET。
- * ⚠ 前置纪律（R27 规矩）：A 线交付后必须补 low/high 两档观感目检
- *   （landing-review 执行）—— fill rate 才是瓶颈，关注 overdraw/雾。
- */
-export const R30_BUDGET = {
-  castleTriLow: 200_000,
-  castleTriHigh: 260_000,
-  castleDc: 20,
-  frameTri: 360_000
-} as const;
-
-/**
- * ⚠ R31_BUDGET 单一真源已迁至 `src/render/scene/r31Budget.ts`（含 7 键 + 单测消费 +
- * 完整口径文档）。本文件**不再定义** R31_BUDGET，避免双源冲突（铁律：预算键只准一处定义）。
- * A 线原写入的 R31_BUDGET 常量（359k/250k/20/465k）已并入 r31Budget.ts。
+ * ⚠ R31_BUDGET 单一真源在 `src/render/scene/r31Budget.ts`（含 7 键 + 单测消费 +
+ * 完整口径文档 + 三口径台账）。本文件**不再定义**任何预算键，避免双源冲突
+ * （铁律：预算键只准一处定义）。A 线原写入的 R31_BUDGET 常量（359k/250k/20/465k）
+ * 已并入 r31Budget.ts。
  */

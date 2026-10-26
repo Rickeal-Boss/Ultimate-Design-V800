@@ -1708,6 +1708,88 @@ function createQuiltTileTexture(
  */
 const SHADOW_CASTER_MATERIAL_IDS = new Set<string>(['paint-upper', 'paint-lower']);
 
+/* ────────────────────────────────────────────────────────────────────────────
+ * R32-D1 车模预算常量（**唯一真源**）
+ *
+ * 背景：审查方（秦核源）与 CI 都要按同一组上限裁决，写死在测试里的数字会与
+ * 实现漂移 —— 一旦两侧不同步，红线就形同虚设。故上限一律在这里导出，由
+ * `tests/r32_car_material.test.ts` 直接 import 消费（测试侧不得再抄数字）。
+ *   · 上调 = 明确的预算决策，须在主理人处登记并在本注释写明原因；
+ *   · 下调 = 收紧，理应放行（但仍须在报告中登记新的实测值）。
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * 装配后**材质实例**上限。实测 78（R32-D1：前后绿牌合并，79 → 78）。
+ * ⚠ 外部审查 P0 给的期望值是 ≤45，本工位实测结论是**在不动视觉语义的前提下达不到**
+ * （逐实例理由见 `.qa/r32_tmp_car/D1_material_merge.md` §4：真正可并的同 id 同签名
+ * 实例对为 0，其余 78 例各自承载不同参考图 / 不同实例级运行时语义 / 不同标量参数）。
+ * 降到 45 只有三条路：① 参考图去重（牺牲 per-part 观感）；② 砍掉座舱遮挡克隆
+ * （毁 cabin 显隐）；③ 改工厂 spec 合并材质定义（非适配层文件，本波禁改）。
+ * 三条都属于视觉/范围变更 ⇒ 保持 78 并在此登记，不做静默降级。
+ */
+export const V800_MATERIAL_INSTANCE_BUDGET = 78;
+
+/**
+ * 车模 tri **可见口径**红线（= 渲染器 `info.render.triangles` 口径；实测 79,798）。
+ * brief §3 / `r32_lead_phase3_spec.md` §3 写的「tri #assembled ~79.9k，红线 90k」
+ * 指的就是这条 —— 79,798 与历史 `r24_b_report.md` 的 79,878 同口径。
+ */
+export const V800_VISIBLE_TRI_BUDGET = 90_000;
+
+/**
+ * 车模 tri **全树 #assembled 口径**（含 `visible=false` 的备选/占位几何，
+ * InstancedMesh 按 count 计倍）红线。
+ * 处置建议（非本波执行）：要么把这条正式改成「可见口径 90k + 全树 ≤100k 双线」，
+ * 要么立项清掉 19,860 tri 的死几何（届时可降回 90k）。在此之前本常量按实测登记，
+ * 保证 CI 不红、数字不撒谎。
+ */
+export const V800_ASSEMBLED_TRI_BUDGET = 100_000;
+
+/**
+ * 同参材质实例判定：**全量**渲染参数签名。
+ * R30-C4 初版只列 19 个标量 + 7 个贴图槽，漏了 bumpMap / displacementMap(+Scale/Bias) /
+ * normalScale / aoMapIntensity / clearcoatNormalMap —— 两例材质若只差在这些槽上，
+ * 旧签名判同 ⇒ 合并后观感静默改变（同 id 同色同糙但法线强度不同 = 不同材质）。
+ * 导出给测试共用，保证「被测签名」与「适配器实际合并时用的签名」永不漂移。
+ */
+const V800_MATERIAL_SIGNATURE_KEYS = [
+  'side', 'transparent', 'opacity', 'alphaTest', 'depthWrite', 'color', 'emissive',
+  'emissiveIntensity', 'metalness', 'roughness', 'envMapIntensity', 'clearcoat',
+  'clearcoatRoughness', 'flatShading', 'iridescence', 'sheen', 'transmission', 'thickness',
+  'wireframe', 'reflectivity', 'specularIntensity', 'aoMapIntensity',
+  'displacementScale', 'displacementBias', 'attenuationDistance', 'anisotropy',
+  'anisotropyRotation', 'iridescenceIOR', 'sheenRoughness', 'dispersion'
+] as const;
+const V800_MATERIAL_TEXTURE_KEYS = [
+  'map', 'emissiveMap', 'normalMap', 'roughnessMap', 'alphaMap', 'aoMap', 'metalnessMap',
+  'bumpMap', 'displacementMap', 'clearcoatNormalMap'
+] as const;
+
+/** 签名值序列化：Color 取 hex、Vector2 取 (x,y)，其余 String() */
+function v800SignatureValue(v: unknown): string {
+  if (v && typeof v === 'object') {
+    if ('getHexString' in (v as object)) return (v as THREE.Color).getHexString();
+    const rec = v as { x?: unknown; y?: unknown };
+    if (typeof rec.x === 'number' && typeof rec.y === 'number') return `${rec.x},${rec.y}`;
+  }
+  return String(v);
+}
+
+/**
+ * 材质参数的**实例级**签名（不含 userData 行为旗标）。
+ * 与 `tests/r32_car_material.test.ts` 同源：测试断言「同 id + 同签名最多 1 个可合并
+ * 实例」时用的就是这个函数 ⇒ 不可能出现「测试换了一套更窄的签名、放过了回归」。
+ */
+export function v800MaterialSignature(m: THREE.Material): string {
+  const p = m as unknown as Record<string, unknown>;
+  const parts = V800_MATERIAL_SIGNATURE_KEYS.map((k) => `${k}:${v800SignatureValue(p[k])}`);
+  const tex = V800_MATERIAL_TEXTURE_KEYS.map((k) => {
+    const t = p[k] as THREE.Texture | null | undefined;
+    return t ? t.uuid : '-';
+  });
+  return `${m.type}|${parts.join(',')}|${tex.join(',')}`;
+}
+
 export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
   const model = createZunjieV800LuxuryMPVModel({ textureSize: carTextureSizeFor(tier) });
   const runtime = model.userData.runtime as ProceduralModelRuntime | undefined;
@@ -2752,13 +2834,14 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
     model.updateMatrixWorld(true);
     // 后牌
     const tgNodeR = byId.get('tailgate');
+    let plateRear: THREE.Mesh | null = null;
     if (tgNodeR) {
       const tgBox = new THREE.Box3().setFromObject(tgNodeR);
       if (!tgBox.isEmpty()) {
         const c = tgBox.getCenter(new THREE.Vector3());
         const s = tgBox.getSize(new THREE.Vector3());
         const cl = body.worldToLocal(c.clone());
-        mountLicensePlate({
+        plateRear = mountLicensePlate({
           body,
           name: 'license-plate-rear',
           text: '尊界V800',
@@ -2775,13 +2858,14 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
     const bbNode = byId.get('bumper-lower');
     const feNode = byId.get('front-end');
     const plateSrc = bbNode ?? feNode;
+    let plateFront: THREE.Mesh | null = null;
     if (plateSrc) {
       const bBox = new THREE.Box3().setFromObject(plateSrc);
       if (!bBox.isEmpty()) {
         const c = bBox.getCenter(new THREE.Vector3());
         const s = bBox.getSize(new THREE.Vector3());
         const cl = body.worldToLocal(c.clone());
-        mountLicensePlate({
+        plateFront = mountLicensePlate({
           body,
           name: 'license-plate-front',
           text: '尊界V800',
@@ -2791,6 +2875,30 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
           faceRear: false,
           ownedTextures
         });
+      }
+    }
+    // ---- R32-D1：前后绿牌共用同一材质实例 + 同一张贴图 ----
+    // mountLicensePlate 每次调用各建一份 CanvasTexture + MeshBasicMaterial，而
+    // createGreenPlateTexture 自 R18 起忽略 text（牌面不含字符，只有渐变底+边框）
+    // ⇒ 两块牌的贴图逐位一致、参数一致（MeshBasic + transparent + depthWrite:false）。
+    // 把后牌并到前牌（保留先建者）：材质实例 −1；两块牌仍是各自 mesh（贴花不参与
+    // 合批，DC 不变）。被并掉的贴图在装配期内即被替换、从未上传 GPU，dispose 防
+    // 泄漏，并同步移出 ownedTextures 登记表（避免 dispose 时二次释放）。
+    if (plateRear && plateFront) {
+      const rearMat = plateRear.material as THREE.MeshBasicMaterial;
+      const frontMat = plateFront.material as THREE.MeshBasicMaterial;
+      if (rearMat && frontMat && rearMat !== frontMat) {
+        plateRear.material = frontMat;
+        const dropped = rearMat.map;
+        if (dropped) {
+          dropped.dispose();
+          const at = ownedTextures.indexOf(dropped);
+          if (at >= 0) ownedTextures.splice(at, 1);
+        }
+        // R32-D1 复核补：`car.dispose()` 是按 mesh 上的 material 引用遍历回收的，
+        // 换掉引用后的 rearMat 已成孤儿、遍历不到 ⇒ 这里显式释放（否则程序的
+        // refcount 直到 JS GC 才回落，且 userData 上的 spec 元数据会多留一轮）。
+        rearMat.dispose();
       }
     }
   }
@@ -3911,7 +4019,7 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
     );
   }
 
-  // ---- R30-C4：同参材质去重（Map 缓存键 = 材质 id + 参数签名）----
+  // ---- R30-C4 → R32-D1：同参材质去重（Map 缓存键 = 材质 id + 全量参数签名）----
   // 外部审查 P0「材质实例复用（77 → 40 以内）」的适配层落地：同一
   // userData.sculptMaterial.id + 同一参数签名（含**贴图实例 uuid**）的多个材质实例
   // 合并为一个实例。保 id 驱动逻辑不破（铁律：适配器全链按材质 id 建表 —— matById /
@@ -3923,28 +4031,16 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
   //   · refTexture       —— 参考图贴图克隆（UV 已按目标 mesh 重写过）；
   //   · 无 sculptMaterial.id 的贴花/地毯材质（license plate / MAEXTRO / carpet）。
   // 保留策略 = 遍历首见实例（与 matById 的「先序先命中」同序 ⇒ 适配器持有的引用恒为保留侧）。
+  //
+  // R32-D1 实测口径（.qa/r32_tmp_car/D1_material_merge.md，node shim + DOM 补全）：
+  // 当前工况下「同 id + 同全量签名」的实例对为 **0** —— 每个重复用途的材质都因
+  // 承载不同参考图（refTextures 按规则各挂各的图）/ 不同 tuned 参数而天然不同参，
+  // 唯一两对同签名的（wood 的 tunnel-front vs 座舱遮挡克隆、leather-warm 的
+  // seat-quilt 克隆 vs 座舱遮挡克隆）都被 cabinHidable 正确拦下。故本块今天是
+  // 「守门员」而非「削减器」：真正价值在签名完备性（见下方 SCULPT_SIG_KEYS 注释）。
+  // R32-D1：上面的常量注释已登记「实测 0 对可并」结论；这里复用模块级
+  // `v800MaterialSignature()`（与测试同源），不再维护第二份签名表。
   {
-    const SCULPT_SIG_KEYS = [
-      'side', 'transparent', 'opacity', 'alphaTest', 'depthWrite', 'color', 'emissive',
-      'emissiveIntensity', 'metalness', 'roughness', 'envMapIntensity', 'clearcoat',
-      'clearcoatRoughness', 'flatShading', 'iridescence', 'sheen', 'transmission', 'thickness'
-    ] as const;
-    const TEX_KEYS = ['map', 'emissiveMap', 'normalMap', 'roughnessMap', 'alphaMap', 'aoMap', 'metalnessMap'] as const;
-    const signatureOf = (m: THREE.Material): string => {
-      const p = m as unknown as Record<string, unknown>;
-      const parts = SCULPT_SIG_KEYS.map((k) => {
-        const v = p[k];
-        if (v && typeof v === 'object' && 'getHexString' in (v as object)) {
-          return `${k}:${(v as THREE.Color).getHexString()}`;
-        }
-        return `${k}:${String(v)}`;
-      });
-      const tex = TEX_KEYS.map((k) => {
-        const t = p[k] as THREE.Texture | null | undefined;
-        return t ? t.uuid : '-';
-      });
-      return `${m.type}|${parts.join(',')}|${tex.join(',')}`;
-    };
     const keep = new Map<string, THREE.Material>();
     const reassign: Array<{ mesh: THREE.Mesh; from: THREE.Material; to: THREE.Material }> = [];
     root.traverse((o) => {
@@ -3962,7 +4058,7 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
         if (ud.cabinHidable || ud.cabinPaintShadow || ud.refTexture) continue;
         const id = ud.sculptMaterial?.id;
         if (!id) continue; // 无 id 材质不并（贴花/地毯各承载不同贴图）
-        const key = `${id}|${signatureOf(mt)}`;
+        const key = `${id}|${v800MaterialSignature(mt)}`;
         const hit = keep.get(key);
         if (!hit) {
           keep.set(key, mt);
