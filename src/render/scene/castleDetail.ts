@@ -1062,21 +1062,86 @@ export function corniceBand(o: { len: number; proj?: number; h?: number }): Deta
  * R32（参考图竖向金条间距节拍 18–25px）：`strips` > 0 时屏板上按节拍铺竖向金条
  * （每条 12 tri；屏宽 w 上均匀布 strips 条，跳过中轴 1 条防与十字叠字）。
  */
-export function gildedScreen(o: { w: number; h: number; d?: number; cross?: boolean; strips?: number }): DetailParts {
+export function gildedScreen(o: {
+  w: number;
+  h: number;
+  d?: number;
+  cross?: boolean;
+  strips?: number;
+  /**
+   * R33 `hall_front`：把「实心金板」改为**透空金屏**。
+   * 外框 + 竖棂 + 尖拱分格，板芯完全不产金几何；后方由调用方补 dark 深龛。
+   * 默认 false 保持城门山花屏（平实心）的原观感。
+   */
+  openwork?: boolean;
+  /** 透空屏的尖拱开间数（默认 3；仅 openwork=true 生效） */
+  bays?: number;
+}): DetailParts {
   const p = parts();
   const d = o.d ?? 0.22;
-  p.gold.push(box('gold', d, o.h, o.w, 0, o.h / 2, 0)); // 金板（双面）
+  if (!o.openwork) {
+    p.gold.push(box('gold', d, o.h, o.w, 0, o.h / 2, 0)); // 金板（双面）
+  }
   // 镶金外框（四边加厚，读作金镶边屏）
-  p.gold.push(box('gold', d + 0.08, o.h + 0.6, 0.5, 0, o.h / 2, o.w / 2));
-  p.gold.push(box('gold', d + 0.08, o.h + 0.6, 0.5, 0, o.h / 2, -o.w / 2));
-  p.gold.push(box('gold', 0.5, o.h + 0.6, o.w + 0.6, 0, o.h + 0.3, 0));
-  p.gold.push(box('gold', 0.5, 0.5, o.w + 0.6, 0, 0, 0));
-  if (o.cross) {
+  p.gold.push(box('gold', d + 0.08, o.h + 0.6, 0.8, 0, o.h / 2, o.w / 2));
+  p.gold.push(box('gold', d + 0.08, o.h + 0.6, 0.8, 0, o.h / 2, -o.w / 2));
+  // R33 修正：原实现把顶框写成「厚 0.5 × 高 h+0.6 × 宽 w+0.6」的**整幅面板**
+  // （实为 second full plate，压掉透空屏的所有开口）。顶框应只有 0.9m 高。
+  // 并按 hall_front 实拍把外框/竖棂加粗一档（85m 机位下 0.2m 棂仅 ~3px，读不出）。
+  p.gold.push(box('gold', 0.62, 0.9, o.w + 0.8, 0, o.h + 0.3, 0));
+  p.gold.push(box('gold', 0.62, 0.8, o.w + 0.8, 0, 0, 0));
+  if (o.openwork) {
+    /* ── R33 透空屏：竖棂 + 三/多尖拱分格 ──────────────────────────────
+     * 局部与实心版完全同系（厚度 x、宽 z、高 y），因此调用方的
+     * rotateY(π/2)/translate 接线零改动。金量从「整面 2×w×h 双面板」
+     * 降为「框 + 棂 + 券线」，透过去看到后方 dark 龛 = 门/屏的空间层次。
+     * 尖拱券线由 archBand 生成后 rotateY(π/2) 转进 y-z 立面。
+     */
+    const bays = Math.max(1, o.bays ?? 3);
+    const bayW = o.w / bays;
+    const half = bayW * 0.5 - 0.18;
+    const spring = o.h * 0.52;
+    const rise = Math.min(o.h * 0.24, bayW * 0.42);
+    // 中腰横档（把立面分成「窗下墙 / 透空尖拱区」两段）
+    p.gold.push(box('gold', d + 0.04, 0.52, o.w - 0.4, 0, spring, 0));
+    for (let i = 0; i < bays; i += 1) {
+      const zc = -o.w / 2 + bayW * (i + 0.5);
+      // 竖向分格棂（每开间一根）
+      p.gold.push(box('gold', d * 0.8, spring - 0.4, 0.38, 0, spring * 0.5, zc));
+      // 尖拱券线：archBand 在 x-y 平面沿 -z 挤出 → rotateY(π/2) 后跨 z、厚度 x
+      const ring = archBand(half, spring, rise, 0.42, d * 0.75, 3, 0.6, 0.45);
+      ring.rotateY(Math.PI / 2);
+      ring.translate(0, 0, zc);
+      p.gold.push(goldUV(ring));
+      // 拱顶小尖饰（3 片金卷叶合成一个十字尖，tri 低、远距仍可读）
+      if (!isLowDetail() && !DEEP_FAR) {
+        for (const dz of [-0.3, 0, 0.3]) {
+          const tip = box('gold', d * 0.7, 0.7, 0.14, 0, spring + rise + 0.28, zc + dz);
+          tip.rotateZ(Math.PI / 4);
+          p.gold.push(goldUV(tip));
+        }
+      }
+    }
+    // 在拱肩之间补两道短竖棂，形成 2×bays 细密节奏（参考图金屏的竖棂感）
+    for (let i = 1; i < bays; i += 1) {
+      const zc = -o.w / 2 + bayW * i;
+      p.gold.push(box('gold', d * 0.75, o.h * 0.3, 0.3, 0, o.h * 0.72, zc));
+    }
+    // 两道通长横枋（下枋 + 上枋）：把透空区分成三段，远距也能读出「屏」而不是空洞
+    p.gold.push(box('gold', d * 0.8, 0.34, o.w - 0.3, 0, o.h * 0.16, 0));
+    p.gold.push(box('gold', d * 0.8, 0.34, o.w - 0.3, 0, o.h * 0.82, 0));
+    if (o.cross) {
+      // 透空版十字只在顶部保留短十字，避免重新变成整面板
+      p.gold.push(box('gold', d * 0.9, o.h * 0.2, 0.26, 0, o.h * 0.88, 0));
+      p.gold.push(box('gold', d * 0.9, 0.22, o.w * 0.2, 0, o.h * 0.9, 0));
+    }
+  }
+  if (!o.openwork && o.cross) {
     p.gold.push(box('gold', 0.5, o.h * 0.66, 0.3, 0, o.h * 0.52, 0)); // 竖
     p.gold.push(box('gold', o.w * 0.46, 0.5, 0.3, 0, o.h * 0.6, 0)); // 横
   }
-  // R32 竖向金条（屏面节拍；间距 = w/(strips+1)，中轴跳过与十字重叠）
-  const strips = o.strips ?? 0;
+  // R32 竖向金条（实心屏的屏面节拍；透空版已自带竖棂，不重复铺）
+  const strips = o.openwork ? 0 : (o.strips ?? 0);
   if (strips > 0) {
     for (let i = 1; i <= strips; i += 1) {
       const pz = -o.w / 2 + (o.w * i) / (strips + 1);

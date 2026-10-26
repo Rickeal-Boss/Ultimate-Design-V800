@@ -312,8 +312,11 @@ const STONE_CHANNELS: Record<StoneKind, StoneChannels> = {
   rock: 'full',
   gold: 'full',
   roof: 'noRough',
-  wood: 'albedoOnly',
-  glass: 'albedoOnly',
+  // R33：wood/glass 从 albedoOnly 升 noRough —— 院落木檐/木梁与深腔暖窗进入
+  // 近中景后，单靠 albedo 读不出木纹起伏/玻璃铅条厚度。贴图张数 14→16，
+  // 仍 < castleTexCount 20；roughness 继续由材质常数承载（不新增 roughMap）。
+  wood: 'noRough',
+  glass: 'noRough',
   marble: 'noRough'
 };
 

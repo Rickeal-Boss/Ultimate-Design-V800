@@ -79,12 +79,18 @@ const NSEG_SMALL = 24;
 /** 窗数（参考图实测 18）/ 角距 */
 export const N_WINDOWS = 18;
 const WIN_PITCH = (Math.PI * 2) / N_WINDOWS;
-/** 窗角半宽（弧度） */
-const WIN_HALF_ANG = (6.1 * Math.PI) / 180;
+/**
+ * 窗角半宽（弧度）。
+ * R33：参考图轮面开口是**大面积梯形通风窗**，不是 6° 细缝。原 6.1°×0.030R
+ * 在整车侧视 8m 机位只剩一条黑线，盘面读成实心圆碟。放大到 7.6°×0.034R
+ * （开口面积 +34%）；含 7.5° 涡轮倾角后的外接半径 0.2819 < 窗带外缘 0.283，
+ * 仍严格落在窗带内，不破 band 边界/倒角环。
+ */
+const WIN_HALF_ANG = (7.6 * Math.PI) / 180;
 /** 窗径向半高 / 圆角 / 涡轮倾角 */
-const WIN_HALF_R = 0.03;
-const WIN_CORNER = 0.008;
-const WIN_TILT = (9 * Math.PI) / 180;
+const WIN_HALF_R = 0.034;
+const WIN_CORNER = 0.009;
+const WIN_TILT = (7.5 * Math.PI) / 180;
 /** 窗轮廓每角弧段点数（3 点/角 = 12 边形圆角矩形） */
 const WIN_ARC_PTS = 3;
 /** 窗框倒角宽度 + 抬起高度 */

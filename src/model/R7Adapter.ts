@@ -18,6 +18,7 @@ import { createLuxeedR7Model, type ProceduralModelRuntime } from './createR7Mode
 import { batchMergeStatic, UV_CONTENT_MATERIAL_IDS } from './batchMerge';
 import { applyReferenceTextures } from './refTextures';
 import { mountLicensePlate } from './plateTexture';
+import { createR7FrontDetails } from './parts/r7FrontDetails';
 import { carTextureSizeFor, type QualityTier } from '../config/quality';
 import { damp } from '../util/math';
 
@@ -391,6 +392,29 @@ export function createR7CarAdapter(tier: QualityTier = 'high'): CarLike {
       const id = (mesh.userData as { sculptComponent?: { id?: string } }).sculptComponent?.id;
       if (id === containerId) mesh.visible = false;
     });
+  }
+
+  // ---- R33：前脸手作精修层 ----
+  // spec 的 front-fascia 是平板，headlamp-l/r 是矩形黑卡，与参考图的斜切灯腔
+  // 差距最大。这里隐藏旧灯组（保留 spec 组件与材质，避免破坏 byId/matById 契约），
+  // 再挂入程序化灯腔/镀铬刃/下格栅。新组在 batchMergeStatic 之前挂入 ⇒ 参与合批。
+  // 隐藏只针对组件自身：headlamp-l/r 可能是 group，visible=false 会连同其下
+  // projector/edging 一起不画（这些子件不再需要单独处理）。
+  {
+    const front = createR7FrontDetails();
+    model.add(front.group);
+    let hidden = 0;
+    for (const id of front.hiddenComponentIds) {
+      const node = byId.get(id);
+      if (node && node.visible) {
+        node.visible = false;
+        hidden += 1;
+      }
+    }
+    console.info(
+      `[R7Adapter] R33 前脸精修：灯腔/镀铬刃/下格栅 ${Math.round(front.triangleCount)} tri，` +
+        `隐藏旧件 ${hidden} 个`
+    );
   }
 
   // ---- 玻璃档位：high 用 spec；中低档提高不透明度（省 fill rate + 避免内饰反白）----
