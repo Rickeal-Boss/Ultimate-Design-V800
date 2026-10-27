@@ -23,6 +23,87 @@ const Z_FACE = 2.444;
 const Z_LENS = Z_FACE + 0.006;
 const Z_DETAIL = Z_FACE + 0.012;
 
+/**
+ * R34 · 前唇贴合口径（★唯一真源，禁止在别处硬编码）
+ *
+ * 实测（node shim .qa/r34car，工厂局部系）：spec `front-fascia` 是
+ *   x[-0.940,0.940] y[0.210,0.945] z[2.383,2.428] 的平板挤出体，
+ *   ⇒ **底缘是一张 y=0.210 的水平面**（整宽等高）。
+ * R33 旧 lipBar 置于局部 y=0.105（z 2.419..2.469），顶面 y=0.118 距 fascia
+ * 底缘 0.210 还差 92mm ⇒ 真机侧视读作一条「悬在前脸下方的黑条」（P1 悬浮缝）。
+ *
+ * 修复：把 lipBar **顶面对齐 fascia 底缘**（top = 0.210 ⇒ center = 0.210 − h/2），
+ * 并在 z 上与 fascia 本体重叠 ≥20mm（fascia zmax=2.428，bar z ∈ [2.407,2.457]
+ * ⇒ 重叠 21mm、外探 29mm），使悬空态在几何上不可能发生；再补左右端头封口块
+ * （埋进 fascia 内部，只负责消除端头读感缝隙）。
+ *
+ * `lipBarBounds()` 是**由真实几何算出**的纯函数（测试直接断言 MISSING GAP），
+ * 不是另一份手抄常量 —— 改 buildLipBar 而忘了改这里，断言必红。
+ */
+export const R7_FASCIA_BOTTOM_Y = 0.21;
+/** 前唇压条：宽 / 高 / 厚 */
+const LIP_BAR = { w: 1.62, h: 0.026, d: 0.05 } as const;
+/** 压条顶面 y（= fascia 底缘）⇒ 中心 y */
+const LIP_BAR_TOP_Y = R7_FASCIA_BOTTOM_Y;
+const LIP_BAR_CENTER_Y = LIP_BAR_TOP_Y - LIP_BAR.h / 2;
+/** 压条 z 中心：与 fascia 本体（zmax 2.428）重叠 21mm */
+const LIP_BAR_CENTER_Z = Z_FACE - 0.012;
+/** 端头封口块（埋进 fascia 内部，不参与外观读数） */
+const LIP_END_CAP = { w: 0.03, h: 0.05, d: 0.05 } as const;
+/** 贴合判定容差（m）：6mm ≈ 屏幕 1px 以下 */
+export const R7_LIP_CONTACT_EPSILON = 0.006;
+
+/** 构造前唇压条 + 端头封口的真实几何（↔ createR7FrontDetails 共用同一份代码） */
+export function buildLipBar(): THREE.BufferGeometry[] {
+  const geos: THREE.BufferGeometry[] = [];
+  const bar = new THREE.BoxGeometry(LIP_BAR.w, LIP_BAR.h, LIP_BAR.d);
+  bar.translate(0, LIP_BAR_CENTER_Y, LIP_BAR_CENTER_Z);
+  geos.push(bar);
+  for (const sx of [1, -1] as const) {
+    const cap = new THREE.BoxGeometry(LIP_END_CAP.w, LIP_END_CAP.h, LIP_END_CAP.d);
+    // 顶到 fascia 底缘之上 25mm（埋进本体），下端落到压条底之下 11mm
+    cap.translate(sx * (LIP_BAR.w / 2 - LIP_END_CAP.w / 2), R7_FASCIA_BOTTOM_Y + 0.025 - LIP_END_CAP.h / 2, LIP_BAR_CENTER_Z);
+    geos.push(cap);
+  }
+  return geos;
+}
+
+export interface R7LipBounds {
+  /** 压条本体（不含端头封口）y 上下限 */
+  barMinY: number;
+  barMaxY: number;
+  /** 压条 z 前后限 */
+  barMinZ: number;
+  barMaxZ: number;
+  /** 含端头封口的整体 y 上限（需 ≥ fascia 底缘 ⇒ 确认埋进本体） */
+  capMaxY: number;
+  /** 压条顶面到 fascia 底缘的间隙（m）；0 = 完全贴合 */
+  topGap: number;
+  /** 压条与 fascia 本体在 z 上的重叠深度（m）；> 0 表示有实体搭接，不是企口对接 */
+  zOverlap: number;
+}
+
+/** 由真实几何反算前唇贴合数据（QA / 单元测试消费） */
+export function lipBarBounds(): R7LipBounds {
+  const [bar, ...caps] = buildLipBar();
+  bar.computeBoundingBox();
+  const bb = bar.boundingBox!;
+  let capMaxY = -Infinity;
+  for (const c of caps) {
+    c.computeBoundingBox();
+    capMaxY = Math.max(capMaxY, c.boundingBox!.max.y);
+  }
+  return {
+    barMinY: bb.min.y,
+    barMaxY: bb.max.y,
+    barMinZ: bb.min.z,
+    barMaxZ: bb.max.z,
+    capMaxY,
+    topGap: Math.abs(bb.max.y - R7_FASCIA_BOTTOM_Y),
+    zOverlap: 2.428 - bb.min.z
+  };
+}
+
 export const R7_FRONT_DETAIL_MATERIAL_IDS = {
   housing: 'r33-r7-lamp-housing',
   chrome: 'r33-r7-chrome',
@@ -283,12 +364,15 @@ export function createR7FrontDetails(): R7FrontDetailResult {
       push(materials.chrome, edge);
     }
 
-    // 前唇压条（低位，避免遮牌）
-    const lipBar = new THREE.BoxGeometry(1.62, 0.026, 0.05);
-    lipBar.translate(0, 0.105, Z_FACE + 0.006);
-    push(materials.lip, lipBar);
+    // 前唇压条（R34：顶面对齐 fascia 底缘 y=0.210，几何见 lipBarBounds 口径注释）
+    for (const g of buildLipBar()) push(materials.lip, g);
+    // 前唇镀铬饰条：贴在压条正面上缘（原 y=0.13 是旧悬浮位，会漂在 bar 上方 3cm）
     const lipChrome = new THREE.BoxGeometry(1.3, 0.008, 0.01);
-    lipChrome.translate(0, 0.13, Z_FACE + 0.026);
+    lipChrome.translate(
+      0,
+      LIP_BAR_TOP_Y - 0.005,
+      LIP_BAR_CENTER_Z + LIP_BAR.d / 2 + 0.0035 - 0.005
+    );
     push(materials.chrome, lipChrome);
   }
 

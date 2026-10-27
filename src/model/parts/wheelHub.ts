@@ -41,7 +41,7 @@
  * 几何构成（每材质 1 mesh，共 4 mesh/轮）：
  *   r22-hub-bright  外唇环 + 窗带（18 个真开窗）+ 18 条机加工倒角窗框 + 主盘穹顶
  *                   + 中心凸台 + 中心镀铬环（回转体母线两段，绕窗带生成）
- *   r22-hub-dark    窗带后的暗腔整环（透过开窗看到的深腔）
+ *   r22-hub-dark    窗带后的暗腔整环（透过开窗看到的深腔）+ 制动盘（R34 P2-1 透窗见盘）
  *   r22-hub-cap     黑亮圆盖（MeshPhysical clearcoat，平顶 + 收边）
  *   r22-hub-emblem  菱形徽标 canvas 贴图圆面（程序化绘制，零外部图片）
  *
@@ -457,6 +457,33 @@ function buildCavity(): THREE.BufferGeometry {
   return geo;
 }
 
+/**
+ * 制动盘（R34 · P2-1 黑洞假开口修复）：透窗可见的刹车盘。
+ * 暗腔 shell 在 z≈0.1358–0.1455，盘置于其后（z≈0.11）⇒ 透窗读到真实盘体而非纯黑腔。
+ * 并入 r22-hub-dark 材质（不增 mesh / 不增 DC / 不破窗带 0.203–0.283 测试锁）。
+ * 盘半径 0.235 < 外唇 0.30 ⇒ 盘体落在窗带 0.203–0.283 区间内，透窗必见。
+ */
+function buildBrakeDisc(): THREE.BufferGeometry {
+  const cyl = new THREE.CylinderGeometry(0.235, 0.235, 0.014, 12, 1, false);
+  cyl.rotateX(Math.PI / 2); // 轴 Y→Z（盘平面平行车外侧）
+  cyl.translate(0, 0, 0.11);
+  cyl.computeVertexNormals();
+  cyl.computeBoundingBox();
+  return cyl;
+}
+
+/**
+ * 卡钳（R34 · P2-1）：固定式制动卡钳，银色（并入 bright 材质，零 DC 成本）。
+ * 处于盘缘 r≈0.20、z≈0.12，透窗可见，给「这是真刹车」的读感锚点。
+ */
+function buildCaliper(): THREE.BufferGeometry {
+  const g = new THREE.BoxGeometry(0.07, 0.05, 0.05);
+  g.translate(0, 0.2, 0.12); // 盘缘顶部（局部 +Y），落在窗带/暗腔之后的盘前缘
+  g.computeVertexNormals();
+  g.computeBoundingBox();
+  return g;
+}
+
 /* ================================================================
  * 3. 徽标 canvas 贴图（程序化，零外部图片）
  * ================================================================ */
@@ -659,11 +686,12 @@ export function createWheelHub(side: WheelHubSide = 1, materials?: WheelHubMater
     revolve(lipProfile, NSEG),
     revolve(discProfile, NSEG),
     createWheelHubBandGeometry(),
-    buildBezels()
+    buildBezels(),
+    buildCaliper()
   ]);
 
-  /* ---- 5.3 暗腔整环 ---- */
-  const darkGeo = buildCavity();
+  /* ---- 5.3 暗腔整环 + 制动盘（P2-1，透窗见盘）---- */
+  const darkGeo = mergeSafe([buildCavity(), buildBrakeDisc()]);
 
   /* ---- 5.4 黑亮圆盖（平顶 + 收边，顶面承载徽标贴图）---- */
   const capProfile: ProfilePoint[] = [

@@ -35,7 +35,14 @@
  *
  * ── 预算 ───────────────────────────────────────────────────────────────
  * 远景环 ~1040 tri + 峡谷内衬 ~2.9k tri ≈ **4k tri / 2 DC**（R28 删崖体 ~3.2k tri）
- * （整帧红线 R27_BUDGET.frameTri = 320,000，本线增量建议 ≤40k ⇒ 余量充足）。
+ * 整帧红线现由 **`R31_BUDGET.frameTri` = 465,000** 卡（口径③ renderer.info.render，
+ * 含阴影 pass + 后处理）。
+ * ⚠ R33 C 线清理：此处原写「R27_BUDGET.frameTri = 320,000」—— `R27_BUDET`/`R30_BUDGET`
+ *   两族旧键（`R27_BUDGET`/`R30_BUDGET`）已在 R32 C-1 全部删除（全树 grep 零代码消费，证据
+ *   `.qa/r32_tmp_audit/c1_grep.txt`），预算键**唯一真源**是
+ *   `src/render/scene/r31Budget.ts`。写回旧键名 = 造一条指向空气的红线
+ *   （后人照它卡，卡的是个不存在的东西）。
+ * 本线 4k tri 相对 465,000 整帧红线 ≈0.9% ⇒ 余量充足；本文件不单独设键。
  */
 import * as THREE from 'three';
 import { MeshLambertMaterial } from 'three';

@@ -1,4 +1,8 @@
-import { defineConfig } from 'vite';
+// ⚠ 从 'vitest/config' 取 defineConfig 而不是 'vite'：下面带 `test` 段，
+//   用 vite 的 defineConfig 会被 tsc 判「对象字面量只能指定已知属性」（vite.config.ts 在
+//   tsconfig 的 include 里，属于 `npm run build` 的 `tsc --noEmit` 门禁范围）。
+//   'vitest/config' 导出的是 vite UserConfig 的超集，build 段行为完全一致。
+import { defineConfig } from 'vitest/config';
 
 // three@0.186.1 的 package.json exports 已内置 "three/addons/*" 映射，
 // 无需额外 alias；base 用相对路径便于静态托管。
@@ -38,6 +42,27 @@ const SHARED_SRC = [
 
 export default defineConfig({
   base: './',
+  /**
+   * R33 F1 · 小内存机器上的 vitest 鲁棒性（`tests/r32_zone.test.ts` OOM）。
+   *
+   * 根因：r32_zone.test.ts 里 5 个 `it` 各自 `new Castle(scene, high)`（high 档城堡
+   * 全量几何 + 石材贴图 canvas），默认 pool 是 **threads**（worker_threads），
+   * 多文件并发时**每个 worker 各自持一份 Castle 常驻堆**且 dispose 后 worker
+   * 不立刻释放 ⇒ 峰值内存 = 并发文件数 × 城堡堆。本机 RAM 受限时直接 OOM：
+   * 而且是**确定性**的（与 A 线几何同向增长，A 线再铺量只会更早炸）。
+   *
+   * 为什么选 `pool: 'forks'` 而不是别的：
+   *   · forks = 一测试文件一子进程 ⇒ 进程退出时**整段堆被 OS 回收**，
+   *     不存在 threads 那种「worker 复用 + GC 不彻底」的驻留；
+   *   · 代价只是进程启动开销（本仓库测试文件少、单文件跑 5~10s，启动成本可忽略）；
+   *   · 不用 `isolate:false`（那会让同进程内多文件共享堆，**更**容易 OOM），
+   *     也不用 `singleThread`（会把全部文件塞进一个进程，同样堆叠加）。
+   *   · `maxWorkers=2` 仍由命令行给（CI/本机按需调），配置里不写死并发数。
+   * 若仍 OOM ⇒ 走 F1 ②号预案（改 r32_zone.test.ts 用 low 档 Castle，见该文件注释）。
+   */
+  test: {
+    pool: 'forks'
+  },
   build: {
     target: 'es2022',
     chunkSizeWarningLimit: 1600,

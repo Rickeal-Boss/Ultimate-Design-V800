@@ -42,6 +42,27 @@
  *    阴影带、wood 旧化灰斑、glass 窗台积灰 + 竖向流痕、marble 细脉 + 抛光斑块
  *    （roughness 分层）、floor 浅色勾缝（seamTone 0.06→0.62）。
  * 4) 契约不动：tex 总数 14、族种类 9、UV 重映射、异步/同步逐字节一致（shim 可证）。
+ *
+ * ── R34 波次（B 线：贴图极致细化 + 内部材质底子，2026-10）───────────────────
+ * 1) 石墙族（ashlar / wall）逐项补齐参考图判读：
+ *    · **灰缝有颜色了**：缝芯 blend 到「深灰（STONE_HEX.mortar）↔ 浅褐（MORTAR_WARM）」
+ *      双色带，低频在两端之间游走 —— 旧实现只压暗不改色相，缝永远是「更暗的白石」；
+ *    · 缝内微凹陷：缝芯高度 0.1 → 0.08（albedo 阴影 / 法线凹槽 / 粗糙度同源 h 派生）；
+ *    · 砌块边缘磨损：`edgeNick` 沿缝口做粗颗粒抖动（缺棱 / 磨蚀 ⇒ 缝不是直边）；
+ *    · 雨水渍：`seep` = 贴竖向灰缝 × 竖向拉长低频斑（淡黄-灰褐 SEEP_TINT），走独立通道。
+ * 2) 内部材质族底子：新增 `STONE_VARIANTS`（inner-stone / inner-wood / gilded-aged /
+ *    pave-damp）—— **全部复用既有图集**（同 kind+size+seed+weather+repeat ⇒ 命中
+ *    makeStoneMaps 缓存），只改材质侧 color/rough/metal/env/normalScale ⇒ **贴图 0 新增**。
+ * 3) 底图细化：wood 木纹节奏（ringWarp 弦切弯纹 + ringBand 早晚材带 + vessel 导管细线）、
+ *    gold 做旧加量（氧化窗口放宽 + 剥落加深 + 刷脊抛光；**色相档不动**，R30b 决策）、
+ *    floor 微湿低频斑（damp：albedo 压暗 + roughness 洼地；floor 现为 'noRough'，
+ *    故 roughness 洼地在生产上不生效 —— 这是**刻意**的，见 CRAZY_PAVE.damp 注释）。
+ * 4) ⚠ 平铺红线（本轮最重要的判据）：所有族走 RepeatWrapping 平铺，**任何「底部更脏」
+ *    类的世界空间梯度都会在每 1 个 tile（ashlar 1.2m）重复一次 ⇒ 横向接缝带**。故
+ *    「污渍集中在底部墙面 / 窗洞下方」**不在贴图内实现**（应由 A 线走顶点色或世界空间
+ *    渍片），只做可平铺的「沿竖向灰缝渗出」版本。
+ * 5) 契约不动：StoneKind 仍 9 族（castle.ts / castleKit.ts 的 `Record<StoneKind,…>` 依赖
+ *    它，扩族会直接编译红），贴图张数 0 变化，异步/同步逐字节一致（shim 可证）。
  */
 import * as THREE from 'three';
 import { makeCanvas } from '../../util/canvasTex';
@@ -111,9 +132,18 @@ export interface StoneOptions {
  * +13/+24 收到 +6/+2；wall/marble 同步收冷。本场景天光 sky 0x8fa0bd 亦偏冷，
  * 若成片仍偏暖，优先动 Lighting/C 线而不是回退这里。
  */
+/**
+ * 色族四档色 + **灰缝色**。
+ * ⚠ R34：`mortar` 从「死字段」变成**真消费**（旧实现只是压暗、不改色相，缝永远是
+ * 「更暗的白石」；参考图判读要求灰缝是「深灰至浅褐」）。缝色带的两端：
+ *   `mortar`（深灰端） ← 低频 `MORTAR_WARM` 混合 → `MORTAR_WARM`（浅褐端）。
+ * 明度校准（sRGB 码值口径，stone 面 ashlar L≈219）：
+ *   ashlar 缝 = 深灰 148×0.90≈133（0.61×）↔ 浅褐 189×0.90≈170（0.78×）；
+ *   wall   缝 = 深灰 126×0.88≈111（0.60×）↔ 浅褐 168×0.88≈148（0.80×）。
+ */
 export const STONE_HEX: Record<StoneKind, { base: string; light: string; dark: string; mortar: string }> = {
-  ashlar: { base: '#dcdcd6', light: '#f3f2ee', dark: '#b2b4b0', mortar: '#b8bab6' },
-  wall: { base: '#bcbcb8', light: '#d6d6d2', dark: '#7f817d', mortar: '#9a9c98' },
+  ashlar: { base: '#dcdcd6', light: '#f3f2ee', dark: '#b2b4b0', mortar: '#97948c' },
+  wall: { base: '#bcbcb8', light: '#d6d6d2', dark: '#7f817d', mortar: '#807d75' },
   // R32 图B 路面 (60,55,50)：与 R29 StoneFloor 中位 #413f3d 同源，取中值 #3e3b37
   floor: { base: '#3e3b37', light: '#5c5954', dark: '#282624', mortar: '#1c1b1a' },
   // R32 图B 远山：大气透视偏浅灰褐（hue 30–40° / V 50–60%）。Fab 岩石贴图是**近景
@@ -271,6 +301,30 @@ interface MasonryProfile {
    */
   pit: number;
   pitPeriod: number;
+  /* ── R34 极致细化新增层 ── */
+  /**
+   * 灰缝**上色**强度（0..1）：缝芯 blend 到灰缝色的比例（缝色带 = 深灰↔浅褐）。
+   * 旧实现只有「压暗」、不改色相 ⇒ 缝永远是「更暗的白石」；参考图判读要求灰缝是
+   * **深灰至浅褐**。通道值 = 缝芯遮罩 × 本值，compose 只做一次 lerp，成本固定。
+   */
+  jointTint: number;
+  /** 缝色在「深灰端 ↔ 浅褐端」之间的低频游走幅度（0..1；0.9 ⇒ 权重 ≈0.23..0.77） */
+  jointWarm: number;
+  /** 灰缝自身亮度系数（乘在灰缝色上；与 stone 的 shadeLo 分开，便于单独调缝的深浅） */
+  jointShade: number;
+  /**
+   * 雨水渍幅度（沿竖向灰缝渗出，淡黄-灰褐 SEEP_TINT）。
+   * ⚠ 只做**可平铺**的版本（贴竖向缝 × 竖向拉长低频斑）；「污渍集中在底部墙面 /
+   * 窗洞下方」是**世界空间**梯度，平铺下每 1.2m 重复一次 ⇒ 横向接缝带，禁止在贴图内做
+   * （见头注 R34 §4，遗留项交由 A 线走顶点色 / 世界空间渍片）。
+   */
+  seep: number;
+  /**
+   * 砌块边缘磨损（缺棱 / 磨蚀）：沿缝口做**粗颗粒**抖动（cell ≈8px@512 ≈ 0.019m），
+   * 让缝不是尺子画的直边。乘在 edge 距离上（±），不动缝芯宽度 ⇒ 不削弱缝的清晰度
+   * （R31 的「缝必须更清晰」判据仍成立）。
+   */
+  edgeNick: number;
 }
 
 const MASONRY: Record<'ashlar' | 'wall', MasonryProfile> = {
@@ -307,7 +361,15 @@ const MASONRY: Record<'ashlar' | 'wall', MasonryProfile> = {
     patch: 0.12,
     // R32：风化凹坑 0.01–0.03m（固定 res 256 ⇒ 世界尺度跨尺寸一致）
     pit: 0.055,
-    pitPeriod: 32
+    pitPeriod: 32,
+    // R34：灰缝上色（深灰 #97948c ↔ 浅褐 #d0bb99），缝自身亮度 0.90
+    jointTint: 0.88,
+    jointWarm: 0.9,
+    jointShade: 0.9,
+    // R34：沿竖向灰缝渗出的淡黄-灰褐雨水渍（0.85 经覆盖度实测标定 ⇒ >0.15 覆盖 ≈10%）
+    seep: 0.85,
+    // R34：砌块边缘磨损/缺棱（粗颗粒抖动 ±12%）
+    edgeNick: 0.12
   },
   wall: {
     // R32：5×5 @ 2.4m/tile = 0.48m 见方（rows==cols，勿拉成长条）
@@ -340,9 +402,33 @@ const MASONRY: Record<'ashlar' | 'wall', MasonryProfile> = {
     chiselPeriodY: 16,
     patch: 0.12,
     pit: 0.05,
-    pitPeriod: 32
+    pitPeriod: 32,
+    // R34：次级墙缝更深更脏（深灰 #807d75 ↔ 浅褐 #bda684），渍更重
+    jointTint: 0.85,
+    jointWarm: 0.85,
+    jointShade: 0.88,
+    seep: 0.9,
+    edgeNick: 0.14
   }
 };
+
+/**
+ * R34 灰缝「浅褐」端 + 雨水渍色（只有砌体族 ashlar / wall 有，其余族不产缝色通道）。
+ * - `MORTAR_WARM`：与 `STONE_HEX.mortar`（深灰）构成「**深灰 → 浅褐**」缝色带的两端，
+ *   逐像素的混合权重由低频 `jointWarm` 通道给出（≈0.23..0.77，两端都够得到但不打满）；
+ * - `SEEP_TINT`：**淡黄-灰褐**雨水渍。比石材基色暗一档、色相偏黄褐 ⇒ blend 后读作
+ *   「脏」而不是「阴影」（纯压暗会被当成法线阴影，参考图里渍是暖的）。
+ */
+const MORTAR_WARM: Partial<Record<StoneKind, string>> = {
+  ashlar: '#d0bb99',
+  wall: '#bda684'
+};
+const SEEP_TINT: Partial<Record<StoneKind, string>> = {
+  ashlar: '#bdae90',
+  wall: '#aea084'
+};
+/** 渍色 blend 强度上限（乘在 seep 通道值 0..1 上） */
+const SEEP_BLEND = 0.5;
 
 /**
  * R30 路面**乱石板（crazy-paving）**参数表。据 `.qa/r29_vision.md` §2-D（置信度 H）：
@@ -374,7 +460,17 @@ const CRAZY_PAVE = {
   jointRough: 0.84,
   normalStrength: 1.15,
   /** 缝底亮度比（compose shadeLo）⇒ 与 seamTone 共同定勾缝明度 */
-  mortarShade: 0.82
+  mortarShade: 0.82,
+  /**
+   * R34 微湿感（低频水渍斑，周期 4 ⇒ ≈1.8m@7.2m/张）：湿处 albedo 压暗 + roughness 洼地。
+   * ⚠ **历史坑（R26h / 铁律 34 的孪生陷阱）**：three 的 effective roughness =
+   *   material.roughness × roughnessMap.g。本族 faceRough 0.44 / jointRough 0.84 ⇒
+   *   ḡ≈0.5，若把 floor 从 'noRough' 切成 'full'，`inverseRoughness(0.9, 0.5)` 会被
+   *   clamp 到 1 ⇒ effective 掉到 0.5（哑光石面被乘亮/乘滑）—— 正是「哑光石面别挂会
+   *   乘低 roughness 的 roughnessMap」那条。故本族**保持 noRough**，微湿感只走 albedo
+   *   （+ 仍然算进 roughness 数组，供 stats / 未来若改口径时校验用）。
+   */
+  damp: 0.3
 };
 
 /** 屋面板岩 / 木板 / 铅条玻璃 / 大理石：结构不同，各自单独的参数表 */
@@ -415,7 +511,21 @@ const PLANK = {
   /** R32 旧化灰斑（材料丰富度）：低频斑块脱色（压暗 + 抬粗糙），木楼板/廊柱的岁月感 */
   grayWeather: 0.12,
   faceRough: 0.78,
-  jointRough: 0.88
+  jointRough: 0.88,
+  /* ── R34 木纹节奏细化 ── */
+  /**
+   * 弦切弯纹（cathedral figure）：用低频场把木纹的 **x 采样坐标整体平移** ⇒ 原本笔直的
+   * 竖向纹被掰成弓形（真实弦切板就是这种「拱形年轮」）。平移按整像素取模环绕 ⇒
+   * 仍严格可平铺，且**只读同一行** ⇒ 行带分片与整幅逐字节一致。
+   * 数值 = 平移幅度占贴图边长的比例（0.12 ⇒ ±15px@512 ≈ 3 个木纹细胞，弓形才读得出）。
+   */
+  ringWarp: 0.12,
+  /** 早晚材带（年轮疏密）：低频调制木纹对比度，让纹路有「密一段 / 疏一段」的节奏 */
+  ringBand: 0.35,
+  /** 导管细线（比 grain 更细一档的竖线，periodX 128 > grain 96 ⇒ 更密） */
+  vessel: 0.04,
+  vesselPeriodX: 128,
+  vesselPeriodY: 3
 };
 
 const PANE = {
@@ -691,6 +801,15 @@ export interface StoneBake {
   readonly rough: Uint8ClampedArray;
   /** 每像素色相微调信号（−1..1，仅 glass 薄膜虹彩用；其余族 null）⇒ compose 做暖冷微移 */
   readonly tint: Float32Array | null;
+  /**
+   * R34 缝芯遮罩 × jointTint（0..255，仅砌体族 ashlar/wall；其余族 null）。
+   * compose 用它把缝色（深灰↔浅褐）blend 上去 —— **贴图新增字段，向后兼容**（只读）。
+   */
+  readonly joint: Uint8ClampedArray | null;
+  /** R34 缝色「深灰端(0) ↔ 浅褐端(255)」低频权重（仅砌体族；其余族 null） */
+  readonly jointWarm: Uint8ClampedArray | null;
+  /** R34 雨水渍遮罩（0..255，沿竖向灰缝渗出的淡黄-灰褐渍；仅砌体族；其余族 null） */
+  readonly seep: Uint8ClampedArray | null;
   build(y0: number, y1: number): void;
   expand(y0: number, y1: number): void;
   compose(y0: number, y1: number): void;
@@ -699,7 +818,13 @@ export interface StoneBake {
 
 // ── 各族的 prep + buildBand（per-pixel 公式与 R29 逐字一致）───────────
 
-/** 砌体高度场（ashlar / wall / floor 共用）的 prep：建字段 + 逐块表 + 行带构建器 */
+/**
+ * 砌体高度场（ashlar / wall）的 prep：建字段 + 逐块表 + 行带构建器。
+ * R34 新增三个**输出通道**（都是 null 容忍 ⇒ 其余族零开销）：
+ *   jointOut    缝芯遮罩 × jointTint（compose 把缝色 blend 上去）
+ *   jointWarmOut 缝色在「深灰↔浅褐」之间的低频权重
+ *   seepOut     雨水渍遮罩（贴竖向缝 + 竖向拉长低频斑）
+ */
 function prepMasonry(
   size: number,
   seed: number,
@@ -708,7 +833,10 @@ function prepMasonry(
   height: Float32Array,
   tone: Float32Array,
   roughness: Float32Array,
-  mossOut: Float32Array | null
+  mossOut: Float32Array | null,
+  jointOut: Uint8ClampedArray | null,
+  jointWarmOut: Uint8ClampedArray | null,
+  seepOut: Uint8ClampedArray | null
 ): { build: (y0: number, y1: number) => void } {
   const rowH = size / prof.rows;
   const colW = size / prof.cols;
@@ -729,6 +857,13 @@ function prepMasonry(
   const patchF = makeField(prof.patch, () => fbmField(96, 3, 3, 3, seed + 233), size);
   // R32 风化凹坑（固定 res 256 ⇒ 世界尺度 0.01–0.03m 跨尺寸一致；pitPeriod 32 ⇒ 坑 ≈0.019m）
   const pitF = makeField(prof.pit, () => fbmField(256, prof.pitPeriod, prof.pitPeriod, 2, seed + 239), size);
+  /* ── R34 三个新通道的驱动场 ── */
+  // 缝色「深灰↔浅褐」低频权重（2×3 ⇒ 大块斑，一条缝上走得慢 ⇒ 同一段缝同色）
+  const mortarVarF = makeField(prof.jointWarm, () => fbmField(64, 2, 3, 2, seed + 307), size);
+  // 雨水渍：6×2 ⇒ 沿 x 快变（窄竖条 ≈0.2m 间距）、沿 y 慢变（0.6m 长竖向拖尾）
+  const seepF = makeField(prof.seep, () => fbmField(128, 6, 2, 2, seed + 311), size);
+  // 边缘磨损：粗颗粒（cell ≈8px@512 ≈0.019m）⇒ 缝口呈啃噬状而非尺画直边
+  const nickF = makeField(prof.edgeNick, () => noiseField(Math.min(256, size), 64, 64, seed + 313), size);
 
   // 颗粒白噪按 2px 粒度预生成再查表
   const grainRes = Math.max(64, size >> 1);
@@ -773,6 +908,9 @@ function prepMasonry(
       fillField(chiselF, y0, y1);
       fillField(patchF, y0, y1);
       fillField(pitF, y0, y1);
+      fillField(mortarVarF, y0, y1);
+      fillField(seepF, y0, y1);
+      fillField(nickF, y0, y1);
       const baseFbm = baseFbmF ? baseFbmF.out : EMPTY;
       const stainField = stainF ? stainF.out : EMPTY;
       const reliefField = reliefF ? reliefF.out : EMPTY;
@@ -785,6 +923,9 @@ function prepMasonry(
       const chiselField = chiselF ? chiselF.out : EMPTY;
       const patchField = patchF ? patchF.out : EMPTY;
       const pitField = pitF ? pitF.out : EMPTY;
+      const mortarVarField = mortarVarF ? mortarVarF.out : EMPTY;
+      const seepField = seepF ? seepF.out : EMPTY;
+      const nickField = nickF ? nickF.out : EMPTY;
 
       for (let y = y0; y < y1; y += 1) {
         const row = Math.min(prof.rows - 1, Math.floor(y / rowH));
@@ -803,7 +944,9 @@ function prepMasonry(
 
           const rag = ragField.length ? (ragField[index] - 0.5) * prof.ragged : 0;
           const jw = blockChip[block] * (1 + rag);
-          const edge = Math.min(lx, colW - lx, ly, rowH - ly) / jw;
+          // R34 边缘磨损/缺棱：缝口沿缝长方向做粗颗粒抖动（±edgeNick），缝芯宽度不动
+          const nick = nickField.length ? (nickField[index] - 0.5) * 2 * prof.edgeNick : 0;
+          const edge = (Math.min(lx, colW - lx, ly, rowH - ly) / jw) * (1 + nick);
           const bevel = smoothstep(halfJoint, bevelEnd, edge);
 
           const base = baseFbm.length ? baseFbm[index] : 0.5;
@@ -816,8 +959,19 @@ function prepMasonry(
           // .qa/r32_tmp_texture/flake_threshold_calib.mjs：bilinear 值噪声极少触顶）
           const pitMask = pitField.length ? smoothstep(0.64, 0.8, pitField[index]) : 0;
 
+          // R34 雨水渍：**贴竖向灰缝** × 竖向拉长低频斑。
+          // 竖向缝邻近度用「到最近竖缝的距离 / 缝宽」量 ⇒ 与贴图尺寸无关（世界尺度一致）；
+          // 1→18 缝宽单位 ≈ ±0.068m@1.2m/tile ⇒ 渍带 ≈13.5cm 宽（真实 runoff 量级）。
+          // ⚠ 两个门限都是**实测标定**的：fbm 值天然向 0.5 集中（2 octave 上尤甚），
+          //   按 0.42/0.78 这类「名义门限」取门限会得到 ≈0 的覆盖（实测 see .qa/r34_tmp_texture）。
+          const dvx = Math.min(lx, colW - lx) / jw;
+          const vJoint = 1 - smoothstep(1, 18, dvx);
+          const seepRaw = seepField.length ? smoothstep(0.38, 0.58, seepField[index]) : 0;
+          const seepMask = vJoint * seepRaw * prof.seep * (0.55 + 0.45 * weather);
+
           // —— 高度场（法线 / 缝阴影 / 粗糙度的唯一真源）——
-          let h = 0.1 + 0.9 * bevel;
+          // R34：缝芯 0.1 → 0.08（缝内微凹陷，法线凹槽与 albedo 暗部同源加深）
+          let h = 0.08 + 0.92 * bevel;
           h += (reliefV - 0.5) * prof.relief * (0.55 + 0.9 * blockRelief[block]) * bevel;
           h += (base - 0.5) * prof.relief * prof.reliefNoise * bevel;
           h += (chiselV - 0.5) * prof.chisel * bevel; // R30 中频凿点（精切石肌理）
@@ -839,6 +993,7 @@ function prepMasonry(
           t -= (grime - 0.42) * prof.grime * (0.55 + 0.45 * weather);
           t -= (streak - 0.45) * prof.streak * weather;
           t -= pitMask * 0.1 * weather; // R32 坑内积水/积灰更暗
+          t -= seepMask * 0.16 * weather; // R34 雨水渍压暗（渍色由 compose blend 上去）
           t += grain * prof.grain * 1.6;
           t += wearEdge;
 
@@ -847,6 +1002,7 @@ function prepMasonry(
           rough += Math.abs(chiselV - 0.5) * prof.chisel * 0.9; // R30 凿点处更哑
           rough += pitMask * 0.12; // R32 坑内更哑（风化石）
           rough += Math.max(0, grime - 0.42) * prof.grime * 0.35;
+          rough += seepMask * 0.1; // R34 渍带略哑（积灰的雨水痕）
           rough -= wearEdge * 0.5;
           if (wearField.length) {
             const wear = smoothstep(0.45, 0.9, wearField[index]);
@@ -865,6 +1021,17 @@ function prepMasonry(
           if (hasMoss) {
             mossOut![index] = smoothstep(mossLo, mossLo + 0.28, mossField[index]) * prof.moss * 3;
           }
+          // —— R34 三个输出通道（null ⇒ 该族不产，零开销）——
+          if (jointOut) {
+            // 缝芯遮罩（1 - bevel：缝芯 1 → 倒角过渡 → 块面 0）× 上色强度
+            jointOut[index] = (1 - bevel) * prof.jointTint * 255;
+            // 缝色权重：低频在「深灰端(0) ↔ 浅褐端(1)」之间游走。
+            // ⚠ 必须先做**对比拉伸**：fbm 值向 0.5 集中（实测 jointWarm 原分位 51/137/180
+            //   ⇒ 两端根本够不到），拉伸后再乘 jointWarm ⇒ 分位落进 ≈13..242。
+            const wv = mortarVarField.length ? smoothstep(0.34, 0.66, mortarVarField[index]) : 0.5;
+            jointWarmOut![index] = clamp01(0.5 + (wv - 0.5) * prof.jointWarm) * 255;
+          }
+          if (seepOut) seepOut[index] = clamp01(seepMask) * 255;
           fx += invColW;
         }
       }
@@ -911,6 +1078,8 @@ function prepFloor(
   const microF = makeField(1, () => noiseField(Math.min(256, size), 24, 24, seed + 37), size)!;
   const grimeF = makeField(1, () => fbmField(128, 2, 6, 2, seed + 83), size)!;
   const chiselF = makeField(1, () => noiseField(Math.min(256, size), 16, 16, seed + 227), size)!;
+  // R34 微湿低频斑（4×4 @7.2m/张 ⇒ ≈1.8m 水渍）：湿处压暗 + roughness 洼地
+  const dampF = makeField(1, () => fbmField(96, 4, 4, 2, seed + 337), size)!;
 
   const grainRes = Math.max(64, size >> 1);
   const grainStep = size / grainRes;
@@ -923,6 +1092,17 @@ function prepFloor(
 
   const seamHalf = cellSize * 0.05; // 缝芯半宽（深色 #222 区）
   const seamEnd = cellSize * 0.085; // 缝口倒角（法线凹凸过渡）
+  /**
+   * R34 **可平铺性缺陷修复**（实测证据 .qa/r34_tmp_texture/r34_seam_check.mjs）：
+   * 乱石板 Voronoi 原来直接用 `cx[cid] − x` 求距离，而 `cx[]` 全部落在 [0,size) ⇒
+   * **从不考虑邻贴图的复制格**。于是靠近贴图边界的像素会把「隔壁那块石板」算成
+   * 512−Δ 之远（真值 Δ）⇒ 最近/次近格心判错、gap 虚高 ⇒ 平铺接缝处**每 7.2m 一条硬缝**
+   * （实测：边界列差 17.63 vs 内部相邻列最大 2.74，超出一个量级）。
+   * 修法 = **最小镜像距离**（把 dx/dy 折回 [−size/2, size/2]，与无限平铺的真实距离一致）。
+   * 注：`prepRock` 用 `(gx + offset) * cellSize`（gx 可取 −1 / cells）天然落在界外，
+   * 等价已考虑复制格 ⇒ 它没这个病（实测 rock 接缝 1.55 / 内部 p95 3.14 = OK）。
+   */
+  const halfSpan = size * 0.5;
 
   return {
     build(y0: number, y1: number): void {
@@ -930,10 +1110,12 @@ function prepFloor(
       fillField(microF, y0, y1);
       fillField(grimeF, y0, y1);
       fillField(chiselF, y0, y1);
+      fillField(dampF, y0, y1);
       const patchA = patchF ? patchF.out : EMPTY;
       const microA = microF.out;
       const grimeA = grimeF.out;
       const chiselA = chiselF.out;
+      const dampA = dampF.out;
       for (let y = y0; y < y1; y += 1) {
         const cyi = Math.floor(y / cellSize);
         const dstRow = y * size;
@@ -952,8 +1134,13 @@ function prepFloor(
               const wx = ((gx % cells) + cells) % cells;
               const wy = ((gy % cells) + cells) % cells;
               const cid = wy * cells + wx;
-              const dx = cx[cid] - x;
-              const dy = cy[cid] - y;
+              // R34 最小镜像距离（可平铺性修复，见 halfSpan 处注释）
+              let dx = cx[cid] - x;
+              let dy = cy[cid] - y;
+              if (dx > halfSpan) dx -= size;
+              else if (dx < -halfSpan) dx += size;
+              if (dy > halfSpan) dy -= size;
+              else if (dy < -halfSpan) dy += size;
               const d2 = dx * dx + dy * dy;
               if (d2 < best) {
                 second = best;
@@ -971,11 +1158,14 @@ function prepFloor(
           const grimeV = grimeA[index];
           const chiselV = chiselA[index];
           const grain = grainTable[grainRow + grainCol[x]];
+          // R34 微湿低频斑：只取 fbm 上段 ⇒ 稀疏水渍（≈15% 覆盖），不是全局变暗
+          const damp = smoothstep(0.55, 0.88, dampA[index]) * P.damp;
 
           // 高度场：板心微拱 + 缝口低 + 微起伏 + 凿点 + 颗粒（法线真源）
           let h = 0.05 + 0.7 * bevel + dome * 0.14 * bevel;
           h += (microV - 0.5) * 0.06 * bevel;
           h += (chiselV - 0.5) * P.chisel * bevel;
+          h -= damp * 0.02 * bevel; // R34 湿处微凹（水膜压平感）
           h += grain * P.grain;
           height[index] = clamp01(h);
 
@@ -986,15 +1176,18 @@ function prepFloor(
           t += (grimeV - 0.42) * P.grime * weather;
           t += grain * P.grain * 1.6;
           t += smoothstep(0.45, 0.95, dome) * wear[bestId] * P.wear * 0.12;
+          t -= damp * 0.1; // R34 湿处压暗（深色石板 + 水渍的「深色」读数）
           // 深色缝：blend 到 seamTone（≈dark），配 compose shade(mortarShade 0.72) ⇒ #222
           const seamMask = 1 - bevel;
           t = t * (1 - seamMask) + P.seamTone * seamMask;
           tone[index] = clamp01(t);
 
           // 粗糙度（pavement 不挂 roughnessMap、给均匀 0.9；此处仍算供 stats/备用）
+          // ⚠ 见 CRAZY_PAVE.damp 的「历史坑」注释：本族保持 noRough，下面的洼地不入管线。
           let rough = P.faceRough + (P.jointRough - P.faceRough) * (1 - bevel);
           rough += (microV - 0.5) * 0.06 * weather;
           rough -= smoothstep(0.45, 0.95, dome) * wear[bestId] * P.wear * 0.3; // 磨光处更滑
+          rough -= damp * 0.28; // R34 湿处更滑（微湿感的真身；生产上暂不挂 roughMap）
           roughness[index] = clamp01(rough);
         }
       }
@@ -1178,35 +1371,42 @@ function prepGold(
           const g = graina[index] - 0.5;
           const pitv = pita[index];
           const polishv = polisha[index];
-          const oxidized = smoothstep(0.62 - 0.22 * weather, 0.9, oxv);
-          const pits = smoothstep(0.72, 0.88, pitv) * (1 - oxidized) * weather;
+          // R34 做旧加量：氧化窗口整体下移（0.62→0.58 起、0.9→0.87 满）⇒ 覆盖更广、更暗。
+          // ⚠ 只动**明度/粗糙度**，不动色调：金饰色相档是 R30b 已验证决策（成片 R−B ≈ +70），
+          //   氧化只把 tone 推向 dark #6f5c39（同色系更深），不引入绿锈等异色相。
+          const oxidized = smoothstep(0.58 - 0.22 * weather, 0.87, oxv);
+          const pits = smoothstep(0.7, 0.87, pitv) * (1 - oxidized) * weather; // R34 麻点略多
           const shine = smoothstep(0.52, 0.8, polishv);
           const sc = smoothstep(0.7, 0.76, scratcha[index]); // R30 稀疏划痕
           const flakeMask = smoothstep(0.8, 0.88, flakea[index]); // R32 剥落（标定覆盖 mask>0.5 ≈6.8%，落 5–10% 带）
 
           let h = 0.58 + (b1 - 0.5) * 0.26 + (b2 - 0.5) * 0.13;
           h += g * 0.015;
-          h -= oxidized * 0.16;
+          h -= oxidized * 0.18; // R34 0.16 → 0.18（氧化处更凹）
           h -= pits * 0.22;
           h -= sc * 0.03; // 划痕微凹
-          h -= flakeMask * 0.2; // R32 剥落凹入（露基底）
+          h -= flakeMask * 0.24; // R34 0.20 → 0.24（剥落更深地凹入）
           height[index] = clamp01(h);
+          // R34 刷脊抛光：刷纹凸起处被人手/雨水磨亮 ⇒ 做旧但仍有可读的高光（金属 identity）
+          const ridge = smoothstep(0.62, 0.9, h);
 
           let t = 0.5 + (b1 - 0.5) * 0.35 + (b2 - 0.5) * 0.2;
-          t -= oxidized * 0.62;
+          t -= oxidized * 0.66; // R34 0.62 → 0.66（暗金做旧：氧化更沉）
           t -= pits * 0.1;
           t += g * 0.05;
           t += shine * 0.08;
           t += sc * 0.1; // 划痕露新金属（更亮）
-          t -= flakeMask * 0.3; // R32 剥落处压向暗基底（古铜氧化痕同族色）
+          t += ridge * 0.07; // R34 刷脊抛光（凸处更亮 ⇒ 做旧仍有高光）
+          t -= flakeMask * 0.34; // R34 0.30 → 0.34（剥落露更暗的基底）
           tone[index] = clamp01(t);
 
           let rough = 0.47 + (b2 - 0.5) * 0.16 + Math.abs(b1 - 0.5) * 0.1;
-          rough += oxidized * 0.34;
+          rough += oxidized * 0.36; // R34 0.34 → 0.36
           rough += pits * 0.2;
           rough -= shine * 0.14;
+          rough -= ridge * 0.12; // R34 刷脊更滑（抛光）
           rough += sc * 0.06; // 划痕边缘略糙
-          rough += flakeMask * 0.28; // R32 剥落边缘极哑
+          rough += flakeMask * 0.32; // R34 0.28 → 0.32（剥落边缘极哑）
           roughness[index] = clamp01(rough);
         }
       }
@@ -1348,6 +1548,13 @@ function prepWood(
   const reliefF = makeField(1, () => noiseField(Math.min(256, size), 12, 12, seed + 37), size)!;
   // R32 旧化灰斑（4×8 ⇒ 横向拉长的脱色斑；只取上半段 ⇒ 斑块状风化而非全局变暗）
   const grayF = makeField(P.grayWeather, () => fbmField(128, 4, 8, 2, seed + 293), size);
+  /* ── R34 木纹节奏细化：三个新驱动场 ── */
+  // 弦切弯纹 warp（3×2 极低频 ⇒ 木纹被整体掰成弓形，而不是尺子画的直竖纹）
+  const warpF = makeField(P.ringWarp, () => fbmField(128, 3, 2, 2, seed + 317), size);
+  // 早晚材带（4×2 ⇒ 竖向拉长的低频带 ⇒ 年轮「密一段 / 疏一段」的节奏）
+  const bandF = makeField(P.ringBand, () => fbmField(128, 4, 2, 2, seed + 331), size);
+  // 导管细线（比 grain 更细一档；只取门限上段 ⇒ 稀疏深色细线）
+  const vesselF = makeField(P.vessel, () => noiseField(Math.min(512, size), P.vesselPeriodX, P.vesselPeriodY, seed + 347), size);
 
   const grainRes = Math.max(64, size >> 1);
   const grainStep = size / grainRes;
@@ -1374,6 +1581,9 @@ function prepWood(
       fillField(streakF, y0, y1);
       fillField(reliefF, y0, y1);
       fillField(grayF, y0, y1);
+      fillField(warpF, y0, y1);
+      fillField(bandF, y0, y1);
+      fillField(vesselF, y0, y1);
       const grainField = grainF.out;
       const fineField = fineF.out;
       const knotField = knotF.out;
@@ -1381,6 +1591,9 @@ function prepWood(
       const streakField = streakF.out;
       const reliefField = reliefF.out;
       const grayField = grayF ? grayF.out : EMPTY;
+      const warpField = warpF ? warpF.out : EMPTY;
+      const bandField = bandF ? bandF.out : EMPTY;
+      const vesselField = vesselF ? vesselF.out : EMPTY;
       for (let y = y0; y < y1; y += 1) {
         const dstRow = y * size;
         const grainRow = Math.floor(y / grainStep) * grainRes;
@@ -1393,8 +1606,19 @@ function prepWood(
           const edge = Math.min(lx, colW - lx);
           const bevel = smoothstep(halfJoint, bevelEnd, edge);
 
-          const g1 = grainField[index];
-          const g2 = fineField[index];
+          // R34 弦切弯纹：把木纹的 x 采样坐标按低频场**整像素平移**（只读同一行 ⇒
+          // 行带分片与整幅逐字节一致；取模环绕 ⇒ 仍严格可平铺）。
+          const warpV = warpField.length ? warpField[index] - 0.5 : 0;
+          const shift = warpField.length ? Math.round(warpV * P.ringWarp * size) : 0;
+          const gx = shift === 0 ? x : (x + shift + size) % size;
+          const gIdx = dstRow + gx;
+          const g1 = grainField[gIdx];
+          const g2 = fineField[gIdx];
+          // R34 早晚材带：低频调制木纹对比度（年轮疏密节奏，不是均匀条纹）
+          const bandV = bandField.length ? bandField[index] : 0.5;
+          const grainK = 1 + (bandV - 0.5) * 2 * P.ringBand;
+          // R34 导管细线：比 grain 更细一档的竖线，只取门限上段 ⇒ 稀疏深色细线
+          const vesselV = vesselField.length ? Math.max(0, vesselField[gIdx] - 0.68) * 3.1 : 0;
           const knot = smoothstep(0.66, 0.86, knotField[index]);
           const reliefV = reliefField[index];
           const grain = grainTable[grainRow + grainCol[x]];
@@ -1403,8 +1627,8 @@ function prepWood(
           const grayV = grayField.length ? Math.max(0, grayField[index] - 0.5) * 2 : 0;
 
           let h = 0.12 + 0.62 * bevel;
-          h += (g1 - 0.5) * P.grainAmp * bevel;
-          h += (g2 - 0.5) * P.grainAmp * 0.5 * bevel;
+          h += (g1 - 0.5) * P.grainAmp * grainK * bevel;
+          h += (g2 - 0.5) * P.grainAmp * 0.5 * grainK * bevel;
           h += knot * 0.1 * bevel;
           h += (reliefV - 0.5) * P.relief * bevel;
           h -= grayV * 0.03 * bevel; // R32 灰斑处木面微蚀
@@ -1412,12 +1636,13 @@ function prepWood(
           height[index] = clamp01(h);
 
           let t = 0.5 + plankTint[col];
-          t += (g1 - 0.5) * 0.3 + (g2 - 0.5) * 0.16;
+          t += ((g1 - 0.5) * 0.3 + (g2 - 0.5) * 0.16) * grainK;
           t += (stainField[index] - 0.5) * P.stain * weather;
           t -= (1 - bevel) * 0.24 * weather;
           t -= (streakV - 0.45) * P.streak * weather;
           t -= knot * P.knot * 0.5;
           t -= grayV * 0.16; // R32 旧化灰斑压暗
+          t -= vesselV * P.vessel; // R34 导管细线（深色）
           t += grain * P.grain * 1.6;
           tone[index] = clamp01(t);
 
@@ -1613,6 +1838,12 @@ export function createStoneBake(kind: StoneKind, size: number, seed: number, wea
   let expandRows = 0;
   let moss: Float32Array | null = null;
   let tint: Float32Array | null = null;
+  /* ── R34 三个新输出通道（仅砌体族分配，其余族保持 null ⇒ 零开销）── */
+  let joint: Uint8ClampedArray | null = null;
+  let jointWarm: Uint8ClampedArray | null = null;
+  let seep: Uint8ClampedArray | null = null;
+  /** 灰缝自身亮度系数（仅砌体族有意义） */
+  let jointShade = 1;
   let normalStrength = MASONRY.ashlar.normalStrength;
   let mortarShade = MASONRY.ashlar.mortarShade;
 
@@ -1656,9 +1887,15 @@ export function createStoneBake(kind: StoneKind, size: number, seed: number, wea
   } else {
     const prof = MASONRY[kind];
     if (prof.moss > 0) moss = new Float32Array(count);
-    build = prepMasonry(size, seed, weather, prof, height, tone, roughness, moss).build;
+    if (prof.jointTint > 0) {
+      joint = new Uint8ClampedArray(count);
+      jointWarm = new Uint8ClampedArray(count);
+    }
+    if (prof.seep > 0) seep = new Uint8ClampedArray(count);
+    build = prepMasonry(size, seed, weather, prof, height, tone, roughness, moss, joint, jointWarm, seep).build;
     normalStrength = prof.normalStrength;
     mortarShade = prof.mortarShade;
+    jointShade = prof.jointShade;
   }
 
   const hex = STONE_HEX[kind];
@@ -1666,6 +1903,10 @@ export function createStoneBake(kind: StoneKind, size: number, seed: number, wea
   const light = hexToRgb(hex.light);
   const dark = hexToRgb(hex.dark);
   const mossColor = hexToRgb('#5b6b3a');
+  // R34 灰缝色带两端（深灰 = STONE_HEX.mortar；浅褐 = MORTAR_WARM）+ 雨水渍色
+  const mortarCool = hexToRgb(hex.mortar);
+  const mortarWarm = hexToRgb(MORTAR_WARM[kind] ?? hex.mortar);
+  const seepColor = hexToRgb(SEEP_TINT[kind] ?? hex.base);
   const sparkle = SPARKLE[kind];
   const albedo = new Uint8ClampedArray(count * 4);
   const normal = new Uint8ClampedArray(count * 4);
@@ -1679,6 +1920,12 @@ export function createStoneBake(kind: StoneKind, size: number, seed: number, wea
     normal,
     rough,
     tint,
+    /** R34 缝芯遮罩 × jointTint（仅砌体族；其余族 null） */
+    joint,
+    /** R34 缝色「深灰↔浅褐」低频权重（仅砌体族；其余族 null） */
+    jointWarm,
+    /** R34 雨水渍遮罩（仅砌体族；其余族 null） */
+    seep,
     build,
     expand,
     compose(y0: number, y1: number): void {
@@ -1731,6 +1978,30 @@ export function createStoneBake(kind: StoneKind, size: number, seed: number, wea
               ar *= 1 + hue * 0.05;
               ag *= 1 - hue * 0.02;
               ab *= 1 - hue * 0.05;
+            }
+          }
+          // —— R34 灰缝上色：缝芯按低频权重在「深灰 ↔ 浅褐」之间取色 ——
+          // 旧实现只有压暗 ⇒ 缝永远是「更暗的白石」；现在缝有**自己的颜色**。
+          // 缝色不吃 stone 的 shade（缝是另一种材料），只吃 jointShade ⇒ 可单独调深浅。
+          if (joint) {
+            const jm = joint[index] / 255;
+            if (jm > 0.004) {
+              const w = jointWarm ? jointWarm[index] / 255 : 0.5;
+              const mr = mortarCool.r + (mortarWarm.r - mortarCool.r) * w;
+              const mg = mortarCool.g + (mortarWarm.g - mortarCool.g) * w;
+              const mb = mortarCool.b + (mortarWarm.b - mortarCool.b) * w;
+              ar += (mr * jointShade - ar) * jm;
+              ag += (mg * jointShade - ag) * jm;
+              ab += (mb * jointShade - ab) * jm;
+            }
+          }
+          // —— R34 雨水渍（淡黄-灰褐）：沿用本像素的 shade ⇒ 渍会随缝口阴影一起沉下去 ——
+          if (seep) {
+            const sm = (seep[index] / 255) * SEEP_BLEND;
+            if (sm > 0.004) {
+              ar += (seepColor.r * shade - ar) * sm;
+              ag += (seepColor.g * shade - ag) * sm;
+              ab += (seepColor.b * shade - ab) * sm;
             }
           }
           albedo[offset] = ar * 255;
@@ -2149,6 +2420,132 @@ export function makeStoneMaps(kind: StoneKind, opts: StoneOptions = {}): StoneMa
   );
   cache.set(key, maps);
   return maps;
+}
+
+// ── R34 内部材质族（共享图集 ⇒ **贴图张数 0 变化**）───────────────────
+
+/**
+ * R34 **内部材质族 id**（供 A 线「内部丰富度」消费的材质底子）。
+ *
+ * ⚠ 为什么不是新 `StoneKind`：`castle.ts` 的 `TARGET_ROUGH / FAMILY_METAL / FAMILY_ENV /
+ * FAMILY_NORMAL_SCALE / FAMILY_WEATHER / STONE_CHANNELS` 与 `castleKit.ts` 的 `TILE`
+ * 都是 `Record<StoneKind, …>`，**扩族会直接编译红**，且新 kind 会多产 2~3 张贴图
+ * （`castleTexCount` 稳态 14/16 → 涨）。故本轮走「**同族共享图集 + 材质侧分身**」：
+ * 变体只改 `color / roughness / metalness / envMapIntensity / normalScale`，
+ * **贴图实例完全复用** ⇒ 稳态张数**不涨**。
+ *
+ * ⚠ 三条使用铁律（违反即「张数暗涨」）：
+ * 1. 变体**不得**改 `size / seed / weather / repeat / channels` —— 这些是
+ *    `makeStoneMaps` 的缓存键组成部分，任何一项不同都会**另起一整套贴图**；
+ *    变体只能改材质侧参数（几何 UV 由 A 线自己按世界尺度给）。
+ * 2. 变体**不得** `texture.clone()` —— three 按 Texture 实例上传 GPU，clone 会多占一份
+ *    显存（等于偷偷加一张）。
+ * 3. 若多 mesh 共享同一张图集且需**分区取图**，UV 必须走
+ *    `remapUVToRegion`（按 mesh 自身 UV bbox 归一，禁线性 remap —— R3 曾 814 三角串味）；
+ *    本模块的族都是**可平铺单块**（RepeatWrapping），分区取图会破坏平铺，
+ *    故推荐路径是「整幅共享 + 材质分身」，不是分区。
+ */
+export type StoneVariantId = 'inner-stone' | 'inner-wood' | 'gilded-aged' | 'pave-damp';
+
+export interface StoneVariantSpec {
+  /** 复用的图集族（= `makeStoneMaps(texKind, …)` 的族；贴图张数 0 变化的关键） */
+  texKind: StoneKind;
+  /** 中文名（QA / 审查对接用） */
+  label: string;
+  /** 材质 color 乘子（sRGB 写法；THREE 内部按线性相乘） */
+  color: number;
+  /** **目标有效粗糙度**（= material.roughness × roughnessMap.g；无 roughMap 时即 material.roughness） */
+  rough: number;
+  metalness: number;
+  /** envMapIntensity（内部件照不到天光 ⇒ 比同族外装低） */
+  env: number;
+  /** normalScale */
+  normalScale: number;
+  /** 用途备注（写清「比原族差在哪」，便于审查核对） */
+  note: string;
+}
+
+export const STONE_VARIANTS: Record<StoneVariantId, StoneVariantSpec> = {
+  // a) 内壁暗石：复用 ashlar 图集（0.3m 砌块节拍一致 ⇒ 室内外缝节奏同源），
+  //    乘子偏冷（R−B −16）且压暗到 ~0.68 ⇒ 比外墙更冷更暗，但不改砌块形制。
+  'inner-stone': {
+    texKind: 'ashlar',
+    label: '内壁暗石',
+    color: 0x8e979e,
+    rough: 0.92,
+    metalness: 0,
+    env: 0.45,
+    normalScale: 0.8,
+    note: 'ashlar 图集 + 冷暗乘子；内壁照不到天光 ⇒ env 0.85→0.45、rough 0.86→0.92'
+  },
+  // b) 木门/木梁：复用 wood 图集（本轮已细化木纹节奏：弦切弯纹 + 早晚材带 + 导管细线）。
+  //    wood 是 'noRough' ⇒ 无 roughnessMap，rough 直接给常数（铁律 34 的 ḡ 反算不适用）。
+  'inner-wood': {
+    texKind: 'wood',
+    label: '木门/木梁',
+    color: 0xab9a86,
+    rough: 0.82,
+    metalness: 0,
+    env: 0.35,
+    normalScale: 1.0,
+    note: 'wood 图集 + 暖灰压暗；室内木作比城门木更干更旧'
+  },
+  // c) 金属暗金做旧：复用 gold 图集（本轮已加氧化/剥落/刷脊抛光，色相档未动）。
+  //    乘子走**近中性压暗**（R−B +14）⇒ 只降明度不动 R30b 已验证的色相档。
+  'gilded-aged': {
+    texKind: 'gold',
+    label: '暗金做旧',
+    color: 0xd2cec4,
+    rough: 0.55,
+    metalness: 0.8,
+    env: 0.85,
+    normalScale: 0.7,
+    note: 'gold 图集 + 近中性压暗；保 R30b 色相档，只降明度/抬粗糙度（env 1.4→0.85）'
+  },
+  // d) 桥面/地面深色石板：复用 floor 图集（本轮新增 damp 微湿低频斑）。
+  //    ⚠ 微湿感**只走 albedo**：floor 是 'noRough'，挂 roughnessMap 会因 ḡ≈0.5 让
+  //    inverseRoughness clamp 到 1 ⇒ effective 掉到 0.5（哑光石面被乘滑，历史坑）。
+  'pave-damp': {
+    texKind: 'floor',
+    label: '桥面深色石板',
+    color: 0x8b9094,
+    rough: 0.8,
+    metalness: 0,
+    env: 0.25,
+    normalScale: 0.85,
+    note: 'floor 图集 + 冷暗乘子；微湿感走 damp 低频水渍（albedo），rough 0.9→0.8'
+  }
+};
+
+/**
+ * 变体的 material.roughness 反算（与 `castle.ts inverseRoughness` 同口径，铁律 34）：
+ * 挂了 roughnessMap ⇒ 必须按 1/ḡ 反算，否则 effective 被 ḡ 乘低。
+ */
+function variantRoughness(target: number, roughMean: number, hasRoughMap: boolean): number {
+  if (!hasRoughMap) return target;
+  if (!Number.isFinite(roughMean) || roughMean <= 0.01) return target;
+  return Math.min(1, Math.max(0.05, target / roughMean));
+}
+
+/**
+ * 按变体规格造一个 MeshStandardMaterial（图集**直接复用传入的 maps**，不 clone）。
+ * A 线也可以只读 `STONE_VARIANTS` 自己造材质 —— 这里只是把「反算 + 通道挂载」封好，
+ * 避免各自实现时漏掉铁律 34 的 1/ḡ 反算。
+ */
+export function makeStoneVariantMaterial(id: StoneVariantId, maps: StoneMaps): THREE.MeshStandardMaterial {
+  const v = STONE_VARIANTS[id];
+  const mat = new THREE.MeshStandardMaterial({
+    color: v.color,
+    map: maps.map,
+    normalMap: maps.normalMap,
+    roughnessMap: maps.roughnessMap,
+    metalness: v.metalness,
+    roughness: variantRoughness(v.rough, maps.stats.roughMean, maps.roughnessMap !== null)
+  });
+  mat.envMapIntensity = v.env;
+  if (maps.normalMap) mat.normalScale.setScalar(v.normalScale);
+  mat.name = `stone-variant:${id}`;
+  return mat;
 }
 
 /** 全清缓存（换场景/关卡时调用），三张纹理各自 dispose */

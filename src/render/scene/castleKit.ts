@@ -126,7 +126,10 @@ type CastleKind = StoneKind;
 
 /* ═══════════════════ R29 加大建筑群（开发线 A 自有常量；r28Layout 只读不动） ═══════════════════
  * 用户令：城堡群目前是「外包交付版」，需**加大建筑群**贴近参考图。四条增量
- * （预算红线 R27_BUDGET：high ≤ 240k tri / DC ≤ 20；R29 改前实测 129,414 tri / 7 DC）：
+ * （预算红线（R29 当时口径）：high ≤ 240k tri / DC ≤ 20；R29 改前实测 129,414 tri / 7 DC。
+ *   ⚠ R32 C-1 已**删除** `R27_BUDGET` / `R30_BUDGET`（零代码消费），预算键唯一真源
+ *   是 `r31Budget.ts` 的 `R31_BUDGET`（castleTriHigh 400k / castleTriLow 285k /
+ *   castleDc 32 / visibleTri 200k）；上面这行 240k/20 是**历史留档**，不是现值）：
  *   ① 城内大街：连墙抬高（9→14）、每街区补第二座塔、殿身上加层 + 角塔、
  *     沿街立面**后两排体量**（高过前排 → 天际线成簇）
  *   ② 门楼塔群：翼墙向两侧延伸（xEnd 55 → ±95）+ 角塔 + 门楼后排塔
@@ -278,6 +281,34 @@ const R33_COURTYARD = {
   winW: 3.0,
   winH: 4.8,
   winBase: 4.2
+} as const;
+
+/* ═══════════════════ R34 · 近中区装饰密度回砍（P0：sphere 口径峰值对位） ═══════════════════
+ * 起因（主理人 R34 P0 裁决，记录在案）：`tests/r32_budget.test.ts` 的可见 tri 判据
+ * 改用 three.js 真实剔除口径 **boundingSphere** 后，六点采样峰值实测 **250,202 tri
+ * @ z=−500**（bbox 口径只有 186,294 ⇒ 漏计 22%），越 `R31_BUDGET.visibleTri` 200k
+ * 键 25% ⇒ 裁决**不许抬键**，回砍 z0/z1/z2（viewer z ≥ −460 可见区）+ 中区临界带。
+ *
+ * 砍法（铁律 33 合规：只降**装饰密度**，几何长度 / 体量 / 跨度 / 层数一律不动）：
+ *   ① **hero 街区（k < hero）**：保留全装饰 —— 入口正面首批街面，是近景 hero 读法；
+ *   ② **其余街区（k ≥ hero）**：关闭「尺度 <0.6m、在 200m 外降到亚像素」的
+ *      **重复**细饰 —— 窗棂 + 子拱光、龛立像与龛楣卷叶、锥面卷叶、垂幔浮雕、
+ *      角塔飞扶壁、檐口小尖塔加密、垛口加密、盲拱列 / 墙顶敞廊的街区密度。
+ *      判据：0.3m 物件在 200m 处 ≈0.86px（fov55° / 1080p ≈19.6px 每度）⇒ 降密不可辨；
+ *      而 650m 的 ZONE_VIEW_RANGE + ~200m 的区包围球半径决定了这些区在行车段
+ *      **恒在视锥内**，是 sphere 口径峰值的主体。
+ *   ③ 保留项（不可砍）：殿/塔/连墙/角塔体量、街面连廊（corridorRun，用户令"连廊"）、
+ *      檐口带 corniceBand（FBX Cornice_2 语汇）、券框（只换桶位不删）。
+ */
+const R34_DENSITY = {
+  /** hero 街区数（k < hero 保留全装饰；=2 ⇒ 街区 0/1，落在 z1 门楼正后方） */
+  hero: 2,
+  /** 非 hero 街区的檐口小尖塔数（原 9 ⇒ 剪影节奏仍在，只是不再每 1.9m 一根） */
+  eavePinnacles: 5,
+  /** 非 hero 街区的垛口节拍（原 2.4 ⇒ 4.8 减半，垛口总数/连墙长度不变） */
+  merlonPitch: 4.8,
+  /** 非 hero 街区的墙顶敞廊街区筛选模（原 k%2 ⇒ k%4，敞廊长度不变） */
+  cloisterMod: 4
 } as const;
 
 /* ═══════════════════ 基础几何 ═══════════════════ */
@@ -2207,7 +2238,6 @@ export function makeInnerCity(): StoneBuckets {
   const { zNear, zFar, faceHalf, blockLen } = INNER;
   const blocks = Math.floor((zNear - zFar) / blockLen); // 21
   const depth = 8;
-  const merlonPitch = 2.4;
 
   for (let k = 0; k < blocks; k += 1) {
     const zc = zNear - blockLen / 2 - k * blockLen; // 块中心
@@ -2226,6 +2256,17 @@ export function makeInnerCity(): StoneBuckets {
      * ⚠ 只动**桶位与装饰密度**，所有长度/体量参数逐项不变（铁律 33，见 A_line_report §5）。
      */
     const nearZone = k < R32_WALL_RHYTHM.near;
+    /**
+     * R34 回砍 · **街区装饰密度档**：`hero`（k < R34_DENSITY.hero）保留全装饰，
+     * 其余街区走「减密档」（`trim`），只关重复细饰、不动任何长度/体量。
+     * 详见 R34_DENSITY 常量块注释（含 sphere 口径峰值的对位依据）。
+     */
+    const hero = k < R34_DENSITY.hero;
+    const trim = !hero;
+    /** 减密档的窗参数：窗棂 0 枝 + 子拱光关（与 low / DEEP_FAR 同语义，见 TraceryOpts.mullions） */
+    const winMullions = trim ? 0 : 2;
+    const winSubs = trim ? false : undefined;
+    const merlonPitch = hero ? 2.4 : R34_DENSITY.merlonPitch;
     for (const side of [-1, 1] as const) {
       /** 局部 → 世界（见上方配方）：side=+1 直达，side=−1 过 rotateY(π) 镜像 */
       const put = <T extends THREE.BufferGeometry>(g: T): T => {
@@ -2281,7 +2322,8 @@ export function makeInnerCity(): StoneBuckets {
               cusp: 0.8,
               frameOut: 0.45,
               plateBack: 0.28,
-              mullions: 2,
+              mullions: winMullions,
+              subArches: winSubs,
               goldFrame: nearZone,
               goldTracery: false
             }),
@@ -2314,8 +2356,11 @@ export function makeInnerCity(): StoneBuckets {
           b.ashlar.push(put(spire('ashlar', 0.85, 0, 2.4, 4, faceX - 0.45, wallTop - 0.05, pz, Math.PI / 4)));
         }
         // ③ 檐口小尖塔排（节拍 3.2，只在屋脊线以下，不抢双坡顶）
-        for (let k = 0; k < 9; k += 1) {
-          const pz = -hallW / 2 + 0.8 + (k * (hallW - 1.6)) / 8;
+        //    R34 回砍：非 hero 街区 9 → R34_DENSITY.eavePinnacles（5），剪影节奏保留、
+        //    单根 0.34m 半径在 200m 外已亚像素 ⇒ 加密不可辨。
+        const eaveN = hero ? 9 : R34_DENSITY.eavePinnacles;
+        for (let i = 0; i < eaveN; i += 1) {
+          const pz = -hallW / 2 + 0.8 + (i * (hallW - 1.6)) / (eaveN - 1);
           b.ashlar.push(put(spire('ashlar', 0.34, 0, 1.9, 4, faceX - 0.2, wallTop + 0.2, pz, Math.PI / 4)));
         }
       }
@@ -2338,7 +2383,8 @@ export function makeInnerCity(): StoneBuckets {
                 cusp: 0.7,
                 frameOut: 0.45,
                 plateBack: 0.28,
-                mullions: 2,
+                mullions: winMullions,
+                subArches: winSubs,
                 goldFrame: nearZone,
                 goldTracery: false
               }),
@@ -2385,7 +2431,8 @@ export function makeInnerCity(): StoneBuckets {
               cusp: 0.7,
               frameOut: 0.45,
               plateBack: 0.28,
-              mullions: 2,
+              mullions: winMullions,
+              subArches: winSubs,
               goldFrame: nearZone,
               goldTracery: false
             }),
@@ -2405,12 +2452,16 @@ export function makeInnerCity(): StoneBuckets {
         extra(b, 'wood', put(box('wood', 0.4, 0.34, len - 0.4, -0.28, 12.15, lz)));
         // A 线 ③ 白色垂幔浮雕（draperyRelief）：连墙窗上悬挂白石材垂幔 + 金系带
         //     （远区经 DEEP_FAR 折页减半；仅在近/中区铺设，控制 tri）
-        if (!far) {
+        //     R34 回砍：再收到 **hero 街区** —— 垂幔折页 0.4m 级，非 hero 街区在
+        //     200m 外折页全糊成一片，而它 156 tri/墙 ×2 墙 ×40 块侧是重复细饰大头。
+        //     连墙长度/窗位/檐口逐项不变（铁律 33）。
+        if (!far && hero) {
           pour(b, mapParts(draperyRelief({ w: len - 2, h: 4.6, folds: 4 }), (g) => put(g.translate(0, 8.4, lz))));
         }
         // R32 街墙加密 ①：连墙上带雕像龛 ×2（近区、每墙首段；壁龛与窗/垂幔交替，
         //     参考图 A「壁龛与盲拱交替形成立面明暗节奏」的街面版。龛位避让既有窗位）
-        if (!far && k < R32_WALL_RHYTHM.near && li === 0) {
+        //     R34 回砍：228 tri/龛 ×2 龛 ⇒ 同律收到 hero 街区（立像 0.5m 级）。
+        if (!far && hero && li === 0) {
           for (const nz of [za + 1.6, zb - 1.6]) {
             pour(b, mapParts(statueNicheX({ halfW: 0.62, rise: 2.6, cusp: 0.5 }), (g) => put(g.translate(0, 2.4, nz))));
           }
@@ -2458,8 +2509,12 @@ export function makeInnerCity(): StoneBuckets {
           b.dark.push(put(box('dark', 0.6, 5.5, 1.6, -0.06, ctH * 0.4, ctz)));
           b.gold.push(put(box('gold', 0.3, ctH - 4, 0.16, -0.08, (ctH - 4) / 2 + 2, ctz + ctd / 2 - 0.3)));
           // 塔尖柱头环（castleDetail.capitalCollar：收分托石 + 金箍，坐在尖顶根部）
-          pour(b, mapParts(capitalCollar({ r: ctw * 0.5, h: 0.5 }), (g) => put(g.translate(ctw / 2, ctH - 1.4, ctz))));
+          //   R34 回砍：24 tri/座 ×2 座 ×40 块侧，0.5m 高托石 ⇒ 收到 hero 街区。
+          if (hero) {
+            pour(b, mapParts(capitalCollar({ r: ctw * 0.5, h: 0.5 }), (g) => put(g.translate(ctw / 2, ctH - 1.4, ctz))));
+          }
           // 檐口带（castleDetail.corniceBand：FBX Cornice_2 分层檐口，塔身中带上沿）
+          //   保留（R34 不可砍项：FBX 语汇 + 1.0m 高、中远区仍读得出分层）
           pour(b, mapParts(corniceBand({ len: ctd + 1.6, proj: 0.55, h: 1.0 }), (g) => put(g.translate(0, ctH - 4.5, ctz))));
           pour(
             b,
@@ -2470,32 +2525,43 @@ export function makeInnerCity(): StoneBuckets {
                 cusp: 0.7,
                 frameOut: 0.4,
                 plateBack: 0.26,
-                mullions: 2,
+                mullions: winMullions,
+                subArches: winSubs,
                 goldFrame: nearZone,
                 goldTracery: false
               }),
               (g) => put(g.translate(0, 8, ctz))
             )
           );
-          pour(
-            b,
-            mapParts(statueNicheX({ halfW: 0.62, rise: 2.4, cusp: 0.5, crocket: nearZone }), (g) =>
-              put(g.translate(0, 16, ctz))
-            )
-          );
+          // 角塔雕像龛（R34 回砍：228 tri/龛 ×2 座 ⇒ 收到 hero 街区）
+          if (hero) {
+            pour(
+              b,
+              mapParts(statueNicheX({ halfW: 0.62, rise: 2.4, cusp: 0.5, crocket: nearZone }), (g) =>
+                put(g.translate(0, 16, ctz))
+              )
+            );
+          }
           if (finial) pour(b, mapParts(finialOrnament({ r: 0.5 }), (g) => put(g.translate(ctw / 2, ctH + 5.6, ctz))));
-          // A 线 ① 卷叶尖塔（crockedSpire）顶冠；R32-A2：锥面金卷叶仅近区（leaves）
+          // A 线 ① 卷叶尖塔（crockedSpire）顶冠；R32-A2 锥面金卷叶仅近区（leaves）
+          //   R34 回砍：卷叶 96 tri/座 ×7 座/块侧 —— 0.15m 卷叶在 200m 外亚像素，
+          //   `leaves` 由「近区（k<8）」再收到 **hero 街区**；锥体本身两档都保留。
           pour(
             b,
-            mapParts(crookedSpire({ w: 1.7, h: 5.2, leaves: nearZone }), (g) =>
+            mapParts(crookedSpire({ w: 1.7, h: 5.2, leaves: hero }), (g) =>
               put(g.translate(ctw / 2, ctH + 1.8, ctz))
             )
           );
           // A 线 ② 角塔飞扶壁（街面墩 → 塔身，内城塔群语汇拓展；pinnacle:false 控 tri）
-          const cfb = flyingButtress({ baseY: 0, springY: 9, topY: 22, reach: 6, depth: 1.0, band: 0.5, pierW: 1.3, pinnacle: false });
-          pour(b, mapParts(cfb, (g) => put(g.rotateY(Math.PI).translate(0, 0, ctz))));
+          //   R34 回砍：104 tri/座 ×2 座 ×40 块侧，且是**双档都在**的实心件
+          //   （远档 LOD 不裁）⇒ 中区 peak 的硬成本。收到 hero 街区。
+          if (hero) {
+            const cfb = flyingButtress({ baseY: 0, springY: 9, topY: 22, reach: 6, depth: 1.0, band: 0.5, pierW: 1.3, pinnacle: false });
+            pour(b, mapParts(cfb, (g) => put(g.rotateY(Math.PI).translate(0, 0, ctz))));
+          }
         };
-        cornerTower(-(blockLen / 2 - 0.5), k % 2 === 0);
+        // R34 回砍：纹章顶饰（finialOrnament，108 tri）由「隔街区」收到 hero 街区
+        cornerTower(-(blockLen / 2 - 0.5), hero && k % 2 === 0);
         cornerTower(blockLen / 2 - 0.5, false);
         // ② 街面低拱廊（连廊主体；局部 x∈[−4.5,−1.0] ⇒ 世界 |x|∈[11.0,14.5]）
         pour(
@@ -2528,7 +2594,9 @@ export function makeInnerCity(): StoneBuckets {
           pour(b, mapParts(fb, (g) => (side > 0 ? g.rotateY(Math.PI) : g).translate(side * faceHalf, 0, zc + lz)));
         }
         // ④ 前排塔盲拱列（隔街区，两座前排塔街面上带 y 18）
-        if (k % 2 === 0) {
+        //    R34 回砍：492 tri/列 ×2 塔 —— 龛 1.0m 宽 / 4.2m 高，隔街区铺 10 块
+        //    ⇒ 单块侧 492 tri 的重复细饰。收到 hero 街区（k%2 隔块规则不变）。
+        if (hero && k % 2 === 0) {
           for (const tz of [-blockLen / 4, blockLen / 4]) {
             pour(
               b,
@@ -2556,8 +2624,10 @@ export function makeInnerCity(): StoneBuckets {
           b.ashlar.push(put(spire('ashlar', 0.42, 0, 1.5, 6, depth / 2, ridgeY + 0.1, gz2)));
           // 山墙斜边卷叶 ×2/边（金，参考图坡顶金饰）
           //   R32-A2：只降**装饰密度**——中区（8 ≤ k < 14）关闭（不可读、纯 tri 负担）；
+          //   R34 回砍：再由「近区（k<8）」收到 **hero 街区** —— 0.15m 卷叶在
+          //   200m 外亚像素，40 tri/条 ×4 条/块侧是纯 tri 负担。
           //   山墙斜边长度 / 坡顶几何逐项不变（铁律 33）。
-          if (!nearZone) continue;
+          if (!hero) continue;
           for (const e of [
             [
               [0.45, wallTop - 0.1],
@@ -2618,7 +2688,9 @@ export function makeInnerCity(): StoneBuckets {
           }
         }
         // R31 ① 墙顶敞廊（隔块；回廊柱列骑在 24m 墙顶 —— 街面透过前排建筑间隙可见）
-        if (k % 2 === 0) {
+        //   R34 回砍：588 tri/座 —— 柱 0.84m 径、隔块铺 10 块。改 k%4（隔三块），
+        //   敞廊**长度/柱距/层高一概不变**（铁律 33），只降街区重复次数。
+        if (k % R34_DENSITY.cloisterMod === 0) {
           pour(
             b,
             mapParts(
@@ -2642,9 +2714,10 @@ export function makeInnerCity(): StoneBuckets {
           extra(b, 'roof', put(spire('roof', 5.4, 0, th * 0.2, 8, r1x, th - th * 0.2 + 0.6, oz, Math.PI / 8)));
           // A 线 ① 卷叶尖塔（crockedSpire）顶冠：后排塔尖收口
           //   R32-A2：锥面金卷叶由「非远区」收紧到「仅近区」（中区不可读，纯 tri 负担）
+          //   R34 回砍：再收到 **hero 街区**（与角塔卷叶同一判据）。
           pour(
             b,
-            mapParts(crookedSpire({ w: 2.2, h: th * 0.18, leaves: nearZone }), (g) =>
+            mapParts(crookedSpire({ w: 2.2, h: th * 0.18, leaves: hero }), (g) =>
               put(g.translate(r1x, th - th * 0.1 + 0.6, oz))
             )
           );
@@ -2898,14 +2971,16 @@ export function makeInnerCity(): StoneBuckets {
               cusp: 0.7,
               frameOut: 0.4,
               plateBack: 0.26,
-              mullions: 2,
+              mullions: winMullions,
+              subArches: winSubs,
               goldFrame: nearZone,
               goldTracery: false
             }),
             (g) => put(g.translate(0, 26, 0))
           )
         );
-        if (k % 2 === 0) {
+        // R34 回砍：中央高塔雕像龛（228 tri）由「隔街区」收到 hero 街区
+        if (hero && k % 2 === 0) {
           pour(
             b,
             mapParts(statueNicheX({ halfW: 0.62, rise: 2.6, cusp: 0.5, crocket: nearZone }), (g) =>
@@ -2914,7 +2989,8 @@ export function makeInnerCity(): StoneBuckets {
           );
         }
         // A 线 ① 卷叶尖塔（crockedSpire）顶冠：内城中央高塔收口（卷叶仅近区）
-        pour(b, mapParts(crookedSpire({ w: 3.4, h: 9, leaves: nearZone }), (g) => put(g.translate(r2x, rc.h - 6, 0))));
+        //   R34 回砍：卷叶同律收到 hero 街区（锥体保留）。
+        pour(b, mapParts(crookedSpire({ w: 3.4, h: 9, leaves: hero }), (g) => put(g.translate(r2x, rc.h - 6, 0))));
         /* ── R30/R31 第四排远景体量（隔块；R31 外移 43..58 → 63..78）──────────────
          * R32：奇数块原本整排空置 ⇒ 天际线断档。补「矮墙 + 单塔」体量（纯盒体，
          * 12~16 tri/件，wall/ashlar 桶）⇒ 四排体量沿全街连续不断档。 */

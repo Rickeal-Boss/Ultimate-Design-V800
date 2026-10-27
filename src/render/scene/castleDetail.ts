@@ -492,7 +492,12 @@ export interface TraceryOpts {
   band?: number;
   frameOut?: number;
   plateBack?: number;
-  mullions?: 2 | 3;
+  /**
+   * 竖棂枝数。**R34**：允许显式 `0` —— 近中区回砍要求「窗棂 + 子拱光」这组
+   * <0.3m 的重复细饰在非 hero 街区整体关闭（原本只有 low / DEEP_FAR 会关），
+   * 由调用方按街区密度档传入；`0` 与 low 档内部自裁同一语义（mullions=0）。
+   */
+  mullions?: 0 | 2 | 3;
   lights?: boolean;
   /** 子尖拱光（Window2_4 语汇）；默认窗宽 ≥1.6 时自动开启 */
   subArches?: boolean;
@@ -544,8 +549,22 @@ function traceryWindow(o: TraceryOpts & { face: 'x' | 'z' }): DetailParts {
   if (goldRing) p.gold.push(goldUV(ring));
   else p.ashlar.push(ring);
   // ② 近黑背板（2 段尖拱板）
+  /**
+   * R34 埋件修复：**窗洞内腔必须探出墙外皮**。
+   * 局部约定里「墙体向 +x（face 'x'）/ 向 −z（face 'z'）」⇒ `archIntoWallX` 把板
+   * 放到 **墙里**（x∈[0,plateBack]），而墙是**实心盒**（殿身/塔身没有任何开洞），
+   * 改前背板 + 玻璃整块埋在墙内 ⇒ 476 扇窗在街面只读到「白墙 + 一圈券框」，
+   * 既没有「窗洞深 2–3 倍窗宽」的凹腔读法、又白占 ~8.6k tri（glass 桶实测世界
+   * |x| ≥ 15.56 > 墙外皮 15.50，`.qa/r34_castle/bury.ts` 取证）。
+   * 修法：**沿视线反方向抬出墙外皮** —— 背板前脸抬到 −0.06，玻璃抬到 −0.14
+   * （= 背板前缘再前 0.08），都仍在券框外脸（−frameOut ≈ −0.45）之内 ⇒ 读作
+   * 「券框里嵌一块深色窗腔 + 一层玻璃」，零 tri 变化。
+   */
+  const PROUD_PLATE = 0.06; // 背板前脸探出墙外皮的米数
+  const PROUD_GLASS = 0.14; // 玻璃探出墙外皮的米数（> 背板 ⇒ 玻璃压在腔前）
   const plate = archPlate(halfW - band * 0.55, 0, rise, plateBack, 2, cusp);
-  if (faceX) archIntoWallX(plate, plateBack);
+  if (faceX) archIntoWallX(plate, plateBack).translate(-PROUD_PLATE, 0, 0);
+  else plate.translate(0, 0, PROUD_PLATE);
   p.dark.push(plate);
   // ②b 凹龛侧壁（R32：洞口左右两侧的 dark 内壁，读作"窗洞凹进墙里"的阴影深度；
   //      nicheCavity 同款语汇的窗用版——只在近景挂载点显式开启，控 tri）
@@ -560,11 +579,13 @@ function traceryWindow(o: TraceryOpts & { face: 'x' | 'z' }): DetailParts {
       p.dark.push(wall);
     }
   }
-  // ③ 玻璃底板（glass 桶；嵌在背板前缘内侧 0.06~0.11m，不与背板/棂共面 ⇒ 无 z-fighting）
+  // ③ 玻璃底板（glass 桶；压在背板前缘 **外侧**，不与背板/棂共面 ⇒ 无 z-fighting）
+  //    ⚠ R34：原写法把玻璃推成 x∈[+0.06,+0.11]（**更深处**）—— 符号反了（+x 是墙里），
+  //    整块埋进实心墙。现改为探出墙外皮 0.14m，见上方「R34 埋件修复」注释。
   if (o.glass !== false) {
     const gp = archPlate(halfW - band * 0.9, 0, rise * 0.995, 0.05, 2, cusp);
-    if (faceX) archIntoWallX(gp, 0.05).translate(0.06, 0, 0);
-    else gp.translate(0, 0, -0.11);
+    if (faceX) archIntoWallX(gp, 0.05).translate(-PROUD_GLASS, 0, 0);
+    else gp.translate(0, 0, PROUD_GLASS);
     (p.glass ??= []).push(gp);
   }
   // ④ 竖棂（石，2~3 枝；顶没入拱环即"棂冠合拱"）；低配档整组跳过
@@ -741,8 +762,23 @@ export function crocketRun(o: CrocketOpts): DetailParts {
  *
  * R32（参考图 A 城门楣「中央对称卷叶 + 两侧金菱形」）：`flankDiamonds` 在纹章
  * 左右各加一枚金菱形（方板转 45°，2×12 tri）—— 门楣金饰的对称收口语汇。
+ *
+ * R34 修复（主理人 P2）：菱形横偏原本**写死 ±1.7r，不受楣板宽度约束** ⇒ 窄楣上
+ * 菱形整枚越出墙体两侧（"金菱形外飘"）。菱形转 45° 后横向半跨 = 边长×√2/2，
+ * 原写法外缘到 ±(1.7r + 0.64r) = ±2.34r —— 只要楣板半宽 < 2.34r 就飘出墙外。
+ * 现加 `lintelHalf`（楣板半宽）钳制：① 菱形边长先按楣板收（外缘不越楣板）；
+ * ② 横偏再按「外缘贴楣板内」取 min。给了 `lintelHalf` 就钳死，没给则保持原值
+ * （向后兼容既有调用点）。
  */
-export function finialOrnament(o: { r: number; petals?: number; flankDiamonds?: boolean }): DetailParts {
+export interface FinialOpts {
+  r: number;
+  petals?: number;
+  flankDiamonds?: boolean;
+  /** 楣板半宽（世界米）。给了 ⇒ 菱形边长与横偏都按它钳制，外缘不越楣板 */
+  lintelHalf?: number;
+}
+
+export function finialOrnament(o: FinialOpts): DetailParts {
   const p = parts();
   const r = o.r;
   const petals = o.petals ?? 6;
@@ -771,11 +807,22 @@ export function finialOrnament(o: { r: number; petals?: number; flankDiamonds?: 
   tip.translate(0, r * 0.62 + r * 0.45, 0);
   p.gold.push(goldUV(tip));
   // R32 两侧金菱形（门楣对称收口；参考图 A 城门楣楣饰两侧）
+  //   R34：横偏与边长都过一遍楣宽钳制（见文件头 FinialOpts.lintelHalf 注释）。
   if (o.flankDiamonds) {
-    for (const s of [-1, 1] as const) {
-      const dm = box('gold', r * 0.9, r * 0.9, r * 0.3, s * r * 1.7, r * 0.42, 0);
-      dm.rotateZ(Math.PI / 4);
-      p.gold.push(goldUV(dm));
+    const want = r * 0.9; // 期望边长
+    // 菱形绕 z 转 45° 后的横向半跨 = 边长 × √2 / 2
+    const side = o.lintelHalf !== undefined ? Math.min(want, o.lintelHalf * Math.SQRT2) : want;
+    const halfSpan = (side * Math.SQRT2) / 2;
+    const dx =
+      o.lintelHalf !== undefined
+        ? Math.min(r * 1.7, Math.max(0, o.lintelHalf - halfSpan))
+        : r * 1.7;
+    if (side > 1e-4 && dx > 1e-4) {
+      for (const s of [-1, 1] as const) {
+        const dm = box('gold', side, side, r * 0.3, s * dx, r * 0.42, 0);
+        dm.rotateZ(Math.PI / 4);
+        p.gold.push(goldUV(dm));
+      }
     }
   }
   return p;

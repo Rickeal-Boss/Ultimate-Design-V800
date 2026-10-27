@@ -9,7 +9,13 @@
  */
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { createR7FrontDetails, R7_FRONT_DETAIL_MATERIAL_IDS } from '../src/model/parts/r7FrontDetails';
+import {
+  createR7FrontDetails,
+  R7_FRONT_DETAIL_MATERIAL_IDS,
+  lipBarBounds,
+  R7_FASCIA_BOTTOM_Y,
+  R7_LIP_CONTACT_EPSILON
+} from '../src/model/parts/r7FrontDetails';
 import { createWheelHubResult, listWheelWindows, N_WINDOWS } from '../src/model/parts/wheelHub';
 
 const triOf = (g: THREE.BufferGeometry): number => {
@@ -53,6 +59,19 @@ describe('R33 R7 前脸手作件', () => {
     ]) {
       expect(detail.hiddenComponentIds).toContain(id);
     }
+  });
+
+  it('R34 前唇压条顶面贴合 front-fascia 底缘（零悬浮缝），且与本体 z 重叠', () => {
+    const b = lipBarBounds();
+    // 顶面对齐 fascia 底缘 y=0.21（容差 6mm ≈ 屏幕 1px 以下）
+    expect(b.topGap).toBeLessThanOrEqual(R7_LIP_CONTACT_EPSILON);
+    // 与 fascia 实体搭接 ≥18mm（企口对接会让悬浮态在几何上不可能发生）
+    expect(b.zOverlap).toBeGreaterThan(0.018);
+    // 端头封口埋进本体 ⇒ 压条整体 y 上限 ≥ fascia 底缘（确认不悬空）
+    expect(b.capMaxY).toBeGreaterThanOrEqual(R7_FASCIA_BOTTOM_Y - 1e-6);
+    // 压条处于前脸外侧 z 区间（不埋进车体，也不外探过多）
+    expect(b.barMaxZ).toBeGreaterThan(2.4);
+    expect(b.barMinZ).toBeLessThan(2.47);
   });
 });
 

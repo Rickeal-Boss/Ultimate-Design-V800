@@ -73,7 +73,7 @@ const HEAD_DIM_INTENSITY = 0.18;
 const CALIPER_HEAT_HEX = 0x8c1114;
 
 /**
- * N-5（复审 P3）：R7 尾灯常亮待机档（brakeLevel 口径）。
+ * N-5（复审 P3，R33 首次尝试）：R7 尾灯常亮待机档（brakeLevel 口径）。
  * 双车静态约定统一前：V800 构造即 brakeTarget = TAIL_BASE(2.5) 常亮待机（preview
  * 车尾特写红≈1759），R7  brakeTarget = 0（静态 emissive = 2.0×0.55 = 1.1，特写红≈0/27）
  * —— 只污染 preview/QA 静态截图基线（游戏内 Game 构造时 setBrakeLights(1.6) 两车都覆盖）。
@@ -117,6 +117,29 @@ const TEXTURE_SLOTS = [
 ] as const;
 
 const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);
+
+/**
+ * N-5（R34 实锤修复）：R7 尾灯 **静态**目标发光强度。
+ *
+ * 病根（node shim .qa/r34car `matof r7 lamp-red` 实锤 —— 两条光束不是同一个材质实例）：
+ *   batch/lamp-red · ei=1.2 emis=#ffffff map=Y · y[1.07,1.13] z[2.26,2.51] ← 贯穿尾灯带
+ *   batch/lamp-red · ei=2.0 emis=#e03040 map=n · y[0.25,1.20] z[2.47,2.50] ← 后保反光条
+ * 即 refTextures 的 `tail-lamp` 规则给「贯穿尾灯带」**克隆并改写了夺冠载体材质**
+ * （emissiveWhite ⇒ emissive 转白 + 挂灯纹贴图），而适配器 `matById.get('lamp-red')`
+ * 只持有**遍历首见的那一个**实例 ⇒ 最显眼的那条灯带可能压根不在联动链里；更根本的是
+ * 刹车联动只在 `update()` 里写，**构造完成时一次都没写过** ⇒ fresh/preview 静态截图
+ * 读到工厂原始值（旧口径 2.0×0.55），而 V800 同期读出 1761 ⇒ 双车静态不一致。
+ *
+ * 修复分两步（都在本文件，不动工厂 / refTextures）：
+ *   ① 构造期就调用一次 applyTailLevel()，让静态读数 = 目标待机值；
+ *   ② 把「所有仍被尾灯 mesh 实际引用的 lamp-red 实例」都纳入联动（含 refTexture 克隆），
+ *      统一写**同一绝对值**，杜绝实例漂移。
+ *
+ * 目标值来历：由 V800 静态读数 2.5 反解（与下方 R7_TAIL_STANDBY_LEVEL 同源）：
+ *   静态 = TAIL_STANDBY = 2.5；行驶中 setBrakeLights(1.6) 收敛后
+ *   = 2.5 × (0.55+1.6)/(0.55+0.7) = 4.3（与旧 R7 行为逐位一致）。
+ */
+const R7_TAIL_STANDBY_EI = 2.5;
 
 // ------------------------------------------------------------------ Canvas 贴图
 
@@ -466,6 +489,9 @@ export function createR7CarAdapter(tier: QualityTier = 'high'): CarLike {
   }
 
   // ---- 灯光材质句柄（刹车 / 头灯 / 卡钳热）----
+  // N-5： brakeMat 只保留兼容语义（涂料 builder 首见实例）。真正的**联动目标集**是
+  // 下面 tailMatTargets —— 在 refTextures 之后重建，覆盖尾灯 mesh 实际引用的全部
+  // lamp-red 实例（含被克隆改写过的贯穿灯带）。详细病根见 R7_TAIL_STANDBY_EI 注释。
   const brakeMat = matById.get('lamp-red');
   const headMats = [matById.get('lamp-head'), matById.get('lamp-white')].filter(
     (m): m is THREE.MeshPhysicalMaterial => Boolean(m),
@@ -476,10 +502,10 @@ export function createR7CarAdapter(tier: QualityTier = 'high'): CarLike {
     caliperMat.emissiveIntensity = 0;
     caliperMat.needsUpdate = true;
   }
-  const brakeBaseIntensity = brakeMat?.emissiveIntensity ?? 2.0;
   const headBaseIntensity = headMats[0]?.emissiveIntensity ?? HEAD_BASE_INTENSITY;
 
-  // ---- 内饰贴图接线（LUXEED / 铭牌 / 牌照 / 屏幕 / 网罩 / 方向盘标）----
+
+  // ---- 参考图贴图接线（LUXEED / 铭牌 / 牌照 / 屏幕 / 网罩 / 方向盘标）----
   // 注意：同一材质 ID 被多个 mesh 复用时必须逐 mesh 克隆，否则一句话会串到所有件上
   // （"遮阳板出现 LUXEED"这类串味是 V800 付过学费的坑）。
   const anisotropy = Math.min(8, tier === 'high' ? 8 : 4);
@@ -634,6 +660,48 @@ export function createR7CarAdapter(tier: QualityTier = 'high'): CarLike {
     }
   }
 
+  // ---- N-5：尾灯联动目标收集（★必须在 refTextures 之后 / batchMergeStatic 之前）----
+  // refTextures 的 `tail-lamp` 规则会给「贯穿尾灯带」**克隆并改写**材质（emissiveWhite
+  // ⇒ emissive 转白 + 挂灯纹贴图），早于此地就只拿到改写前的旧实例，最显眼的那条灯带
+  // 永远不在联动链里（静态读作 ei=1.2 的白图，而非目标待机红）。详见 R7_TAIL_STANDBY_EI。
+  const tailMatTargets: THREE.MeshPhysicalMaterial[] = [];
+  {
+    // 「按材质 id 全树扫描」而非 byId 按组件名：refTextures 会克隆实例（克隆保留
+    // sculptMaterial.id），按组件名逐个取会漏掉克隆出的那一份（静态漏 HAVE ⇒ 一侧漂移）。
+    // lamp-red 语义即「尾灯红光 + 后保反光条」（工厂 shaderNotes 明文），全收即全联动。
+    model.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      const list = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      for (const mt of list) {
+        const mat = mt as THREE.MeshPhysicalMaterial | undefined;
+        if (!mat) continue;
+        if (mat.userData?.sculptMaterial?.id !== 'lamp-red') continue;
+        if (!tailMatTargets.includes(mat)) tailMatTargets.push(mat);
+      }
+    });
+    // 兜底：极端情况下（工厂改名）退化到 matById 首见实例，避免尾灯完全不亮
+    if (tailMatTargets.length === 0 && brakeMat) tailMatTargets.push(brakeMat);
+  }
+  /**
+   * 统一写 **绝对值**（不按各实例原始基数缩放）——旧写法 `base × (0.55+level)` 会因
+   * refTexture 克隆的 base（1.2）与原厂（2.0）不同而漂移；改成绝对值后静态读数恒等于
+   * 目标待机值，两条灯带永远同步。
+   */
+  const applyTailLevel = (level: number, snap: number): void => {
+    const ei =
+      (R7_TAIL_STANDBY_EI * (BRAKE_BASE_INTENSITY + level)) /
+        (BRAKE_BASE_INTENSITY + R7_TAIL_STANDBY_LEVEL) +
+      snap * SNAP_GAIN;
+    for (const mat of tailMatTargets) mat.emissiveIntensity = ei;
+  };
+  // ★ 构造期就写一次：静态 / preview 从不进 update()，此前读到的是工厂原始值
+  //   （旧口径 2.0×0.55），而 V800 同期读出 2.5 ⇒ 双车静态口径不一致。
+  applyTailLevel(R7_TAIL_STANDBY_LEVEL, 0);
+  console.info(
+    `[R7Adapter] N-5 尾灯联动目标 → ${tailMatTargets.length} 个 lamp-red 实例（静态 ei=${R7_TAIL_STANDBY_EI}）`
+  );
+
   // ---- 静态合批（按材质并 mesh，1 DC 顶 N）----
   // 必须放在「所有 per-mesh 改写」之后、「逐帧驱动」之前 —— 合并器会 dispose 源几何，
   // 之后再拿 mesh 引用就是悬空对象。动态件全部显式排除。
@@ -673,6 +741,7 @@ export function createR7CarAdapter(tier: QualityTier = 'high'): CarLike {
     clone.metalness = 0.0;
     clone.roughness = 0.92;
     clone.envMapIntensity = 0.12;
+
     clone.clearcoat = 0;
     clone.iridescence = 0;
     clone.side = src.side; // 保持原 side（FrontSide）
@@ -1184,10 +1253,9 @@ export function createR7CarAdapter(tier: QualityTier = 'high'): CarLike {
       brakeLevel = damp(brakeLevel, brakeTarget, BRAKE_FADE_K, dt);
       snapT = damp(snapT, 0, 6, dt);
       if (snapT < 0.001) snapT = 0;
-      if (brakeMat) {
-        brakeMat.emissiveIntensity =
-          brakeBaseIntensity * (BRAKE_BASE_INTENSITY + brakeLevel) + snapT * SNAP_GAIN;
-      }
+      // N-5：写 tailMatTargets 全目标集（含 refTexture 克隆），且是**绝对值**口径
+      // （旧的 brakeMat × brakeBaseIntensity 相对写法会随 instances 的初始 ei 漂移）。
+      applyTailLevel(brakeLevel, snapT);
       // 头灯
       headLevel = damp(headLevel, headTarget, 14, dt);
       for (const mat of headMats) mat.emissiveIntensity = headLevel;
