@@ -28,7 +28,8 @@ import {
   createGlassBand,
   createGlassBandMaterial
 } from './parts/windowTrim';
-import { createWheelHub, createWheelHubMaterials, type WheelHubSide } from './parts/wheelHub';
+import { createWheelHub, createWheelHubMaterials, type WheelHubSide, WHEEL_HUB_CENTERS } from './parts/wheelHub';
+import { createWheelArchLiner, WHEEL_ARCH_LINER_MATERIAL_ID } from './parts/wheelArchLiner';
 import {
   createRoofPod,
   ROOF_POD_POSITION_SPEC_FRAME,
@@ -1726,8 +1727,14 @@ const SHADOW_CASTER_MATERIAL_IDS = new Set<string>(['paint-upper', 'paint-lower'
  * 降到 45 只有三条路：① 参考图去重（牺牲 per-part 观感）；② 砍掉座舱遮挡克隆
  * （毁 cabin 显隐）；③ 改工厂 spec 合并材质定义（非适配层文件，本波禁改）。
  * 三条都属于视觉/范围变更 ⇒ 保持 78 并在此登记，不做静默降级。
+ *
+ * **R36 登记（上调 78→80，按上方「上调 = 明确的预算决策」条款）**：两例新语义
+ * 材质，各自不可并入既有实例 ——
+ *   · `r22-hub-steel`（B1 制动盘独立金属灰档，rough 0.4；原并入 dark 被吞没）；
+ *   · `r22-arch-liner`（C1 前轮拱内衬哑光黑，遮拱内顶橙褐块）。
+ * 实例对为 0 可合并项（与 D1 材料清单同口径复核）；已回传主理人登记。
  */
-export const V800_MATERIAL_INSTANCE_BUDGET = 78;
+export const V800_MATERIAL_INSTANCE_BUDGET = 80;
 
 /**
  * 车模 tri **可见口径**红线（= 渲染器 `info.render.triangles` 口径；实测 79,798）。
@@ -1866,18 +1873,29 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
   // R10b：平滑法线后高金属漆面把 RoomEnvironment 暖色矩形镜像成大理石漩涡
   // （前后两次截图逐像素一致、撤 map 无效 → 反射实锤）。车漆改清漆语义：
   // 低金属度+较高粗糙+压低 env；铬件同压。
+  //
+  // R36-V1（香槟金身份丢失 · ACES 反演标定）：R10 的 sc.color 覆盖把 paint-*
+  // 压成 spec 占位近黑（#0F0F12「曜石黑」）⇒ 双拼香槟金全丢（追尾读纯黑/机盖
+  // 读银白）。恢复 **albedo.base 香槟金 #C9A86B 并提饱和**，metalness 0.12→0.45
+  // （金属漆语义）、envMapIntensity 0.55→0.7（阴天/黄昏两光照下金身份可辨）、
+  // rough 0.42→0.38。只调材质参数，不动几何。
   const paintMat = matById.get('paint-upper');
   if (paintMat) {
-    paintMat.metalness = 0.12;
-    paintMat.roughness = 0.42;
-    paintMat.envMapIntensity = 0.55;
+    paintMat.metalness = 0.45;
+    paintMat.roughness = 0.38;
+    paintMat.envMapIntensity = 0.7;
+    // albedo 提饱和：spec.albedo.base #C9A86B 香槟金，HSL 饱和 +0.12、明度 +0.02
+    paintMat.color.set(0xc9a86b).offsetHSL(0, 0.12, 0.02);
     paintMat.needsUpdate = true;
   }
   const paintLowerMat = matById.get('paint-lower');
   if (paintLowerMat) {
-    paintLowerMat.metalness = 0.1;
-    paintLowerMat.roughness = 0.5;
-    paintLowerMat.envMapIntensity = 0.45;
+    // 双拼下段（曜石黑）：metal 0.1→0.45 / env 0.45→0.7 与上段同金属漆语义，
+    // 反射抬起来后追尾不再读「死黑」（仍保深色双拼对比）。
+    paintLowerMat.metalness = 0.45;
+    paintLowerMat.roughness = 0.42;
+    paintLowerMat.envMapIntensity = 0.7;
+    paintLowerMat.color.set(0x111014);
     paintLowerMat.needsUpdate = true;
   }
   const chromeMatSolid = matById.get('chrome');
@@ -1885,6 +1903,12 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
     chromeMatSolid.metalness = 0.42;
     chromeMatSolid.roughness = 0.42;
     chromeMatSolid.envMapIntensity = 0.26; // R12b：软光箱下眉线/徽框过曝成白板，压反射读作缎面银
+    // R36-D1：腰线 chrome-belt 与侧皮共聚面 z-fight（白虚线花纹）—— polygonOffset
+    // (−1,−1) 把铬件压前一档（工厂 belt 外脸与 body-lower 侧皮仅毫米级差，几何外移
+    // 会与曲率误差叠加；隐藏 belt 之外的同材质件也顺带受保护）。
+    chromeMatSolid.polygonOffset = true;
+    chromeMatSolid.polygonOffsetFactor = -1;
+    chromeMatSolid.polygonOffsetUnits = -1;
     chromeMatSolid.needsUpdate = true;
   }
 
@@ -2624,7 +2648,9 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
     screenMat.map = tex; // 屏体自发光为主，map 同源避免关闭 bloom 后纯黑
     screenMat.emissive.set(0xffffff);
     screenMat.color.set(0xffffff);
-    screenMat.emissiveIntensity = 1.25;
+    // R36-V4①：白吹光带修复 —— 1.25 时 emissive 峰值压过 UI 纹理 ⇒ 屏面读成
+    // 「均匀白发光带」。压到 0.75：UI 纹理可辨（亮度层次回来了），夜间仍有背光。
+    screenMat.emissiveIntensity = 0.75;
     screenMat.needsUpdate = true;
     // R4：plane-card 基元 UV 恒 0..1，线性与 bbox 归一等价；统一走 bbox 归一，
     // 将来若换成坐标值 UV 的基元（如圆角 extrude）不至于再出串味。
@@ -3153,6 +3179,16 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
       createProceduralSurface(fabricSize, 0.45, woodSampler([54, 32, 20], 37)),
       0.45
     );
+    // R36-V4②：木纹 UV 独立 repeat —— 仪表台/中岛件 UV 0..1 全宽铺一幅 ⇒「单条
+    // 拉伸漩涡横贯台面」。贴图独立 repeat（RepeatWrapping 3×1.5），木纹周期回到
+    // 可读节拍；只动贴图寻址，不动任何几何/UV 数据。
+    const wt = woodMatTrim.map as THREE.Texture | null;
+    if (wt) {
+      wt.wrapS = THREE.RepeatWrapping;
+      wt.wrapT = THREE.RepeatWrapping;
+      wt.repeat.set(3, 1.5);
+      wt.needsUpdate = true;
+    }
   }
   const suedeMat = matById.get('headliner-suede') ?? null;
   if (suedeMat && !suedeMat.map) {
@@ -3236,7 +3272,7 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
    * 金屏（×0.75）/ 灯芯随刹车同源联动，基线抬升后刹车爆发同步增强。
    * 反光条克隆件 REFLECTOR_EMISSIVE_INTENSITY 0.55 静态弱值不动（EX-31 机制）。
    */
-  const TAIL_BASE = 2.5;
+  const TAIL_BASE = 2.6; // R36-V6：2.5→2.6（尾灯签名弱；与 R7_TAIL_STANDBY_EI 同步抬基座）
   // 前脸签名增强（S5 朝向线索）：基础 2.5 正面视角辨识度不足，提到 3.2 ——
   // 只动常亮基础值，setHeadlights 开关 / damp 联动映射语义不变（headTarget 同源）
   const HEAD_BASE = 3.2;
@@ -3822,6 +3858,41 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
     }
     if (wired > 0) console.info(`[V800Adapter] R22-B 涡轮盘轮毂接线完成：${wired} 轮`);
   }
+
+  // —— R36-C1 前轮拱内衬（哑光黑衬板；遮拱内顶「橙褐色块」两轮残留）——
+  // 病灶与修法见 parts/wheelArchLiner.ts 头注（材质归属 = 哑光黑轮拱语义）。
+  // 落在轮胎(0.382)与拱(0.452)之间 70mm 余量带，不碰轮/拱几何本体。
+  {
+    const linerMat = new THREE.MeshStandardMaterial({
+      color: 0x101114,
+      metalness: 0.05,
+      roughness: 0.85,
+      side: THREE.DoubleSide // 掠射/腔内双面可见，防背面剔除漏色
+    });
+    linerMat.userData.sculptMaterial = { id: WHEEL_ARCH_LINER_MATERIAL_ID };
+    linerMat.name = WHEEL_ARCH_LINER_MATERIAL_ID;
+    for (const corner of ['fl', 'fr'] as const) {
+      const c = WHEEL_HUB_CENTERS[corner];
+      const mesh = new THREE.Mesh(createWheelArchLiner(c.side), linerMat);
+      mesh.name = `r22-arch-liner-${corner}`;
+      mesh.position.set(c.x, c.y, c.z);
+      mesh.castShadow = false;
+      mesh.receiveShadow = true;
+      model.add(mesh);
+      r22Exclude.push(mesh);
+    }
+    console.info('[V800Adapter] R36-C1 前轮拱内衬接线完成（fl/fr ×哑光黑）');
+  }
+
+  // —— R36-V5 roof-spoiler 浮刃缝隙：贴合（下沉 8mm 咬进 roof-panel 顶面）——
+  // 实测（.qa/r36_spoiler_probe.mjs）：刃体 y1.839..1.857 仅 18mm 厚、roof 顶面
+  // 1.848 ⇒ 名义重叠 9mm 但刃底与曲面顶局部读作悬浮缝。下沉 8mm ⇒ 重叠 17mm，
+  // 刃读作「贴顶刃」；不动几何本体（spec 改形走主理人管线）。
+  model.traverse((o) => {
+    if ((o.userData as { sculptComponent?: { id?: string } }).sculptComponent?.id === 'roof-spoiler') {
+      o.position.y -= 0.008;
+    }
+  });
 
   // —— R22-C 镀铬窗框 + 玻璃带（手写几何；替换 window-belt-*，chrome-belt-* 间距过挤一并隐）——
   {

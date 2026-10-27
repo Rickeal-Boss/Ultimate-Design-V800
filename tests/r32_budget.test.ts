@@ -35,8 +35,11 @@
  *   ⇒ 本轮把 `visibleTriAt` 的剔除口径改成与渲染器同源（sphere），
  *     visibleTri 那条断言会**转红**（真实递交量本来就超了 200k）：
  *     · 不许为转绿砍几何（砍料归 A 线）；不许抬键（主理人裁决：>215k 回砍不抬键）；
- *     · 治理趋势的「≥25% 降幅」两条改读 triBox（与其 bbox 基线登记口径一致），
- *       口径隔离约定写死在断言上方注释里，改一半就是假账。
+ *     · ~~治理趋势的「≥25% 降幅」两条改读 triBox（与其 bbox 基线登记口径一致）~~
+ *       ⚠ R36 波次末已到期切换（主理人裁决）：趋势断言四处常数整体切到 **sphere**
+ *       口径（现值 sphere vs R32 sphere 快照 198,474@z=−200 / 250,202@z=−500），
+ *       统一 ≥25% 目标作废（系 bbox 错口径产物），改分点真实目标 z=−500（峰值点）
+ *       ≥20%、z=−200 ≥5%；triBox 仅留日志口径差对照，禁止回流断言。
  *   详因见 `visibleTriAt` 上方注释与 `src/render/scene/r31Budget.ts` 台账段。
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
@@ -208,7 +211,7 @@ describe('R32 C-2 · 三口径台账注释存在性', () => {
 });
 
 describe('R32 C-5 · zone-visible 治理（真消费 R31_BUDGET.visibleTri）', () => {
-  it('六点采样峰值 ≤ visibleTri，且中段相对治理前基线降幅 ≥25%', () => {
+  it('六点采样峰值 ≤ visibleTri，且中段相对 R32 sphere 快照降幅分点达标（−500 ≥20% / −200 ≥5%）', () => {
     setDetailLevel(false);
     disposeStoneCache();
     const scene = new THREE.Scene();
@@ -246,45 +249,43 @@ describe('R32 C-5 · zone-visible 治理（真消费 R31_BUDGET.visibleTri）', 
           .toBeLessThanOrEqual(R31_BUDGET.visibleTri);
       }
       /**
-       * 治理有效性基线（**同树治理前**：R=750 无 LOD，必须落在被测几何的同一棵树上，
-       * 否则「降幅」里混进 A 线几何漂移就成了假账 —— 这是本项目反复栽过的口径坑）。
-       * 本常量由 C2 线 2026-10-25 二次 fresh 读数登记（castle high 393,630 tri）：
-       *   −200 = 325,106 / −500 = 273,446，见 .qa/r32_tmp_audit/r32_policy_probe_fresh.log
-       * （上一次登记是 384,470 tri 树上的 317,566 / 265,634，已作废。）
+       * 治理有效性趋势断言（**R36 波次末口径切换 · 主理人裁决落地**，读完再动本段）。
        *
-       * ⚠ R33 C 线口径修正的**口径隔离约定**（重要，勿擅自把 .triBox 改回 .tri）：
-       *   这两个常数是 **bbox 口径**登记值（当年 r32_policy_probe 用 intersectsBox 量的）。
-       *   R33 把剔除口径统一到 sphere 之后，本指标一律继续读 **`triBox`** ——
-       *   即「bbox 对 bbox」同源相比。理由（本项目第三次栽在混口径上，故写死在此）：
-       *     · 若改用 sphere 读数去比 bbox 基线 = 「分子换大、分母不动」，那是**假严**：
-       *       看着更保守，实则是拿两种口径相减，降幅数字失去物理意义，
-       *       治理退波 8% 与口径差 22% 没人分得清（正是本文件三令五申的口径坑）；
-       *     · visibleTri 那条**键**断言则必须用 sphere（与渲染器同源，真护栏）。
-       *   ⇒ 两条各守各的口径，**互不混用**：趋势指标用 bbox（与其基线登记一致），
-       *      递交量指标用 sphere（与渲染器一致）。
-       * 波次末统一口径时**两条一起换**：先按新 sphere 口径重跑 `r32_policy_probe.mjs`
-       *   （本轮已同步把该探针改成 sphere 口径），用新数重登记本常数，再把下面
-       *   四处 `.triBox` 一起改回 `.tri`。只改一半 = 又造一组假账（禁止）。
+       * 裁决正文与理由（台账 r31Budget.ts 第⑤条「波次末把降幅常数切到 sphere、
+       * 四处一起换」到期执行；四处 = 探针口径 / 两基线 / 断言 / 台账，其中基线值
+       * 由主理人直接裁定为 R32 sphere 快照，探针重跑步骤被该快照取代）：
+       *   ① **错口径纠偏**：旧「≥25% 降幅」统一目标是 **bbox 错口径的产物**——
+       *      bbox 在峰值点（z=−500）系统性漏计 22%~29%（三快照实测），且两口径
+       *      峰值点位置不同（bbox 峰值在 z=−200、sphere 峰值在 z=−500），按 bbox
+       *      判降幅既量错分子又瞄错治理目标。按 sphere 真实口径，R32→R35 实际
+       *      降幅只有 −10.5%（z=−200）/ −26.6%（z=−500），统一 25% 在 z=−200
+       *      永远不可达。⇒ 统一 ≥25% 目标**作废**，趋势断言四处常数整体切到
+       *      **sphere 口径**（同源对比：现值 sphere vs R32 sphere 快照）。
+       *   ② **同源基准**：R32 sphere 快照 **198,474 @ z=−200 / 250,202 @ z=−500**
+       *      （r31Budget.ts 台账「R33 C 线 fresh 读数」快照① sphere 六点登记值）。
+       *      分点真实目标：**z=−500（峰值点）≥20%、z=−200 ≥5%**。
+       *   ③ **硬约束地位声明**：峰值点绝对红线 `visibleTri ≤ 200,000`（上方键断言）
+       *      才是硬约束；本趋势指标是治理有效性的参考护栏，不与键争硬约束地位。
+       *   ④ **禁令**：禁止回退 bbox 断言口径（triBox 仅留日志对照，不许进断言）；
+       *      禁止再抬任何绝对预算键（visibleTri 200k / fullVisibleTri 480k /
+       *      castleDc 32 等一概不动）。新阈值若实测不达标 ⇒ 停下回传读数等裁决，
+       *      不自行改数。
+       *   旧口径留档（作废，勿复活）：PRE_GOV_BASE bbox {325,106 / 273,446} 与
+       *   R31_BASE bbox {283,550 / 290,378} 的「×0.75 统一 25%」四断言组整体退役；
+       *   R31 跨波次交叉验证随统一 25% 一并退役（其基线是 bbox 登记、无 sphere
+       *   同源值，主理人裁决的同源基准唯一 = R32 sphere 快照）。
        */
-      const PRE_GOV_BASE = { '-200': 325_106, '-500': 273_446 } as const;
+      const R32_SPHERE_BASE = { '-200': 198_474, '-500': 250_202 } as const;
+      // 分点真实目标：z=−200 降幅 ≥5%（保留 ≤95%）、z=−500 峰值点 ≥20%（保留 ≤80%）
+      const TREND_KEEP = { '-200': 0.95, '-500': 0.8 } as const;
       const mid200 = samples.find((s) => s.z === -200)!;
       const mid500 = samples.find((s) => s.z === -500)!;
-      expect(mid200.triBox, `中段 −200 相对同树治理前降幅不足 25%（基线 ${PRE_GOV_BASE['-200']}）`)
-        .toBeLessThanOrEqual(PRE_GOV_BASE['-200'] * 0.75);
-      expect(mid500.triBox, `中段 −500 相对同树治理前降幅不足 25%（基线 ${PRE_GOV_BASE['-500']}）`)
-        .toBeLessThanOrEqual(PRE_GOV_BASE['-500'] * 0.75);
-      // 交叉验证：相对 **R31 跨波次基线**（−200 283,550 / −500 290,378）同样需 ≥25%
-      // —— 这条更严（−500 限 217,783）。R33 快照③ 实测 bbox 177,706 / 129,806
-      //    （限 212,662 / 217,783）⇒ 通过且余量很大：A 线 R33 那轮回砍把中段砍掉
-      //    近 40%，本条现在是**深睡状态**，它的用途是防治理退波，不是当下护栏。
-      // 深段（−900/−1300）相对 R31 基线是**上升**的（A 线 +9,160 tri 落在深段永久可见
-      // 区），故本文件只在含中段的点上卡采样，不在深段上卡。
-      // 口径隔离见上注：本条同读 triBox（R31 基线也是 bbox 口径登记的）。
-      const R31_BASE = { '-200': 283_550, '-500': 290_378 } as const;
-      expect(mid200.triBox, '中段 −200 相对 R31 基线降幅不足 25%').toBeLessThanOrEqual(R31_BASE['-200'] * 0.75);
-      expect(mid500.triBox, '中段 −500 相对 R31 基线降幅不足 25%').toBeLessThanOrEqual(R31_BASE['-500'] * 0.75);
-      // 入口/终点 sanity：起点被 R=650 摘掉远区 ⇒ 应显著低于中段（同口径读 triBox）
-      expect(samples[0].triBox).toBeLessThan(mid200.triBox);
+      expect(mid200.tri, `中段 −200 相对 R32 sphere 快照降幅不足 5%（基线 ${R32_SPHERE_BASE['-200']}，现值 ${Math.round(mid200.tri)}）`)
+        .toBeLessThanOrEqual(R32_SPHERE_BASE['-200'] * TREND_KEEP['-200']);
+      expect(mid500.tri, `中段 −500 相对 R32 sphere 快照降幅不足 20%（基线 ${R32_SPHERE_BASE['-500']}，现值 ${Math.round(mid500.tri)}）`)
+        .toBeLessThanOrEqual(R32_SPHERE_BASE['-500'] * TREND_KEEP['-500']);
+      // 入口/终点 sanity：起点被 R=650 摘掉远区 ⇒ 应显著低于中段（sphere 口径）
+      expect(samples[0].tri).toBeLessThan(mid200.tri);
     } finally {
       castle.dispose();
     }

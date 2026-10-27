@@ -33,15 +33,18 @@
  *   ⚠️ 旧 rim 自身中心在 world z=1.727（比胎心 1.715 前移 12mm），那是旧件偏心；
  *      本件严格对胎心建，隐藏旧件后不会出现 12mm 错位。
  *
- * 独占材质（铁律 8）：4 个 id 全 r22-hub-*，不得并入全车共享批次。
- *   DC 口径：每轮 4 mesh × 4 材质 → 独占时 16 DC；4 轮共享 createWheelHubMaterials()
- *   产物时 4 DC（推荐）。本 group 必须进 batchMergeStatic 的 excludeObjects ——
+ * 独占材质（铁律 8）：5 个 id 全 r22-hub-*，不得并入全车共享批次。
+ *   DC 口径：每轮 5 mesh × 5 材质 → 独占时 20 DC；4 轮共享 createWheelHubMaterials()
+ *   产物时 5 DC（推荐）。本 group 必须进 batchMergeStatic 的 excludeObjects ——
  *   否则按材质实例入批后材质改名不可寻址，且合批重算法线会把镜面盘面高光磨平。
+ *   R36-B1：制动盘从 dark 拆出独立 steel 槽（+1 mesh/轮）—— 原并入近黑暗腔被吞没，
+ *   透窗读黑洞；拆槽后盘=金属灰 rough 0.4、卡钳仍在 bright 亮档、暗腔仍近黑。
  *
- * 几何构成（每材质 1 mesh，共 4 mesh/轮）：
+ * 几何构成（每材质 1 mesh，共 5 mesh/轮）：
  *   r22-hub-bright  外唇环 + 窗带（18 个真开窗）+ 18 条机加工倒角窗框 + 主盘穹顶
- *                   + 中心凸台 + 中心镀铬环（回转体母线两段，绕窗带生成）
- *   r22-hub-dark    窗带后的暗腔整环（透过开窗看到的深腔）+ 制动盘（R34 P2-1 透窗见盘）
+ *                   + 中心凸台 + 中心镀铬环（回转体母线两段，绕窗带生成）+ 卡钳
+ *   r22-hub-dark    窗带后的暗腔整环（透过开窗看到的深腔）
+ *   r22-hub-steel   制动盘（R36-B1 独立金属灰语义；R34 P2-1 透窗见盘）
  *   r22-hub-cap     黑亮圆盖（MeshPhysical clearcoat，平顶 + 收边）
  *   r22-hub-emblem  菱形徽标 canvas 贴图圆面（程序化绘制，零外部图片）
  *
@@ -118,6 +121,8 @@ export const EMBLEM_R = 0.0165;
 export const WHEEL_HUB_MATERIAL_IDS = {
   bright: 'r22-hub-bright',
   dark: 'r22-hub-dark',
+  /** R36-B1 制动盘独立语义：金属灰 steel 档（rough 0.4），透窗读「真盘」而不是黑洞 */
+  steel: 'r22-hub-steel',
   cap: 'r22-hub-cap',
   emblem: 'r22-hub-emblem'
 } as const;
@@ -138,10 +143,12 @@ export type WheelHubSide = 1 | -1;
  * ================================================================ */
 
 export interface WheelHubMaterials {
-  /** 抛光银：外唇 / 窗带 / 窗框倒角 / 主盘穹顶 / 中心凸台（独占） */
+  /** 抛光银：外唇 / 窗带 / 窗框倒角 / 主盘穹顶 / 中心凸台 / 卡钳（独占） */
   bright: THREE.MeshStandardMaterial;
   /** 暗腔（透窗可见的深腔，独占） */
   dark: THREE.MeshStandardMaterial;
+  /** R36-B1 制动盘：金属灰 steel（rough ≈0.4）——原并入 dark 被近黑吞没（透窗黑洞） */
+  steel: THREE.MeshStandardMaterial;
   /** 黑亮圆盖（clearcoat，独占） */
   cap: THREE.MeshPhysicalMaterial;
   /** 菱形徽标（canvas 贴图，独占） */
@@ -460,7 +467,8 @@ function buildCavity(): THREE.BufferGeometry {
 /**
  * 制动盘（R34 · P2-1 黑洞假开口修复）：透窗可见的刹车盘。
  * 暗腔 shell 在 z≈0.1358–0.1455，盘置于其后（z≈0.11）⇒ 透窗读到真实盘体而非纯黑腔。
- * 并入 r22-hub-dark 材质（不增 mesh / 不增 DC / 不破窗带 0.203–0.283 测试锁）。
+ * R36-B1：从 r22-hub-dark 拆出 **r22-hub-steel** 独立金属灰档（rough 0.4）——
+ * 原并入近黑暗腔被吞没（透窗读黑洞）；拆槽后盘体读作机加工钢盘。
  * 盘半径 0.235 < 外唇 0.30 ⇒ 盘体落在窗带 0.203–0.283 区间内，透窗必见。
  */
 function buildBrakeDisc(): THREE.BufferGeometry {
@@ -619,6 +627,13 @@ export function createWheelHubMaterials(emblemTex?: THREE.Texture | null): Wheel
       metalness: 0.45,
       roughness: 0.48
     }),
+    // R36-B1 制动盘 steel 档：金属灰（比 bright 哑一档、比 dark 亮两档），
+    // rough 0.4 —— 透窗读作「机加工刹车盘」，不再被近黑暗腔吞没。
+    steel: mk(WHEEL_HUB_MATERIAL_IDS.steel, {
+      color: 0x9aa1a8,
+      metalness: 0.88,
+      roughness: 0.4
+    }),
     cap,
     emblem: tex
       ? mk(WHEEL_HUB_MATERIAL_IDS.emblem, {
@@ -690,8 +705,9 @@ export function createWheelHub(side: WheelHubSide = 1, materials?: WheelHubMater
     buildCaliper()
   ]);
 
-  /* ---- 5.3 暗腔整环 + 制动盘（P2-1，透窗见盘）---- */
-  const darkGeo = mergeSafe([buildCavity(), buildBrakeDisc()]);
+  /* ---- 5.3 暗腔整环（P2-1 透窗见腔深）+ 制动盘（R36-B1 拆出 steel 档）---- */
+  const darkGeo = mergeSafe([buildCavity()]);
+  const steelGeo = mergeSafe([buildBrakeDisc()]);
 
   /* ---- 5.4 黑亮圆盖（平顶 + 收边，顶面承载徽标贴图）---- */
   const capProfile: ProfilePoint[] = [
@@ -731,6 +747,7 @@ export function createWheelHub(side: WheelHubSide = 1, materials?: WheelHubMater
   };
   add(brightGeo, mats.bright, WHEEL_HUB_MATERIAL_IDS.bright);
   add(darkGeo, mats.dark, WHEEL_HUB_MATERIAL_IDS.dark);
+  add(steelGeo, mats.steel, WHEEL_HUB_MATERIAL_IDS.steel);
   add(capGeo, mats.cap, WHEEL_HUB_MATERIAL_IDS.cap);
   add(emblemGeo, mats.emblem, WHEEL_HUB_MATERIAL_IDS.emblem);
 

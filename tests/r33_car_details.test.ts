@@ -86,12 +86,70 @@ describe('R33 V800 轮毂开口', () => {
     }
   });
 
-  it('轮毂仍是 4 材质桶，且 bbox 半径不超过 0.3m', () => {
+  it('轮毂 5 材质桶（R36-B1：制动盘拆 steel 独立档），bbox 半径不超过 0.3m', () => {
     const hub = createWheelHubResult(1);
     expect(hub.materials.bright.userData.sculptMaterial.id).toBe('r22-hub-bright');
+    // R36-B1：制动盘独立金属灰语义（rough 0.4），不再并入近黑 dark
+    const steel = hub.materials.steel;
+    expect(steel.userData.sculptMaterial.id).toBe('r22-hub-steel');
+    expect(steel.roughness).toBeGreaterThanOrEqual(0.35);
+    expect(steel.roughness).toBeLessThanOrEqual(0.45);
+    expect(steel.metalness).toBeGreaterThan(0.7);
+    // steel 与 dark 亮度可分（盘不再被暗腔吞没）：steel 明度显著高于 dark
+    const lum = (m: THREE.MeshStandardMaterial): number =>
+      (m.color.r + m.color.g + m.color.b) / 3;
+    expect(lum(steel)).toBeGreaterThan(lum(hub.materials.dark) + 0.3);
+    // 盘几何在 steel 桶（mesh 名 = 材质 id）
     hub.group.updateMatrixWorld(true);
+    const names = new Set<string>();
+    hub.group.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (m.isMesh) names.add(m.name);
+    });
+    expect(names.has('r22-hub-steel')).toBe(true);
     const box = new THREE.Box3().setFromObject(hub.group);
     expect(box.max.y - box.min.y).toBeLessThanOrEqual(0.601);
     expect(hub.triangleCount).toBeGreaterThan(1_200);
+    hub.group.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (m.isMesh) m.geometry.dispose();
+    });
+  });
+
+  it('D1 共聚面断言：bbox 同侧面距 <1mm 的件对，其材质必须开 polygonOffset（报警）', async () => {
+    const { createZunjieV800LuxuryMPVModel } = await import('../src/model/createV800Model');
+    const model = createZunjieV800LuxuryMPVModel();
+    model.updateMatrixWorld(true);
+    const boxes = new Map<string, { box: THREE.Box3; mat: THREE.Material | null }>();
+    model.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      const id = String(m.userData?.sculptComponent?.id ?? m.name);
+      const bb = new THREE.Box3().setFromObject(m);
+      const prev = boxes.get(id);
+      if (prev) prev.box.union(bb);
+      else boxes.set(id, { box: bb, mat: (m.material as THREE.Material) ?? null });
+    });
+    const trimIds = [...boxes.keys()].filter((i) => /chrome-belt|window-belt|trim/.test(i));
+    const skinIds = [...boxes.keys()].filter((i) => /body-lower|body-upper|door-panel$/.test(i));
+    const offenders: string[] = [];
+    for (const a of trimIds) {
+      for (const b of skinIds) {
+        const A = boxes.get(a)!;
+        const B = boxes.get(b)!;
+        const gaps = [
+          Math.abs(A.box.max.x - B.box.max.x), Math.abs(A.box.min.x - B.box.min.x),
+          Math.abs(A.box.max.y - B.box.max.y), Math.abs(A.box.min.y - B.box.min.y),
+          Math.abs(A.box.max.z - B.box.max.z), Math.abs(A.box.min.z - B.box.min.z)
+        ];
+        if (Math.min(...gaps) < 0.001) {
+          // 共聚面报警：材质必须带 polygonOffset 缓解（工厂 chrome 已由适配层补上）
+          const mats = [A.mat, B.mat].filter(Boolean) as THREE.MeshPhysicalMaterial[];
+          const mitigated = mats.every((m) => m.polygonOffset === true);
+          if (!mitigated) offenders.push(`${a} ↔ ${b}`);
+        }
+      }
+    }
+    expect(offenders, `共聚面未缓解：${offenders.join(', ')}`).toEqual([]);
   });
 });

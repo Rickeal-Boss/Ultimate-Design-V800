@@ -117,9 +117,15 @@ export function setDeepFar(far: boolean): void {
 /** 金件 UV 口径（archBand/archPlate 自带的是 ashlar 6.4m，金饰必须覆写成 1.2m） */
 const GOLD_TILE = STONE_TILE_METERS.gold;
 
-/** castle.ts EXTRA_BUCKETS 的镜像键（casteDetail 只产这四个可选桶，不新增其它） */
-export type ExtraBucketKey = 'roof' | 'wood' | 'glass' | 'marble';
-const EXTRA_KEYS: readonly ExtraBucketKey[] = ['roof', 'wood', 'glass', 'marble'];
+/**
+ * castle.ts EXTRA_BUCKETS / VARIANT_BUCKETS 的镜像键。
+ * R31 四桶（roof/wood/glass/marble）走 `stone(key)` 基族材质；
+ * R36-A2 三桶（door/agedGold/pave）走 `variantMaterial(id)` 变体材质
+ * （inner-wood / gilded-aged / pave-damp，复用基族图集 ⇒ 0 新贴图）。
+ * castle.ts 在本轮 A 线白名单内 ⇒ 新桶合法（旧「不新增桶」约束已随白名单解除）。
+ */
+export type ExtraBucketKey = 'roof' | 'wood' | 'glass' | 'marble' | 'door' | 'agedGold' | 'pave';
+const EXTRA_KEYS: readonly ExtraBucketKey[] = ['roof', 'wood', 'glass', 'marble', 'door', 'agedGold', 'pave'];
 
 /* ═══════════════════ 分桶容器（与 StoneBuckets 同构的小件包 + 可选桶） ═══════════════════ */
 
@@ -135,6 +141,10 @@ export interface DetailParts {
   wood?: THREE.BufferGeometry[];
   glass?: THREE.BufferGeometry[];
   marble?: THREE.BufferGeometry[];
+  /** R36-A2 变体桶（castle.ts VARIANT_BUCKETS → variantMaterial：inner-wood/gilded-aged/pave-damp） */
+  door?: THREE.BufferGeometry[];
+  agedGold?: THREE.BufferGeometry[];
+  pave?: THREE.BufferGeometry[];
 }
 
 function parts(): DetailParts {
@@ -239,11 +249,12 @@ function goldUV(g: THREE.BufferGeometry): THREE.BufferGeometry {
 }
 
 /**
- * **真实凹龛内壁**（R31 核心件）：回填 = 后背拱板 + 两侧壁 + 拱头腹板，
- * 全部 dark 桶、按 `recess` 深度嵌进墙体 ⇒ 近黑腔体产生真实凹陷阴影
- * （R30 只有 flush 拱板，龛"平贴"墙面读不出深度）。
+ * **真实凹龛内壁**（R31 核心件）：回填 = 后背拱板 + 两侧壁 + 拱头腹板 + **底板**
+ * （R36-A2：四侧壁补齐 —— 左/右/拱腹/底板，龛深 ≈ 龛宽 1/3–1/2），全部 dark 桶、
+ * 按 `recess` 深度嵌进墙体 ⇒ 近黑腔体产生真实凹陷阴影（R30 只有 flush 拱板，
+ * 龛"平贴"墙面读不出深度）。
  * 局部：墙面 x=0、龛体嵌 +x（深 recess+back）、拱跨沿 z、龛底 y=0。
- * tri = 板 12 + 侧壁 24 + 拱头 24 ≈ 60。
+ * tri = 板 12 + 侧壁 24 + 拱头 24 + 底板 12 ≈ 72。
  */
 function nicheCavity(
   halfW: number,
@@ -260,6 +271,8 @@ function nicheCavity(
   for (const s of [-1, 1] as const) {
     g.push(box('dark', recess + back, rise * 0.72, 0.14, (recess + back) / 2, rise * 0.36, s * (halfW - 0.07)));
   }
+  // ②b 底板（R36-A2 四侧壁第 4 面：龛底横向铺板，与侧壁/背板留 2mm 防 z-fight）
+  g.push(box('dark', recess + back - 0.002, 0.12, halfW * 2 - 0.002, (recess + back) / 2, 0.06, 0));
   // ③ 拱头腹板（拱外廓与墙面之间的斜面，读作龛楣厚度）
   const hood = archPlate(halfW + 0.3, 0, rise * 1.12, recess * 0.8, 2, cusp);
   g.push(archIntoWallX(hood, recess * 0.8).translate(-0.02, 0, 0));
@@ -496,8 +509,9 @@ export interface TraceryOpts {
    * 竖棂枝数。**R34**：允许显式 `0` —— 近中区回砍要求「窗棂 + 子拱光」这组
    * <0.3m 的重复细饰在非 hero 街区整体关闭（原本只有 low / DEEP_FAR 会关），
    * 由调用方按街区密度档传入；`0` 与 low 档内部自裁同一语义（mullions=0）。
+   * **R36-A3**：hero 窗支持 3–5 根（FBX 级立面：尖拱窗内竖棂 3–5 根+拱顶分格）。
    */
-  mullions?: 0 | 2 | 3;
+  mullions?: 0 | 2 | 3 | 4 | 5;
   lights?: boolean;
   /** 子尖拱光（Window2_4 语汇）；默认窗宽 ≥1.6 时自动开启 */
   subArches?: boolean;
@@ -566,17 +580,35 @@ function traceryWindow(o: TraceryOpts & { face: 'x' | 'z' }): DetailParts {
   if (faceX) archIntoWallX(plate, plateBack).translate(-PROUD_PLATE, 0, 0);
   else plate.translate(0, 0, PROUD_PLATE);
   p.dark.push(plate);
-  // ②b 凹龛侧壁（R32：洞口左右两侧的 dark 内壁，读作"窗洞凹进墙里"的阴影深度；
-  //      nicheCavity 同款语汇的窗用版——只在近景挂载点显式开启，控 tri）
+  // ②b 窗洞真凹腔（R36-A2 · B2 修复：4 面 dark 内壁 = 左/右/窗台/拱腹）。
+  //   R32 原「recess 侧壁」落在墙皮**内**（墙是实心盒 ⇒ 埋件不可见）；R34 把背板
+  //   抬出墙皮后窗读「白墙贴黑矩形」——背板 −0.06 对券框外脸 −0.45 差一个量级却
+  //   没有侧壁连起来，深度读不出来。现把 4 面内壁铺在**墙皮↔券框外脸**的外挑
+  //   空腔里（x∈[−frameOut,−PROUD_PLATE] / face 'z' 对应 +z），两侧/底/顶连成
+  //   真凹腔 ⇒ 近景窗读作券框里嵌的洞，不是贴片。4 box = 48 tri，hero 挂载点开。
+  //   防 z-fight：内壁两端各留 5mm（背板/券框外脸处），不与背板/券框共面。
   if (o.recess && !low) {
-    const sideH = rise * 0.9;
-    const sideD = plateBack * 1.1;
+    const cavD = frameOut - PROUD_PLATE - 0.01; // 空腔净深（≈0.38）
+    const cavMid = -(frameOut + PROUD_PLATE) / 2; // 空腔中面（≈−0.255）
+    const half = halfW - band * 0.55; // 洞口半宽（= 背板半宽）
+    const sideH = rise * 0.82;
     for (const s of [-1, 1] as const) {
-      const wall =
+      p.dark.push(
         faceX
-          ? box('dark', sideD, sideH, 0.14, sideD / 2, sideH / 2 + 0.04, s * (halfW - band * 0.55 - 0.07))
-          : box('dark', 0.14, sideH, sideD, s * (halfW - band * 0.55 - 0.07), sideH / 2 + 0.04, -sideD / 2);
-      p.dark.push(wall);
+          ? box('dark', cavD, sideH, 0.14, cavMid, sideH / 2 + 0.04, s * (half - 0.07))
+          : box('dark', 0.14, sideH, cavD, s * (half - 0.07), sideH / 2 + 0.04, -cavMid)
+      );
+    }
+    // 窗台（底）+ 拱腹（顶）：沿洞口横向铺，两端各留 5mm
+    for (const [yy, hh] of [
+      [0.06, 0.12],
+      [rise * 0.84, 0.12]
+    ] as const) {
+      p.dark.push(
+        faceX
+          ? box('dark', cavD, hh, half * 2 - 0.01, cavMid, yy, 0)
+          : box('dark', half * 2 - 0.01, hh, cavD, 0, yy, -cavMid)
+      );
     }
   }
   // ③ 玻璃底板（glass 桶；压在背板前缘 **外侧**，不与背板/棂共面 ⇒ 无 z-fighting）
@@ -588,10 +620,20 @@ function traceryWindow(o: TraceryOpts & { face: 'x' | 'z' }): DetailParts {
     else gp.translate(0, 0, PROUD_GLASS);
     (p.glass ??= []).push(gp);
   }
-  // ④ 竖棂（石，2~3 枝；顶没入拱环即"棂冠合拱"）；低配档整组跳过
+  // ④ 竖棂（石，2~5 枝；顶没入拱环即"棂冠合拱"）；低配档整组跳过
   const mullW = Math.max(0.1, halfW * 0.18); // 实测棂宽 ≈0.18×窗宽
   const mullH = rise * 0.74;
-  const offs = mullions >= 3 ? [-halfW * 0.52, 0, halfW * 0.52] : mullions === 2 ? [-halfW * 0.36, halfW * 0.36] : [];
+  // R36-A3：3–5 根竖棂的横向排布（对称、含中轴；2 根保持 R31 旧位）
+  const offs =
+    mullions >= 5
+      ? [-halfW * 0.66, -halfW * 0.33, 0, halfW * 0.33, halfW * 0.66]
+      : mullions === 4
+        ? [-halfW * 0.55, -halfW * 0.18, halfW * 0.18, halfW * 0.55]
+        : mullions === 3
+          ? [-halfW * 0.52, 0, halfW * 0.52]
+          : mullions === 2
+            ? [-halfW * 0.36, halfW * 0.36]
+            : [];
   const mullionsGeo: THREE.BufferGeometry[] = [];
   for (const off of offs) {
     if (faceX) {
@@ -778,6 +820,27 @@ export interface FinialOpts {
   lintelHalf?: number;
 }
 
+/**
+ * R36-A1 · 金菱形「楣宽钳制」纯函数（finialOrnament 与 castleKit 门楣菱形共用；
+ * tests 断言「菱形外缘 ≤ 楣板半宽」的判据源）。
+ *
+ * 几何推导：方板边长 `side` 绕 z 转 45° 后横向半跨 = side×√2/2 ⇒ 要外缘
+ * （dx + halfSpan）≤ lintelHalf，只需 ① 边长先按 lintelHalf×√2 收（单枚菱形
+ * 自身就装得下）；② 横偏 dx ≤ lintelHalf − halfSpan。给了 lintelHalf 就钳死，
+ * 没给则保持 want 原值（向后兼容）。dx ≤ 0 ⇒ 菱形放不下，调用方跳过。
+ */
+export function diamondFit(
+  wantSide: number,
+  wantDx: number,
+  lintelHalf?: number
+): { side: number; dx: number } {
+  if (lintelHalf === undefined) return { side: wantSide, dx: wantDx };
+  const side = Math.min(wantSide, lintelHalf * Math.SQRT2);
+  const halfSpan = (side * Math.SQRT2) / 2;
+  const dx = Math.min(wantDx, Math.max(0, lintelHalf - halfSpan));
+  return { side, dx };
+}
+
 export function finialOrnament(o: FinialOpts): DetailParts {
   const p = parts();
   const r = o.r;
@@ -808,20 +871,14 @@ export function finialOrnament(o: FinialOpts): DetailParts {
   p.gold.push(goldUV(tip));
   // R32 两侧金菱形（门楣对称收口；参考图 A 城门楣楣饰两侧）
   //   R34：横偏与边长都过一遍楣宽钳制（见文件头 FinialOpts.lintelHalf 注释）。
+  //   R36-A1：钳制数学统一走 diamondFit（与 castleKit 门楣菱形共用判据）。
   if (o.flankDiamonds) {
-    const want = r * 0.9; // 期望边长
-    // 菱形绕 z 转 45° 后的横向半跨 = 边长 × √2 / 2
-    const side = o.lintelHalf !== undefined ? Math.min(want, o.lintelHalf * Math.SQRT2) : want;
-    const halfSpan = (side * Math.SQRT2) / 2;
-    const dx =
-      o.lintelHalf !== undefined
-        ? Math.min(r * 1.7, Math.max(0, o.lintelHalf - halfSpan))
-        : r * 1.7;
+    const { side, dx } = diamondFit(r * 0.9, r * 1.7, o.lintelHalf);
     if (side > 1e-4 && dx > 1e-4) {
       for (const s of [-1, 1] as const) {
-        const dm = box('gold', side, side, r * 0.3, s * dx, r * 0.42, 0);
-        dm.rotateZ(Math.PI / 4);
-        p.gold.push(goldUV(dm));
+        // R36-A1：转 45° 走 boxRot（先转后移）。box() 预平移 + rotateZ 会绕世界
+        // 原点转 ⇒ 菱形中心漂移出楣板（外飘根因）；boxRot 后中心稳定在 (±dx, r*0.42)。
+        p.gold.push(goldUV(boxRot('gold', side, side, r * 0.3, s * dx, r * 0.42, 0, Math.PI / 4)));
       }
     }
   }
@@ -1002,7 +1059,11 @@ export function statueNiche(o: {
   const p = parts();
   const faceX = (o.face ?? 'x') === 'x';
   const frameOut = o.frameOut ?? 0.4;
-  const plateBack = o.plateBack ?? 0.55;
+  // R36-A2 龛深口径：龛深 ≈ 龛宽 1/3–1/2（FBX/视觉）⇒ plateBack 默认 0.85×半宽
+  // （总腔深/龛宽 ≈ 0.42，落在带内）；显式传入的也钳进带内（只加深不减浅）。
+  const depthBandLo = o.halfW * (2 / 3); // 龛宽 1/3
+  const depthBandHi = o.halfW * 1.0; // 龛宽 1/2
+  const plateBack = Math.min(depthBandHi, Math.max(depthBandLo, o.plateBack ?? o.halfW * 0.85));
   const cusp = o.cusp ?? 0.5;
   const low = isLowDetail();
   // ① 真实凹腔（后背板 + 侧壁 + 楣腹）。
@@ -1161,11 +1222,10 @@ export function gildedScreen(o: {
       ring.translate(0, 0, zc);
       p.gold.push(goldUV(ring));
       // 拱顶小尖饰（3 片金卷叶合成一个十字尖，tri 低、远距仍可读）
+      //   R36-A1：转 45° 走 boxRot（box()+rotateZ 绕世界原点转 ⇒ 尖饰飞离拱顶）
       if (!isLowDetail() && !DEEP_FAR) {
         for (const dz of [-0.3, 0, 0.3]) {
-          const tip = box('gold', d * 0.7, 0.7, 0.14, 0, spring + rise + 0.28, zc + dz);
-          tip.rotateZ(Math.PI / 4);
-          p.gold.push(goldUV(tip));
+          p.gold.push(goldUV(boxRot('gold', d * 0.7, 0.7, 0.14, 0, spring + rise + 0.28, zc + dz, Math.PI / 4)));
         }
       }
     }
@@ -1232,6 +1292,55 @@ export function balusterPost(o: { h: number; r?: number; collar?: boolean; copin
   if (o.coping) {
     const cp = archBand(r * 0.62, o.h + r * 0.5, r * 0.55, r * 0.22, r * 1.1, 2, 0.5, 0.45);
     p.ashlar.push(cp);
+  }
+  return p;
+}
+
+/* ═══════════════════ ⑧b 木门扇（R36-A2 变体桶：door=inner-wood / 金件=agedGold） ═══════════════════ */
+
+/**
+ * R36-A2 内部材料丰富度 · 木门扇（城门门扇/内庭门扇）：
+ * 门板主体 + 竖向拼板 + 横撑 + **门钉/徽章（gilded-aged 做旧金饰）** + 木门框。
+ * 材质路径：门板几何进 `door` 桶（castle.variantMaterial('inner-wood')，wood 图集
+ * 弦切弯纹已备）、门钉/徽章/卷叶进 `agedGold` 桶（'gilded-aged'，gold 图集做旧）——
+ * 全部复用基族图集 ⇒ **0 新贴图**（R35 wall 桶先例的热升级同款）。
+ *
+ * 局部：门面朝 +z、门底 y=0、宽 w 沿 x、厚 0.28 沿 z（挂载方 mapParts 转向/平移）。
+ * 单扇 ≈ 204 tri（板 12 + 拼板 48 + 横撑 24 + 钉 72 + 徽章 12 + 框 36）。
+ * 防 z-fight：拼板/横撑/钉只铺**正面**（z≥0.17 处），与门板面差 ≥3cm。
+ */
+export function doorLeaf(o: { w: number; h: number; studs?: boolean }): DetailParts {
+  const p = parts();
+  const w = o.w;
+  const h = o.h;
+  const woodOut: THREE.BufferGeometry[] = [];
+  // ① 门板主体（wood 桶 → inner-wood 变体）
+  woodOut.push(box('wood', w, h, 0.28, 0, h / 2, 0));
+  // ② 竖向拼板 ×4（正面凸 3cm，弦切弯纹沿高度走）
+  for (const t of [-0.36, -0.12, 0.12, 0.36]) {
+    woodOut.push(box('wood', w * 0.18, h * 0.96, 0.06, t * w, h / 2, 0.17));
+  }
+  // ③ 横撑 ×2（1/3、2/3 高）
+  for (const t of [0.33, 0.67]) {
+    woodOut.push(box('wood', w * 0.96, h * 0.07, 0.06, 0, h * t, 0.17));
+  }
+  // ④ 木门框（两侧立柱 + 门楣）
+  woodOut.push(box('wood', 0.22, h + 0.3, 0.4, -(w / 2 + 0.11), (h + 0.3) / 2, 0));
+  woodOut.push(box('wood', 0.22, h + 0.3, 0.4, w / 2 + 0.11, (h + 0.3) / 2, 0));
+  woodOut.push(box('wood', w + 0.66, 0.24, 0.4, 0, h + 0.36, 0));
+  p.door = woodOut;
+  // ⑤ 门钉 6 枚 + 菱形徽章（agedGold 做旧金饰；低配档留钉去章）
+  if (o.studs !== false) {
+    const golds: THREE.BufferGeometry[] = [];
+    for (const ty of [0.28, 0.55, 0.82]) {
+      for (const tx of [-0.28, 0.28]) {
+        golds.push(goldUV(box('gold', 0.16, 0.16, 0.1, tx * w, h * ty, 0.22)));
+      }
+    }
+    if (!isLowDetail()) {
+      golds.push(goldUV(boxRot('gold', w * 0.14, w * 0.14, 0.08, 0, h * 0.62, 0.22, Math.PI / 4)));
+    }
+    p.agedGold = golds;
   }
   return p;
 }
@@ -1576,9 +1685,9 @@ export function bellTower(o: { w: number; totalH: number; clock?: boolean; pendu
   roof.rotateY(Math.PI / 4);
   roof.translate(0, cy + chamberH + roofH / 2, 0);
   (p.roof ??= []).push(finishArch(roof, STONE_TILE_METERS.roof));
-  // ⑤ 顶饰（低配跳过）
+  // ⑤ 顶饰（低配跳过；R36-A1：lintelHalf = 四坡瓦顶基座（w×0.78）半宽）
   if (!isLowDetail()) {
-    pour(p, mapParts(finialOrnament({ r: w * 0.16 }), (g) => g.translate(0, h + 0.4, 0)));
+    pour(p, mapParts(finialOrnament({ r: w * 0.16, lintelHalf: w * 0.39 }), (g) => g.translate(0, h + 0.4, 0)));
   }
   // ⑥ 塔身金饰条 + 深色窗缝
   for (const s of [-1, 1] as const) {

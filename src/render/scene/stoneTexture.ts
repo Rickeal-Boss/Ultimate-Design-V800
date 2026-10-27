@@ -341,7 +341,7 @@ const MASONRY: Record<'ashlar' | 'wall', MasonryProfile> = {
     jointRough: 0.93,
     normalStrength: 0.82,
     relief: 0.16,
-    grain: 0.055,
+    grain: 0.062, // R36-A5：0.055→0.062 石肌理再细化一档
     stain: 0.5,
     grime: 0.3,
     wear: 0,
@@ -360,7 +360,8 @@ const MASONRY: Record<'ashlar' | 'wall', MasonryProfile> = {
     // R32：色斑/水渍上墙（图A 风化判读的「色斑」项）
     patch: 0.12,
     // R32：风化凹坑 0.01–0.03m（固定 res 256 ⇒ 世界尺度跨尺寸一致）
-    pit: 0.055,
+    // R36-A5：0.055→0.062 坑再深一档
+    pit: 0.062,
     pitPeriod: 32,
     // R34：灰缝上色（深灰 #97948c ↔ 浅褐 #d0bb99），缝自身亮度 0.90
     jointTint: 0.88,
@@ -368,8 +369,8 @@ const MASONRY: Record<'ashlar' | 'wall', MasonryProfile> = {
     jointShade: 0.9,
     // R34：沿竖向灰缝渗出的淡黄-灰褐雨水渍（0.85 经覆盖度实测标定 ⇒ >0.15 覆盖 ≈10%）
     seep: 0.85,
-    // R34：砌块边缘磨损/缺棱（粗颗粒抖动 ±12%）
-    edgeNick: 0.12
+    // R34：砌块边缘磨损/缺棱（粗颗粒抖动 ±12%）；R36-A5：0.12→0.15 缺棱再毛一档
+    edgeNick: 0.15
   },
   wall: {
     // R32：5×5 @ 2.4m/tile = 0.48m 见方（rows==cols，勿拉成长条）
@@ -1372,13 +1373,15 @@ function prepGold(
           const pitv = pita[index];
           const polishv = polisha[index];
           // R34 做旧加量：氧化窗口整体下移（0.62→0.58 起、0.9→0.87 满）⇒ 覆盖更广、更暗。
+          // R36-A5 再一档：0.58→0.55 起、0.87→0.85 满（仍只动明度/粗糙度）。
           // ⚠ 只动**明度/粗糙度**，不动色调：金饰色相档是 R30b 已验证决策（成片 R−B ≈ +70），
           //   氧化只把 tone 推向 dark #6f5c39（同色系更深），不引入绿锈等异色相。
-          const oxidized = smoothstep(0.58 - 0.22 * weather, 0.87, oxv);
+          const oxidized = smoothstep(0.55 - 0.22 * weather, 0.85, oxv);
           const pits = smoothstep(0.7, 0.87, pitv) * (1 - oxidized) * weather; // R34 麻点略多
           const shine = smoothstep(0.52, 0.8, polishv);
           const sc = smoothstep(0.7, 0.76, scratcha[index]); // R30 稀疏划痕
-          const flakeMask = smoothstep(0.8, 0.88, flakea[index]); // R32 剥落（标定覆盖 mask>0.5 ≈6.8%，落 5–10% 带）
+          // R32 剥落；R36-A5 门限 0.80→0.88 收为 0.78→0.86（覆盖 ≈8%，仍落 5–10% 带）
+          const flakeMask = smoothstep(0.78, 0.86, flakea[index]);
 
           let h = 0.58 + (b1 - 0.5) * 0.26 + (b2 - 0.5) * 0.13;
           h += g * 0.015;

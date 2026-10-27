@@ -50,6 +50,33 @@ export const FREE = {
   reverseForceRatio: 0.35,
   /** 手刹减速度 m/s²（低于 ABS 上限，留一点滑移感） */
   handbrakeDecel: 9,
+  /* ── R36-P1 手刹漂移仿真（轮胎侧偏 + 摩擦圆；与主线普通制动路径完全隔离）──
+   * 模型：动态自行车模型（前后轮侧偏角 → 侧向力 → 横摆力矩 + 侧向速度积分）。
+   * 手刹 ⇒ 后轴摩擦圆收紧（rearGrip 一阶衰减）⇒ 后侧向力下降 ⇒ 横摆力矩失衡 ⇒
+   * 车尾外滑（β 增长）；反打方向改变前轮侧偏 ⇒ 可维持/调整漂移；松手刹 + 回正
+   * ⇒ rearGrip 一阶恢复 ⇒ 侧偏力把 β 拉回 0（恢复抓地）。
+   * 纵向减速由摩擦圆自动钳制（侧向占用越高、可用纵向越少）⇒ 漂移减速 < 满刹。
+   * 轴距/质心来自 WHEEL_HUB_CENTERS 实测（前后轴 z=±1.715 ⇒ L=3.43、a=b=1.715）。 */
+  /** 前轴侧向刚度 N/rad（3.3t SUV 量级） */
+  corneringStiffnessFront: 92_000,
+  /** 后轴侧向刚度 N/rad */
+  corneringStiffnessRear: 88_000,
+  /** 偏航惯量 kg·m²（≈1.2·m·a·b） */
+  yawInertia: 11_000,
+  /** 轮胎摩擦系数（摩擦圆半径 = μ·g） */
+  tyreMu: 0.92,
+  /** 质心到前轴/后轴距离 m（轴距 3.43 之半） */
+  axleFront: 1.715,
+  axleRear: 1.715,
+  /** 手刹时后轴抓地下限（0.32 = 明确甩尾倾向；恢复路径不受此限） */
+  driftGripFloor: 0.32,
+  /** 轮胎自回正力矩刚度 N·m/rad（气动拖距项：β 反向拉回车头，松手刹后
+   *  大侧滑角态能收敛回直线的关键 —— 没有它「饱和侧偏 + 对称轴距」近似守恒） */
+  aligningStiffness: 9_200,
+  /** 后轴抓地衰减时间常数 s（拉手刹起滑） */
+  gripDecayTau: 0.22,
+  /** 后轴抓地恢复时间常数 s（松手刹回正；「恢复抓地时间有限」的口径） */
+  gripRecoverTau: 0.45,
   /** 视觉侧倾上限 rad（2.5°） */
   rollMaxRad: (2.5 * Math.PI) / 180,
   /** 视觉俯仰上限 rad（1.2°） */
@@ -132,6 +159,10 @@ export interface FreeDriveState {
   handbrake: boolean;
   /** 累计里程 m */
   odometer: number;
+  /** R36-P1 车身侧滑角 rad（速度方向 − heading；漂移时增长，恢复抓地回 0） */
+  beta: number;
+  /** R36-P1 后轴抓地系数 0..1（手刹收紧 → 恢复；摩擦圆按此缩放） */
+  rearGrip: number;
 }
 
 export interface FreeDriveOptions {
@@ -289,6 +320,9 @@ export class FreeDrive {
   /** 事件去抖（防止贴墙/贴主殿时 toast 与撞击音每帧刷屏） */
   private hallCd = 0;
   private wallCd = 0;
+  /** R36-P1 漂移动力学状态：体轴侧向速度 m/s / 动态偏航角速度 rad/s */
+  private vy = 0;
+  private yawDyn = 0;
 
   private readonly onKeyDown = (e: KeyboardEvent): void => {
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
@@ -348,8 +382,12 @@ export class FreeDrive {
       throttle: 0,
       brake: 0,
       handbrake: false,
-      odometer: 0
+      odometer: 0,
+      beta: 0,
+      rearGrip: 1
     };
+    this.vy = 0;
+    this.yawDyn = 0;
   }
 
   get active(): boolean {
@@ -393,6 +431,10 @@ export class FreeDrive {
     s.accel = 0;
     s.yawRate = 0;
     s.odometer = 0;
+    s.beta = 0;
+    s.rearGrip = 1;
+    this.vy = 0;
+    this.yawDyn = 0;
     this.keys.clear();
     this.emit('reset');
   }
@@ -407,6 +449,10 @@ export class FreeDrive {
     s.steer = 0;
     s.roll = 0;
     s.pitch = 0;
+    s.beta = 0;
+    s.rearGrip = 1;
+    this.vy = 0;
+    this.yawDyn = 0;
   }
 
   /** 给 QA 探针的只读快照 */
@@ -437,9 +483,29 @@ export class FreeDrive {
     const v = s.speed;
     const av = Math.abs(v);
     const dir = v > 0 ? 1 : v < 0 ? -1 : 0;
+
+    /* ---- R36-P1 后轴抓地一阶动力学（手刹收紧 / 松开恢复）----
+     * rearGrip ∈ [driftGripFloor, 1]；它同时缩放后轴侧向力与后轴摩擦圆。 */
+    const gripTarget = handbrake ? FREE.driftGripFloor : 1;
+    const gripTau = handbrake ? FREE.gripDecayTau : FREE.gripRecoverTau;
+    s.rearGrip = damp(s.rearGrip, gripTarget, 1 / gripTau, dt);
+
+    /* ---- R36-P1 漂移动力学（动态自行车模型；激活滞回）----
+     * 激活条件：手刹 / 侧滑角 / 动态偏航未归零；|v|<1.5 m/s 退回运动学（低速保护）。
+     * 停用时状态清零 ⇒ 正常驾驶路径与 R29 运动学逐位一致（回归零风险）。 */
+    const driftActive =
+      av >= 1.5 && (handbrake || Math.abs(s.beta) > 0.002 || Math.abs(this.yawDyn) > 0.02);
+
+    // 摩擦圆：侧向占用越高、可用纵向越少 ⇒ 漂移减速天然 < 直线刹车
+    const muG = FREE.tyreMu * 9.81;
+    const latUse = driftActive ? Math.abs(this.yawDyn * v) : 0;
+    const decelAvail = Math.sqrt(Math.max(0, muG * muG - latUse * latUse));
+
     let force = 0;
     if (handbrake) {
-      force = -dir * FREE.handbrakeDecel * MASS;
+      // 手刹制动（摩擦圆钳制）；漂移中给油仍有效 —— 真实漂移靠油门维持车速/姿态
+      force = -dir * Math.min(FREE.handbrakeDecel, decelAvail) * MASS;
+      if (throttle > 0) force += motorForce(av, throttle);
     } else if (throttle > 0) {
       force = motorForce(av, throttle);
     } else if (brakeIn > 0) {
@@ -467,12 +533,46 @@ export class FreeDrive {
 
     // ---- 位移（梯形积分，用步进前后的平均速度）----
     const vAvg = 0.5 * (v + vNext);
-    const f = forwardOf(s.heading);
+    let yawRate: number;
+    let moveHeading: number;
+    if (driftActive) {
+      /* 轮胎侧偏角（体轴；vx 用步进前速度符号保持一致） */
+      const vx = v === 0 ? 1e-3 : v;
+      const ax = Math.abs(vx);
+      const aF = FREE.axleFront;
+      const aR = FREE.axleRear;
+      const alphaF = s.steer - Math.atan2(this.vy + aF * this.yawDyn, ax);
+      const alphaR = -Math.atan2(this.vy - aR * this.yawDyn, ax);
+      // 侧向力（线性侧偏 + 摩擦圆钳制；后轴圆随 rearGrip 收紧）
+      const maxF = FREE.tyreMu * 9.81 * MASS * 0.5;
+      const fyf = clamp(FREE.corneringStiffnessFront * alphaF, -maxF, maxF);
+      const fyr = clamp(
+        FREE.corneringStiffnessRear * alphaR * s.rearGrip,
+        -maxF * s.rearGrip,
+        maxF * s.rearGrip
+      );
+      // 横摆 + 侧向速度积分（前轴产生横摆、后轴反向；β 自回正力矩拉回车头）
+      const alignAccel = (-FREE.aligningStiffness * s.beta * Math.min(1, ax / 8)) / FREE.yawInertia;
+      this.yawDyn += ((aF * fyf - aR * fyr) / FREE.yawInertia) * dt + alignAccel * dt;
+      this.vy += ((fyf + fyr) / MASS - vx * this.yawDyn) * dt;
+      // 防散：beta / yaw 限幅（数值护栏，不改动力学符号）
+      this.vy = clamp(this.vy, -Math.abs(vx), Math.abs(vx));
+      this.yawDyn = clamp(this.yawDyn, -FREE.maxYawRate, FREE.maxYawRate);
+      s.beta = Math.atan2(this.vy, ax);
+      yawRate = this.yawDyn;
+      moveHeading = s.heading + s.beta; // 速度方向 = 航向 + 侧滑角（车尾外滑的运动学产物）
+    } else {
+      this.vy = 0;
+      this.yawDyn = 0;
+      s.beta = 0;
+      yawRate = yawRateFor(s.steer, vAvg !== 0 ? vAvg : v);
+      moveHeading = s.heading;
+    }
+    const f = forwardOf(moveHeading);
     let nx = s.x + f.x * vAvg * dt;
     let nz = s.z + f.z * vAvg * dt;
 
-    // ---- 偏航（用平均速度判方向，倒车反向）----
-    const yawRate = yawRateFor(s.steer, vAvg !== 0 ? vAvg : v);
+    // ---- 偏航（漂移层用动态偏航；正常路径用既有运动学）----
     s.yawRate = yawRate;
     s.heading = wrapAngle(s.heading + yawRate * dt);
 

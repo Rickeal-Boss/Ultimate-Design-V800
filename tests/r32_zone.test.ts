@@ -140,7 +140,7 @@ describe('zoneIndexOf：z 中值归区语义', () => {
 });
 
 describe('R32 C-4 · 建桶结构与 DC 设计公式', () => {
-  it('分区 mesh 命名落 z 区划，DC = 设计公式内（6+3+6+6+1+4+2=28 ≤ castleDc）', () => {
+  it('分区 mesh 命名落 z 区划，DC = 设计公式内（6+3+6+6+1+4+3+2=31 ≤ castleDc）', () => {
     const { scene, castle } = buildCastle();
     try {
       const stats = castle.getCastleStats();
@@ -152,13 +152,14 @@ describe('R32 C-4 · 建桶结构与 DC 设计公式', () => {
       for (let i = 0; i < 3; i += 1) {
         expect(castleMesh(scene, `castle-wall-z${i}`), `castle-wall-z${i} 缺失`).toBeDefined();
       }
-      // 设计公式：分区族非空区上限 + flame 1 + 四可选桶 4 + 铺装 2
-      const DESIGN_MAX_DC = 6 + 3 + 6 + 6 + 1 + 4 + 2;
+      // 设计公式：分区族非空区上限 + flame 1 + 可选桶 4 + 变体桶 3（R36-A2）+ 铺装 2
+      const DESIGN_MAX_DC = 6 + 3 + 6 + 6 + 1 + 4 + 3 + 2;
       expect(DESIGN_MAX_DC).toBeLessThanOrEqual(R31_BUDGET.castleDc);
-      // 实测 27（dark z0 空）⇒ 区间断言吸收 A 线几何漂移。
-      // ⚠ 不要把下界钉到 27、上界钉到 28 之外：
+      // 实测 30（dark z0 空 + R36-A2 变体桶 3）⇒ 区间断言吸收 A 线几何漂移。
+      // ⚠ 不要把下界钉到 30、上界钉到 31 之外：
       //   C-4 结论 = 分区族 **非空区数**（6+3+6+5）+ flame 1 + 四可选桶 4 + 铺装 2 = 27，
-      //   designMAX 28 对应 dark z0 将来被补满。空区/zero-tri 区一律不建 mesh
+      //   designMAX 28 对应 dark z0 将来被补满。R36-A2 变体桶（door/agedGold/pave
+      //   → variantMaterial）+3 ⇒ 30/31。空区/zero-tri 区一律不建 mesh
       //   （castle.ts 的 isDrawable 护栏），故 DC 只会随「某区由空变非空」上行。
       expect(stats.dc).toBeGreaterThanOrEqual(20);
       expect(stats.dc).toBeLessThanOrEqual(DESIGN_MAX_DC);

@@ -139,7 +139,7 @@ const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);
  *   静态 = TAIL_STANDBY = 2.5；行驶中 setBrakeLights(1.6) 收敛后
  *   = 2.5 × (0.55+1.6)/(0.55+0.7) = 4.3（与旧 R7 行为逐位一致）。
  */
-const R7_TAIL_STANDBY_EI = 2.5;
+const R7_TAIL_STANDBY_EI = 2.6; // R36-V6：2.5→2.6（尾灯签名弱，与 V800 TAIL_BASE 同步抬基座）
 
 // ------------------------------------------------------------------ Canvas 贴图
 

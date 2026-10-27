@@ -110,6 +110,19 @@ function disposeMaps(maps: StoneMaps): void {
 const EXTRA_BUCKETS = ['roof', 'wood', 'glass', 'marble'] as const;
 type ExtraBucket = (typeof EXTRA_BUCKETS)[number];
 
+/**
+ * R36-A2 变体桶（door / agedGold / pave）：材质走 `variantMaterial(id)` 热升级路径
+ * （R35 wall→inner-stone 先例：材质替换而非新建贴图，0 新贴图）。
+ *   door    → inner-wood （城门门扇/内庭门扇；wood 图集弦切弯纹）
+ *   agedGold → gilded-aged（门钉/徽章/做旧金饰；gold 图集氧化做旧）
+ *   pave    → pave-damp  （内庭地面潮斑铺装；floor 图集微湿低频斑）
+ * 每桶全局 1 mesh（量小不分区）⇒ +3 DC（27→30 ≤ castleDc 32）。
+ */
+const VARIANT_BUCKETS = { door: 'inner-wood', agedGold: 'gilded-aged', pave: 'pave-damp' } as const;
+type VariantBucket = keyof typeof VARIANT_BUCKETS;
+/** absorb()/释放时要读取的全部可选桶键（基族 + 变体） */
+const ALL_BUCKETS: readonly (ExtraBucket | VariantBucket)[] = [...EXTRA_BUCKETS, ...(Object.keys(VARIANT_BUCKETS) as VariantBucket[])];
+
 /* ─────────────────── R31 z 分区合批 ─────────────────── */
 
 /**
@@ -381,8 +394,8 @@ export class Castle {
   private readonly matCache = new Map<string, THREE.Material>();
   /** 静态几何桶（世界坐标），最后每族 merge 成 1 mesh */
   private readonly statics: StoneBuckets = { ashlar: [], wall: [], gold: [], dark: [], flame: [] };
-  /** R29 可选桶（castleKit 补桶后自动生效；见 EXTRA_BUCKETS 注释） */
-  private readonly extras = new Map<ExtraBucket, THREE.BufferGeometry[]>();
+  /** R29 可选桶 + R36 变体桶（castleKit 补桶后自动生效；见 EXTRA_BUCKETS/VARIANT_BUCKETS 注释） */
+  private readonly extras = new Map<ExtraBucket | VariantBucket, THREE.BufferGeometry[]>();
   /** R30 石材族注册表（kind|weather → 两代贴图 + 材质槽），热升级的账本 */
   private readonly families = new Map<string, StoneFamily>();
   /** 目标代贴图（异步产物，非同步 cache 管辖 ⇒ 由 Castle.dispose 显式释放） */
@@ -688,15 +701,15 @@ export class Castle {
     return mesh;
   }
 
-  /** 把一个构件集按材质族摊进静态桶（含 R29 可选桶的防御式读取） */
+  /** 把一个构件集按材质族摊进静态桶（含 R29 可选桶 + R36 变体桶的防御式读取） */
   private absorb(set: StoneBuckets): void {
     this.statics.ashlar.push(...set.ashlar);
     this.statics.wall.push(...set.wall);
     this.statics.gold.push(...set.gold);
     this.statics.dark.push(...set.dark);
     this.statics.flame.push(...set.flame);
-    for (const key of EXTRA_BUCKETS) {
-      const maybe = (set as unknown as Partial<Record<ExtraBucket, THREE.BufferGeometry[]>>)[key];
+    for (const key of ALL_BUCKETS) {
+      const maybe = (set as unknown as Partial<Record<string, THREE.BufferGeometry[]>>)[key];
       if (!Array.isArray(maybe) || maybe.length === 0) continue;
       const bucket = this.extras.get(key) ?? [];
       bucket.push(...maybe);
@@ -723,6 +736,12 @@ export class Castle {
       const parts = this.extras.get(key);
       if (!parts || parts.length === 0) continue;
       this.addMerged(parts, this.stone(key), `castle-${key}`);
+    }
+    // R36-A2 变体桶：材质走 variantMaterial 热升级路径（0 新贴图），全局 1 mesh/桶
+    for (const key of Object.keys(VARIANT_BUCKETS) as VariantBucket[]) {
+      const parts = this.extras.get(key);
+      if (!parts || parts.length === 0) continue;
+      this.addMerged(parts, this.variantMaterial(VARIANT_BUCKETS[key]), `castle-${key}`);
     }
     // R32 C-5：没被任何高端区配上的远档（A 线几何漂移致某族 low 区空/high 区非空的
     // 防御态）⇒ 释放，不占常驻。正常态下这里为空（每个 lo 都被同族同区 high 消费）。
@@ -781,12 +800,12 @@ export class Castle {
       }
       for (const g of parts) g.dispose();
     }
-    // sets 里本轮不用的族（wall/flame/extras）逐一释放，防首建期泄漏
+    // sets 里本轮不用的族（wall/flame/extras+变体桶）逐一释放，防首建期泄漏
     for (const s of sets) {
       for (const g of s.wall) g.dispose();
       for (const g of s.flame) g.dispose();
-      for (const k of EXTRA_BUCKETS) {
-        const arr = (s as unknown as Partial<Record<ExtraBucket, THREE.BufferGeometry[]>>)[k];
+      for (const k of ALL_BUCKETS) {
+        const arr = (s as unknown as Partial<Record<string, THREE.BufferGeometry[]>>)[k];
         if (arr) for (const g of arr) g.dispose();
       }
     }

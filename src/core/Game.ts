@@ -166,6 +166,8 @@ export class Game {
    * tick / frame 都按它分流，退出时置 null 并 detach（键盘监听随之解绑）。
    */
   private freeDrive: FreeDrive | null = null;
+  /** R36-P2 高速阴影节流相位（隔帧更新；>8 m/s 时启用） */
+  private shadowFrame = 0;
 
   private time = 0;
   /** 窗口事件句柄（dispose 时统一解绑，避免 HMR 泄漏） */
@@ -1114,6 +1116,20 @@ export class Game {
    * @param vehicle 挑战模式的车辆状态；自由探索传 null（帧探针只在挑战链路有意义）
    */
   private renderTail(dt: number, vehicle: VehicleState | null, alpha = 0): void {
+    /* ---- R36-P2 高速掉帧治理：阴影贴图更新节流 ----
+     * 热点定位（r31Budget 台账 + `#noshadowupd` 对照）：阴影贴图每帧全场景重绘
+     * （2048² = 实测 113 DC / 78k tri）是最大单项帧成本（冻结后帧时 −60%）。
+     * 车速快时唯一移动投射体是车 ⇒ 隔帧更新阴影（1 帧旧影在高速下不可感知）；
+     * 低速/静止保持逐帧（画质无损）。质量档只降更新频率，不改任何长度/密度。 */
+    const speedNow = vehicle ? Math.abs(vehicle.speed) : (this.freeDrive?.snapshot().speed ?? 0);
+    if (speedNow > 8) {
+      this.shadowFrame = (this.shadowFrame + 1) & 1;
+      this.renderer.shadowMap.autoUpdate = false;
+      this.renderer.shadowMap.needsUpdate = this.shadowFrame === 0;
+    } else {
+      this.renderer.shadowMap.autoUpdate = true;
+    }
+
     // ---- 渲染（结构要素 1 的最终呈现）----
     this.postfx.render();
 

@@ -277,6 +277,12 @@ export function createWindowTrimMaterials(): WindowTrimMaterials {
       metalness: 1.0,
       roughness: 0.11,
       envMapIntensity: 1.35,
+      // R36-D1：腰线铬条与侧皮共聚面 z-fight（白虚线花纹）——PROUD 4mm 小于车身
+      // 曲率误差（见 PROUD 注释），条面会被曲面追平 ⇒ 深度缓冲打架。polygonOffset
+      // (−1,−1) 把铬条整体压前一档，不改几何（外移 5–10mm 会与曲率误差叠加成浮条）。
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -1
     }),
   };
 }
