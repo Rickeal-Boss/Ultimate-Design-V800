@@ -50,8 +50,8 @@
  */
 import * as THREE from 'three';
 import { mergeSafe } from '../../util/geo';
-import { makeStoneMaps, stoneTextureSize, bakeStoneMapsAsync, disposeStoneCache, retireStoneMaps } from './stoneTexture';
-import type { StoneKind, StoneMaps, StoneBakeHandle, StoneChannels } from './stoneTexture';
+import { makeStoneMaps, stoneTextureSize, bakeStoneMapsAsync, disposeStoneCache, retireStoneMaps, makeStoneVariantMaterial, STONE_VARIANTS } from './stoneTexture';
+import type { StoneKind, StoneMaps, StoneBakeHandle, StoneChannels, StoneVariantId } from './stoneTexture';
 import type { QualitySettings } from '../../config/quality';
 import {
   setDetailLevel,
@@ -643,6 +643,29 @@ export class Castle {
     return mat;
   }
 
+  /**
+   * R35：石材变体材质（STONE_VARIANTS，复用基族图集 ⇒ 0 新贴图）。
+   * 与 `stone()` 同享基族热升级路径：变体材质也 push 进 `family.slots`，
+   * 基族同步代退役前先 swap 到目标代，避免引用被 dispose 的同步代纹理（否则渲染崩）。
+   * 当前消费点：内庭围合墙 → inner-stone（暗冷做旧内壁）。
+   */
+  private variantMaterial(id: StoneVariantId): THREE.MeshStandardMaterial {
+    const cacheKey = `variant:${id}`;
+    const hit = this.matCache.get(cacheKey);
+    if (hit) return hit as THREE.MeshStandardMaterial;
+    const v = STONE_VARIANTS[id];
+    const texKind = v.texKind;
+    const family = this.familyFor(texKind, quantizeWeather(FAMILY_WEATHER[texKind]), STONE_CHANNELS[texKind]);
+    const mat = makeStoneVariantMaterial(id, family.syncMaps);
+    family.slots.push({
+      mat,
+      targetRough: v.rough,
+      usesRoughMap: family.syncMaps.roughnessMap !== null
+    });
+    this.matCache.set(cacheKey, mat);
+    return mat;
+  }
+
   private special(key: string, make: () => THREE.Material): THREE.Material {
     const hit = this.matCache.get(key);
     if (hit) return hit;
@@ -686,7 +709,8 @@ export class Castle {
     // R31：只有两个大桶分区（ashlar 6 区 / wall 3 区）；量小的桶保持全局 1 个，
     // 分了也不见得被剔除，白增 DC。
     this.addMergedByZone(this.statics.ashlar, this.stone('ashlar'), 'castle-ashlar', ZONE_EDGES_6);
-    this.addMergedByZone(this.statics.wall, this.stone('wall'), 'castle-wall', ZONE_EDGES_3);
+    // R35：内庭围合墙改走 inner-stone 变体（暗冷做旧内壁；复用 ashlar 图集 ⇒ 0 新贴图、0 新 DC）。
+    this.addMergedByZone(this.statics.wall, this.variantMaterial('inner-stone'), 'castle-wall', ZONE_EDGES_3);
     // R31 运行时治理①延伸：gold（135k）/ dark（34k）体量远非「量小」，且沿整条御桥+城门+内城
     // 铺开（bbox 跨整个 z 走廊），若保持全局 1 个 mesh，行车时永不被视锥剔除 ⇒ 每帧全量提交。
     // 改为按 z 分区（与 ashlar 同 6 区），越过车后的区被剔除（视野前方仍可见，但已过的段不再提交）。
