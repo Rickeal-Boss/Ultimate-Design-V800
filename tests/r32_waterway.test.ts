@@ -73,20 +73,36 @@ describe('R32 C-6 · src/ 下零残留 import（防回升）', () => {
     expect(files.length).toBeGreaterThan(20);
   });
 
-  it('无任何 Waterway / waterTexture 的 import（静态 / 副作用 / 动态）', () => {
-    const offenders: string[] = [];
-    for (const f of files) {
-      const src = readFileSync(f, 'utf8');
-      for (const hit of [
-        ...collectMatches(src, IMPORT_FROM),
-        ...collectMatches(src, IMPORT_BARE),
-        ...collectMatches(src, IMPORT_DYNAMIC)
-      ]) {
-        offenders.push(`${f.replace(ROOT, '')}: ${hit}`);
+  /* ── R37 收尾 · 显式 timeout 12s（**不是**判据松弛）──────────────────────────
+   * 症状：全量并发跑时本条 5s 超时（默认 testTimeout），**隔离复跑 153ms 通过**。
+   * 归因：本条要把 `src/` 下**全部** TS 源码逐个 `readFileSync` + 跑 3 条正则，
+   *   是本文件唯一的重活；并发 worker 争 CPU 时被推到 >5s。
+   * ⇒ 属**环境 flake**（调度/争用），不是判据失效：
+   *   · 三条断言（IMPORT_FROM / BARE / DYNAMIC）**一字未改**；
+   *   · `vite.config.ts` 的全局 testTimeout **不动**（不给其他测试开口子）；
+   *   · 只给**这一条**显式 12s —— 相对隔离 153ms 有 ~78× 余量、相对并发实测
+   *     5.2s 左右有 ~2.3× 余量。
+   * 若将来本条在 12s 下仍红 ⇒ 不再是争用问题，须回头查 src/ 文件数是否暴涨
+   * （walkTs 全量读取的量级变了）或磁盘 IO 异常。
+   * 同款处理见 tests/r33_car_details.test.ts 的 D1（那里是构建整台车模）。 */
+  it(
+    '无任何 Waterway / waterTexture 的 import（静态 / 副作用 / 动态）',
+    () => {
+      const offenders: string[] = [];
+      for (const f of files) {
+        const src = readFileSync(f, 'utf8');
+        for (const hit of [
+          ...collectMatches(src, IMPORT_FROM),
+          ...collectMatches(src, IMPORT_BARE),
+          ...collectMatches(src, IMPORT_DYNAMIC)
+        ]) {
+          offenders.push(`${f.replace(ROOT, '')}: ${hit}`);
+        }
       }
-    }
-    expect(offenders, `残留 import：\n${offenders.join('\n')}`).toEqual([]);
-  });
+      expect(offenders, `残留 import：\n${offenders.join('\n')}`).toEqual([]);
+    },
+    12_000
+  );
 });
 
 describe('R32 C-6 · Game.ts 接线已摘净', () => {

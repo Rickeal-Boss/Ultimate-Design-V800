@@ -220,6 +220,26 @@ export function yawRateFor(steer: number, speedMs: number): number {
   return steer * FREE.maxYawRate * factor * dir;
 }
 
+/**
+ * 纯函数（R37-D 抽出具单测）：轮胎自回正力矩产生的**横摆角加速度** rad/s²。
+ *
+ * ⚠️ 符号口径 —— 这是「松手刹零油门一直绕圈」bug 的根因，改动前先读这里：
+ *   beta = atan2(vy, |vx|)，且代码里「速度方向 = heading + beta」。
+ *   自回正的目的是把**车头**拉回速度方向（减小 |β|），所以横摆角加速度必须与 β
+ *   **同号**：β>0（速度方向偏在车头左侧）⇒ 正横摆把车头往左追上去；β<0 ⇒ 负横摆。
+ *   写成 −K·β 就是一枚「放大 β」的正反馈：它与轮胎横摆阻尼平衡出一个**非零**稳态
+ *   横摆率 ⇒ 松手刹后车持续绕圈；同时 latUse = |yawDyn·v| 被这个非零横摆率顶到
+ *   ≥ μ·g，摩擦圆把纵向可用附着吃光 ⇒ 手刹/制动完全不减速，绕圈更停不下来。
+ *
+ * 幅值：低速线性淡出（|v|/8，与旧实现 Math.min(1, ax/8) 逐位一致），
+ * 避免停车时残余横摆抖动。数值本身不决定恢复**速率**（恢复主要由轮胎侧偏力 +
+ * rearGrip 一阶回升完成），只决定是否存在非零稳态 —— 实测 K 从 9.2k 拉到 45k，
+ * 收敛时间 2.12s → 1.76s，量级不敏感，故保持 R36 标定值不动。
+ */
+export function aligningYawAccel(beta: number, speedMs: number): number {
+  return (FREE.aligningStiffness * beta * Math.min(1, Math.abs(speedMs) / 8)) / FREE.yawInertia;
+}
+
 /** 角度归一到 (−π, π] */
 function wrapAngle(a: number): number {
   const t = (a + Math.PI) % (Math.PI * 2);
@@ -552,7 +572,8 @@ export class FreeDrive {
         maxF * s.rearGrip
       );
       // 横摆 + 侧向速度积分（前轴产生横摆、后轴反向；β 自回正力矩拉回车头）
-      const alignAccel = (-FREE.aligningStiffness * s.beta * Math.min(1, ax / 8)) / FREE.yawInertia;
+      // R37-D：符号口径见 aligningYawAccel() 头注（必须为 +K·β，曾因 −K·β 绕圈）
+      const alignAccel = aligningYawAccel(s.beta, ax);
       this.yawDyn += ((aF * fyf - aR * fyr) / FREE.yawInertia) * dt + alignAccel * dt;
       this.vy += ((fyf + fyr) / MASS - vx * this.yawDyn) * dt;
       // 防散：beta / yaw 限幅（数值护栏，不改动力学符号）

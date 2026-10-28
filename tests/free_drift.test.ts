@@ -11,7 +11,7 @@
  * decelPerNewton=ABS_MAX_DECEL/1612、限速只钳速、b=1.0 1.77s 断裂、路障 1300m。
  */
 import { describe, expect, it } from 'vitest';
-import { FreeDrive } from '../src/core/FreeDrive';
+import { FREE, FreeDrive, aligningYawAccel } from '../src/core/FreeDrive';
 import { BRAKE } from '../src/config/physics';
 
 const DT = 1 / 120;
@@ -135,5 +135,142 @@ describe('R36-P1 手刹漂移（仿真：轮胎侧偏 + 摩擦圆）', () => {
     fd.press('Space', false);
     fd.press('KeyD', false);
     fd.press('KeyW', false);
+  });
+});
+
+/**
+ * R37-D · 自回正项符号回归（用户报：「手刹漂移不加油门时车一直旋转绕圈不停」）。
+ *
+ * 根因：alignAccel 写成 −K·β（应为 +K·β）。β = atan2(vy,|vx|)，速度方向 = heading+β，
+ * 把车头拉回速度方向需要横摆与 β **同号**；负号 ⇒ 正反馈 ⇒ 与轮胎阻尼平衡出
+ * **非零稳态横摆率** ⇒ 松手刹后车持续绕圈；且 latUse=|yawDyn·v| 被顶到 ≥ μ·g，
+ * 摩擦圆把纵向附着吃光 ⇒ 手刹不减速，绕圈停不下来。
+ *
+ * 判据全部取「零油门」路径 —— R36 既有用例都边给油边收，油门掩盖了该项，
+ * 所以老版本能全绿而 bug 漏网。
+ */
+describe('R37-D 自回正项符号（零油门绕圈 bug 回归）', () => {
+  it('纯函数：自回正横摆角加速度与 β 同号（+K·β），低速淡出', () => {
+    // ① 同号：β>0 拉正横摆、β<0 拉负横摆（把车头追向速度方向）
+    expect(aligningYawAccel(0.3, 16)).toBeGreaterThan(0);
+    expect(aligningYawAccel(-0.3, 16)).toBeLessThan(0);
+    // ② 反号会正中反馈，这里显式钉死（改回 −K·β 必须红）
+    expect(aligningYawAccel(0.3, 16)).toBeCloseTo(
+      (FREE.aligningStiffness * 0.3) / FREE.yawInertia,
+      12
+    );
+    // ③ 奇对称 + 零点为零（无偏置，停车不抖）
+    expect(aligningYawAccel(0, 16)).toBe(0);
+    expect(aligningYawAccel(-0.3, 16)).toBeCloseTo(-aligningYawAccel(0.3, 16), 12);
+    // ④ 低速淡出：|v|/8 线性，≥8 m/s 饱和（与旧 min(1, ax/8) 逐位一致）
+    expect(aligningYawAccel(0.3, 4)).toBeCloseTo(aligningYawAccel(0.3, 8) * 0.5, 12);
+    expect(aligningYawAccel(0.3, 20)).toBeCloseTo(aligningYawAccel(0.3, 8), 12);
+  });
+
+  /**
+   * ⚠️ 判据必须「无碰撞辅助」。起漂后车是斜着走的，2.7s 左右就会撞上 |x| ≤ 12~14.5 的
+   * 走廊护栏；撞墙会把速度打到很低，driftActive（|v| ≥ 1.5）直接退出并把 yawDyn **硬
+   * 清零** ⇒ **反号 bug 也能假收敛**。第一版判据就是这样漏过去的（反号下照样全绿）。
+   *
+   * 解法：从贴左墙 x = −11.5 起步、**向走廊内侧（右）漂**，把横向可用行程从 12m 拉到
+   * ~26m，于是恢复段有 2.5s 的**无碰撞观察窗**（实测该窗口内 x 从 −10.5 走到 7.6，
+   * 离右墙 14.5 还有 7m 余量）。窗口内直接看横摆率有没有掉下来：
+   *   正号（修后）0.900 → 0.510  反号（旧）全程钉死 0.900（= maxYawRate 限幅值）
+   */
+  it('起漂 → 松手刹 → 零油门零转向：横摆率在无碰撞观察窗内真实衰减（非撞墙假收敛）', () => {
+    const fd = new FreeDrive({ start: { x: -11.5, z: -330, heading: 0 } });
+    let hits = 0;
+    fd.onEvent = (e) => {
+      if (e === 'wall' || e === 'hall') hits += 1;
+    };
+    accelerateTo(fd, 16);
+    fd.press('Space', true);
+    fd.press('KeyD', true); // 右漂（朝走廊内侧，买横向行程）
+    for (let i = 0; i < 90; i += 1) fd.step(DT); // 漂 0.75s
+    const drift = fd.snapshot();
+    expect(Math.abs(drift.yawRate)).toBeGreaterThan(0.85); // 已漂到限幅（轮胎饱和，判据有效）
+
+    // 松手刹、松开转向、**零油门**（关键：不给油，老版本在此暴露绕圈）
+    fd.press('Space', false);
+    fd.press('KeyD', false);
+    const trace: number[] = [];
+    for (let i = 0; i < 240; i += 1) {
+      fd.step(DT);
+      trace.push(Math.abs(fd.snapshot().yawRate));
+    }
+    // ① 观察窗内 0 次碰撞 ⇒ 衰减不可能来自撞墙
+    expect(hits).toBe(0);
+    // ② 2s 内横摆率必须掉到限幅值的 78% 以下（修后 0.510；反号恒为 0.900 ⇒ 必红）
+    expect(trace[trace.length - 1]).toBeLessThan(FREE.maxYawRate * 0.78);
+    // ③ 全程单调不增（同时挡住「把 K 调过头导致自回正振荡」这类反向回归）
+    for (let i = 1; i < trace.length; i += 1) {
+      expect(trace[i]).toBeLessThanOrEqual(trace[i - 1] + 1e-9);
+    }
+    // ④ 速度仍在漂移层内（|v| ≥ 1.5 ⇒ 不是低速退出短路）
+    expect(Math.abs(fd.snapshot().speed)).toBeGreaterThan(1.5);
+  });
+
+  it('零油门收敛：4s 内 yawDyn/β 归零，且收敛时仍有车速（非低速短路）', () => {
+    for (const v0 of [16, 20]) {
+      const fd = new FreeDrive({ start: { x: -11.5, z: -330, heading: 0 } });
+      accelerateTo(fd, v0);
+      fd.press('Space', true);
+      fd.press('KeyD', true);
+      for (let i = 0; i < 90; i += 1) fd.step(DT);
+      fd.press('Space', false);
+      fd.press('KeyD', false);
+      let settledAt = -1;
+      let speedAtSettle = 0;
+      for (let i = 0; i <= 480; i += 1) {
+        fd.step(DT);
+        const s = fd.snapshot();
+        // 收敛口径与 driftActive 退出门限同族：|yaw|<0.02 rad/s 且 |beta|<0.002 rad
+        if (Math.abs(s.yawRate) < 0.02 && Math.abs(s.beta) < 0.002) {
+          settledAt = i;
+          speedAtSettle = Math.abs(s.speed);
+          break;
+        }
+      }
+      // ① 4s 内必须收敛（反号时 yawDyn 钉在 0.9 上不衰减）
+      expect(settledAt, `v0=${v0}`).toBeGreaterThanOrEqual(0);
+      expect(settledAt * DT, `v0=${v0}`).toBeLessThanOrEqual(4);
+      // ② 收敛时仍有车速（> 1.5 m/s 的 driftActive 退出门限 ⇒ 不是低速硬清零）
+      expect(speedAtSettle, `v0=${v0}`).toBeGreaterThan(1.5);
+    }
+  });
+
+  it('起漂路径不受符号修正影响：后轴抓地落到下限、后轴侧向力饱和', () => {
+    const fd = new FreeDrive();
+    accelerateTo(fd, 16);
+    fd.press('Space', true);
+    fd.press('KeyA', true);
+    for (let i = 0; i < 90; i += 1) fd.step(DT);
+    const s = fd.snapshot();
+    // ① 后轴抓地被手刹收紧到下限附近（driftGripFloor=0.32 契约不动）
+    expect(s.rearGrip).toBeLessThan(FREE.driftGripFloor + 0.05);
+    expect(s.rearGrip).toBeGreaterThanOrEqual(FREE.driftGripFloor - 1e-9);
+    // ② 横摆与转向同号起步（左转 = 正），车尾外滑 β≠0
+    expect(s.yawRate).toBeGreaterThan(0);
+    expect(Math.abs(s.beta)).toBeGreaterThan(0.02);
+    fd.press('Space', false);
+    fd.press('KeyA', false);
+  });
+
+  it('零油门纯滑行（从未漂移）不触发漂移层：beta/rearGrip 恒为初始值', () => {
+    const fd = new FreeDrive();
+    accelerateTo(fd, 24);
+    // 松开一切输入，纯滑行 8s
+    for (let i = 0; i < 960; i += 1) {
+      fd.step(DT);
+      const s = fd.snapshot();
+      // 漂移层三条状态逐位不动（R29 正常驾驶运动学路径零风险）
+      expect(s.beta).toBe(0);
+      expect(s.rearGrip).toBe(1);
+      expect(s.handbrake).toBe(false);
+    }
+    // 直线滑行：位移只在 z 上、heading 不动
+    expect(fd.snapshot().heading).toBeCloseTo(0, 12);
+    expect(fd.snapshot().x).toBeCloseTo(0, 12);
+    expect(fd.snapshot().speed).toBeGreaterThan(0);
   });
 });

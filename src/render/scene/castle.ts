@@ -116,10 +116,22 @@ type ExtraBucket = (typeof EXTRA_BUCKETS)[number];
  *   door    → inner-wood （城门门扇/内庭门扇；wood 图集弦切弯纹）
  *   agedGold → gilded-aged（门钉/徽章/做旧金饰；gold 图集氧化做旧）
  *   pave    → pave-damp  （内庭地面潮斑铺装；floor 图集微湿低频斑）
- * 每桶全局 1 mesh（量小不分区）⇒ +3 DC（27→30 ≤ castleDc 32）。
+ *   grey    → ashlar-grey（R37-A 灰石强调：门楼翼墙/外延墙身；ashlar 图集 + 冷灰提亮）
+ * 每桶全局 1 mesh（量小不分区）⇒ +4 DC（27→31 ≤ castleDc 32）。
+ * ⚠ 例外：`grey` 走**分区**提交（见 commitStatics），因为它承载的是沿 z 铺开的
+ *   大面积墙身 —— 若做全局 1 mesh，包围球会横跨 z 走廊 ⇒ 行车时永不被视锥剔除，
+ *   在 sphere 峰值点（z=−500）恒 +全额 tri。分区后只有有灰石的那个区建 mesh
+ *   （实测 1 个）⇒ DC 同样 +1，但可被剔除。
  */
-const VARIANT_BUCKETS = { door: 'inner-wood', agedGold: 'gilded-aged', pave: 'pave-damp' } as const;
+const VARIANT_BUCKETS = {
+  door: 'inner-wood',
+  agedGold: 'gilded-aged',
+  pave: 'pave-damp',
+  grey: 'ashlar-grey'
+} as const;
 type VariantBucket = keyof typeof VARIANT_BUCKETS;
+/** R37-A：走**分区**提交的变体桶（体量大 / 沿 z 铺开 ⇒ 全局 mesh 会废掉剔除） */
+const ZONED_VARIANT_BUCKETS: readonly VariantBucket[] = ['grey'];
 /** absorb()/释放时要读取的全部可选桶键（基族 + 变体） */
 const ALL_BUCKETS: readonly (ExtraBucket | VariantBucket)[] = [...EXTRA_BUCKETS, ...(Object.keys(VARIANT_BUCKETS) as VariantBucket[])];
 
@@ -739,9 +751,22 @@ export class Castle {
     }
     // R36-A2 变体桶：材质走 variantMaterial 热升级路径（0 新贴图），全局 1 mesh/桶
     for (const key of Object.keys(VARIANT_BUCKETS) as VariantBucket[]) {
+      if (ZONED_VARIANT_BUCKETS.includes(key)) continue; // 分区桶在下面单独提交
       const parts = this.extras.get(key);
       if (!parts || parts.length === 0) continue;
       this.addMerged(parts, this.variantMaterial(VARIANT_BUCKETS[key]), `castle-${key}`);
+    }
+    // R37-A 灰石强调：走 6 区分区提交（理由见 VARIANT_BUCKETS.grey 注释）。
+    // 空区不建 mesh ⇒ 只有真正铺了灰石的那个区占 1 DC（实测 1 个 ⇒ 30→31）。
+    for (const key of ZONED_VARIANT_BUCKETS) {
+      const parts = this.extras.get(key);
+      if (!parts || parts.length === 0) continue;
+      this.addMergedByZone(
+        parts,
+        this.variantMaterial(VARIANT_BUCKETS[key]),
+        `castle-${key}`,
+        ZONE_EDGES_6
+      );
     }
     // R32 C-5：没被任何高端区配上的远档（A 线几何漂移致某族 low 区空/high 区非空的
     // 防御态）⇒ 释放，不占常驻。正常态下这里为空（每个 lo 都被同族同区 high 消费）。

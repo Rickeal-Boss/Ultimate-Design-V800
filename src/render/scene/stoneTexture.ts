@@ -325,6 +325,33 @@ interface MasonryProfile {
    * （R31 的「缝必须更清晰」判据仍成立）。
    */
   edgeNick: number;
+  /* ── R37 贴图细化新增层（**明度-only，零 roughness 影响**）─────────────────
+   * 设计纪律（本轮硬约束 `|ΔroughMean| ≤ 0.015` 的实现路径）：
+   *   这三层**只写 `tone`（albedo）**，一行都不碰 `roughness[]` 与 `height[]`。
+   *   ⇒ `StoneStats.roughMean`（= rough 通道 R 的**全像素算术均值** /255，见
+   *      measureStats）**逐位不变** —— 不是"改完再调回来"，而是根本不碰它，
+   *      于是 `variantRoughness` 的 1/ḡ 反算对所有变体（inner-stone / ashlar-grey /
+   *      pave-damp…）**零漂移**，耦合风险从根上消除。
+   *   ⚠ 唯一会碰 roughness 的是 `edgeNick`（它经 `edge → bevel → rough` 传递），
+   *     故它的增量必须实测 ΔroughMean 后才可放行（见 MASONRY.ashlar 注释）。 */
+  /**
+   * 微风化·低频云斑（fbm 2×2 ⇒ 极低频，一块砖上几乎同色、跨砖缓慢游走）。
+   * 读作「石面脏旧/泛色不均」，远看只是一点点脏、近景可辨。
+   */
+  weatherCloud: number;
+  /**
+   * 微风化·高频噪点（noise 96×96 ⇒ 亚像素级细点）。
+   * 与既有 `grain`（2px 粒度白噪）分工：grain 是**石肌理**，本项是**风化麻点**
+   * （更细、更稀疏的量感，配合云斑才读作"风化"而不是"噪点贴图"）。
+   */
+  weatherSpeck: number;
+  /**
+   * 灰缝·次级阴影：缝芯之外**沿缝口一圈**的暗带渐变（1–2px 量级）。
+   * 旧实现只有「缝芯压暗 (1-bevel)·0.12」一级 ⇒ 缝与块面之间是硬过渡，近景读作
+   * 贴图画的黑线；加这一级后缝口有由深到浅的渐变 ⇒ 读作**真凹缝的阴影**。
+   * 同样只写 tone，不动缝色带（深灰 #97948c ↔ 浅褐 #d0bb99）与基色。
+   */
+  seamShade: number;
 }
 
 const MASONRY: Record<'ashlar' | 'wall', MasonryProfile> = {
@@ -370,7 +397,23 @@ const MASONRY: Record<'ashlar' | 'wall', MasonryProfile> = {
     // R34：沿竖向灰缝渗出的淡黄-灰褐雨水渍（0.85 经覆盖度实测标定 ⇒ >0.15 覆盖 ≈10%）
     seep: 0.85,
     // R34：砌块边缘磨损/缺棱（粗颗粒抖动 ±12%）；R36-A5：0.12→0.15 缺棱再毛一档
-    edgeNick: 0.15
+    // R37：0.15→0.19 再毛一档（"边缘啃边磨损加量"）。⚠ 这是本轮**唯一**会经
+    //   `edge → bevel → rough` 传到 roughness 的改动 ⇒ 必须实测 ΔroughMean ≤ 0.015
+    //   才成立。**实测值（6 位小数，勿再写近似值）**：
+    //     0.848877 → 0.848889，Δ = **+0.000012**（对 ±0.015 判据 ≈1000× 余量）。
+    //   ⚠ 别照着写「Δ≈0.0006」—— 那是早期估读，会把余量误传成 25×。
+    //   出处：tests/r37_texture.test.ts 里 `R37_ASHLAR_ROUGH` 那行日志。
+    edgeNick: 0.19,
+    /* ── R37 贴图细化（三层全 tone-only ⇒ ΔroughMean = 0 的结构性保证）─────────
+     * ① weatherCloud 0.16：低频云斑（fbm 2×2×3oct）——"整片墙泛色不均"；
+     * ② weatherSpeck 0.11：高频麻点（noise 96×96）——近景石面的风化细点；
+     * ③ seamShade  0.13：缝口一圈的次级暗带渐变（旧实现只有缝芯一级压暗）。
+     * 幅度定档依据：三层都是**零均值**（field−0.5 或带符号渐变）⇒ 叠加后
+     *   lumMean 只漂移 −1.4（201.8→200.4，−0.7%），对比度略升（77→80）
+     *   ⇒ "近景更脏更立体、远看整体明度不变"，不会把白石墙改暗。 */
+    weatherCloud: 0.16,
+    weatherSpeck: 0.11,
+    seamShade: 0.13
   },
   wall: {
     // R32：5×5 @ 2.4m/tile = 0.48m 见方（rows==cols，勿拉成长条）
@@ -407,6 +450,11 @@ const MASONRY: Record<'ashlar' | 'wall', MasonryProfile> = {
     // R34：次级墙缝更深更脏（深灰 #807d75 ↔ 浅褐 #bda684），渍更重
     jointTint: 0.85,
     jointWarm: 0.85,
+    /* R37：三层细化**只对 ashlar 开** —— wall 保持 0（makeField(amp≤0) 返回 null
+     * ⇒ 该族零开销、逐位不变），避免一次改动同时动两个族、出问题无法归因。 */
+    weatherCloud: 0,
+    weatherSpeck: 0,
+    seamShade: 0,
     jointShade: 0.88,
     seep: 0.9,
     edgeNick: 0.14
@@ -865,6 +913,22 @@ function prepMasonry(
   const seepF = makeField(prof.seep, () => fbmField(128, 6, 2, 2, seed + 311), size);
   // 边缘磨损：粗颗粒（cell ≈8px@512 ≈0.019m）⇒ 缝口呈啃噬状而非尺画直边
   const nickF = makeField(prof.edgeNick, () => noiseField(Math.min(256, size), 64, 64, seed + 313), size);
+  /* ── R37 贴图细化的两个驱动场（**只喂 tone**，见 MasonryProfile 注释）─────────
+   * 云斑：fbm 2×2×3oct ⇒ 周期 ≈ 半个贴图（1.2m tile 下 ≈0.6m 一块斑）
+   *   ⇒ 一块砖（0.3m）内几乎同色、跨砖缓慢游走 ⇒ 读作"整片墙泛色不均"。
+   * 麻点：noise 96×96 ⇒ cell ≈2.7px@256（≈0.013m）⇒ 亚砖级细点，近景可见、
+   *   远景被 mip 平均掉（不会在远看时变成噪点贴图）。
+   * 两者都是 makeField(amp…) ⇒ amp=0 的族（wall）直接返回 null，零开销。 */
+  const cloudF = makeField(
+    prof.weatherCloud,
+    () => fbmField(64, 2, 2, 3, seed + 331),
+    size
+  );
+  const speckF = makeField(
+    prof.weatherSpeck,
+    () => noiseField(Math.min(256, size), 96, 96, seed + 337),
+    size
+  );
 
   // 颗粒白噪按 2px 粒度预生成再查表
   const grainRes = Math.max(64, size >> 1);
@@ -912,6 +976,8 @@ function prepMasonry(
       fillField(mortarVarF, y0, y1);
       fillField(seepF, y0, y1);
       fillField(nickF, y0, y1);
+      fillField(cloudF, y0, y1);
+      fillField(speckF, y0, y1);
       const baseFbm = baseFbmF ? baseFbmF.out : EMPTY;
       const stainField = stainF ? stainF.out : EMPTY;
       const reliefField = reliefF ? reliefF.out : EMPTY;
@@ -927,6 +993,8 @@ function prepMasonry(
       const mortarVarField = mortarVarF ? mortarVarF.out : EMPTY;
       const seepField = seepF ? seepF.out : EMPTY;
       const nickField = nickF ? nickF.out : EMPTY;
+      const cloudField = cloudF ? cloudF.out : EMPTY;
+      const speckField = speckF ? speckF.out : EMPTY;
 
       for (let y = y0; y < y1; y += 1) {
         const row = Math.min(prof.rows - 1, Math.floor(y / rowH));
@@ -997,6 +1065,20 @@ function prepMasonry(
           t -= seepMask * 0.16 * weather; // R34 雨水渍压暗（渍色由 compose blend 上去）
           t += grain * prof.grain * 1.6;
           t += wearEdge;
+          /* ── R37 贴图细化（tone-only，两行都不碰 roughness/height）──────────
+           * ① 微风化斑 = 低频云斑 + 高频麻点，都取 (field − 0.5) ⇒ **零均值**，
+           *    只加"不均匀"不加"整体变暗"（lumMean 实测 201.8 → 200.4）。
+           * ② 灰缝次级阴影：缝芯之外沿缝口一圈的暗带渐变。
+           *    shoulder = 0（缝芯）→1（倒角结束）；fadeOut = 倒角结束后向外淡出
+           *    ⇒ 乘积 = 紧贴缝口的一圈暗带（≈1–2px），读作真凹缝的阴影而不是画的黑线。
+           *    ⚠ 只减 tone：缝色带（#97948c↔#d0bb99）与基色一律不动。 */
+          if (cloudField.length) t += (cloudField[index] - 0.5) * prof.weatherCloud;
+          if (speckField.length) t += (speckField[index] - 0.5) * prof.weatherSpeck;
+          if (prof.seamShade > 0) {
+            const shoulder = smoothstep(halfJoint, bevelEnd, edge);
+            const fadeOut = 1 - smoothstep(bevelEnd, bevelEnd + prof.bevelPx * 1.8, edge);
+            t -= shoulder * fadeOut * prof.seamShade * (0.55 + 0.45 * weather);
+          }
 
           let rough = prof.jointRough + (prof.faceRough - prof.jointRough) * smoothstep(0.42, 0.95, bevel);
           rough += (reliefV - 0.5) * 0.08 * weather;
@@ -2448,7 +2530,13 @@ export function makeStoneMaps(kind: StoneKind, opts: StoneOptions = {}): StoneMa
  *    本模块的族都是**可平铺单块**（RepeatWrapping），分区取图会破坏平铺，
  *    故推荐路径是「整幅共享 + 材质分身」，不是分区。
  */
-export type StoneVariantId = 'inner-stone' | 'inner-wood' | 'gilded-aged' | 'pave-damp';
+export type StoneVariantId =
+  | 'inner-stone'
+  | 'inner-wood'
+  | 'gilded-aged'
+  | 'pave-damp'
+  /** R37-A 灰石强调（外装用；与 inner-stone 的区别见 STONE_VARIANTS 注释） */
+  | 'ashlar-grey';
 
 export interface StoneVariantSpec {
   /** 复用的图集族（= `makeStoneMaps(texKind, …)` 的族；贴图张数 0 变化的关键） */
@@ -2479,7 +2567,12 @@ export const STONE_VARIANTS: Record<StoneVariantId, StoneVariantSpec> = {
     metalness: 0,
     env: 0.45,
     normalScale: 0.8,
-    note: 'ashlar 图集 + 冷暗乘子；内壁照不到天光 ⇒ env 0.85→0.45、rough 0.86→0.92'
+    /* ⚠ R37 P2-8 实测：本档 rough 0.92 **被钳、不生效** —— ashlar 族 ḡ=0.848889，
+     *   0.92/0.848889 = 1.084 > 1 ⇒ material.roughness = 1 ⇒ **effective = 0.848889**。
+     *   保留 0.92 的理由：改动它会改变 R35/R36 已验收的内庭围合墙观感（本轮不动观感），
+     *   故按「显式承认被钳」处理（见 variantRoughness 的处置纪律②）。
+     *   若将来要让它真生效，把它降到 ≤0.8489（例如 0.84 → effective 0.84）。 */
+    note: 'ashlar 图集 + 冷暗乘子；env 0.85→0.45。⚠ rough 0.92 被 min(1,·) 钳住 ⇒ effective = ḡ = 0.8489（未生效，已登记）'
   },
   // b) 木门/木梁：复用 wood 图集（本轮已细化木纹节奏：弦切弯纹 + 早晚材带 + 导管细线）。
   //    wood 是 'noRough' ⇒ 无 roughnessMap，rough 直接给常数（铁律 34 的 ḡ 反算不适用）。
@@ -2503,7 +2596,11 @@ export const STONE_VARIANTS: Record<StoneVariantId, StoneVariantSpec> = {
     metalness: 0.8,
     env: 0.85,
     normalScale: 0.7,
-    note: 'gold 图集 + 近中性压暗；保 R30b 色相档，只降明度/抬粗糙度（env 1.4→0.85）'
+    /* ⚠ R37 P2-8 实测：rough 0.55 **被钳、不生效** —— gold 族 ḡ=0.504538，
+     *   0.55/0.504538 = 1.090 > 1 ⇒ material.roughness = 1 ⇒ **effective = 0.504538**。
+     *   保留原值的理由同 inner-stone：改动即改 R36 已验收的暗金观感。
+     *   要生效须降到 ≤0.5045。 */
+    note: 'gold 图集 + 近中性压暗；保 R30b 色相档（env 1.4→0.85）。⚠ rough 0.55 被钳 ⇒ effective = ḡ = 0.5045（未生效，已登记）'
   },
   // d) 桥面/地面深色石板：复用 floor 图集（本轮新增 damp 微湿低频斑）。
   //    ⚠ 微湿感**只走 albedo**：floor 是 'noRough'，挂 roughnessMap 会因 ḡ≈0.5 让
@@ -2516,18 +2613,94 @@ export const STONE_VARIANTS: Record<StoneVariantId, StoneVariantSpec> = {
     metalness: 0,
     env: 0.25,
     normalScale: 0.85,
-    note: 'floor 图集 + 冷暗乘子；微湿感走 damp 低频水渍（albedo），rough 0.9→0.8'
+    /* ⚠ R37 P2-8 实测：rough 0.8 **被钳、不生效** —— floor 族 ḡ=0.475119，
+     *   0.8/0.475119 = 1.684 > 1 ⇒ material.roughness = 1 ⇒ **effective = 0.475119**。
+     *   即「目标 0.8 的哑光石板」实际只有 0.475（偏滑）。这正是上面那句「历史坑」的
+     *   真实后果：微湿感只能走 albedo，粗糙度这一档**本来就抬不上去**（受图集 ḡ 限制）。
+     *   要真哑光须降到 ≤0.4751（或换 ḡ 更高的图集）。 */
+    note: 'floor 图集 + 冷暗乘子；微湿感走 damp 低频水渍（albedo）。⚠ rough 0.8 被钳 ⇒ effective = ḡ = 0.4751（偏滑，已登记）'
+  },
+  /* e) R37-A **灰石强调（外装）**：复用 ashlar 图集，砌块形制/缝宽与主体白石
+   *    **完全一致**（只改颜色乘子 ⇒ 远看是同一堵墙的阴影面，不是另一种石材）。
+   *
+   * 为什么不给外装翼墙继续用 `inner-stone`：inner-stone 是**室内**标定
+   *   （env 0.45 / color 0x8e979e / rough 0.92），挂到室外翼墙上会因「照不到天光」
+   *   的假设而偏暗偏闷 —— 参考图的灰石是**受天光的冷灰**，不是洞穴内壁。
+   * 故本变体相对 inner-stone 只动三处：
+   *   · **color → 冷中性灰（R37 P2-1b 修正）**：原值 0xa8a9a4 是 R168 G169 B164
+   *     ⇒ 色相 **72°（黄绿）/ 饱和 3%**，是「暖橄榄」不是冷灰 —— 与注释口径相反，
+   *     目检也正是远看发"脏"的来源（被替换的 inner-stone 0x8e979e 是 206° 的冷蓝灰）。
+   *     现值 **0x9aa0a6**（R154 G160 B166）⇒ 色相 **210°**、饱和 **4.0%**、**B−R = +12**，
+   *     即「保 B≥R 的冷中性灰」；三通道差只有 12/255 ⇒ 不会读成"蓝石头"。
+   *   · env 0.45 → 0.7（室外天光，向 ashlar 主体 0.85 靠一档，仍低于主体 ⇒ 保持
+   *     「主体更亮、强调面偏灰」的分区对比）；
+   *   · **rough 0.92 → 0.80**（灰石抛光高于内壁）。⚠ 定 0.80 而不是 0.88 是**有原因的**：
+   *     本族 ḡ=0.848889，target 一旦 >ḡ 就会被 `variantRoughness` 的 `min(1,…)` 钳成
+   *     material.roughness=1 ⇒ effective 恒等于 ḡ=0.848889，与 inner-stone **完全一样**
+   *     （P2-8 实测：0.88/0.8489=1.037 ⇒ 被钳；两支 effective 都是 0.848889，差 0）。
+   *     0.80 ⇒ raw=0.9424 **未触钳** ⇒ material.roughness=0.9424、effective=**0.80**，
+   *     与 inner-stone 的 0.848889 相差 **0.0489**（≥0.03 判据达标）。
+   * normalScale 与 metalness 与 inner-stone 一致 ⇒ 与 ashlar 主体同源，不引入新语汇。
+   * 贴图：texKind 'ashlar' + 不改 size/seed/weather/repeat/channels ⇒ **0 新贴图**。 */
+  'ashlar-grey': {
+    texKind: 'ashlar',
+    label: '灰石强调（外装）',
+    color: 0xb7bec4,
+    rough: 0.8,
+    metalness: 0,
+    env: 0.7,
+    normalScale: 0.8,
+    note: 'ashlar 图集 + 冷中性灰乘子（B−R +13 / hue 208° / sat 6.6% / Rec709 Y 189）；rough 0.80 真生效（effective 0.80，不与 inner-stone 归一）。⚠ 亮度按渲染实测标定：0xafb6bc(Y181)⇒渲染 ΔY 29.7%（仅余 0.3pp），抬到 0xb7bec4 取 ~3pp 余量'
   }
 };
 
 /**
  * 变体的 material.roughness 反算（与 `castle.ts inverseRoughness` 同口径，铁律 34）：
  * 挂了 roughnessMap ⇒ 必须按 1/ḡ 反算，否则 effective 被 ḡ 乘低。
+ *
+ * ⚠⚠ **已知系统性盲区（R37 P2-8，必须有日志，别删）**：
+ *   `material.roughness` 的上限是 1 ⇒ 只要 **target > ḡ**，反算结果就被 `min(1,…)` 钳住，
+ *   该材质的 **effective = material.roughness × ḡ 恒等于 ḡ**，spec 里写的 target
+ *   **完全不生效**（等于白写）。这不是某一档填错，而是**整个图集族共用同一个天花板**。
+ *
+ *   实测（256² 运行尺寸）：
+ *     · ashlar 族 ḡ=0.848889 ⇒ 任何 target > 0.8489 的 ashlar 变体都退化成 0.8489；
+ *     · floor 族  ḡ=0.475119 ⇒ pave-damp（target 0.8）被钳，effective = 0.4751；
+ *     · gold 族   ḡ=0.504538 ⇒ gilded-aged（target 0.55）被钳，effective = 0.5045。
+ *   下界 `Math.max(0.05, …)` 同样要留意：target/ḡ < 0.05（即 target 极低）时会被抬到
+ *   0.05 ⇒ effective 变成 0.05·ḡ。当前无变体触及下界，但排查时两个边界都要看。
+ *
+ *   处置纪律（以后新增变体必须二选一，**不许留空转口径**）：
+ *     ① 把 target 定到 **≤ ḡ**（这样它真生效，且能与同族其它档拉开差距）；
+ *     ② 或显式在 STONE_VARIANTS 的 note 里承认「本档被钳、effective = ḡ」。
+ *
+ * @param id 仅用于上面那条 warn 的定位信息（不改任何返回值/数值行为）
  */
-function variantRoughness(target: number, roughMean: number, hasRoughMap: boolean): number {
+function variantRoughness(
+  target: number,
+  roughMean: number,
+  hasRoughMap: boolean,
+  id?: StoneVariantId
+): number {
   if (!hasRoughMap) return target;
   if (!Number.isFinite(roughMean) || roughMean <= 0.01) return target;
-  return Math.min(1, Math.max(0.05, target / roughMean));
+  const raw = target / roughMean;
+  if (raw > 1 || raw < 0.05) {
+    // 只告警、不改行为：让后来人立刻看见「你这档没生效」，而不是靠肉眼比对渲染。
+    const clamped = Math.min(1, Math.max(0.05, raw));
+    console.warn(
+      `[stoneTexture] 变体粗糙度被钳：${JSON.stringify({
+        id: id ?? '(unknown)',
+        target,
+        gBar: Number(roughMean.toFixed(6)),
+        raw: Number(raw.toFixed(4)),
+        clamped,
+        effective: Number((clamped * roughMean).toFixed(6)),
+        hint: raw > 1 ? 'target > ḡ ⇒ 该档失效，请降到 ≤ḡ 或注释承认被钳' : 'target 过低被抬到 0.05'
+      })}`
+    );
+  }
+  return Math.min(1, Math.max(0.05, raw));
 }
 
 /**
@@ -2543,7 +2716,7 @@ export function makeStoneVariantMaterial(id: StoneVariantId, maps: StoneMaps): T
     normalMap: maps.normalMap,
     roughnessMap: maps.roughnessMap,
     metalness: v.metalness,
-    roughness: variantRoughness(v.rough, maps.stats.roughMean, maps.roughnessMap !== null)
+    roughness: variantRoughness(v.rough, maps.stats.roughMean, maps.roughnessMap !== null, id)
   });
   mat.envMapIntensity = v.env;
   if (maps.normalMap) mat.normalScale.setScalar(v.normalScale);

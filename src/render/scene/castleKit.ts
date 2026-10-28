@@ -107,6 +107,20 @@ function extra(b: StoneBuckets, key: ExtraBucketKey, g: THREE.BufferGeometry): v
 }
 
 /**
+ * R37-A 变体桶直推（grey / pave / …）：与 `extra()` 同形，但显式列出允许键，
+ * 免得手滑把几何推进一个 castle.ts 没有注册的桶（那样会被 `absorb()` 静默丢弃 ——
+ * 静默丢几何是本项目出过的事，故这里用类型收口而不是裸 Record）。
+ * castle.ts 的 `VARIANT_BUCKETS` 是这些键的唯一真源，改桶名要两边一起改。
+ */
+export type VariantBucketKey = 'grey' | 'pave' | 'agedGold' | 'door';
+
+function pushVariant(b: StoneBuckets, key: VariantBucketKey, g: THREE.BufferGeometry): void {
+  const dst = b as unknown as Record<string, THREE.BufferGeometry[] | undefined>;
+  if (!dst[key]) dst[key] = [];
+  dst[key].push(g);
+}
+
+/**
  * 低配细节档（质量档**只降装饰密度，绝不改几何长度** —— 铁律 33）。
  * 影响：8 面尖塔 → 4 面、卷叶 crocket 跳过、火焰段数降。
  * **不影响**：拱跨数、栏板长度、城门/建筑尺寸、铺装范围。
@@ -233,6 +247,42 @@ const R32_BRAZIER = {
   /** 盆高（FBX 3.88 的比例层；栏板 2.6 高 ⇒ 盆 ≈1.35 读作栏板上陈设） */
   bowlH: 0.95,
   flameH: 0.5
+} as const;
+
+/**
+ * R37-A 引桥**烛台式壁灯**（挂在栏板外壁的暖光节奏；与 R32_BRAZIER 落地火盆
+ * 是两种灯具，详见 makeParapet 内注释）。
+ *   perSide 6 ⇒ 双侧共 **12 座**（硬上限 12，不铺满全桥 423m）；
+ *   spacing 10.5m（参考图「8–12m 低频节奏」中值），6 站 z = **−349.5 / −339 /
+ *   −328.5 / −318 / −307.5 / −297**（实测）；
+ *   out 0.18 ⇒ 壁座外脸比栏板中心线（**x = 12.24**，非旧注释的 16.36）外挪 0.18m。
+ *
+ * ── y 为什么是 1.30（**R37 P2-6 实测改判，原 1.62 会让壁灯悬空**）───────────────
+ * 栏板在 x∈[12.0,12.6] 的通长实心构件**只有 5 条**（审查线把截面全枚举了）：
+ *   ashlar x[11.88,12.60] y[0.00,0.25]   基座下层
+ *   ashlar x[11.95,12.53] y[0.25,0.50]   基座上层
+ *   ashlar x[12.07,12.41] y[0.50,1.12]   低栏板
+ *   ashlar x[11.99,12.49] y[1.24,1.36]   **中横梁** ← 本档落点
+ *   gold   x[11.84,12.64] y[2.42,2.60]   金压顶
+ * 其余 1.45~1.79 那一带**通长构件 0 件**，只有 292 根离散瓶柱（zLen 0.26、柱距 1.63）。
+ * 原 y=1.62 的壁座 y 区间恰好落在 [1.45,1.79] ⇒ 逐站算「壁座中心 → 最近瓶柱」z 距
+ * 为 0.43 / 0.48 / 0.24 / 0.67 / **0.05** / 0.77 ⇒ **只有 −307.5 那 1 座真贴柱，
+ * 其余 10 座壁座背后是空的**（截图里能透出路面）。
+ *
+ * 落点选 **中横梁 y=1.30**（而不是低栏板 0.95）的原因：壁座 x 区间是 [12.37,12.47]，
+ *   低栏板外表面只到 x=12.41 ⇒ x 只咬 **0.04m**（壁座厚 0.1，60% 外挑），AABB 会过但
+ *   物理上只是薄搭边；中横梁 x 到 12.49 ⇒ x 咬 **0.10m**、y 咬 **0.12m**，真正贴实。
+ *   ⇒ 判据写成「双轴咬合各 ≥0.08m」（见 tests/r37_castle.test.ts），把"薄搭边"钉红。
+ * ⚠ x 千万别往外推（>12.47 就脱离所有通长构件，立刻回到 0/12）。
+ * ⚠ 外挑已知：烛杯/焰外沿 x ≈ 12.79 > 桥面半宽 12.6 ⇒ **外挑 0.19m 在桥面轮廓外**
+ *   （真实壁灯外挑正常，本轮保留，但不再假装没有）。
+ */
+const R37_SCONCE = {
+  perSide: 6,
+  spacing: 10.5,
+  zStart: GATE.z + GATE.depth / 2 + 2,
+  y: 1.3,
+  out: 0.18
 } as const;
 /** 内部街墙 5 盲拱节拍（参考图 A 中墙段：龛心距=墙宽 1/5、龛宽=间距 2/3、
  *  龛高=墙高 2/3、龛底离地=墙高 1/6）+ 雕像龛交替（壁龛与盲拱交替的明暗节奏） */
@@ -765,7 +815,9 @@ export function makeViaduct(): StoneBuckets {
 /* ═══════════════════ ② 栏板（2.2m 金顶） ═══════════════════ */
 
 /**
- * 栏板：双侧连续，z ∈ [VIADUCT.zNear, 城门脸 −351.5]，中心线 x = ±16.36。
+ * 栏板：双侧连续，z ∈ [VIADUCT.zNear, 城门脸 **−351.5**]，中心线 x = **±12.24**。
+ * ⚠ 两处数值都是 R37 按现值订正的（原写 x = ±16.36 是 R29 桥面收窄
+ *   totalHalf 16.72 → 12.6 **之前**的过期读数；照旧值摆饰件会飘到桥外 4m 空中）。
  * 结构（自下而上）：2 层基座梁 → 圆柱瓶柱（r 0.13，节拍 1.63）→ 中横梁 →
  * 金压顶（0.18）→ 每跨一枚金徽章（菱形 1.3 高 + 金尖，坐在墩位上方）。
  * 全静态合并：基座/横梁/压顶是通长条件（12 tri/侧/层），瓶柱按节拍逐根推入
@@ -777,7 +829,10 @@ export function makeParapet(): StoneBuckets {
   const zFar = GATE.z + GATE.depth / 2; // 城门脸 −351.5
   const len = zNear - zFar;
   const zMid = (zNear + zFar) / 2;
-  const x = VIADUCT.totalHalf - 0.36; // 16.36（比桥沿内收 0.36）
+  // ⚠ R37-A 更正：此处原注「16.36」是 R29 桥面收窄（totalHalf 16.72 → **12.6**）
+  // 之前的**过期读数**，本轮按现值订正为 12.24。别再拿 16.36 当栏板线用 ——
+  // 那会把灯具/饰件摆到桥面外 4m 的空中（数值实测见 tests/r37_castle.test.ts）。
+  const x = VIADUCT.totalHalf - 0.36; // 12.24（比桥沿内收 0.36）
   const { h, pitch, postRadius, capH, emblemH } = PARAPET;
 
   // 基座两层（plinthLayers）：0..0.28 / 0.28..0.50
@@ -867,6 +922,65 @@ export function makeParapet(): StoneBuckets {
         b.gold.push(spire('gold', 0.26, 0.44, R32_BRAZIER.bowlH, 8, cx, 3.1, cz)); // 金碗盆（下收口）
         b.gold.push(spire('gold', 0.48, 0.48, 0.12, 8, cx, 3.1 + R32_BRAZIER.bowlH, cz)); // 盆口沿
         b.flame.push(flame(0.3, R32_BRAZIER.flameH, cx, 3.1 + R32_BRAZIER.bowlH + 0.12, cz));
+      }
+    }
+  }
+
+  /* ── R37-A 引桥烛台式壁灯（参考图「引桥两侧烛台式发光壁灯」）──────────────────
+   * 与既有 R32 桥栏火盆（**落地墩座 + 金碗盆**，7 盏/侧、间距 ~53m、坐在压顶之上）
+   * 是**两种不同灯具**，不要混：
+   *   · 火盆 = 陈设（大、稀、在栏板顶上）；
+   *   · 壁灯 = **挂在栏板外壁的烛台**（小、密、贴在栏杆柱节拍上），
+   *     参考图读作「引桥两侧一排连续的暖光点」，是御桥夜景的节奏来源。
+   * 故本段**新增**壁灯而不是改火盆参数。
+   *
+   * 布置纪律（踩坑防护）：
+   *   · **显式 for 循环逐座 push**，绝不用任何 `distribution` 字段 —— 生成器不读
+   *     该字段，写下去会被静默读空 ⇒ 全部实例 position=(0,0,0)（历史事故：394 实例
+   *     /75,648 面全毁）。每座的 x/y/z 都由下面的算式显式给出。
+   *   · 合批：几何直接进 gold / flame 桶（桶内 mergeSafe 合批）⇒ **0 新增 mesh/DC**；
+   *     两桶都是既有桶，gold 走 6 区分区、flame 全局 1 mesh。
+   *   · 数量硬上限 12 座（6 盏/侧），间距 10.5m，z = **−349.5 / −339 / −328.5 /
+   *     −318 / −307.5 / −297**（实测，城门近段）—— 那里是御桥的 hero 读段；
+   *     不铺满 423m 全桥（那要 ~40 座，超上限）。
+   *
+   * ⚠⚠ 峰值点（carZ=−500）的实际开销 —— **本条原注释写错，R37 落地审查 P2-2 后重写**。
+   *   原注：「壁灯落 z1 区 ⇒ 峰值点已被剔除、零影响」。这句**两头都不准**：
+   *     ① 12 座并非全落 z1：只有最北那**1 站**（z=−349.5，两侧共 2 座）在 z1
+   *        （−462..−340）；其余 **5 站 10 座**落在 **z0**（60..−340）。
+   *     ② 「距区心 360m < ZONE_VIEW_RANGE 650 ⇒ 可见」这个推理**混淆了两件事** ——
+   *        ZONE_VIEW_RANGE 只管 `mesh.visible`（距离显隐），**递交量还要过视锥剔除**。
+   *   Node 实测（与渲染器同源的 boundingSphere + intersectsSphere，carZ=−500）：
+   *     · `castle-gold-z0`：vis=**true** 但 **inFrustum=false** —— 包围球 cz=−149 /
+   *       r=210，相机在 z=−491.8 朝 −Z ⇒ 整个球落在相机**后方**，被视锥剔除。
+   *       ⇒ z0 那 10 座金件在峰值点**确实不计**（原结论方向对，但理由不是"距离"）。
+   *     · `castle-gold-z1`：**inFrustum=true**（cz=−401 / r=168）⇒ z=−349.5 那
+   *       2 座的金件（≈96 tri）**计入峰值**。
+   *     · `castle-flame`：**全局桶**（cz=−638 / r=677）恒在锥内 ⇒ 12 座的焰
+   *       （12 × 24 = **192 tri**）**恒计入峰值**，且计入**每一个**采样点。
+   *   ⇒ 峰值点真实增量 ≈ **288 tri**（96 金 + 192 焰），既不是 0、也不是全额 672。
+   *     672 全额里约 384 tri 只在 z0 前方的采样点（z=+40/0/−200）才计入。
+   *   结论不变（预算仍过：峰值 190,322 ≤ 200,000），但**论证已换成实测**。 */
+  {
+    const { perSide, spacing, zStart, y, out } = R37_SCONCE;
+    for (let i = 0; i < perSide; i += 1) {
+      // ⚠ 方向：御桥段 z 从 zNear（≈+61，北端）**递减**到城门脸 **−351.5**。
+      //   故「从城门往北铺」= z **递增**（zStart + i·spacing）；写成 zStart − i·spacing
+      //   会一路穿进城内（从 −349.5 起算，第 2~6 座落在 z **−360..−402**，已在城门之后
+      //   的城内段，壁灯会浮在街屋里面）⇒ 判据已写进 tests/r37_castle.test.ts 的御桥 z 段断言。
+      const cz = zStart + i * spacing;
+      for (const side of [-1, 1] as const) {
+        const wall = side * (x + out); // 贴栏板外壁（比栏板中心线外挪 out）
+        // ① 壁座（贴墙方板）
+        b.gold.push(box('gold', 0.1, 0.34, 0.3, wall, y, cz));
+        // ② 曲臂（从壁座横向挑出）
+        b.gold.push(box('gold', 0.26, 0.08, 0.08, side * (x + out + 0.13), y + 0.06, cz));
+        // ③ 烛杯（下收上敞的浅杯）
+        b.gold.push(spire('gold', 0.07, 0.13, 0.14, 6, side * (x + out + 0.26), y + 0.14, cz));
+        // ④ 蜡烛（细柱）
+        b.gold.push(box('gold', 0.09, 0.24, 0.09, side * (x + out + 0.26), y + 0.26, cz));
+        // ⑤ 焰（emissive，靠 bloom 出光晕）
+        b.flame.push(flame(0.1, 0.3, side * (x + out + 0.26), y + 0.4, cz));
       }
     }
   }
@@ -1602,7 +1716,26 @@ export function makeTowerGroup(): StoneBuckets {
     for (const side of [-1, 1] as const) {
       const cx = side * (xIn + xEnd) / 2;
       const w = xEnd - xIn; // 37.5
-      b.wall.push(box('wall', w, h, 8, cx, h / 2, gz)); // 墙身
+      /* R37-A 灰石分区：翼墙墙身 **wall 桶 → grey 桶**。
+       *
+       * ⚠ 源桶名订正（R37 落地审查 P2-1）：这里原先写「源桶是 inner-stone 内壁档」是
+       *   **误记**。`inner-stone` 是**材质 id**（castle.ts 的 `VARIANT_BUCKETS.wall`
+       *   映射出来的变体材质），**从来不是 castleKit 里的桶名**；castleKit 里这一行
+       *   历史上一直是 `b.wall.push(...)`，即 **wall 桶**（`git show 4b6f78b:...` 实证）。
+       *   「桶」与「材质」是两层：桶决定进哪个数组，材质由 castle.ts 在 commit 时挂。
+       *
+       * ⚠ 同时修一处**真 bug**（同因）：原写作 `box('wall', …)` —— `box()` 的第一个
+       *   参数是 **UV 图集族**（决定 TILE 米数），改桶时漏改它 ⇒ `wall` 族按 TILE 2.4m
+       *   烘 UV，却挂 ashlar 图集（TILE 1.2m）⇒ 灰石砌块读作 **0.6m**，而邻接的 ashlar
+       *   主体是 **0.3m**，**砌块尺度差一倍**（Node 直跑实测）。改成 `box('ashlar', …)`
+       *   后两族 UV 密度比 = **1.0**（判据见 tests/r37_castle.test.ts）。
+       *
+       * 为什么要换桶：wall 桶在 castle.ts 里挂的是 inner-stone = **室内**标定
+       *   （env 0.45 / color 0x8e979e），挂到室外翼墙上会偏暗偏闷；参考图的灰石是
+       *   **受天光的冷灰**（翼墙/分节/阴影面偏灰）。ashlar-grey 与主体 ashlar 同砌块
+       *   形制、同缝宽（同一张图集），只换颜色乘子 ⇒ 远看是「同一堵墙的阴影面」。
+       * 代价：**0 新增 tri / 0 新增贴图**（只是换桶；贴图仍是 ashlar 那一套）。 */
+      pushVariant(b, 'grey', box('ashlar', w, h, 8, cx, h / 2, gz)); // 墙身
       b.ashlar.push(box('ashlar', w + 0.8, 0.6, 8.8, cx, h + 0.3, gz)); // 顶叠涩
       b.gold.push(box('gold', w + 1, 0.24, 9, cx, h + 0.78, gz)); // 檐口金带
       // 垛口（齿 1:1，节拍 2.4）
@@ -1648,7 +1781,9 @@ export function makeTowerGroup(): StoneBuckets {
       const cx = side * (x0 + x1) / 2;
       const w = x1 - x0;
       // 外延墙身（比主翼墙低 7m，形成"主-次"层次而不是一条平墙）
-      b.wall.push(box('wall', w, 22, 7, cx, 11, gz));
+      // R37-A 灰石分区：同翼墙墙身，改走 grey 桶（注释见翼墙处）。
+      // ⚠ UV 族必须跟着桶一起改：box 第一参是图集族（TILE 米数），漏改会让砌块尺度差一倍。
+      pushVariant(b, 'grey', box('ashlar', w, 22, 7, cx, 11, gz));
       b.ashlar.push(box('ashlar', w + 0.6, 0.55, 7.6, cx, 22.3, gz));
       b.gold.push(box('gold', w + 0.8, 0.2, 7.8, cx, 22.7, gz));
       // 垛口（节拍 2.4，与外延墙同长）
@@ -2857,6 +2992,20 @@ export function makeInnerCity(): StoneBuckets {
            * 只铺近/中区前 8 块（hero 可读带），12 tri/块；far/DEEP_FAR 跳过。 */
           if (!far && k < 8) {
             extra(b, 'pave', put(box('floor', 18, 0.05, blockLen - 4, 19, 0.055, 0)));
+            /* ── R37-A 内庭地坪**拼花带**（内部材料丰富度深化①）──────────────────
+             * 参考图内庭地坪不是一整块匀色板，板面上有一条**窄向的拼花/导向带**。
+             * 用 pave-damp 变体桶（floor 图集 + 微湿潮斑）铺一条 1.4m 宽的窄带压在
+             * 地坪板之上。**位置口径按实订正（R37 P2-7）**：
+             *   · x = 19 是**这块地坪板自己的中线**（板宽 18、x∈[10,28]），
+             *     **不是**院落/街区中轴 —— 旧注释写「中轴」是错的，别再照它推坐标。
+             *   · y 逐值算清（旧注释 y 与实际差 5mm，正是本条被打回的原因）：
+             *       地坪板  y=0.055 h=0.05 ⇒ **板顶 = 0.08**
+             *       拼花带  y=0.1075 h=0.015 ⇒ **带底 = 0.10**、带顶 = 0.115
+             *       ⇒ 离板间隙 = 0.10 − 0.08 = **20mm**，正好压住本项目
+             *         「离面 ≥2cm 防 z-fight」的铁律（旧值 y=0.0925 ⇒ 带底 0.085
+             *         ⇒ 间隙只有 **5mm**，不达标）。
+             * 代价：12 tri/块 × 8 块 = **96 tri**，进既有 pave 桶 ⇒ **0 新增 DC**。 */
+            extra(b, 'pave', put(box('floor', 1.4, 0.015, blockLen - 6, 19, 0.1075, 0)));
           }
 
           if (motif === 0) {

@@ -10,7 +10,7 @@ import { defineConfig } from 'vitest/config';
 /**
  * R7 懒加载 chunk 的**共享模块集**（main 入口 ∩ R7Adapter 动态入口的传递闭包交集）。
  * 推导探针（esbuild metafile，只读不改构建）：`.qa/r32_tmp_audit/r32_policy_probe.mjs`
- * 同款的 shared-chunk 分析法 —— 结论写死在下表，共 6 个 src 模块 + node_modules/three 全域。
+ * 同款的 shared-chunk 分析法 —— 结论写死在下表，共 **7** 个 src 模块 + node_modules/three 全域。
  *
  * ⚠ 维护纪律：若 A/D 线改了 `src/model`、`src/util`、`src/config/quality.ts` 的跨车
  *   import 关系（新增/删除 R7Adapter 与主装配路径的共用模块），必须重跑探针同步本表 ——
@@ -33,6 +33,17 @@ import { defineConfig } from 'vitest/config';
  */
 const SHARED_SRC = [
   'src/config/quality.ts',
+  /* R37-C 补登记（测试线挑出的第 4 块回归，正是本表维护纪律要防的那类）：
+   * `src/config/vehiclePaint.ts` 被**两侧同时** import ——
+   *   · main 侧：Game.ts → resolveAssemblyPaintId / V800Adapter → applyPaintSlot
+   *   · 动态入口：R7Adapter → applyPaintSlot / getPaintSpec
+   * ⇒ 漏登记时 rollup 给它建了一块**启发式命名的自动块**
+   *   （`vehiclePaint-*.js` 2.45kB，实测第 4 块），三块结构被破坏。
+   * 后果不只是"多一个文件"：V800 玩家本应**只下 main + shared**，多出来的这块
+   * 虽是共用件（两边都要）不影响正确性，但它破坏了「块数 = 3」这条可断言的不变量，
+   * 让后来者无法再用块数一眼发现漏登记。⇒ 登记进 shared，块数回到 3。
+   * ⚠ 维护纪律不变：以后任何**跨车共用**的新 config/model 模块，先加到本表。 */
+  'src/config/vehiclePaint.ts',
   'src/model/batchMerge.ts',
   'src/model/plateTexture.ts',
   'src/model/refTextures.ts',

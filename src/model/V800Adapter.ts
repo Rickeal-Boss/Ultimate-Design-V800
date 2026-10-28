@@ -7,6 +7,8 @@
 import * as THREE from 'three';
 import { GRAVITY } from '../config/physics';
 import { carTextureSizeFor, type QualityTier } from '../config/quality';
+// R37-C 车漆配色（开始界面多色选择）：单一真源在 config，装配层只消费
+import { applyPaintSlot, getPaintSpec, resolvePaintId, type PaintId } from '../config/vehiclePaint';
 import { damp, makeLcg } from '../util/math';
 import { mergeSafe } from '../util/geo';
 import { batchMergeStatic, UV_CONTENT_MATERIAL_IDS } from './batchMerge';
@@ -1797,7 +1799,13 @@ export function v800MaterialSignature(m: THREE.Material): string {
   return `${m.type}|${parts.join(',')}|${tex.join(',')}`;
 }
 
-export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
+/**
+ * @param tier 质量档
+ * @param paintId 车漆配色（R37-C 开始界面多色选择）。默认走 `resolvePaintId()`
+ *   （URL `#paint=` > localStorage > 香槟金）。**换色只改既有材质实例**，
+ *   不 new 材质 ⇒ 材质实例预算（V800_MATERIAL_INSTANCE_BUDGET）不受影响。
+ */
+export function createV800CarAdapter(tier: QualityTier = 'high', paintId: PaintId = resolvePaintId()): CarLike {
   const model = createZunjieV800LuxuryMPVModel({ textureSize: carTextureSizeFor(tier) });
   const runtime = model.userData.runtime as ProceduralModelRuntime | undefined;
 
@@ -1879,24 +1887,17 @@ export function createV800CarAdapter(tier: QualityTier = 'high'): CarLike {
   // 读银白）。恢复 **albedo.base 香槟金 #C9A86B 并提饱和**，metalness 0.12→0.45
   // （金属漆语义）、envMapIntensity 0.55→0.7（阴天/黄昏两光照下金身份可辨）、
   // rough 0.42→0.38。只调材质参数，不动几何。
+  /* R37-C：上/下段漆面改由色表驱动（上列数值即色表 champagne 一档的原值）。
+   * 默认档逐位不动的保证：champagne 的 upper/lower 数值与这里的历史值完全相同，
+   * 且它的 clearcoat 是 undefined（不覆写、沿用工厂值）⇒ 不换色时与 R36 一致。 */
+  const paintSpec = getPaintSpec(paintId);
   const paintMat = matById.get('paint-upper');
   if (paintMat) {
-    paintMat.metalness = 0.45;
-    paintMat.roughness = 0.38;
-    paintMat.envMapIntensity = 0.7;
-    // albedo 提饱和：spec.albedo.base #C9A86B 香槟金，HSL 饱和 +0.12、明度 +0.02
-    paintMat.color.set(0xc9a86b).offsetHSL(0, 0.12, 0.02);
-    paintMat.needsUpdate = true;
+    applyPaintSlot(paintMat, paintSpec.upper);
   }
   const paintLowerMat = matById.get('paint-lower');
-  if (paintLowerMat) {
-    // 双拼下段（曜石黑）：metal 0.1→0.45 / env 0.45→0.7 与上段同金属漆语义，
-    // 反射抬起来后追尾不再读「死黑」（仍保深色双拼对比）。
-    paintLowerMat.metalness = 0.45;
-    paintLowerMat.roughness = 0.42;
-    paintLowerMat.envMapIntensity = 0.7;
-    paintLowerMat.color.set(0x111014);
-    paintLowerMat.needsUpdate = true;
+  if (paintLowerMat && paintSpec.lower) {
+    applyPaintSlot(paintLowerMat, paintSpec.lower);
   }
   const chromeMatSolid = matById.get('chrome');
   if (chromeMatSolid) {

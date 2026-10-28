@@ -18,6 +18,8 @@ import { createLuxeedR7Model, type ProceduralModelRuntime } from './createR7Mode
 import { batchMergeStatic, UV_CONTENT_MATERIAL_IDS } from './batchMerge';
 import { applyReferenceTextures } from './refTextures';
 import { mountLicensePlate } from './plateTexture';
+// R37-C 车漆配色：R7 只吃 upper 一档（单支漆面 paint-green）
+import { applyPaintSlot, getPaintSpec, type PaintId } from '../config/vehiclePaint';
 import { createR7FrontDetails } from './parts/r7FrontDetails';
 import { carTextureSizeFor, type QualityTier } from '../config/quality';
 import { damp } from '../util/math';
@@ -371,7 +373,13 @@ function drawCluster(
  * 建立 R7 的 Car 适配器。
  * @param tier 质量档：high 保持 spec 玻璃透光率；medium/low 提高玻璃不透明度并关掉部分细节。
  */
-export function createR7CarAdapter(tier: QualityTier = 'high'): CarLike {
+/**
+ * @param tier 质量档
+ * @param paintId 车漆配色；**null = 保留工厂原色**（R7 基线墨绿，见 vehiclePaint.ts
+ *   的 FACTORY_PAINT_CHOICE 注释）。与 V800 的双拼不同，R7 只有单支漆面
+ *   paint-green ⇒ 只吃色表的 `upper` 一档。换色同样是改既有实例，不 new 材质。
+ */
+export function createR7CarAdapter(tier: QualityTier = 'high', paintId: PaintId | null = null): CarLike {
   const textureSize = carTextureSizeFor(tier);
   const model = createLuxeedR7Model({ textureSize });
   const runtime = model.userData.sculptRuntime as ProceduralModelRuntime | undefined;
@@ -472,6 +480,9 @@ export function createR7CarAdapter(tier: QualityTier = 'high'): CarLike {
     paint.roughness = 0.18;
     paint.iridescence = 0.15;
     paint.envMapIntensity = 1.05;
+    // R37-C：玩家显式选了 5 色之一才覆写 color/金属度等（paintId=null ⇒ 原厂墨绿不动，
+    // 避免 R7 基线外观被本轮改动）。iridescence 是 R7 车漆的身份参数，任何配色都保留。
+    if (paintId) applyPaintSlot(paint, getPaintSpec(paintId).upper);
     paint.needsUpdate = true;
   }
   const matte = matById.get('matte-black');

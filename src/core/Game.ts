@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { Sfx, vibrate } from '../audio/Sfx';
 import { BRAKE, CRASH, MS_TO_KMH, REDUNDANCY, VEHICLE } from '../config/physics';
 import { getVehicleProfile, resolveVehicleId, type InteriorViews } from '../config/vehicles';
+import { resolveAssemblyPaintId } from '../config/vehiclePaint';
 import { AdaptiveQuality, type QualitySettings, type QualityTier } from '../config/quality';
 import { World } from '../physics/World';
 import type { VehicleState } from '../physics/Vehicle';
@@ -435,6 +436,76 @@ export class Game {
     {
       const cam = this.rig.camera;
       const gl = this.renderer;
+
+      /* ── QA 钩子 · 材质隐藏消去法（R37 落地审查 P2-4 补齐）──────────────────────
+       * 为什么需要：`src/model/preview.ts` 里那份 `__v800HideMat` 只作用于
+       *   **preview.html 的迷你 scene**（拍不到 Castle/Road/Terrain）⇒ 游戏页里
+       *   根本没有这个钩子，城堡侧的「遮一类材质 → 同机位重拍 → 像素差热力图」
+       *   消去法做不了（本轮审查只能用热力图 + Node UV 密度解码替代）。
+       *
+       * 与 preview 版的差别（**故意加宽**，因为城堡桶不是 sculptMaterial 语义）：
+       *   key 依次匹配 ① `mesh.name`（城堡分区桶：`castle-ashlar-z0` / `castle-gold-z1`
+       *   / `castle-grey-z1` / `castle-flame` …）② `material.userData.sculptMaterial.id`
+       *   （车模族：`paint-upper` / `chrome` …）③ `material.uuid`（单点定位某个实例）。
+       *   命中即整 mesh `visible=false`，返回隐藏的 mesh 数。
+       *
+       * ⚠ 调用顺序（**很重要的坑**）：`__v800EnvShot` 内部会先 `revealAllZones()`
+       *   把全部分区可见，**会把先前的隐藏抹掉**。故本钩子把隐藏集合持久化，
+       *   并由 `__v800EnvShot` 在 `gl.render` **前**重新应用（见下面 applyHidden 调用）
+       *   ⇒ 正确用法是「先 hide、再 EnvShot」，两者任意顺序都成立。
+       *
+       * 恢复语义：
+       *   · `__v800HideMat(key, false)` —— 只放开 **这一把** key：从集合里删掉它，
+       *     再 `castle.revealAllZones()` 回到「全可见」基准 + 重新应用**剩余** key，
+       *     不会把别的 key 也放开。
+       *   · `__v800HideMat('', false)` —— **一次性全恢复**（空 key + hide=false
+       *     被特判为「清空隐藏集合」）。
+       *   返回值 = **当前累计**隐藏的 mesh 数（不是本次增量）。消去法脚本按
+       *   「hide 一类 → 截图 → 全恢复 → hide 下一类」的节奏用，
+       *   所以增量和累计都不该拿来做逻辑判断，只用于打印/断言 >0。
+       */
+      const hiddenKeys = new Set<string>();
+      const applyHidden = (): number => {
+        if (hiddenKeys.size === 0) return 0;
+        let n = 0;
+        this.scene.traverse((o) => {
+          const m = o as THREE.Mesh;
+          if (!m.isMesh) return;
+          if (hiddenKeys.has(m.name)) {
+            m.visible = false;
+            n += 1;
+            return;
+          }
+          const arr = Array.isArray(m.material) ? m.material : [m.material];
+          for (const mt of arr) {
+            const mid = (mt as THREE.MeshPhysicalMaterial | undefined)?.userData?.sculptMaterial
+              ?.id as string | undefined;
+            if ((mid && hiddenKeys.has(mid)) || hiddenKeys.has(mt.uuid)) {
+              m.visible = false;
+              n += 1;
+              return;
+            }
+          }
+        });
+        return n;
+      };
+      (window as unknown as Record<string, unknown>).__v800HideMat = (
+        key: string,
+        hide: boolean
+      ): number => {
+        if (hide) {
+          if (key) hiddenKeys.add(key);
+        } else {
+          // 空 key + hide=false = 一次性全恢复（见上方注释的恢复语义）
+          if (key === '') hiddenKeys.clear();
+          else hiddenKeys.delete(key);
+          // 回到「全可见」基准再重放剩余隐藏集：否则被 updateViewerZ/revealAllZones
+          // 接管过的 visible 状态无法逐 mesh 还原。
+          this.castle.revealAllZones();
+        }
+        return applyHidden();
+      };
+
       (window as unknown as Record<string, unknown>).__v800EnvShot = (
         _name: string,
         x: number, y: number, z: number,
@@ -458,6 +529,9 @@ export class Game {
         // R31 治理②：自由机位绕过帧循环 ⇒ 先放开全部分区（否则保留上一个行车
         // 机位的距离显隐态，环境验收截图缺远区件）；下一帧按真实机位重算。
         this.castle.revealAllZones();
+        // R37-P2-4：revealAllZones 刚把全部分区放开 ⇒ 必须**在 render 前重放**
+        // 消去法的隐藏集合，否则「先 hide 再 EnvShot」的隐藏会被这行抹掉。
+        applyHidden();
         gl.render(this.scene, cam);
         return gl.domElement.toDataURL('image/png');
       };
@@ -500,13 +574,17 @@ export class Game {
     // B5（R30-D4）：r7 适配器经模块顶层预取（见文件头 R7_ADAPTER 注释），此处同步消费。
     // 兜底 throw：正常不可达（模块求值与构造同一任务内完成，车型不可能中途被改写）——
     // 若将来有人破坏该不变式（如把本方法改成异步调用），这里给明确报错而非静默加载错车。
+    // R37-C 车漆：装配期一次性消费（换色与换车同机制 —— Menu 落盘后 location.reload()）。
+    // resolveAssemblyPaintId 对 r7 返回 null 表示「保留原厂墨绿」，v800 恒为 5 色之一
+    // （默认 champagne，数值 = R36 基线 ⇒ 不换色时车模逐位不变）。
+    const paintId = resolveAssemblyPaintId(this.profile.id);
     if (this.profile.id === 'r7') {
       if (!R7_ADAPTER) {
         throw new Error('[Game] r7 适配器未预取：活动车型在模块求值后被改写？');
       }
-      return R7_ADAPTER.createR7CarAdapter(this.tier);
+      return R7_ADAPTER.createR7CarAdapter(this.tier, paintId);
     }
-    return createV800CarAdapter(this.tier);
+    return createV800CarAdapter(this.tier, paintId ?? undefined);
   }
 
   /**

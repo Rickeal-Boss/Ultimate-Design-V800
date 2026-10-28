@@ -151,5 +151,16 @@ describe('R33 V800 轮毂开口', () => {
       }
     }
     expect(offenders, `共聚面未缓解：${offenders.join(', ')}`).toEqual([]);
-  });
+    /* ── R37 收尾 · 显式 timeout 15s（**不是**判据松弛）─────────────────────────
+     * 症状：全量跑时本条 5s 超时（默认 testTimeout），但 **standalone 只需 2.4s**。
+     * 归因（实测，非推测）：本条要在测试体内 `await import()` + **构建整台 V800
+     * 车模**（createZunjieV800LuxuryMPVModel），是全仓最重的一条；全量跑时 vitest
+     * 并行多个 worker，CPU 争用把它从 2.4s 推到 >5s。
+     * ⇒ 属**环境 flake**（调度/争用），不是判据失效：
+     *   · 断言本身**一字未改**（共聚面 ↔ polygonOffset 判据原样保留）；
+     *   · `vite.config.ts` 的全局 testTimeout **不动**（不给其他测试开口子）；
+     *   · 只给**这一条**显式 15s —— 相对 standalone 2.4s 有 6× 余量，相对全量实测
+     *     5.2~5.6s 有 ~2.7× 余量。
+     * 若将来本条在 15s 下仍红 ⇒ 那不再是争用问题，须回头查车模构建本身是否变重。 */
+  }, 15_000);
 });

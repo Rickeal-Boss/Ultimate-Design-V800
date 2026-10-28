@@ -14,6 +14,14 @@ import {
   type VehicleId,
   type VehicleProfile
 } from '../config/vehicles';
+import {
+  paintChoicesFor,
+  paintChoiceLabel,
+  paintChoiceSwatch,
+  resolvePaintChoiceFor,
+  setActivePaint,
+  type PaintChoice
+} from '../config/vehiclePaint';
 import { byId, blurIfInside, el, setVisible } from './dom';
 
 /** 差异说明：一句话讲清「这辆车为什么玩法不同」（菜单卡片正文） */
@@ -104,6 +112,86 @@ function ensureSelectStyle(): void {
   background: rgba(255, 106, 61, .22);
   border: 1px solid rgba(255, 106, 61, .5);
 }
+/* ═══ R37-P1 矮屏首屏保 CTA ═══════════════════════════════════════════════════
+ * 背景（落地审查 P1 阻断）：R37-C 新增「选择车漆」label + 色块行 44px 后，
+ * 1280×760 下 .menu-panel 内容高 847px、可视区只有 718px（溢出 129px）⇒
+ * 「开始挑战」被挤出可视区（实测可见 5.9%、elementFromPoint 命中 null）。
+ *
+ * 量到的区块高度（1280×900，全放得下时）：车型卡片 258.8 / 规则区 223.5 /
+ * 色块行 28+label16 / 按钮行 47×2。⇒ 真正吃高的是**车型卡片 + 规则区**，
+ * 色块行只占 44px（用户本轮明确要的功能，**不许为腾位置藏起来**）。
+ *
+ * 处置（两条，都不牺牲信息）：
+ *   ① **整体瘦身 ~45px**：面板 padding 28→20、副标题/规则/色块行的外边距各收一档、
+ *      规则行高 1.9→1.62（9 行文案 ≈ −25px）。规则文案**一行不删**。
+ *   ② **矮屏规则区内部滚动**：@media (max-height: 800px) 时给 .menu-rules
+ *      限高 + 自身滚动 —— 与 styles.css 里 max-height: 560px 那套
+ *      「规则区内部滚动」的既有先例同策略。900 高不触发 ⇒ 不产生突兀空白。
+ *
+ * ⚠⚠ 本段整体位于 **CSS 模板字符串内部**：注释里**绝不能出现反引号**，
+ *   否则模板串提前闭合 ⇒ esbuild 报 "Expected ; but found @"，页面一片空白。
+ *   （已踩：tsc 只在部分行报错，看着像类型错误，实际是字符串被截断。）
+ * ⚠ 选择器一律带 .menu-panel 提特异性：本段是**运行时注入**的 style，
+ *   不能靠"后加载"压过 styles.css，必须靠特异性赢。
+ * ⚠ 只影响开始菜单面板；结算面板/其它 .panel 完全不受影响。 */
+.panel.menu-panel {
+  padding: 20px 26px;
+}
+.menu-panel .menu-sub {
+  margin: 6px 0 12px;
+}
+.menu-panel .menu-rules {
+  line-height: 1.62;
+  margin-bottom: 14px;
+  padding: 9px 0;
+}
+.menu-panel .menu-rules-label {
+  margin-bottom: 4px;
+}
+.menu-panel .paint-pick {
+  margin-bottom: 12px;
+}
+@media (max-height: 800px) {
+  .menu-panel .menu-rules {
+    max-height: 120px;
+    overflow-y: auto;
+  }
+}
+
+/* ---- R37-C 车漆色块（与 .vehicle-card 同族视觉：同圆角/同边框/同 hover 语义）---- */
+.paint-pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.paint-swatch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: inherit;
+  padding: 5px 10px 5px 6px;
+  border-radius: 10px;
+  border: 1px solid var(--line, rgba(255,255,255,0.08));
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--cream, #f1dcae);
+  font-size: 11.5px;
+  letter-spacing: .5px;
+  cursor: pointer;
+  transition: border-color .15s ease, background .15s ease;
+}
+.paint-swatch:hover { background: rgba(255, 255, 255, 0.08); }
+.paint-swatch.active {
+  border-color: var(--orange, #ff6a3d);
+  background: rgba(210, 60, 30, 0.22);
+}
+.paint-swatch .ps-chip {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.35);
+}
 `;
   document.head.appendChild(style);
 }
@@ -128,10 +216,35 @@ function buildCard(id: VehicleId, active: VehicleId, onPick: (id: VehicleId) => 
   return card;
 }
 
+/** 单个车漆色块按钮（type/aria-pressed 与既有 vehicle-card 同风格） */
+function buildSwatch(
+  choice: PaintChoice,
+  active: PaintChoice,
+  onPick: (c: PaintChoice) => void
+): HTMLButtonElement {
+  const btn = el(
+    'button',
+    'paint-swatch' + (choice === active ? ' active' : '')
+  ) as HTMLButtonElement;
+  btn.type = 'button';
+  btn.dataset.paint = choice;
+  const label = paintChoiceLabel(choice);
+  btn.title = `车漆：${label}`;
+  btn.setAttribute('aria-label', `车漆 ${label}`);
+  // B6 a11y（同 R30-D2 判据）：选中态走 aria-pressed，读屏能报出「已选中」
+  btn.setAttribute('aria-pressed', choice === active ? 'true' : 'false');
+  const chip = el('span', 'ps-chip');
+  chip.style.background = paintChoiceSwatch(choice);
+  btn.append(chip, el('span', 'ps-name', label));
+  btn.addEventListener('click', () => onPick(choice));
+  return btn;
+}
+
 export class Menu {
   readonly root: HTMLElement;
   private startButton: HTMLButtonElement;
   private readonly cards = new Map<VehicleId, HTMLElement>();
+  private readonly swatches = new Map<PaintChoice, HTMLButtonElement>();
 
   /**
    * @param onStart 开始挑战
@@ -161,6 +274,15 @@ export class Menu {
       pick.append(card);
     }
 
+    // ---- 车漆选择（色块一排；R7 多一个「原厂墨绿」在首位）----
+    const paintActive = resolvePaintChoiceFor(active);
+    const paintPick = el('div', 'paint-pick');
+    for (const choice of paintChoicesFor(active)) {
+      const sw = buildSwatch(choice, paintActive, (next) => this.pickPaint(next));
+      this.swatches.set(choice, sw);
+      paintPick.append(sw);
+    }
+
     const rules = el('div', 'menu-rules');
     rules.append(
       el('p', undefined, '① 倒计时后，向上拖动【油门滑条】（或按住 W/↑）全力加速'),
@@ -180,7 +302,16 @@ export class Menu {
       muteButton.textContent = onToggleMute() ? '音效：关' : '音效：开';
     });
     btnRow.append(this.startButton, muteButton);
-    panel.append(title, subtitle, pickLabel, pick, rules, btnRow);
+    panel.append(
+      title,
+      subtitle,
+      pickLabel,
+      pick,
+      el('div', 'menu-rules-label', '选择车漆'),
+      paintPick,
+      rules,
+      btnRow
+    );
     // 自由探索（R29 次级入口）：与开始挑战同排的次级按钮，不抢主按钮视觉权重
     if (onFreeExplore) {
       const freeButton = el('button', 'btn ghost') as HTMLButtonElement;
@@ -201,6 +332,26 @@ export class Menu {
     if (id === resolveVehicleId()) return;
     setActiveVehicle(id);
     for (const [key, card] of this.cards) card.classList.toggle('active', key === id);
+    this.startButton.disabled = true;
+    location.reload();
+  }
+
+  /**
+   * 选车漆 → 落盘 → 重载（与选车同机制）。
+   * 为什么不运行时换色：车漆材质在装配期就被合批/克隆（batch/paint-*、内舱暗面克隆），
+   * 运行时改基色要同时同步这些派生实例，代价与风险都高于一次重载。
+   */
+  private pickPaint(choice: PaintChoice): void {
+    const vehicle = resolveVehicleId();
+    if (choice === resolvePaintChoiceFor(vehicle)) return;
+    // R37 P2-9：**必须显式传当前车型** —— 车漆 key 已按车型隔离，
+    // 在 R7 选色若写进 V800 的 key，就会把 V800 的玩家选择改掉。
+    setActivePaint(choice, vehicle);
+    for (const [key, sw] of this.swatches) {
+      const on = key === choice;
+      sw.classList.toggle('active', on);
+      sw.setAttribute('aria-pressed', on ? 'true' : 'false');
+    }
     this.startButton.disabled = true;
     location.reload();
   }

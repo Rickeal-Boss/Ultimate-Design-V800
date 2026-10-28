@@ -5,8 +5,16 @@
  * 合批按**材质实例**分桶（batchMerge 不复制材质）⇒ 多一个同参实例就多一个 batch
  * 桶、多一份 uniform 提交。本测试锁四条契约：
  *
- *  1. 装配后材质实例总数 ≤ `V800_MATERIAL_INSTANCE_BUDGET`（当前 78；79 → 78：
- *     R32-D1 前后绿牌共用 1 个材质实例）。
+ *  1. 装配后材质实例总数 ≤ `V800_MATERIAL_INSTANCE_BUDGET`。
+ *     ⚠ **R37 账实校正（旧注「当前 78」已作废）**：实测 **80，预算 80 ⇒ 余量 0**
+ *     （探针口径：装配后遍历 root 按 material.uuid 去重计数，与下面 `records.length` 同源）。
+ *     历史：R32-D1 前后绿牌共用 1 个实例 ⇒ 79 → 78；此后 R33~R36 的车模细化
+ *     （轮毂开口 / 徽标内芯 / 尾门折线等）逐步把余额吃满到 80。
+ *     ⇒ **R37 起余量为 0：新增任何材质实例立刻红**。要加实例必须先合并掉一个
+ *     （例如找一组「同 sculptMaterial.id + 同全量参数签名」的非行为旗标件共用，
+ *     判据见本文件 isBehavioural）。
+ *     R37-C 多色车漆**没有**加重这一点：换色是改既有实例的 color/参数，
+ *     0 新实例（tests/r37_paint.test.ts 已逐色断言实例数不变）。
  *     ⚠ 上限常量**只**定义在 `src/model/V800Adapter.ts`（`V800_MATERIAL_INSTANCE_BUDGET`
  *     / `V800_ASSEMBLED_TRI_BUDGET` / `V800_VISIBLE_TRI_BUDGET` / `v800MaterialSignature`），
  *     本文件一律 import 消费，**不得再抄写数字或自造签名表** —— 手写数与实现漂移
