@@ -1742,3 +1742,293 @@ export function gothicBay(o: {
   }
   return p;
 }
+
+/* ═══════════════════ ⑪ R39 主殿 FBX 级雕刻件（玫瑰窗 / 齿饰檐口 / 四叶金章） ═══════════════════
+ *
+ * ── 为什么是这三件 ─────────────────────────────────────────────────────────
+ * R39 用户令「外包 FBX 级雕刻（飞扶壁/窗花格/雕像/卷叶金饰/凹龛阴影），需要将主殿
+ * 优化」。三处实测缺口（分带计数，`.qa/r39_hall`）：
+ *   · 正立面 y 72..96（24m × 88m = 2,112 m²）装饰件数 = **0**；
+ *   · y 52..72（1,760 m²）仅 5 件小饰；
+ *   · **玫瑰花窗完全缺失**（本文件此前无 rose* 工具）。
+ * 形制真值（`tools/r38_fbx_constants.md`）：尖窗高宽比 6.58、檐口标准高 1.41（多层
+ * 阶梯线脚 + 齿饰）、玫瑰窗「1 个圆形，占整体高 5%~7%，放射状」。三个新工具即这三项。
+ *
+ * ── 统一口径（与 R31 既有构件一致，不发明新方案）──────────────────────────
+ *   · 局部：墙面 z=0、**向 +z 挑出**（与 traceryWindowZ / statueNicheZ 的 face 'z' 同），
+ *     圆心/块心在 (0,0)；调用方只做一次 translate（不镜像、不旋转）；
+ *   · UV 一律 `planarUV` 米制（石 1.2m / 玻璃 1.6m / 金 1.2m），**禁止自定义 UV**
+ *     （防图集串味，铁律）；圆盘/圆柱面必须显式覆写，不能沿用 archBand 的 6.4m 口径；
+ *   · 全部件包 `isLowDetail()`（低档工厂重跑时跳过 ⇒ `castleTriLow` 不变）。
+ */
+
+/** 圆盘 / 圆柱面的米制 UV（archBand 自带的是 ashlar 6.4m 口径，小件必须覆写） */
+function discUV(g: THREE.BufferGeometry, tile: number): THREE.BufferGeometry {
+  g.computeVertexNormals();
+  planarUV(g, tile);
+  return g;
+}
+
+/**
+ * **玫瑰花窗**（R39 新建；FBX `WCArchElemFlat_1` 4.47×4.47「方形玫瑰花窗 / 浮雕板」
+ * + §7「玫瑰花窗存在，1 个圆形，占整体高 5%~7%，**放射状**」）。
+ *
+ * 形制 = 五层同心（自内向外）：
+ *   ① 深腔背衬（dark 圆盘，贴墙 +0.02）—— 保证读作**凹腔**而不是贴片；
+ *   ② 玻璃（glass 桶，半透彩窗底；+0.16）
+ *   ③ 内环石棂（spokes 根径向石条，hub→0.62r）+ 外环石棂（同数、错半拍，0.72r→0.98r）
+ *      —— FBX「尖拱内由垂直+对线条组成的分格骨架」的十字格语汇；
+ *   ④ 每瓣四叶饰（petals 份：小环 + 4 尖锥 = 四叶 cusp）坐在 0.62r 的瓣心；
+ *   ⑤ 外圈**双层石质券框**（voussoir 环 24~28 块切向石 + 石外环）+ 金环（1.2m 金口径）
+ *      + 8 片卷叶（外缘放射）。
+ * 局部：圆心 (0,0)、盘面 x-y、**向 +z 挑出 depth**（调用方 translate 到世界落点）。
+ *
+ * tri 账（高档实测见 `.qa/r39_hall`）：dark 28 + glass 24 + 券框 2×~330 + 石棂 2×~200
+ * + 花瓣 ~560 + 金环 ~80 + 卷叶 ~160 ≈ **2.0~2.4k**；低档整件跳过（返回空包）。
+ *
+ * @param r      外半径（主殿落点 6.5 ⇒ 直径 13m = 立面高 96m 的 13.5%）
+ * @param petals 四叶饰份数（默认 12，FBX 玫瑰窗 12 瓣通行值）
+ * @param spokes 每层放射石棂根数（默认 16；两环共 2×spokes 根）
+ * @param depth  浮雕凸出量（默认 0.85m，主殿 ≤0.9 的撞面约束内）
+ */
+export interface RoseOpts {
+  r: number;
+  petals?: number;
+  spokes?: number;
+  depth?: number;
+  /** 券框切向石块数（默认 24；低档 12） */
+  ringSegs?: number;
+  /**
+   * 外缘卷叶片数（默认 8）。**R39 回炉新增**：主殿拱头花格屏顶的 Ø5 小圆窗必须整圆
+   * 装进尖拱内（拱在 y33 处净宽 ±3.66），而卷叶把外包络撑到 r+1.45 ⇒ 传 0 去掉。
+   * 大玫瑰窗（r 6.5）保持默认 8。
+   */
+  leaves?: number;
+}
+
+export function roseWindow(o: RoseOpts): DetailParts {
+  const p = parts();
+  if (isLowDetail()) return p; // 低档整件跳过（铁律 33：只降装饰密度 ⇒ 低档 tri 不涨）
+  const r = o.r;
+  const petals = Math.max(4, o.petals ?? 12);
+  const spokes = Math.max(6, o.spokes ?? 16);
+  const d = o.depth ?? 0.85;
+  const ringSegs = Math.max(12, o.ringSegs ?? 24);
+  const PI2 = Math.PI * 2;
+
+  // ① 深腔背衬（近黑圆盘；比外券框内缘略大 ⇒ 缝隙里也是黑，不露亮石）
+  const back = new THREE.CircleGeometry(r * 1.02, 28);
+  back.translate(0, 0, 0.02);
+  p.dark.push(back);
+  // ② 玻璃底（glass 桶；半透彩窗读法，24 tri 单片 —— glass 是全局单 mesh，量必须小）
+  const gl = new THREE.CircleGeometry(r * 0.9, 24);
+  // depth 小的圆窗（拱头 Ø5）上 0.16 会与金环前脸共面 ⇒ 按 depth 收，大窗行为不变
+  gl.translate(0, 0, Math.min(0.16, d * 0.5));
+  (p.glass ??= []).push(discUV(gl, STONE_TILE_METERS.glass));
+
+  const stone: THREE.BufferGeometry[] = [];
+  const gold: THREE.BufferGeometry[] = [];
+
+  // ③ 双层石质券框（voussoir 环）：外环 28 块 / 内环 20 块切向石
+  for (const [rr, segs, thick] of [
+    [r + 0.46, ringSegs, 0.92],
+    [r * 0.74, Math.round(ringSegs * 0.72), 0.58]
+  ] as const) {
+    const len = (PI2 * rr) / segs / 2; // 半弦长（块间留 ~0）
+    for (let i = 0; i < segs; i += 1) {
+      const a = (i / segs) * PI2;
+      stone.push(
+        boxRot('ashlar', len, thick, d * 0.7, Math.cos(a) * rr, Math.sin(a) * rr, d * 0.36, a + Math.PI / 2)
+      );
+    }
+  }
+  // ④ 放射石棂 ×2 环（外环错半拍 ⇒ 上下不对齐，读作"分格骨架"而不是辐条轮）
+  for (let i = 0; i < spokes; i += 1) {
+    const a = (i / spokes) * PI2;
+    const mid = r * 0.42;
+    stone.push(boxRot('ashlar', r * 0.44, 0.28, d * 0.5, Math.cos(a) * mid, Math.sin(a) * mid, d * 0.26, a));
+  }
+  for (let i = 0; i < spokes; i += 1) {
+    const a = ((i + 0.5) / spokes) * PI2;
+    const mid = r * 0.86;
+    stone.push(boxRot('ashlar', r * 0.26, 0.24, d * 0.5, Math.cos(a) * mid, Math.sin(a) * mid, d * 0.26, a));
+  }
+  // ⑤ 每瓣四叶饰（瓣心 0.50r：小环 + 4 尖锥 = 四叶 cusp）
+  for (let i = 0; i < petals; i += 1) {
+    const a = ((i + 0.5) / petals) * PI2;
+    const cx = Math.cos(a) * r * 0.5;
+    const cy = Math.sin(a) * r * 0.5;
+    const pr = r * 0.15; // 瓣半径
+    const ring = new THREE.CylinderGeometry(pr, pr, d * 0.42, 8, 1, true);
+    ring.rotateX(Math.PI / 2);
+    ring.translate(cx, cy, d * 0.3);
+    stone.push(discUV(ring, STONE_TILE_METERS.ashlar));
+    for (let k = 0; k < 4; k += 1) {
+      const b = a + (k / 4) * PI2;
+      const tip = new THREE.ConeGeometry(pr * 0.34, pr * 0.8, 4, 1);
+      tip.rotateZ(b - Math.PI / 2);
+      tip.translate(cx + Math.cos(b) * pr * 1.05, cy + Math.sin(b) * pr * 1.05, d * 0.3);
+      stone.push(discUV(tip, STONE_TILE_METERS.ashlar));
+    }
+  }
+  // ⑥ 金环（内缘金线，1.2m 金口径）+ 芯部金珠
+  const goldRing = new THREE.CylinderGeometry(r * 0.31, r * 0.31, d * 0.62, 16, 1, true);
+  goldRing.rotateX(Math.PI / 2);
+  goldRing.translate(0, 0, d * 0.42);
+  gold.push(discUV(goldRing, GOLD_TILE));
+  const boss = new THREE.ConeGeometry(r * 0.16, d * 0.75, 6, 1);
+  boss.rotateX(Math.PI / 2);
+  boss.translate(0, 0, d * 0.6);
+  gold.push(discUV(boss, GOLD_TILE));
+  // ⑦ 外缘卷叶（FBX Decor 语汇：叶尖向外翻卷 ⇒ 锥轴沿半径外指）；leaves=0 关闭
+  const leaves = Math.max(0, o.leaves ?? 8);
+  for (let i = 0; i < leaves; i += 1) {
+    const a = (i / leaves) * PI2 + Math.PI / leaves;
+    const lr = r + 1.15;
+    const leaf = new THREE.ConeGeometry(r * 0.11, r * 0.3, 4, 1);
+    leaf.rotateZ(a - Math.PI / 2);
+    leaf.translate(Math.cos(a) * lr, Math.sin(a) * lr, d * 0.12);
+    gold.push(discUV(leaf, GOLD_TILE));
+    const bead = new THREE.CylinderGeometry(r * 0.06, r * 0.06, d * 0.5, 6, 1, true);
+    bead.rotateX(Math.PI / 2);
+    bead.translate(Math.cos(a) * (lr - r * 0.16), Math.sin(a) * (lr - r * 0.16), d * 0.3);
+    gold.push(discUV(bead, GOLD_TILE));
+  }
+
+  p.ashlar.push(mergeSafe(stone));
+  p.gold.push(mergeSafe(gold));
+  stone.forEach((g) => g.dispose());
+  gold.forEach((g) => g.dispose());
+  return p;
+}
+
+/**
+ * **拱头石质填料**（R39 回炉 P0-1 新建）：尖拱在 `y ≥ y0` 以上那一段的**实心石作板**。
+ *
+ * 为什么需要它：尖拱门洞的 arch head（楣板以上的拱腔）在哥特做法里是**石砌
+ * tympanum 墙**，不是空的；本项目殿身是实心盒，所谓"门洞"全靠一块 dark 拱板
+ * 画出来 ⇒ 整段拱腔读作"黑洞"（R39 立面目测：门洞内 dark 可见 **383.6 m²**）。
+ * 这块板把 `y0` 以上的拱腔从 dark 改回**石作**，只把缝隙阴影留给 dark 背衬 ——
+ * 正是设计稿「dark 只作缝隙阴影，不许大面积露出」的落地手段。
+ *
+ * 局部：x-y 平面、沿 −z 挤出 depth（与 archBand/archPlate 同口径，调用方 translate）。
+ * 形状 = `pointedArch()` 点列里 `y ≥ y0` 的**连续一段** + 沿 y=y0 横线闭合
+ * （拱自起拱线向拱顶单调收窄 ⇒ 该段必连续；cusp 提尖只抬 |x| 小的顶部，不改连续性）。
+ *
+ * ⚠ 与 `archPlate`（从 y=0 起、整拱实心）的分工：archPlate 用在**暗龛背板**（整腔黑），
+ *   archHeadPlate 用在**半截以上填石**（下留门、上填墙）——两者叠在不同 z 上使用。
+ */
+export function archHeadPlate(
+  halfW: number,
+  springY: number,
+  rise: number,
+  y0: number,
+  depth: number,
+  segPerHalf = 9,
+  cusp = 0,
+  cuspW = 0.5
+): THREE.BufferGeometry {
+  const arch = pointedArch(halfW, springY, rise, segPerHalf, cusp, cuspW);
+  const above = arch.filter(([, y]) => y >= y0 - 1e-6);
+  if (above.length < 2) return new THREE.BufferGeometry();
+  const shape = new THREE.Shape();
+  shape.moveTo(above[0][0], y0);
+  for (const [x, y] of above) shape.lineTo(x, y);
+  shape.lineTo(above[above.length - 1][0], y0);
+  shape.closePath();
+  const geo = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false, curveSegments: 1, steps: 1 });
+  geo.translate(0, 0, -depth);
+  geo.computeVertexNormals();
+  planarUV(geo, STONE_TILE_METERS.ashlar);
+  return geo;
+}
+
+/**
+ * **齿饰檐口带**（R39 新建；FBX `WCArchElemCornice_2_Full` 18.30×**1.41**×0.68 的
+ * 「4 层退台 + 齿饰」语汇 —— 真值表 §6 `CORNICE_H = 1.41`，§7「檐口 1~2 段，
+ * 每段 3%~5%，**多层阶梯水平线脚**」）。
+ *
+ * 与既有 `corniceBand` 的分工：corniceBand = 3 层退台 + 3 道通长金线（城门/塔群用，
+ * 单件 36 tri，**没有齿**）；本件补的是**齿列（dentil）** —— 哥特檐口最显著的
+ * 「一排小方块」节拍，远看就是一条明暗点线，正是 y 72..96 空白立面缺的那层。
+ *
+ * 局部（与 corniceBand 完全同构，调用方 rotateY(π/2) 后贴 z 向立面）：
+ * 墙面 x=0、**向 −x 挑出 proj**、沿 **z** 长 len、块心 z=0、底面 y=0。
+ *
+ * tri：冠石/托石/金线 = 36（3 个 12 面 box）+ 齿 n×12。主殿 len 90 / 齿距 1.0 ⇒
+ * n=89 ⇒ 1,104 tri/道；低档整件跳过（由调用方 `!isLowDetail()` 包裹 + 内部再兜一层）。
+ *
+ * @param toothW 齿宽（默认 0.55；主殿 90m 长带在 300m 外仍读得出点线）
+ * @param gap    齿间净距（默认 0.45）
+ * @param proj   挑出量（默认 0.75；必须 < 主殿壁柱 0.8 ⇒ 壁柱读在前面）
+ */
+export function dentilBand(o: {
+  len: number;
+  h?: number;
+  toothW?: number;
+  gap?: number;
+  proj?: number;
+}): DetailParts {
+  const p = parts();
+  if (isLowDetail()) return p;
+  const h = o.h ?? 1.41; // FBX CORNICE_H
+  const proj = o.proj ?? 0.75;
+  const toothW = o.toothW ?? 0.55;
+  const gap = o.gap ?? 0.45;
+  const pitch = toothW + gap;
+  const n = Math.max(2, Math.floor((o.len - gap) / pitch));
+  // ① 上冠石（fascia，挑出最浅）+ ② 下托石（窗上墙的水平线脚）
+  p.ashlar.push(box('ashlar', proj * 0.72, h * 0.34, o.len, -proj * 0.36, h * 0.83, 0));
+  p.ashlar.push(box('ashlar', proj * 0.5, h * 0.22, o.len, -proj * 0.25, h * 0.11, 0));
+  // ③ 齿列（挑出最深 = 冠石下皮之外；低档隔齿 —— 只降密度）
+  const teeth: THREE.BufferGeometry[] = [];
+  const x0 = -((n - 1) * pitch) / 2;
+  for (let i = 0; i < n; i += 1) {
+    teeth.push(box('ashlar', proj * 0.92 - proj * 0.36, h * 0.4, toothW, -proj * 0.64, h * 0.44, x0 + i * pitch));
+  }
+  if (teeth.length) p.ashlar.push(mergeSafe(teeth));
+  teeth.forEach((g) => g.dispose());
+  // ④ 金压顶线（通长，1.2m 金口径；读作"金是线脚不是面"）
+  p.gold.push(goldUV(box('gold', proj * 0.86, h * 0.14, o.len, -proj * 0.42, h * 1.0, 0)));
+  return p;
+}
+
+/**
+ * **四叶金章（quatrefoil medal）**（R39 新建）。
+ *
+ * 背景（R39 ⑤/⑥）：主殿正立面原有 **12 枚 r=1.5 金圆盘**（每侧 6 枚，y 16..71），
+ * 在 300~470m 的实机距离读作「波点 / 硬币」。FBX 的金是**细竖线 + 线脚 + 卷叶**
+ * （真值表 §5 金件 = 线脚；§7 卷叶饰），没有大金盘。本件把"圆盘"换成**四叶轮廓 +
+ * 中心凸起**的章：远看是小亮点（不再是实心币），近看有哥特四叶饰（quatrefoil）语义。
+ *
+ * 局部：章面 x-y、**向 +z 挑出 depth**、中心 (0,0)。tri ≤ 120（实测见 .qa/r39_hall）：
+ * 底盘 10 面开口筒 20 + 4 尖瓣锥 4×8 = 32 + 芯锥 8 + 金环 12 ⇒ ≈ 72~88。
+ */
+export function quatrefoilMedal(o: { r: number; depth?: number }): DetailParts {
+  const p = parts();
+  if (isLowDetail()) return p;
+  const r = o.r;
+  const d = o.depth ?? 0.34;
+  const gold: THREE.BufferGeometry[] = [];
+  // ① 底盘（浅金盘，10 面；不做实心厚饼 ⇒ 侧看是一条金线）
+  const base = new THREE.CylinderGeometry(r * 0.62, r * 0.62, d * 0.5, 10, 1, false);
+  base.rotateX(Math.PI / 2);
+  base.translate(0, 0, d * 0.25);
+  gold.push(discUV(base, GOLD_TILE));
+  // ② 四尖瓣（45°/135°/225°/315° 四个方向，尖端朝外 = 四叶轮廓）
+  for (let k = 0; k < 4; k += 1) {
+    const a = Math.PI / 4 + (k / 4) * Math.PI * 2;
+    const lobe = new THREE.ConeGeometry(r * 0.3, r * 0.62, 4, 1);
+    lobe.rotateZ(a - Math.PI / 2);
+    lobe.translate(Math.cos(a) * r * 0.62, Math.sin(a) * r * 0.62, d * 0.28);
+    gold.push(discUV(lobe, GOLD_TILE));
+  }
+  // ③ 中心小凸起（芯珠；"章"的收头）
+  const hub = new THREE.ConeGeometry(r * 0.2, d * 0.8, 6, 1);
+  hub.rotateX(Math.PI / 2);
+  hub.translate(0, 0, d * 0.55);
+  gold.push(discUV(hub, GOLD_TILE));
+  p.gold.push(mergeSafe(gold));
+  gold.forEach((g) => g.dispose());
+  return p;
+}

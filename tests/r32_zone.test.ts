@@ -56,7 +56,14 @@ const QUALITY_HIGH = {
 
 /** castle.ts ZONE_EDGES_6 的镜像（分区表不导出，命名区划由建桶测试间接钉住） */
 const EDGES_6: readonly number[] = [60, -340, -460, -760, -1060, -1290, -1470];
-/** castle.ts ZONE_EDGES_3 的镜像 */
+/**
+ * R39-P9：gold / dark 用 **5 区**表 = `EDGES_6` 去掉 −1290（把最深两小区
+ * z4[−1060,−1290] 与 z5[−1290,−1470] 并成 [−1060,−1470]）。
+ */
+const EDGES_5: readonly number[] = [60, -340, -460, -760, -1060, -1470];
+/** R39-P9：wall 用 **1 区**表（全域 2,784 tri 一个 mesh） */
+const EDGES_1: readonly number[] = [60, -1470];
+/** castle.ts 已退役的 3 区 wall 表（R31 原版）：保留作 `zoneIndexOf` 纯函数用例 */
 const EDGES_3: readonly number[] = [60, -460, -1060, -1470];
 
 /** 造一条「z 中值 = cz」的假几何（直接塞 boundingBox，不需要顶点数据） */
@@ -140,12 +147,17 @@ describe('zoneIndexOf：z 中值归区语义', () => {
 });
 
 describe('R32 C-4 · 建桶结构与 DC 设计公式', () => {
-  it('分区 mesh 命名落 z 区划，DC = 设计公式内（7+2+7+6+1+4+3+2=32 ≤ castleDc）', () => {
+  it('分区 mesh 命名落 z 区划，DC = 设计公式内（R39-P9：7+1+6+4+1+4+3+2=28 ⇒ 实测 29）', () => {
     const { scene, castle } = buildCastle();
     try {
       const stats = castle.getCastleStats();
-      // 区划结构：R38-P0-2 B1 把 ashlar/gold 的 z0 按 z=−150 一分为二（z0a/z0b），其余 z1..z5 不变；
-      // wall 经 R38-P0-2 B3 把 ZONE_EDGES_3 由 4 界收成 3 界 ⇒ 只剩 z0/z1 两段。
+      /* 区划结构（R39-P9：**每族按自己的区表**，不再全局共用一张，见 castle.ts
+       * `ZONE_EDGES_BY_FAMILY`）：
+       *   · ashlar → `EDGES_6`（6 区）+ z0 按 z=−150 二分 ⇒ z0a/z0b + z1..z5 = 7 个 mesh；
+       *   · gold   → `EDGES_5`（5 区）+ z0 二分 ⇒ z0a/z0b + z1..z4 = 6 个（**没有 z5**）；
+       *   · wall   → `EDGES_1`（1 区）⇒ 只有 castle-wall-z0（全域 2,784 tri 一个 mesh）；
+       *   · dark   → `EDGES_5`（5 区，z0 实测空）⇒ z1..z4；
+       *   · grey   → 仍走 `EDGES_6`，实测只有 z1 非空。 */
       for (let i = 0; i < 6; i += 1) {
         if (i === 0) {
           expect(castleMesh(scene, 'castle-ashlar-z0a'), 'castle-ashlar-z0a 缺失').toBeDefined();
@@ -154,22 +166,20 @@ describe('R32 C-4 · 建桶结构与 DC 设计公式', () => {
           expect(castleMesh(scene, 'castle-gold-z0b'), 'castle-gold-z0b 缺失').toBeDefined();
         } else {
           expect(castleMesh(scene, `castle-ashlar-z${i}`), `castle-ashlar-z${i} 缺失`).toBeDefined();
-          expect(castleMesh(scene, `castle-gold-z${i}`), `castle-gold-z${i} 缺失`).toBeDefined();
+          if (i <= 4) {
+            expect(castleMesh(scene, `castle-gold-z${i}`), `castle-gold-z${i} 缺失`).toBeDefined();
+          }
         }
       }
-      for (let i = 0; i < 2; i += 1) {
-        expect(castleMesh(scene, `castle-wall-z${i}`), `castle-wall-z${i} 缺失`).toBeDefined();
-      }
-      // 设计公式：ashlar 7 + wall 2 + gold 7 + dark 6 + flame 1 + 可选桶 4 + 变体桶 3（R36-A2）+ 铺装 2 = 32
-      // （R38-P0-2：ashlar/gold 各 +1 因 z0 二分、wall −1 因 ZONE_EDGES_3 收界；净 +1，压在 castleDc 32 硬顶内）
-      const DESIGN_MAX_DC = 7 + 2 + 7 + 6 + 1 + 4 + 3 + 2;
+      expect(castleMesh(scene, 'castle-gold-z5'), 'R39-P9 之后 gold 只有 5 区（z5 已并入 z4）').toBeUndefined();
+      expect(castleMesh(scene, 'castle-wall-z0'), 'castle-wall-z0 缺失').toBeDefined();
+      expect(castleMesh(scene, 'castle-wall-z1'), 'R39-P9 之后 wall 只剩 1 区（z1 已并入 z0）').toBeUndefined();
+      // 设计公式（R39-P9）：ashlar 7 + wall 1 + gold 6 + dark 4（z0 空）+ grey 1
+      //   + flame 1 + 可选桶 4 + 变体桶 3 + 铺装 2 = 29
+      const DESIGN_MAX_DC = 7 + 1 + 6 + 4 + 1 + 1 + 4 + 3 + 2;
+      expect(DESIGN_MAX_DC).toBe(29);
       expect(DESIGN_MAX_DC).toBeLessThanOrEqual(R31_BUDGET.castleDc);
-      // 实测 30（dark z0 空 + R36-A2 变体桶 3）⇒ 区间断言吸收 A 线几何漂移。
-      // ⚠ 不要把下界钉到 30、上界钉到 31 之外：
-      //   C-4 结论 = 分区族 **非空区数**（6+3+6+5）+ flame 1 + 四可选桶 4 + 铺装 2 = 27，
-      //   designMAX 28 对应 dark z0 将来被补满。R36-A2 变体桶（door/agedGold/pave
-      //   → variantMaterial）+3 ⇒ 30/31。空区/zero-tri 区一律不建 mesh
-      //   （castle.ts 的 isDrawable 护栏），故 DC 只会随「某区由空变非空」上行。
+      // 实测 29（R39-P9；R38 末态 32）⇒ 区间断言吸收 A 线几何漂移
       expect(stats.dc).toBeGreaterThanOrEqual(20);
       expect(stats.dc).toBeLessThanOrEqual(DESIGN_MAX_DC);
       // 全显口径（LOD 区取高档）不超 castleTriHigh
@@ -251,7 +261,12 @@ describe('R32 C-5 · 距离衰减运行时语义（显隐 + 远档 LOD + 滞回�
       castle.updateViewerZ(-1300); // 深区 ⇒ 必重算，近区改藏
       const deep = visibleSignature(scene);
       expect(deep).not.toEqual(a);
-      expect(deep.some((n) => n.endsWith('-z0'))).toBe(false); // 入口区在深处不可见
+      /* R39-P9：`-z0` 不再等于「入口区」—— wall 合并成 1 区后 `castle-wall-z0` 覆盖
+       * 全域（cz≈−906，z=−1300 时 d≈394 ⇒ 仍在 550m 闸门内可见）。
+       * 入口区按**族 + z0 段**点名（ashlar/gold 的 z0a/z0b）。
+       * 实测（.qa/r39_b 探针）：z=−1300 可视 18 个 mesh，其中以 -z0 结尾的只有
+       * castle-wall-z0，而 castle-(ashlar|gold)-z0[ab] 一个都不在。 */
+      expect(deep.filter((n) => /^castle-(ashlar|gold)-z0[ab]$/.test(n))).toEqual([]);
     } finally {
       castle.dispose();
     }

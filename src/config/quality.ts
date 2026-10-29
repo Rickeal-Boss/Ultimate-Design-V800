@@ -15,17 +15,13 @@ export interface QualitySettings {
   minPixelRatio: number;
   antialias: boolean;
   shadowMapSize: number;
-  /** 阴影正交半径（texel 对齐用） */
-  shadowOrtho: number;
   /**
-   * R31 阴影贴图**更新间隔（帧）**：1 = 每帧重绘，N = 每 N 帧重绘一次。
-   * 冻结阴影更新后帧时降约 60%（.qa/r31_test/baseline.md §5.3）⇒ 2048² 阴影每帧重绘
-   * 是当前最大单项帧成本。节流让阴影贴图从「每帧全量重绘」变成「每 N 帧重绘一次」，
-   * 中间帧直接复用上一张贴图（three 的 `shadow.autoUpdate=false` + `needsUpdate` 门控）。
-   * 焦点跳变（>1.5m，如复位/换场景）与首次 update 强制刷新，避免换场景后阴影错位。
+   * 阴影正交半径（texel 对齐 + 影子盒尺寸）。
+   * R39：20 → **10**。texel = 2·ortho/mapSize 与 mapSize 同步减半 ⇒ 密度不变（0.0195m/texel）。
+   * 依据：阴影 pass 的 caster 只有车模（13 DC / 19,536 tri，R38-P1-6 实证），
+   * 接收面只有车周围路面 ⇒ 40m 见方的盒子对「只投一辆车」严重过剩。
    */
-  shadowUpdateInterval: number;
-  /** EffectComposer 渲染目标 MSAA 采样数 */
+  shadowOrtho: number;
   msaaSamples: number;
   bloom: boolean;
   /**
@@ -62,26 +58,28 @@ const TIERS: Record<QualityTier, Omit<QualitySettings, 'tier' | 'isMobile' | 'gp
     pixelRatio: Math.min(window.devicePixelRatio, 2),
     minPixelRatio: 1,
     antialias: true,
-    // 构建无限制 ⇒ 2048² 保留（texel 更细）；运行时靠 shadowUpdateInterval 节流，不靠缩尺寸。
-    shadowMapSize: 2048,
-    // R31：28 → 20。texel 0.027m → 0.019m（更细），同时阴影视锥里的 caster 数下降。
-    shadowOrtho: 20,
     /**
-     * ══ R38-P1-5（A3）：2 → **4 帧** ══════════════════════════════════════════
-     * 依据：本文件头「冻结阴影更新后帧时 −60%」⇒ 每帧重绘 ≈60% 帧时，隔帧（2）≈30%，
-     *   **4 帧 ≈15%** ⇒ 再省 ≈15% 帧时，是本波性价比最高的一项（改一个常数）。
-     * 拖影论证（承 R31 本键的自有论证，参数更新）：阴影相机是**正交**且 texel 对齐，
-     *   节流期间只是贴图停在上一刷新帧的位置；焦点恒在 ±20m 正交盒内、
-     *   深度恒落在 [near=1, far=160] 内（光源沿 sunDirection 后退 60m）。
-     *   250 km/h（69 m/s）下 **4 帧位移 = 4/60 × 69 = 4.6m ≪ 20m** ⇒ 无可见拖影。
-     * 双闸门同相位（已核实）：`Lighting.update` 按本值置 `sun.shadow.needsUpdate`，
-     *   `Game.renderTail` 在 speed>8 时置 `renderer.shadowMap.autoUpdate=false`
-     *   + `needsUpdate=(shadowFrame===0)`（每 2 帧）⇒ three 的 `WebGLShadowMap.render`
-     *   先过外墙再过单灯 ⇒ 实际刷新周期 = **lcm 语义下的每 4 帧**（两计数器同为
-     *   每渲染帧 +1，偶帧重合）。
-     * ⚠ 观感验收（必做）：高速段连拍 3 帧，确认车下阴影边界无「台阶」位移。
+     * ══ R39：ortho 20 → **10**，mapSize 2048 → **1024**（同 texel 密度，光栅面积 1/4）══
+     * 复算（texel = 2·ortho / mapSize，逐位相同 ⇒ 锐度零变化）：
+     *   改前 2×20/2048 = **0.01953 m/texel**；改后 2×10/1024 = **0.01953 m/texel**。
+     * 单次重绘成本 ∝ mapSize² ⇒ 1024²/2048² = **0.25，即 −75%**。
+     * 为什么盒子可以收到 10：R38-P1-6 实证阴影 pass 的 caster **只有车模**
+     *   （castle/Terrain/Road 全 castShadow=false；13 DC / 19,536 tri），接收面只有车周围
+     *   路面 ⇒ 40m 见方的盒子对「只投一辆车」严重过剩。
+     * 安全边界（投影体必须留在盒内才不会被裁）：
+     *   · 盒的 left/right/top/bottom 只约束**投射体（车）**，不约束影子的落地范围 ——
+     *     落地范围主要落在**深度轴**（near=1 / far=160，与 ortho 无关）。
+     *     按 sunDir(−0.2531, 0.2079, −0.9448)（仰角 12°）复算：车高 1.9m 投出 8.9m 尾影，
+     *     其远端在光照空间 basisY 上只偏离盒心 ≈1.8m；车自身半长 2.81m ⇒ 合计 4.6m，
+     *     **ortho 10 有 2 倍余量**。
+     *   · R39 起阴影**每帧重绘**（`Lighting` 不再节流）⇒ 没有任何「陈旧位移」，
+     *     因此这条约束与帧率、车速都无关（旧方案要按 4 帧节流的 travel 额外留量）。
+     * ⚠ 观感验收（必做）：高速段连拍 3 帧，确认车下阴影边界无「台阶」位移、
+     *   且尾影远端未被盒边切平（`.qa/r39_perf` 有 texel 换算 + 出图脚本骨架）。
      */
-    shadowUpdateInterval: 4,
+    shadowMapSize: 1024,
+    // R31：28 → 20；R39：20 → 10（理由同上：caster 只有车，且每帧重绘无陈旧位移）
+    shadowOrtho: 10,
     msaaSamples: 4,
     bloom: true,
     bloomScale: 1,
@@ -93,10 +91,10 @@ const TIERS: Record<QualityTier, Omit<QualitySettings, 'tier' | 'isMobile' | 'gp
     pixelRatio: Math.min(window.devicePixelRatio, 1.5),
     minPixelRatio: 1,
     antialias: true,
-    // R31：1536 → 1024（面积 −55%）；节流间隔 3 帧。
-    shadowMapSize: 1024,
-    shadowOrtho: 20,
-    shadowUpdateInterval: 3,
+    // R31：1536 → 1024（面积 −55%）。R39：2048→1024 的同一规则 ⇒ 1024 → **512**，
+    // ortho 10 ⇒ texel 2×10/512 = **0.0391 m**，与改前 2×20/1024 = 0.0391 **逐位相同**。
+    shadowMapSize: 512,
+    shadowOrtho: 10,
     msaaSamples: 2,
     bloom: true,
     bloomScale: 0.5,
@@ -108,10 +106,10 @@ const TIERS: Record<QualityTier, Omit<QualitySettings, 'tier' | 'isMobile' | 'gp
     pixelRatio: 1,
     minPixelRatio: 0.75,
     antialias: false,
-    // R31：1024 → 768（面积 −44%）；节流间隔 4 帧。
-    shadowMapSize: 768,
-    shadowOrtho: 20,
-    shadowUpdateInterval: 4,
+    // R31：1024 → 768（面积 −44%）。R39：按同规则 768 → **384**，ortho 10
+    // ⇒ texel 2×10/384 = **0.0521 m**，与改前 2×20/768 = 0.0521 **逐位相同**。
+    shadowMapSize: 384,
+    shadowOrtho: 10,
     msaaSamples: 0,
     bloom: false,
     bloomScale: 0.5,
@@ -172,7 +170,7 @@ export function detectQualityTier(gpu: GpuClass = 'unknown'): QualityTier {
  * - pixelRatio 2 → 1.5：1080p@2x 是 8.3M 像素，1.5x 只要 4.7M（−44% 填充）；
  * - msaaSamples 4 → 2：MSAA 的 resolve 带宽与显存减半（4x 在核显上收益递减）；
  * - bloomScale 1 → 0.5：bloom 的 5 级 mip blur 面积降到 1/4；
- * - shadowMapSize 2048 → 1536：2048² 阴影每帧全场景重绘是核显第二大固定开销；
+ * - shadowMapSize 再降一档（R39：high 1024 → 核显 768，见函数体内注释）；
  *   ⚠ **R38-P1-6 账实校正**：这里原写「实测 **113 DC / 78k tri**」是**过期错值**。
  *     探针实证（`tools/r38_frameload.mjs`）：**castle / Terrain / Road 的 castShadow
  *     全为 0**（castle.ts addMesh 显式置 false）⇒ 阴影 pass 是**车模独占**，
@@ -180,8 +178,9 @@ export function detectQualityTier(gpu: GpuClass = 'unknown'): QualityTier {
  *     再经 R38-P1-5 E2 关掉 28 个 <500 tri 的小件后为 **13 DC / 19,536 tri**）。
  *     错因：113/78k 是 R31 之前「城堡还投影」时代的读数，几何与 shadow flag 都改过后
  *     未回填 —— 正是本项目最危险的失效类型（数字不跟着实物走）。
- *     选 1536² 的结论**不受影响**（依据仍是「2048² 全场景重绘是第二大固定开销」，
- *     且 R38-P1-5 把更新间隔拉到 4 帧后该开销又降一半），但错值必须消掉。
+ *     R39 追加：R39 探针实测「单次阴影重绘的净成本」在 268ms 帧下已**低于噪声**
+ *     （同桶内重绘帧 265.2ms vs 非重绘帧 270.4ms；两帧合并 536.5 vs 535.8）
+ *     ⇒ 阴影早已不是帧时主项，降这一档只为「把每帧成本摊平」（见 quality 顶注）。
  * - 画布 antialias 关掉：最终呈现走 composer 的 RT，默认帧缓冲再开 MSAA 纯属白付带宽。
  */
 function applyIntegratedBudget(s: QualitySettings): QualitySettings {
@@ -189,7 +188,10 @@ function applyIntegratedBudget(s: QualitySettings): QualitySettings {
   s.pixelRatio = Math.min(window.devicePixelRatio, 1.5);
   s.msaaSamples = 2;
   s.bloomScale = 0.5;
-  s.shadowMapSize = 1536;
+  // R39：high 现默认 1024 → 核显 **768**（ortho 仍 10）⇒ texel 2×10/768 = 0.0260 m
+  // （比 0.01953 略粗 33%，是「像素预算档」唯一允许的降质方向），
+  // 单次重绘面积只剩改前的 0.14×；且每帧重绘 ⇒ 成本恒定、无重/轻帧交替。
+  s.shadowMapSize = 768;
   s.antialias = false;
   return s;
 }

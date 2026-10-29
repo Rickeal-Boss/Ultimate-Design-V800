@@ -17182,7 +17182,7 @@
    "confidence": 0.9,
    "primitive": "extrude",
    "topologyClass": "conforming-shell",
-   "topologyRationale": "仪表台下体侧视断面挤出，膝部空间留 y0.74 以下",
+   "topologyRationale": "仪表台下体侧视断面挤出；下沿落到座舱地板：工厂口径 y0.05 起（profile 0.21 − position.y 0.16），经 R7Adapter R27 内饰抬升 +0.26 后装配态底面 0.310 与 cabin-floor 顶面精确相接",
    "geometryDescriptor": {
     "profile2D": {
      "points": [
@@ -17200,11 +17200,11 @@
       ],
       [
        0.716,
-       0.74
+       0.21
       ],
       [
        0.995,
-       0.74
+       0.21
       ]
      ],
      "depth": 1.78,
@@ -17229,7 +17229,7 @@
    "attachment": null,
    "dimensions": {
     "width": 1.78,
-    "height": 0.215,
+    "height": 0.745,
     "depth": 0.295,
     "units": "meters",
     "confidence": 0.9

@@ -120,10 +120,24 @@ describe('R37-P 四个候选的代码论证（防回退）', () => {
     expect(src).toContain('if (now - lastGaugeTime < GAUGE_MIN_INTERVAL * 1000) return;');
   });
 
-  it('阴影节流（R36-P2）仍在：>8 m/s 隔帧，低速逐帧', () => {
-    const src = readFileSync(new URL('../src/core/Game.ts', import.meta.url), 'utf8');
-    expect(src).toContain('if (speedNow > 8) {');
-    expect(src).toContain('this.renderer.shadowMap.needsUpdate = this.shadowFrame === 0;');
+  /**
+   * ══ R39（性能线收口）：**节流守卫已被拆除**，改为「无节流 + 加载期预热」 ══════════
+   * 改前（R36-P2）：`Game` 里按 `speedNow > 8` 隔帧刷阴影 + `shadowMap.needsUpdate` 手拨；
+   * 改后（R39）：阴影**逐帧真实刷新**（`Lighting` 置 `sun.shadow.autoUpdate = true`、
+   *   `quality.shadowUpdateInterval` 键**已删除**），代价由「加载期 `prewarmGpu()` 预热」
+   *   + 正交盒/贴图缩档（shadowOrtho 20→10、shadowMapSize 2048→1024）抵掉
+   *   ⇒ texel 尺寸 0.01953m **逐位不变**、阴影面积 0.25×。
+   * 本用例的**意图不变**（盯住「不需要每帧重烘阴影」这条性能不变量），
+   * 只是形态从「节流守卫存在」换成「无节流 + 预热存在」—— 断言文本由性能线给定。
+   */
+  it('阴影无逐帧节流守卫（R39：改为 autoUpdate + 加载期预热），且不留旧节流残留', () => {
+    const gameSrc = readFileSync(new URL('../src/core/Game.ts', import.meta.url), 'utf8');
+    const lightingSrc = readFileSync(new URL('../src/render/scene/Lighting.ts', import.meta.url), 'utf8');
+    expect(gameSrc).not.toContain('if (speedNow > 8) {');
+    expect(gameSrc).not.toContain('this.renderer.shadowMap.needsUpdate');
+    expect(gameSrc).toContain('this.prewarmGpu()');
+    expect(lightingSrc).toContain('sun.shadow.autoUpdate = true');
+    expect(lightingSrc).not.toContain('updateInterval');
   });
 });
 
@@ -143,8 +157,14 @@ describe('R37-P 常驻地板护栏（全局桶 tri 上限）', () => {
         if (!geo.boundingSphere) geo.computeBoundingSphere();
         const r = geo.boundingSphere?.radius ?? 0;
         const t = triOf(geo);
-        // 半径 > 250m ⇒ 横跨整条 z 走廊，行车机位下恒在视锥内（见文件头④）
-        if (r > 250) {
+        /* 半径 > 250m ⇒ 横跨整条 z 走廊（见文件头④）。
+         * ⚠ R39-P9：**分区 mesh 不算「不可剔除桶」** —— `castle-*-zN` 走 updateViewerZ 的
+         *   550m 距离闸门（整块 `visible = false`），并区的唯一代价是「区内剔除粒度变粗」，
+         *   不是「恒在视锥内」。合并后 `castle-gold-z4` 的球 r=252（仅超阈 **2m**）若计入，
+         *   会把 floor 从 **32,726** 抬到 **55,242** —— 那是把「分区件」误当「全局件」，
+         *   与本用例的名字（全局桶）和文件头④的论证都相反。 */
+        const zoned = /-z\d+[ab]?$/.test(m.name);
+        if (r > 250 && !zoned) {
           rows.push({ name: m.name, tri: t, r });
           floor += t;
         }
@@ -152,7 +172,8 @@ describe('R37-P 常驻地板护栏（全局桶 tri 上限）', () => {
       rows.sort((a, b) => b.tri - a.tri);
       const log = rows.map((x) => `${x.name}=${Math.round(x.tri)}(r${Math.round(x.r)})`).join(' ');
       console.log(`R37_ALWAYS_ON_FLOOR ${JSON.stringify({ tri: Math.round(floor), buckets: rows.length, log })}`);
-      // 现值 ≈32,446 tri / 9 桶。上限 40,000 留 ~23% 余量给后续细化，
+      // R39-P9 实测 = **33,054 tri / 9 桶**（全是真·全局桶：glass/roof/marble/wood/
+      //   flame/door/agedGold/pave-road/pave-walk）。上限 40,000 留 ~21% 余量给后续细化，
       // 但**禁止**靠往全局桶里堆料来花掉它 —— 要加量请先分区（并付 DC）。
       expect(floor).toBeLessThanOrEqual(40_000);
 

@@ -83,7 +83,10 @@ describe('R31 城堡几何预算（getCastleStats 官方口径）', () => {
     const s = castleStats('high');
     expect(s.tris).toBeLessThanOrEqual(R31_BUDGET.castleTriHigh);
     expect(s.dc).toBeLessThanOrEqual(R31_BUDGET.castleDc);
-  }, 30000);
+    // R39：wood 1024 + ashlar 新增 4 层把 high 档贴图同步段 1.3s→2.6s；
+    //   两个 fork 并发烘 1024² 时实测一次 37.6s 超时。用户已明确「构建时长不限」，
+    //   CI 冷启动需余量 ⇒ 45000。
+  }, 45000);
 
   it('low 档：tris 与 dc 均在 R31_BUDGET 内', () => {
     const s = castleStats('low');

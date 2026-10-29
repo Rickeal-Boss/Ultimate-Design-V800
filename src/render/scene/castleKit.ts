@@ -34,6 +34,7 @@ import { STONE_TILE_METERS } from './stoneTexture';
 import type { StoneKind } from './stoneTexture';
 import {
   apseDrum,
+  archHeadPlate,
   bellTower,
   blindArcadeRow,
   capitalCollar,
@@ -44,6 +45,7 @@ import {
   corridorRun,
   crocketRun,
   crookedSpire,
+  dentilBand,
   diamondFit,
   doorLeaf,
   draperyRelief,
@@ -53,6 +55,8 @@ import {
   mapParts,
   pinnacleCluster,
   pour,
+  quatrefoilMedal,
+  roseWindow,
   setDeepFar,
   statueNicheX,
   statueNicheZ,
@@ -1938,58 +1942,183 @@ export function makeMainHall(): StoneBuckets {
     b.ashlar.push(box('ashlar', frontW, bodyH, frontDepth, 0, 2.7 + bodyH / 2, zMidFront));
     // 中央封闭大拱门龛（dark 内衬 + 金券 3 层 + 楣饰）
     const openHalf = clearW / 2; // 8
-    const rise = clearH - 2.4; // 21.6（起拱线 2.4 处）
-    for (const [band, dep] of [
-      [1.5, 0.6],
-      [0.95, 0.5],
-      [0.55, 0.45]
+    /* ── R39 回炉 · `clearH` 语义修正（拱顶高度）─────────────────────────────
+     * 改前：`rise = clearH − 2.4 = 21.6`，而两心尖拱的**拱顶** = springY + rise
+     *   + cusp = 2.4 + 21.6 + 1.1 = **y 25.1** ⇒ 实际净高只有 25.1m、h/w = **1.26**，
+     *   与 r28Layout 注释「clearH 44 / h/w = 44/20 = 2.2」和 FBX `Arch_3` 的 2.41
+     *   **两个都不符**（差在 cusp 没算，且 rise 被当成"总高"用）。
+     *   后果（立面栅格实证）：门洞是 20×23m 的矮胖拱，近黑三角压在立面正中。
+     * 改后：按 clearH 的原意（净高 44）反解 rise = clearH − springY − cusp = **40.5**
+     *   ⇒ 拱顶 y = 2.4 + 40.5 + 1.1 = **44.0**，h/w = **2.20**（贴 FBX 2.41 的下沿）。
+     *   tri 零变化：archBand/archPlate 的面数只由 segPerHalf 决定，与 rise 无关。
+     * 连带：券四级 / 暗龛板 / 龛拱卷叶 / 拱头花格屏全部改用同一组 PORTAL_* 常量。 */
+    const PORTAL_SPRING = 2.4;
+    const PORTAL_CUSP = 1.1;
+    const rise = clearH - PORTAL_SPRING - PORTAL_CUSP; // 40.5 ⇒ 拱顶 44.0
+    /* ── R39 ④ 中央门洞重构：四级退台尖拱券 ──────────────────────────────────
+     * 改前（R33）：三层券 band 1.5/0.95/0.55，前脸 +0.05/−1.10/−2.05 —— 后两层的
+     * 挤出体全在 z<zFront 的**实心殿身里**（殿身前脸恰在 z=zFront），
+     * 只有最外一层真的看得见，其余两层白占 ~300 tri。
+     * 改后：四层券**全部前凸**（前脸 0.88/0.62/0.42/0.24，逐层内收 ~0.22），
+     * band 加宽到 1.9/1.35/0.95/0.62 ⇒ 近景读作"层层退台的尖拱券"，门扇（前脸 0.14）
+     * 退在最内层之后 ⇒ 真实纵深阴影（不再是贴片）。
+     * ⚠ 设计稿的「三级退台各进深 0.8m（合计内凹 2.4m）」在**实心殿身**上不可能实现
+     *   （z<zFront 即入石，且撞面约束限凸出 ≤0.9m）；本实现是等效退台：
+     *   0.88 → 0.14 共 **0.74m** 纵深落差，观感等价、可复核（.qa/r39_hall/report.md）。
+     */
+    for (const [band, dep, front] of [
+      [1.9, 0.85, 0.88],
+      [1.35, 0.75, 0.62],
+      [0.95, 0.65, 0.42],
+      [0.62, 0.55, 0.24]
     ] as const) {
-      const g = archBand(openHalf, 2.4, rise, band, dep, 9, 1.1, 0.45);
+      const g = archBand(openHalf, PORTAL_SPRING, rise, band, dep, 9, PORTAL_CUSP, 0.45);
       g.rotateY(Math.PI);
-      g.translate(0, 0, zFront + 0.05 - (band === 1.5 ? 0 : band === 0.95 ? 1.15 : 2.1));
+      g.translate(0, 0, zFront + front - dep);
       b.gold.push(g);
     }
-    b.dark.push(archPlate(openHalf - 0.3, 2.4, rise, frontDepth - 1.2, 9, 1.1).translate(0, 0, zFront));
+    // 暗龛背板（前脸 +0.04，压在殿身前脸之外 ⇒ 不 z-fight，且在四级券之**后**
+    // ⇒ 券的每一级都读到自己的阴影）。厚度只 0.12m：殿身是实心盒，厚的没有任何收益。
+    b.dark.push(archPlate(openHalf - 0.3, PORTAL_SPRING, rise, 0.12, 9, PORTAL_CUSP).translate(0, 0, zFront + 0.04));
+    /* ── R39 ④b 双扇木门 + 石质半月楣（tympanum）────────────────────────────
+     * 门扇落 **door 桶**（castle.variantMaterial('inner-wood')，木图集已备）+
+     * 门钉/徽章落 **agedGold 桶**（gilded-aged 做旧金）⇒ **0 新贴图、0 新 DC**
+     * （`castle-door` / `castle-agedGold` 两个全局 mesh 由 makeGate 早已存在）。
+     * 纵深读数：券四级前脸 0.88/0.62/0.42/0.24，门扇前脸 +0.14（含门钉 0.11）⇒
+     * 门在最内层券**之后** 0.1m、暗龛背板（+0.04）**之前** ⇒ 三层次序成立。
+     * 落 y 2.4 起（台基顶 y 2.2 之上）—— 台基是第一级踏步，门不下沉到车道。
+     * ⚠ door/agedGold 是**全局单 mesh**（不参与 z-zone 剔除）⇒ 逐 tri 全额递交，
+     *   量必须小：2 扇门 = door 240 + agedGold 168 = **408 tri**（预算 ≤1,500 内）。
+     */
+    for (const s of [-1, 1] as const) {
+      /* 两扇各 4.6 宽，中心 **±2.52**。为什么不是设计稿的「门缝 0.1」（±2.35）：
+       * `doorLeaf` 自带 0.22 宽立门框（落在 w/2+0.11 处），中心取 ±2.35 时两扇的内框
+       * 会**互叠 0.34m**，且在 y/z 面完全共面 ⇒ 0.34×9m 的共面条带必然 z-fight。
+       * ±2.52 是两框**恰好对接**（x=0 处面接触、法线相反 ⇒ 各向背面剔除，不打架）的
+       * 唯一取值，读作「双扇门 + 0.44m 中挺」，门扇净缝 0.44（比 0.1 宽，但中挺把它
+       * 读成"双开"而不是"一条缝"）。 */
+      pour(b, mapParts(doorLeaf({ w: 4.6, h: 9, studs: true }), (g) => g.translate(s * 2.52, 2.7, zFront - 0.06)));
+    }
+    /* 石质半月楣（tympanum）浮雕：12.4 × 3.2 ashlar 板 + 3 枚四叶金章 + 中央小尖拱。
+     * 宽度取 12.4 而非设计稿 14：拱内净宽在 y 12..15 只有 ±6.6~5.5（见下），
+     * 14m 板两侧会顶穿券线；12.4 留 0.6 余量，且板在券线**之后**（+0.10 < 0.24），
+     * 越界部分被券挡住不影响读数。 */
+    b.ashlar.push(box('ashlar', 12.4, 3.2, 0.16, 0, 13.8, zFront + 0.10));
+    for (const tx of [-4.0, 0, 4.0] as const) {
+      pour(b, mapParts(quatrefoilMedal({ r: 0.8 }), (g) => g.translate(tx, 13.8, zFront + 0.20)));
+    }
+    {
+      // 中央小尖拱（券线坐在楣板上；ashlar 石作，不进 gold —— 金只在四叶章上）
+      const spandrelArch = archBand(2.0, 12.8, 2.4, 0.28, 0.22, 3, 0.4, 0.45);
+      spandrelArch.rotateY(Math.PI);
+      spandrelArch.translate(0, 0, zFront + 0.14);
+      b.ashlar.push(spandrelArch);
+    }
+    /* ── R39 回炉 P0-1：**拱头石质花格屏**（3 扇尖窗 + 顶部小玫瑰窗）──────────
+     * 问题（主理人立面目检）：门洞净腔里除了门（9m）与半月楣（3.2m）之外全是 dark，
+     *   正立面读作"一整块近黑三角"，跟 R33 拆掉的大金盘是同一种病 —— 换了颜色还是
+     *   "一块东西堵住门"。栅格实测（.qa/r39_hall/stats.mjs，改前）：门洞内 dark
+     *   可见 **383.6 m²**、立面 dark 像素占比 **3.50%**。
+     * 修法：在半月楣之上（y 17.4）到拱顶之前填一面**石质透空花格屏**：
+     *   3 扇并排尖窗（中扇更高，Window1 语汇）+ 顶 1 个 Ø5 玫瑰形圆窗
+     *   （roseWindow 去掉外缘卷叶）+ 芯部金饰（Ø3.2 芯 + 6 短刺，≤120 tri）。
+     *   石框落 ashlar、芯落 glass、其后 dark **只作缝隙阴影**（不再是大面积）。
+     * ── 收边核算（逐高比对"拱内净宽"，全部留正余量，故无需裁剪也不露黑角）──
+     *   两心尖拱：R = (rise²+halfW²)/(2·halfW) = (40.5²+8²)/16 = 106.52，c = 98.52；
+     *   净半宽 x(y) = R·√(1−((y−2.4)/R)²) − c
+     *     y 17.4 → ±7.00 ｜ 屏最外沿（边扇 4.45）✓ 余 2.55
+     *     y 26.2 → ±5.41 ｜ 边扇尖顶外包络 ±4.45 ✓ 余 0.96
+     *     y 29.2 → ±4.63 ｜ 中扇尖顶 ±1.70 ✓
+     *     y 33.0 → ±3.66 ｜ Ø5 玫瑰外包络 ±3.42 ✓ 余 0.24（最紧的一处）
+     *   ⚠ 为什么不是设计稿的 **Ø7**：Ø7 外包络 = 3.5+0.92 = ±4.42 > 拱在 y33 的 ±3.66
+     *     ⇒ 圆窗两侧必露黑角（这正是"矩形屏塞进尖拱、四角露黑"的同型错误）。
+     *     Ø5 是本拱内**能整圆装下的最大直径**；若要 Ø7 必须把拱顶再抬到 ≈52（h/w 2.6，
+     *     越过 FBX 2.41），会与 y55 的玫瑰窗挤在一起 ⇒ 不取。
+     * ── 纵深 ── 屏 base z = zFront+0.06、frameOut 0.16 ⇒ 前脸 **0.22**，
+     *   在四级券最内层前脸 0.24 之**后**、暗龛板 0.04 之**前** ⇒「券 → 屏 → 龛」
+     *   三层次序成立，且**不占撞面凸出预算**（0.22 ≪ 0.9）。
+     */
+    /* 拱头石质填料（y ≥ 16.6 的拱腔填石）：dark 只留在门/楣周边作缝隙阴影。
+     * 层序（沿 +z 从后到前）：暗龛板 0.04 → **石填料 0.07** → 花格屏 0.10 → 金芯 0.51。 */
+    b.ashlar.push(
+      archHeadPlate(openHalf - 0.3, PORTAL_SPRING, rise, 16.6, 0.06, 9, PORTAL_CUSP).translate(0, 0, zFront + 0.07)
+    );
+    {
+      const SCREEN_Z = zFront + 0.10;
+      const screenLancet: readonly (readonly [number, number, number, 2 | 3])[] = [
+        [-3.0, 1.15, 8, 2],
+        [0, 1.4, 11, 3],
+        [3.0, 1.15, 8, 2]
+      ];
+      for (const [lx, halfW, rs, mull] of screenLancet) {
+        pour(
+          b,
+          mapParts(
+            traceryWindowZ({
+              halfW,
+              rise: rs,
+              cusp: 0.75,
+              frameOut: 0.16,
+              plateBack: 0.22,
+              mullions: mull,
+              lights: true,
+              recess: true,
+              subArches: false,
+              goldFrame: false
+            }),
+            (g) => g.translate(lx, 17.4, SCREEN_Z)
+          )
+        );
+      }
+      // 顶部小玫瑰窗（Ø5；去掉外缘卷叶以装进拱内，depth 0.30 收在券线之后）
+      pour(
+        b,
+        mapParts(roseWindow({ r: 2.5, petals: 8, spokes: 12, ringSegs: 16, depth: 0.3, leaves: 0 }), (g) =>
+          g.translate(0, 33.0, zFront + 0.08)
+        )
+      );
+      /* 芯饰：金芯 + 6 根短刺（P0-2 允许保留的唯一"门楣聚焦"）。
+       * ⚠ 设计稿写 Ø3.2，那是配 Ø7 圆窗的比例；本拱内只能放下 **Ø5**（见上表），
+       *   Ø3.2 会占 64% 直径 ⇒ 立面目检读作"圆窗中间又贴了一枚金币"（正是要消解的
+       *   读法）。按同一比例降到 **Ø1.8（36%）+ 刺长 0.55**，读作窗芯而不是币。 */
+      const hubR = 0.9;
+      const hub = new THREE.CylinderGeometry(hubR, hubR * 0.66, 0.3, 12);
+      hub.rotateX(Math.PI / 2);
+      hub.translate(0, 33.0, zFront + 0.32);
+      planarUV(hub, TILE.gold);
+      b.gold.push(hub);
+      for (let i = 0; i < 6; i += 1) {
+        const a = (i / 6) * Math.PI * 2 + Math.PI / 6;
+        b.gold.push(
+          boxRot('gold', 0.55, 0.13, 0.14, Math.cos(a) * (hubR + 0.32), 33.0 + Math.sin(a) * (hubR + 0.32), zFront + 0.3, a)
+        );
+      }
+    }
     // R29 暗龛背衬：archPlate 由 9 段挤出，段缝与拱形边界之间会漏出背后的亮石，
     // 在近景读成"竖向梯子条纹"（verify/r29_final/hall_front.png 龛内实测）。
     // 这里补一块整幅近黑背板兜底（位于龛底，不与立面共面 ⇒ 无 z-fighting）。
     b.dark.push(box('dark', clearW + 1.6, clearH + 1.6, 1.2, 0, (clearH + 1.6) / 2, zFront - frontDepth + 0.8));
-    // 门楣：金日轮/翼形饰（竖面金盘 + 放射金刺 + 双侧翼卷）
-    // R29 定尺：随 frontW 比例放大后（88×0.5=44m）日轮在 32m 机位**撑满整个画面**
-    // （verify/r29_check/hall_front.png），压掉全部立面信息。改为**绝对上限**：
-    // 直径 ≤24m（= 0.27×frontW）、高 ≤11m —— 仍是立面主视觉，但留出两侧开间。
-    // R30b（Phase 3 目检 + 量化）：24m 光板金盘在 hall_front 读作"占位符金币"
-    // （画面金覆盖 16.3% vs 参考 11.8%）。压到 ≤14m（=0.16×frontW）+ 花瓣环（低配
-    // 跳过）—— 让"放射花饰"的语汇回到参考图轨道，同时给立面留出呼吸感。
-    const discW = Math.min(frontW * 0.5, 14);
-    const discH = Math.min(frontH * 0.18, 7);
-    const discY = clearH + discH * 0.55; // ≈30.5
-    const sunDisc = new THREE.CylinderGeometry(discW / 2, discW / 2, 0.7, 24);
-    sunDisc.rotateX(Math.PI / 2);
-    sunDisc.translate(0, discY - discH * 0.3, zFront - 0.1);
-    planarUV(sunDisc, TILE.gold);
-    b.gold.push(sunDisc);
-    if (!isLowDetail()) {
-      // 花瓣环（8 瓣，全圆周切向小金板）—— 消解大金盘的"硬币感"
-      for (let i = 0; i < 8; i += 1) {
-        const a = (i / 8) * Math.PI * 2;
-        b.gold.push(
-          boxRot('gold', 0.9, 0.42, 0.5, Math.cos(a) * (discW / 2 + 0.28), discY - discH * 0.3 + Math.sin(a) * (discW / 2 + 0.28), zFront - 0.16, a + Math.PI / 2)
-        );
-      }
-    }
-    for (let i = 0; i < 12; i += 1) {
-      const a = Math.PI + (i / 11) * Math.PI; // 上半圆放射
-      const spike = boxRot('gold', 1.1, 0.32, 0.7, Math.cos(a) * (discW / 2 + 0.6), discY - discH * 0.3 + Math.sin(a) * (discW / 2 + 0.6), zFront - 0.06, a + Math.PI / 2);
-      b.gold.push(spike);
-    }
-    for (const side of [-1, 1] as const) {
-      // 双侧翼卷（两段斜板）
-      b.gold.push(boxRot('gold', 6.5, 0.5, 0.7, side * (discW / 2 + 2.2), discY + 3.2, zFront - 0.06, side * 0.5));
-      b.gold.push(boxRot('gold', 4.5, 0.45, 0.7, side * (discW / 2 + 4.6), discY + 1.2, zFront - 0.06, side * 0.95));
-      b.gold.push(spire('gold', 0.5, 0, 1.6, 6, side * (discW / 2 + 6.4), discY + 0.4, zFront - 0.06));
-    }
+    /* ── R39 回炉 P0-2：**拆掉整组「金日轮/翼形饰」**──────────────────────────
+     * 主理人立面目检：玫瑰窗（Ø13 @ y62）正下方紧贴一个 Ø14 金日轮（R29 语汇：
+     * 实心金盘 → R39 上一版改的透空金环 + 16 放射金线 + 12 金刺 + 8 花瓣 +
+     * 双侧翼卷 + 黑底），两个同心圆上下叠，读作"大圆套小圆 / 钟面"；且它的黑底
+     * 又贡献一块黑洞。**整组移除**（含 dark 圆盘与 glass），只把"门楣聚焦"降级成
+     * 花格屏顶圆窗中心的 Ø3.2 金芯 + 6 短刺（见 P0-1 屏块末，≈130 tri）。
+     * 移除量（实测）：gold 环 56 + 放射线 192 + 花瓣 96 + 金刺 144 + 翼卷 3×2 件
+     * + dark 24 + glass 24 ⇒ 约 **−620 tri**。
+     * ⚠ 与 R39 上一版的关系：上一版把"实心金盘"改成"透空金环"是为了消解"金币"
+     *   读法；但主理人判断"两个圆叠在一起"本身就是冗余 ⇒ 本版直接删除整个语汇，
+     *   门洞上方改用"花格屏 + 小玫瑰窗"，立面只剩 **一个** 大圆（y62 玫瑰窗）。
+     */
     // 门龛两侧尖拱窗列（R29 横向拓展：按 frontW 分 4 开间/侧，铺满 88m 立面）
+    /* ── R39 ⑤ 比例修正（hero 窗）───────────────────────────────────────────
+     * 实测硬伤：hero 尖窗高宽比 **3.33**（rise 7.0 / 净宽 2.1〔halfW .55×2 + frameOut .5×2〕），
+     * FBX 标准尖窗 `WCArchElemWindow1_Full` = **6.58**（1.07×7.04）。
+     * 根因：`frameOut` 把**净宽**撑大了 —— 券框是"框架"，不是"洞口"。
+     * 改法：rise 7.0 → **9.5**、frameOut 0.5 → **0.35** ⇒ 整体 1.8 × 9.5 = h/w **5.28**。
+     * 为什么不继续收 halfW：主殿在 300~470m 实机距离上，0.55m 半宽已 ~2px；再收就消失。
+     * （tri 零变化：archBand 的面数只由 segPerHalf 决定，与 band/frameOut 无关。）
+     */
     for (const side of [-1, 1] as const) {
       const halfFront = frontW / 2;
       const bays = 4;
@@ -1997,11 +2126,11 @@ export function makeMainHall(): StoneBuckets {
       for (let i = 0; i < bays; i += 1) {
         const wx = side * (openHalf + 3.2 + baySpan * (i + 0.62));
         // R30 换装花格窗（金框 + 双棂 + 拱肩光；原 lancetWindow 182 tri → 120 tri）
-        // R36 A3+B2：主立面 hero 窗竖棂 3 + 真凹腔
+        // R36 A3+B2：主立面 hero 窗竖棂 3 + 真凹腔；R39 ⑤：rise 9.5 / frameOut 0.35
         pour(
           b,
           mapParts(
-            traceryWindowZ({ halfW: 0.55, rise: 7.0, cusp: 0.8, frameOut: 0.5, plateBack: 0.32, mullions: 3, lights: true, recess: true }),
+            traceryWindowZ({ halfW: 0.55, rise: 9.5, cusp: 0.8, frameOut: 0.35, plateBack: 0.32, mullions: 3, lights: true, recess: true }),
             (g) => g.translate(wx, 6.5, zFront)
           )
         );
@@ -2009,12 +2138,12 @@ export function makeMainHall(): StoneBuckets {
         pour(
           b,
           mapParts(
-            crocketRun({ halfW: 0.55 * 0.92, rise: 7.0 * 0.9, count: 2, size: 0.16, cusp: 0.8 }),
+            crocketRun({ halfW: 0.55 * 0.92, rise: 9.5 * 0.9, count: 2, size: 0.16, cusp: 0.8 }),
             (g) => g.translate(wx, 6.5, zFront + 0.42)
           )
         );
         // 每开间一根竖向金饰条（参考图的"金线拉高"语言）
-        b.gold.push(box('gold', 0.42, frontH - 9, 0.18, wx + side * 2.1, (frontH - 9) / 2 + 4, zFront - 0.1));
+        b.gold.push(box('gold', 0.42, frontH - 9, 0.18, wx + side * 2.1, (frontH - 9) / 2 + 4, zFront + 0.05));
         // 开间之间的壁柱（白石竖带，制造竖向节奏而不是一块平墙）
         if (i < bays - 1) {
           const px = side * (openHalf + 3.2 + baySpan * (i + 1));
@@ -2022,8 +2151,135 @@ export function makeMainHall(): StoneBuckets {
         }
       }
     }
+    /* ── R39 ⑤b 三道通长横金饰带：由「30.4m 厚的通体大板」改「前脸薄贴带」──────
+     * 改前：`box('gold', frontW+0.6, 0.34, frontDepth+0.4, …, zMidFront)` —— 实体是
+     * 30.4m 厚的金板穿过整个殿身，前脸凸出 **+0.2**；hero 窗 rise 抬到 9.5 后
+     * 窗拱顶（y 16.8）会跨过 y=14 那道带 ⇒ 金带压在**玻璃前面** 0.06m，
+     * 切窗（改前 rise 7.0 拱顶 13.8，不跨 y=14，所以没暴露）。
+     * 改后：厚度收到 0.07、前脸 +0.03（< 窗暗板 +0.06、玻璃 +0.14、券框 +0.35）
+     * ⇒ 横带**压在窗洞之后**，读作"线脚被窗打断"（真哥特立面的正确读法），
+     * 同时去掉 30m 厚的不可见实体板。tri 不变（同 12 面 box）。
+     */
     for (let i = 0; i < 3; i += 1) {
-      b.gold.push(box('gold', frontW + 0.6, 0.34, frontDepth + 0.4, 0, 14 + i * 12, zMidFront));
+      b.gold.push(box('gold', frontW + 0.6, 0.34, 0.07, 0, 14 + i * 12, zFront + 0.03 - 0.035));
+    }
+    /* ══════════════ R39 ①②③ 正立面三段 FBX 级雕刻 ══════════════════════════
+     * 分带实测（改前，.qa/r39_hall/report.md）：y 72..96 = **0 件** / y 52..72 = 5 件
+     * 小饰 / 玫瑰窗**完全缺失**。三段一次补齐（全部包 isLowDetail ⇒ 低档 0 产出）：
+     *   ① 玫瑰窗：x=0、**圆心 y 62、r 6.5**（Ø13m = 立面 96m 的 13.5%，FBX §7
+     *      「玫瑰窗占整体高 5%~7%」按主殿尺度放大到 13.5% —— 理由是主殿在 961m 峰值
+     *      帧之外、实机最近可视距离 ≈300m，5% 的玫瑰窗（4.8m）在该距离只有 ~6px，
+     *      读不出来）；外圈石券框 + 8 片卷叶 + 玻璃 + dark 深腔（详见玉 roseWindow）。
+     *   ② y 72..96 上空带：8 扇高窄尖窗（4/侧，h/w 6.8 ≈ FBX 6.58）+ 每扇 4 片卷叶
+     *      + 3 根/侧壁柱顶尖塔 + y=72 / y=93.4 两道**齿饰檐口**（dentilBand）。
+     *   ③ y 52..72 空带：玫瑰窗两侧各 2 座雕像龛（x ±12/±20，y 56）+ 龛内垂幔浮雕
+     *      作"雕像读法"（FBX 无雕像，§2「FBX 无雕像」；用 draperyRelief 替代并注释）
+     *      + 两侧各一列**盲拱**（盲拱 3 龛，补 y 52..72 的两翼空白）。
+     */
+    if (!isLowDetail()) {
+      // ── ① 玫瑰花窗（Ø13m，圆心 y 62）──
+      pour(b, mapParts(roseWindow({ r: 6.5, petals: 16, spokes: 20, ringSegs: 28 }), (g) => g.translate(0, 62, zFront)));
+
+      // ── ② y 72..96 上空带 ──
+      const bays2 = 4;
+      const baySpan2 = (frontW / 2 - (openHalf + 3.2)) / bays2;
+      for (const side of [-1, 1] as const) {
+        for (let i = 0; i < bays2; i += 1) {
+          const wx = side * (openHalf + 3.2 + baySpan2 * (i + 0.62));
+          // 高窄尖窗（整体 2.3 × 15.7 ⇒ h/w 6.8；FBX Window1_Full 6.58）
+          pour(
+            b,
+            mapParts(
+              traceryWindowZ({ halfW: 0.85, rise: 15, cusp: 0.7, frameOut: 0.3, plateBack: 0.32, mullions: 3, lights: true, recess: true }),
+              (g) => g.translate(wx, 74, zFront)
+            )
+          );
+          // 沿尖拱缘 4 片卷叶（count 2 = 每侧 2 片；size 0.55 = 门龛 1.2 的小一档）
+          pour(
+            b,
+            mapParts(
+              crocketRun({ halfW: 0.85 * 0.92, rise: 15 * 0.9, count: 2, size: 0.55, cusp: 0.7 }),
+              (g) => g.translate(wx, 74, zFront + 0.3)
+            )
+          );
+        }
+        /* 窗间壁柱顶尖塔 ×5/侧（3 根落在下排壁柱正上方 + 两端封檐各 1）。
+         * ⚠ **不用 pinnacleCluster**：它的 footprint 是 **w×w 方阵**（w 2.3 ⇒ 2.3m 深）
+         * + 4 角副塔再外扩 0.62w ⇒ 贴 z 向立面放置时凸出量到 **2.04m**（实测，
+         * 木已成舟的撞面 ≤0.9 约束不允许）。改用「方座 + 八棱鼓 + 锥顶 + 金尖」
+         * 手工小尖塔（Decor_9 语汇同族），径向半径 0.6 ⇒ 凸出 0.90m，正好卡在约束上。
+         * tri 52/根（box 12 + 鼓 16 + 锥 16 + 金尖 8），5 根/侧 ⇒ 520。 */
+        const pinnacle = (px: number): void => {
+          b.ashlar.push(box('ashlar', 1.2, 0.5, 0.9, px, 89.75, zFront + 0.3));
+          b.ashlar.push(spire('ashlar', 0.6, 0.45, 1.5, 4, px, 90.0, zFront + 0.3, Math.PI / 4));
+          b.ashlar.push(spire('ashlar', 0.44, 0, 1.9, 4, px, 91.5, zFront + 0.3, Math.PI / 4));
+          b.gold.push(spire('gold', 0.16, 0, 0.5, 4, px, 93.4, zFront + 0.3));
+        };
+        for (let i = 0; i < bays2 - 1; i += 1) pinnacle(side * (openHalf + 3.2 + baySpan2 * (i + 1)));
+        // 两端封檐尖塔（x = 11.2 与 43.2：立面竖向节奏的收头）
+        pinnacle(side * (openHalf + 3.2));
+        pinnacle(side * (frontW / 2 - 0.8));
+      }
+      // 两道齿饰檐口（FBX Cornice 标准高 1.41 + 齿列；proj 0.7 < 壁柱 0.8 ⇒ 壁柱在前）
+      for (const yy of [72, 93.4] as const) {
+        pour(
+          b,
+          mapParts(dentilBand({ len: frontW + 2, h: 1.41, toothW: 0.42, gap: 0.34, proj: 0.7 }), (g) =>
+            g.rotateY(Math.PI / 2).translate(0, yy, zFront)
+          )
+        );
+      }
+
+      // ── ③ y 52..72 空带：雕像龛 + 盲拱列 双排（玫瑰窗两侧）───────────────
+      /* 横向落位不是拍脑袋：本带在 y 52..72 只有**满高壁柱**是障碍（1.5m 宽，前脸
+       * +0.8，x = openHalf+3.2 + 8.2×(i+1) = ±19.4 / ±27.6 / ±35.8），其余是平墙。
+       * 于是可用的"开间"是 4 段：A 11.9..18.65（心 15.3）、B 20.15..26.85（心 23.5）、
+       * C 28.35..35.05（心 31.7）、D 36.55..43.5（心 40）。
+       *   A = 雕像龛（x 11.6，龛环外缘 10.62..12.58 —— 比设计稿的 ±12 内移 0.4，
+       *       因为 A 区还要塞一列盲拱，11.6 是两者唯一不打架的位置）+ 盲拱列（x 16.4）
+       *   B = 金线柱（见 ⑥ 的四叶章列；改到平墙才看得见 —— 原落点 ±28 正好在壁柱
+       *       ±27.6 上，Ø3m 金盘有 1.5m 埋在壁柱后面）
+       *   C = 雕像龛（x 31.7）  D = 盲拱列（x 40）
+       * ⚠ 设计稿的「x = ±12/±20 各 2 座龛」里 **±20 不可行**：满高壁柱 ±19.4（1.5 宽）
+       *   把 18.65..20.15 占死，1.6m 宽的龛压上去会被壁柱切掉一半。
+       * 双排（y 56 / y 64.5）依据：本带 20m 高、88m 宽 = 1,760 m²，单排只占 1/3 高度；
+       * FBX 门楼正立面同一带里是 2~3 层叠置的盲龛（`fbx_elev` 11.19..15.87 段实体
+       * 占比 0.39 = 上部镂空/开窗带）。 */
+      for (const side of [-1, 1] as const) {
+        // ── 第一排（y 56）：雕像龛 ×2 + 盲拱列 ×2 ──
+        for (const nx of [11.6, 31.7] as const) {
+          const cx = side * nx;
+          // 龛框（金环 + 楣卷叶）：statueNicheZ 自带的凹腔/立像落在 z<zFront 的实心
+          // 殿身里（face 'z' 的既有缺陷，见下方 dark 板的补法），这里只借它的框。
+          pour(b, mapParts(statueNicheZ({ halfW: 0.8, rise: 3.0, cusp: 0.5 }), (g) => g.translate(cx, 56, zFront)));
+          // 龛内深腔：dark 板**抬到墙面外 +0.03**（否则整块埋在实心石里、看不见）
+          b.dark.push(archPlate(0.72, 0, 2.9, 0.1, 3, 0.5).translate(cx, 56, zFront + 0.03));
+          // 龛内垂幔浮雕（"雕像读法"；前脸 +0.10 = 龛框 0.4 之内 ⇒ 读作凹）
+          pour(
+            b,
+            mapParts(draperyRelief({ w: 1.4, h: 3.2, folds: 3 }), (g) =>
+              g.rotateY(Math.PI / 2).translate(cx, 56.3, zFront - 0.25)
+            )
+          );
+        }
+        for (const nx of [16.4, 40] as const) {
+          pour(
+            b,
+            mapParts(blindArcadeRow({ count: 2, halfW: 0.7, rise: 5.5, pitch: 3.2, cusp: 0.5 }), (g) =>
+              g.rotateY(Math.PI / 2).translate(side * nx, 56, zFront)
+            )
+          );
+        }
+        // ── 第二排（y 64.5）：四列盲拱（比第一排小一号，读作"上收的叠层"）──
+        for (const nx of [15.3, 23.5, 31.7, 40] as const) {
+          pour(
+            b,
+            mapParts(blindArcadeRow({ count: 2, halfW: 0.62, rise: 4.4, pitch: 3.2, cusp: 0.5 }), (g) =>
+              g.rotateY(Math.PI / 2).translate(side * nx, 64.5, zFront)
+            )
+          );
+        }
+      }
     }
     // 檐口 + 垛口
     b.ashlar.push(box('ashlar', frontW + 2.4, 1.4, frontDepth + 1.8, 0, frontH - 0.7, zMidFront));
@@ -2080,35 +2336,83 @@ export function makeMainHall(): StoneBuckets {
       const cx = side * (wingInner + wingOuter) / 2;
       const w = wingOuter - wingInner; // 37
       b.ashlar.push(box('ashlar', w, wingH, frontDepth, cx, wingH / 2, zMidFront));
-      b.ashlar.push(box('ashlar', w + 0.8, 0.6, frontDepth + 0.8, cx, wingH + 0.3, zMidFront));
-      b.gold.push(box('gold', w + 1, 0.24, frontDepth + 1, cx, wingH + 0.78, zMidFront));
-      // 垛口 + 金齿饰
+      /* R39 ⑤c 翼墙叠涩：0.6 → **1.4**（FBX `WCArchElemCornice_2_Full` 檐口标准高
+       * **1.41**，真值表 §6 `CORNICE_H`）。原 0.6 只有 43% 标准高 ⇒ 翼墙顶读作
+       * "薄薄一条白边"。改后顶部金线随之上移 0.8（1.4/2 − 0.6/2 = 0.4 → 金线 y
+       * 由 wingH+0.78 抬到 wingH+1.18），总高仍 < 前排檐口 95.3，层次不变。 */
+      b.ashlar.push(box('ashlar', w + 0.8, 1.4, frontDepth + 0.8, cx, wingH + 0.7, zMidFront));
+      b.gold.push(box('gold', w + 1, 0.24, frontDepth + 1, cx, wingH + 1.58, zMidFront));
+      // 垛口 + 金齿饰（垛口底面随叠涩上移到 wingH+1.4）
       const merlons = Math.floor(frontDepth / 2.4);
       for (let m = 0; m < merlons; m += 1) {
         const mz = zBack + 1 + (frontDepth * (m + 0.5)) / merlons;
-        b.ashlar.push(box('ashlar', w, 1.2, frontDepth / merlons / 2, cx, wingH + 1.2, mz));
-        b.gold.push(spire('gold', 0.2, 0, 0.38, 4, cx, wingH + 1.8, mz));
+        b.ashlar.push(box('ashlar', w, 1.2, frontDepth / merlons / 2, cx, wingH + 2.0, mz));
+        b.gold.push(spire('gold', 0.2, 0, 0.38, 4, cx, wingH + 2.6, mz));
       }
       // 尖拱窗列（朝路心；R29 由 3 扇扩到 5 扇，跟上 frontDepth 30 的纵深）
       // R30 换装花格窗（金框 + 双棂 + 拱肩光）；R36 A3+B2：竖棂 3 + 真凹腔
+      /* R39 ⑤d 翼墙窗：**整族迁移到可见立面** + 比例修正。
+       * ⚠ 改前是 R30 遗留的**死几何**：翼墙的临街面是 **+z**（前脸与主立面同面，
+       *   z=zFront），而窗用 `traceryWindowX` 挂在 |x| = wingInner = 44 的 x 法向面上，
+       *   且 wz ∈ [zMidFront−11, zMidFront+11] = [−1326, −1304] —— 全部落在
+       *   翼墙体（z −1330..−1300）**内部**，10 扇窗一辈子没被看见（立面栅格实证：
+       *   改前两翼 61×62m 全白）。R39 把它换成 `traceryWindowZ` 平移到 zFront ⇒
+       *   **tri 零变化**（同型号几何，只是从不可见变可见），同时按 ⑤ 比例修正
+       *   rise 5.6 → 7.4、frameOut 0.45 → 0.32（2.44 × 7.4 ⇒ h/w 3.03，
+       *   与后排窗 2.61 / hero 窗 5.28 形成梯度）。 */
       for (let i = 0; i < 5; i += 1) {
-        const wz = zMidFront - 11 + i * 5.5;
-        // 先镜像再平移（反序会让 −side 窗落到 −wz）
+        const wx = side * (46 + ((i + 0.5) * 57) / 5);
         pour(
           b,
           mapParts(
-            traceryWindowX({ halfW: 0.9, rise: 5.6, cusp: 0.75, frameOut: 0.45, plateBack: 0.3, mullions: 3, lights: true, recess: true }),
-            (g) => {
-              if (side < 0) g.rotateY(Math.PI);
-              return g.translate(side * wingInner, 6, wz);
-            }
+            traceryWindowZ({ halfW: 0.9, rise: 7.4, cusp: 0.75, frameOut: 0.32, plateBack: 0.3, mullions: 3, lights: true, recess: true }),
+            (g) => g.translate(wx, 6, zFront)
           )
         );
       }
-      // 竖向金饰条 ×2（翼墙外棱）
-      for (const ox of [-1, 1] as const) {
-        b.gold.push(box('gold', 0.32, wingH - 2, 0.16, side * (wingInner + (ox < 0 ? 0.5 : w - 0.5)), (wingH - 2) / 2 + 1, zMidFront + frontDepth / 2 - 0.2));
+      /* ── R39 回炉 P1：翼墙上层**两层窄窗** + 每层窗下薄金线 ──────────────────
+       * 改前：翼墙 61×62m 里只有 y6..14 一排窗，y>15 的 50m 是纯白（栅格实测：
+       *   y∈[15,62] 区装饰覆盖率 **1.22%**），占整幅立面宽度的 40%。
+       * 补两层窗（y 24 / y 40，每层 4 扇，halfW .7 / rise 8 / frameOut .28
+       *   ⇒ 整体 1.96 × 8.75，h/w **4.47**，介于后排 2.61 与 hero 5.28 之间），
+       *   每层窗下补一道 0.16 高薄金线（前脸 +0.04）把三层串成竖向节奏。
+       * ⚠ 两处对设计稿的修正（数字见 .qa/r39_hall/report.md）：
+       *   ① 翼宽**不是 37m 而是 61m**（`wingOuter − wingInner = 105 − 44`；代码里
+       *      `// 37` 是 R29 残留注释）⇒ 4 扇按可用段 47..95 均分，pitch 12m；
+       *   ② 上层窗**不与底层 5 扇对齐**：底层第 5 扇在 x 97.3，而翼墙外端有一对
+       *      雕像龛在 |x| = wingOuter−6 = **99**（y 20 / y 40），98.15..99.85 已被占，
+       *      4 扇落在 53/65/77/89 才不会压到龛框。
+       */
+      // ⚠ 低档守卫：新增装饰件在远档必须零产出（铁律 33「只降装饰密度」+ 低档 tri 只降不涨）
+      if (!isLowDetail()) for (const wy of [24, 40] as const) {
+        for (let i = 0; i < 4; i += 1) {
+          const wx = side * (47 + ((i + 0.5) * 48) / 4);
+          pour(
+            b,
+            mapParts(
+              traceryWindowZ({
+                halfW: 0.7,
+                rise: 8,
+                cusp: 0.7,
+                frameOut: 0.28,
+                plateBack: 0.28,
+                mullions: 2,
+                lights: true,
+                recess: true
+              }),
+              (g) => g.translate(wx, wy, zFront)
+            )
+          );
+        }
+        // 窗下薄金线（0.16 高；前脸 +0.04 ⇒ 不抢券框的 0.28）
+        b.gold.push(box('gold', wingOuter - wingInner - 2, 0.16, 0.08, side * ((wingInner + wingOuter) / 2), wy - 0.5, zFront + 0.04));
       }
+      /* 竖向金饰条 ×2（翼墙外棱）：改前落 z = zMidFront + frontDepth/2 − 0.2 = −1300.2
+       * ⇒ 整条**埋在翼墙面里 0.2m**（同 ⑤d 的死几何）。R39 抬到前脸 zFront+0.05，
+       * 并把「内侧根」从 x=wingInner+0.5 移到内棱 wingInner+0.9（避开 ⑤d 窗列），
+       * 外棱由 x=wingInner+w−0.5 = 80.5（**翼墙中部**，明显是算错）改到 wingOuter−0.9。 */
+      b.gold.push(box('gold', 0.32, wingH - 2, 0.16, side * (wingInner + 0.9), (wingH - 2) / 2 + 1, zFront + 0.05));
+      b.gold.push(box('gold', 0.32, wingH - 2, 0.16, side * (wingOuter - 0.9), (wingH - 2) / 2 + 1, zFront + 0.05));
     }
   }
 
@@ -2134,12 +2438,15 @@ export function makeMainHall(): StoneBuckets {
     }
     // 后排尖拱窗 ×8（朝 +z 面；R29 由 4 扇铺到 ±0.36×facadeW，跟上 210m 立面）
     // R30 换装花格窗（无拱肩光的 96 tri 版——后排属远景带，节流；R36-B2 真凹腔）
+    // R39 ⑤e 后排窗比例：rise 5.2 → **6.8**（frameOut 保持 0.45 —— 后排窗在 200m
+    //   宽的远景带、无近景读法，收框只会让 8 扇窗在 210m 立面上消失）。
+    //   改前 2.6 × 5.2 ⇒ h/w 2.00；改后 2.6 × 6.8 ⇒ **2.61**。
     for (let i = 0; i < 8; i += 1) {
       const wx = -facadeW * 0.36 + (i * facadeW * 0.72) / 7;
       pour(
         b,
         mapParts(
-          traceryWindowZ({ halfW: 0.85, rise: 5.2, cusp: 0.7, frameOut: 0.45, plateBack: 0.3, mullions: 2, recess: true }),
+          traceryWindowZ({ halfW: 0.85, rise: 6.8, cusp: 0.7, frameOut: 0.45, plateBack: 0.3, mullions: 2, recess: true }),
           (g) => g.translate(wx, 5, zBack + (depth - frontDepth))
         )
       );
@@ -2235,6 +2542,48 @@ export function makeMainHall(): StoneBuckets {
           (g) => g.translate(0, 2.4, zFront + 0.65)
         )
       );
+      /* ── R39 ⑥c 门龛两侧竖向卷叶金饰带 ────────────────────────────────────
+       * 用户令「金是细线/线脚 + 卷叶」。这里沿 x=±(openHalf+2.1)=±10.1 竖向排
+       * 10 片金卷叶（y 3..23），**叶轴沿墙面外法线 +z**（= 门侧壁的 jamb crocket）。
+       * ⚠ 偏离设计稿的 `crocketRun({pts: 竖线})`：crocketRun 的点列模式按
+       *   `tangent + π/2` 定轴，竖线的切向是 +y ⇒ 叶轴会变成 −y（整列叶片朝下），
+       *   读不出"贴在门侧壁上的卷叶"。故此处按 crocketRun 的同一形体参数
+       *   （锥 size*2.6 长 + 6 面珠 12 tri）手排，轴向改为 +z。tri 相同（20/片）。 */
+      const leafCones: THREE.BufferGeometry[] = [];
+      // ⚠ 作用域纪律：`openHalf` 是 makeGate 与「前排门楼段」各自作用域的局部量，
+      //   本段（R30 构件库块）必须**用自己的量**，不许跨块偷名字（TS2304 曾因此编译红）。
+      const jambHalf = clearW / 2 + 2.1; // 门洞半宽 + 券外沿余量 = 10.1
+      for (const side of [-1, 1] as const) {
+        for (let k = 0; k < 10; k += 1) {
+          const ly = 3 + k * 2.15;
+          // ⚠ 凸出量受撞面约束（≤0.9m）：锥长 0.9 / 中心 +0.25 ⇒ 前脸 0.70；
+          //   首版用 crocketRun 的 size 0.8（锥长 2.08、中心 0.42）会顶到 1.07m，收小。
+          const cone = new THREE.ConeGeometry(0.26, 0.9, 4, 1);
+          cone.rotateX(Math.PI / 2); // 锥轴 → +z（墙面外法线）
+          cone.translate(side * jambHalf, ly, zFront + 0.25);
+          planarUV(cone, TILE.gold);
+          leafCones.push(cone);
+          const bead = new THREE.CylinderGeometry(0.15, 0.15, 0.22, 6, 1, true);
+          bead.rotateX(Math.PI / 2);
+          bead.translate(side * jambHalf, ly, zFront + 0.34);
+          planarUV(bead, TILE.gold);
+          leafCones.push(bead);
+        }
+      }
+      b.gold.push(mergeSafe(leafCones));
+      leafCones.forEach((g) => g.dispose());
+      for (const side of [-1, 1] as const) {
+        // 守卫雕像龛（门洞两侧各 1 座，y≈10；与 ③ 的 y 56 龛同款，只降一档尺寸）
+        pour(b, mapParts(statueNicheZ({ halfW: 0.75, rise: 3.0, cusp: 0.5 }), (g) => g.translate(side * 11.6, 10, zFront)));
+        // 龛内深腔（同 y56 龛：dark 板抬到墙面外 0.03，否则埋在实心殿身里）
+        b.dark.push(archPlate(0.67, 0, 2.9, 0.1, 3, 0.5).translate(side * 11.6, 10, zFront + 0.03));
+        pour(
+          b,
+          mapParts(draperyRelief({ w: 1.2, h: 3.6, folds: 3 }), (g) =>
+            g.rotateY(Math.PI / 2).translate(side * 11.6, 10.2, zFront - 0.25)
+          )
+        );
+      }
     }
     // ④ 雕像龛 ×5（正立面开间起点 |x|=13、窗顶之上 y 40）+ 冠座前脸
     for (const side of [-1, 1] as const) {
@@ -2259,11 +2608,14 @@ export function makeMainHall(): StoneBuckets {
     );
     // ⑤ 纹章顶饰（冠尖之上；R36-A1：lintelHalf = 冠尖金尖底半径 0.42）
     pour(b, mapParts(finialOrnament({ r: 0.7, lintelHalf: 0.42 }), (g) => g.translate(0, crownH + 2.6, zMidFront)));
-    // ⑥ 翼墙顶连廊（翼墙顶 62 + 叠涩 0.6 + 金线 0.24 + 垛口 1.2 ≈ 64 ⇒ 楼面 64.8）
+    // ⑥ 翼墙顶连廊（翼墙顶 62 + R39 叠涩 1.4 + 金线 0.24 + 垛口 1.2 ≈ 64.9 ⇒ 楼面 65.3）
+    //    R39 ⑤c 把叠涩 0.6 抬到 1.4（FBX 1.41）后，垛口顶由 64.6 升到 64.6+0.8 = 64.6？——
+    //    精确账：叠涩顶 62+1.4=63.4、垛口 63.4..64.6、金齿 64.6..64.98 ⇒ 楼面必须 ≥65.0，
+    //    原 64.8 会与垛口/金齿穿插 ⇒ 抬到 65.3。
     for (const side of [-1, 1] as const) {
       pour(
         b,
-        mapParts(corridorGallery({ len: frontDepth - 4, width: 56, floorY: 64.8 }), (g) =>
+        mapParts(corridorGallery({ len: frontDepth - 4, width: 56, floorY: 65.3 }), (g) =>
           g.translate(side * (wingInner + wingOuter) / 2, 0, zMidFront)
         )
       );
@@ -2312,34 +2664,55 @@ export function makeMainHall(): StoneBuckets {
       );
     }
     // A 线 ⑥ 金饰比例提升：正立面金徽章（大金盘）竖向阵列 + 横向金饰带（宽面金，增覆盖）
-    for (let i = 0; i < 6; i += 1) {
-      const my = 16 + i * 11;
+    /* ── R39 ⑥ 金饰语言纠偏：12 枚 Ø3m 金圆盘 → **四叶金章 + 通高金竖线** ──────────
+     * 用户令「金色是**细线 / 线脚**，不是大金盘」。改前每侧 6 枚 r=1.5 实心金盘
+     * （y 16..71，节拍 11m）在 300~470m 实测读作"波点 / 金币"。改后：
+     *   ① 章体换 `quatrefoilMedal(r 0.85)`：四尖瓣 + 芯珠，直径 1.7m 但**金面 −76%**
+     *      （实心盘 2.0m² 面 ≈ 64 tri → 四叶章 ≈0.9m² 面 / 84 tri）；
+     *   ② 每侧加一条 **0.22m 通高金竖线**（y 10..72）串起 6 枚章 ⇒ 读作
+     *      "金色细竖线 + 小章"（设计稿给的备选方案），与既有横向金箍形成格构。
+     * 低档：quatrefoilMedal 整件返回空 ⇒ 12 枚章在低档消失（只降装饰密度）。
+     */
+    if (!isLowDetail()) {
       for (const side of [-1, 1] as const) {
-        const mx = side * (frontW / 2 - 16);
-        const med = new THREE.CylinderGeometry(1.5, 1.5, 0.4, 16);
-        med.rotateX(Math.PI / 2);
-        med.translate(mx, my, zFront - 0.12);
-        planarUV(med, TILE.gold);
-        b.gold.push(med);
+        /* 落位修正（R39 实测）：原落点 x = ±(frontW/2 − 16) = **±28** —— 正好压在
+         * 满高壁柱（±27.6，1.5m 宽、前脸 +0.8）上，Ø3m 金盘有 1.5m 埋在壁柱后面，
+         * 于是"波点"只露出半边。改到平墙开间 B 的心 **±23.5**（20.15..26.85，
+         * 两侧壁柱 ±19.4 / ±27.6 之外），金线 + 章都完整可见。 */
+        const mx = side * 23.5;
+        b.gold.push(box('gold', 0.22, 62, 0.14, mx, 41, zFront + 0.04));
+        for (let i = 0; i < 6; i += 1) {
+          pour(b, mapParts(quatrefoilMedal({ r: 0.85 }), (g) => g.translate(mx, 16 + i * 11, zFront + 0.12)));
+        }
+      }
+    }
+    /* ── R39 ⑦ 基座菱形章（FBX §4「菱形章：基座前缘，占基座高 30%」）──────────
+     * 本轮首次把「基座前缘的菱形装饰」落到主殿：3 枚/侧（x ±14/±22/±30，
+     * 0.9×1.4 绕 z 转 45° = 菱形，长对角 2.0m ≈ 基座高 2.6m 的 77% 视觉跨度）。
+     * 落 **agedGold 桶**（做旧金，与门钉同档）⇒ 全局单 mesh，6 枚 72 tri。
+     * 落位 y 1.7 / z = zFront + 0.55：第一级台基前脸 +1.0、第二级 +0.5，
+     * y 1.2..2.2 区间只有第二级挡着 ⇒ 章凸出 0.05 恰好读到；再往外被第一级的
+     * 1.0m 前脸完全遮住（这也是 BF 基座章只在前缘一条带里的原因）。 */
+    if (!isLowDetail()) {
+      for (const side of [-1, 1] as const) {
+        for (const dx of [14, 22, 30] as const) {
+          pushVariant(b, 'agedGold', boxRot('gold', 0.9, 1.4, 0.22, side * dx, 1.7, zFront + 0.55, Math.PI / 4));
+        }
       }
     }
     // 大理石墙裙（marble 桶；主殿正立面基座带，贴面 z=zFront+0.08 不凸出撞击面；
     // R29 广场平整令仍在 —— 不放任何 y>0.02 的广场横穿体块，大理石只上墙面）
     extra(b, 'marble', box('marble', frontW + 2, 2.6, 0.16, 0, 1.3, zFront + 0.08));
-    /* ── R33 hall_front：中央金屏由「实心金板」改**透空竖棂尖拱屏** ─────────
-     * 玩家目检：14×20m 实心金屏像一块挡视线的金币，读不出门/祭坛层次。
-     * 现在：外框 + 3 个尖拱开间 + 竖棂（全部 gold），板芯完全不产面；
-     * 屏后 2.2m 补一块 dark 深龛背板（比原来的远背板近 30m）⇒ 透空处是
-     * 明确的深腔阴影，而不是直接看穿到内殿亮石。左右再各补一座小雕像龛，
-     * 让人读得出「屏—龛—门」三层。长度/位置/金屏外框尺寸保持原值。 */
-    b.dark.push(box('dark', 12.8, 18.4, 0.45, 0, 9.7, zFront - 2.2));
-    pour(
-      b,
-      mapParts(
-        gildedScreen({ w: 14, h: 20, cross: true, openwork: true, bays: 3 }),
-        (g) => g.rotateY(Math.PI / 2).translate(0, 12, zFront + 0.15)
-      )
-    );
+    /* ── R39 ④c 拆除 R33 的中央透空金屏（14×20m）──────────────────────────
+     * 拆因（用户点名 + 实测）：`gildedScreen({w:14,h:20,openwork,bays:3})` 是一面
+     * **挡在门前的金屏**——它把 y 2.6..22 整段门洞糊住，玩家在 300~470m 读到的是
+     * 「一块大金币」，门/纵深/祭坛全部读不出来（R33 已把它从实心改透空，但"金
+     * 占据门洞"这一层没解）。现由 ④ 的四级退台券 + 双扇木门 + 石质半月楣取代：
+     * 同一位置改读「券 → 楣 → 门」三层纵深，金只剩券线。
+     * 连带删除：屏后 12.8×18.4 的 dark 深龛背板（改前在 zFront−2.2 = **实心殿身
+     * 内部**，本来就不可能被看见，12 tri 纯浪费）。
+     * 保留：门洞两侧的一对小雕像龛（它们是"屏—龛—门"三层里的"龛"层，且已落在
+     * 券线外侧，与新构图不冲突）。 */
     for (const side of [-1, 1] as const) {
       pour(
         b,

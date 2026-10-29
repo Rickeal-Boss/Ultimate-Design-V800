@@ -8,21 +8,27 @@
  * 全部构件在 castleKit.ts 里**直接产世界坐标几何**，本类只做：按材质族归桶 →
  * 每族 merge 成 1 mesh -> 统计。
  *
- * ── DC 策略（R32 C-4 核对：实测 27 / 设计上限 28 ≤ castleDc 32）────────────────
- *   分区合批后每「非空区」1 DC：ashlar ≤6 + wall ≤3 + gold ≤6 + dark ≤6（dark z0
- *   实测空：门洞暗件全在 z1 以深）+ flame 1 + 四可选桶 ≤4 + 铺装 2 = **27**。
- *   ⚠ R31 头注「ashlar/wall/gold/dark/flame 各 1 ⇒ 7 DC」与「gold/dark/flame 各 1
- *     ⇒ 18」都是**过期读数**：R29 点亮四可选桶、R31「治理①延伸」把 gold/dark 也改为
- *     6 区合批后均未回填头注。逐 mesh 实证清单见 `.qa/r32_tmp_audit/dc_audit.md`；
- *     代码侧逻辑（splitByZone/emptyBuckets 语义）本身正确，本轮只修注释。
+ * ── DC 策略（**R39-P9 实测 29** / 设计上限 32 ≤ castleDc 32）────────────────────
+ *   分区合批后每「非空区」1 DC。R39-P9 终态逐族实测（`getCastleStats().dc = 29`）：
+ *     ashlar **7**（同 6 区表，z0 二分 ⇒ z0a/z0b + z1..z5）
+ *   + gold **6**（5 区表，z0 二分 ⇒ z0a/z0b + z1..z4）
+ *   + dark **4**（5 区表；z0 实测空 —— 门洞暗件全在 z1 以深）
+ *   + wall **1**（1 区表）+ grey **1**（6 区表，只有 z1 非空）
+ *   + flame 1 + 四可选桶 4（roof/wood/glass/marble）+ 变体桶 3（door/agedGold/pave）+ 铺装 2
+ *   = **29**。（R32 C-4 时期的「27」是 gold/dark 各 1 DC 的过期读数；R38 末态 32；
+ *    R39-P9 把 gold/dark 的深段两小区并一、wall 并成单区 ⇒ 32 − 3 = 29。）
+ *   逐 mesh 实证清单：`.qa/r39_b/probe.mjs dc`（R39）／`.qa/r32_tmp_audit/dc_audit.md`（R32）。
+ *   ⚠ 区表**不再全局共用一张**：见 `ZONE_EDGES_BY_FAMILY`（ashlar 6 / gold 5 / dark 5 / wall 1），
+ *     近档（commitStatics）与远档（buildFarTier）必须同表，否则 LOD 静默失效。
  *
  * ── R31 运行时治理①：按世界 z 分区合批（「700m 长条永不被剔除」的根治）──────
  *   改前：每族 merge 成 **1 个**横跨 z=+60..−1430 的巨 mesh ⇒ 包围球直径 700m，
  *   行车时几乎恒与视锥相交 ⇒ 视锥剔除完全失效，全城几何每帧都提交（整帧 321k tri）。
- *   改后：ashlar/gold/dark 分 6 区、wall 分 3 区（见 ZONE_EDGES_*），每区一个 mesh；
+ *   改后：ashlar 分 6 区、gold/dark 各 5 区、wall 1 区（见 ZONE_EDGES_BY_FAMILY），每区一个 mesh；
  *   量小的 flame/四可选桶保持全局 1 个（铺装是道路本体，必须全段可见）。
- *   ⇒ castle 静态 DC 7 → **27**（四桶全亮 + gold/dark 分区后，设计上限 28），
- *   但**可见 tri 大降**（剔除生效）。
+ *   ⇒ castle 静态 DC 7 → 27（R31 当时口径：四桶全亮 + gold/dark 分区，设计上限 28）
+ *   → 32（R38 末态：z0 二分 +2、变体桶 3）→ **29**（R39-P9：gold/dark 深段并区 + wall 单区），
+ *   而**可见 tri 大降**（剔除生效）。
  *   这是「用少量 DC 换大量顶点/填充」的交易，判据是可见 tri 而不是静态 DC
  *   （R31_BUDGET.castleDc 已按分区后口径抬到 32）。
  *   跨区几何按 **bbox z 中值**归区，不切割单个几何（A 线构件基本都落在单区内）。
@@ -33,9 +39,9 @@
  *   zone mesh 加远档：
  *   · 近区（<LOD_NEAR_DIST 400m）用 high 全装饰几何；远区换 low「只主体」几何
  *     （铁律 33：low 只降装饰密度；400m 处高低档差异已降到亚像素 ⇒ 换档不可见）；
- *   · 远档几何由**第二遍工厂重跑**（setDetailLevel(true)）按同套 ZONE_EDGES 分区
+ *   · 远档几何由**第二遍工厂重跑**（setDetailLevel(true)）按**各族的同一套区表**分区
  *     merge 产出（buildFarTier），high 档才建（low 档城堡无二变体收益）；
- *   · **同一 mesh 换 geometry 引用** ⇒ 不新增 mesh、静态 DC 仍 27、全显口径
+ *   · **同一 mesh 换 geometry 引用** ⇒ 不新增 mesh、静态 DC 不变（R39 起 29）、全显口径
  *     （getCastleStats.tris）仍按高档计（两档互斥不同画，见 r31Budget.ts 台账①）；
  *   · 换档带 20m 滞回（LOD_HYSTERESIS），与观看者滞回带同量级，边界不抖。
  *   实测（六点采样，.qa/r32_tmp_audit/visibletri_audit.md）：治理前（同树）
@@ -314,7 +320,7 @@ type ExtraBucket = (typeof EXTRA_BUCKETS)[number];
  *   agedGold → gilded-aged（门钉/徽章/做旧金饰；gold 图集氧化做旧）
  *   pave    → pave-damp  （内庭地面潮斑铺装；floor 图集微湿低频斑）
  *   grey    → ashlar-grey（R37-A 灰石强调：门楼翼墙/外延墙身；ashlar 图集 + 冷灰提亮）
- * 每桶全局 1 mesh（量小不分区）⇒ +4 DC（27→31 ≤ castleDc 32）。
+ * 每桶全局 1 mesh（量小不分区）⇒ +4 DC（R36-A2 当时 27→31 ≤ castleDc 32；R39 终态见头注 29）。
  * ⚠ 例外：`grey` 走**分区**提交（见 commitStatics），因为它承载的是沿 z 铺开的
  *   大面积墙身 —— 若做全局 1 mesh，包围球会横跨 z 走廊 ⇒ 行车时永不被视锥剔除，
  *   在 sphere 峰值点（z=−500）恒 +全额 tri。分区后只有有灰石的那个区建 mesh
@@ -342,20 +348,66 @@ const ALL_BUCKETS: readonly (ExtraBucket | VariantBucket)[] = [...EXTRA_BUCKETS,
  */
 const ZONE_EDGES_6 = [60, -340, -460, -760, -1060, -1290, -1470] as const;
 /**
- * ══ R38-P0-2 B3：wall 桶 3 区 → **2 区**（为 B1 的 z0 切段腾出 1 格 DC）══════════
- * 改前 `[60,−460,−1060,−1470]`（3 区），改后 `[60,−460,−1470]`（2 区）。
- * 依据（实测，非估算）：
- *   · wall 全域仅 **2,544 tri**（wall-z0 264 + wall-z1 1,824 + wall-z2 720），
- *     占 castle 全显 312,022 的 0.82% —— 是**最不该占 DC 的一族**（3 个 DC 换 2.5k tri）；
- *   · 合并后 z1 变成 z∈[−1447,−458] 的 989m 长条、球 r≈257 ⇒ 剔除效率下降，
- *     但**同树 74 帧仿真只多递交 <1k tri**（`tools/r38_plan_sim.mjs` 的 B3 基线已含该代价）；
- *   · 收益 = **静态 DC 31 → 30**，正好补上 B1（z0 两段 = +2 格）里缺的那一格，
- *     使终态 **30+2 = 32** 压在 `castleDc` 键 32 的硬顶内（主理人裁决：不许超、不许抬键）。
- * ⚠ 「远景剪影带切太碎没收益」的旧判断仍成立（2 区不是 1 区，剪影带仍可整体剔除），
- *   本轮只是把「最贵的那格 DC」从 wall 身上收回来。
+ * ══ R38-P0-2 B3（**历史**，已被 R39-P9 取代）：wall 桶 3 区 → 2 区 ══════════════════
+ * 当时的边界表 `[60,−460,−1470]`（2 区）本文件已不再引用（R39 并到 1 区），保留记录：
+ * 依据是「wall 全域仅 2,544 tri，占 312,022 的 0.82%，是最不该占 DC 的一族」；
+ * 合并后 z1 成为 989m 长条（球 r≈257）、剔除效率下降，同树 74 帧仿真只多递交 <1k tri。
+ * ⚠「远景剪影带切太碎没收益」的判断**仍成立**——R39 再并到 1 区不是因为「切碎无用」，
+ *   而是逐 mesh 实测该族只剩三块（264 / 48 / 2,520 tri）且全在深段，合并代价可量化
+ *   （见下方 R39-P9 ③ 的实测数字）。
  */
-const ZONE_EDGES_3 = [60, -460, -1470] as const;
+
+/**
+ * ══ R39-P9（DC 32 → 29）：**每族按自己的 z 分区表**，不再共用一张 ══
+ *
+ * 改前（R38 终态）实测 DC 32 = 分区 22 + 全局 10，逐族：ashlar 7（z0a/z0b + z1..z5）、
+ * gold 7、dark 5（z1..z5）、wall 2（z0/z1）、grey 1、全局 10
+ * （flame 1 + 四可选桶 roof/wood/glass/marble 4 + 变体桶 door/agedGold/pave 3 + 铺装 2）。
+ *
+ * 本轮只做三件「零观感」的事（都是**换分区边界**，不切/不改任何几何）：
+ *   ① gold：6 区 → **5 区**（`ZONE_EDGES_5`，把最深两个小区 z4[−1060,−1290] 与
+ *      z5[−1290,−1470] 并成 [−1060,−1470]）⇒ 7 → 6 DC；
+ *   ② dark：同上 ⇒ 5 → 4 DC（dark 的 z5 实测 bbox [−1330,−1300]、cz=−1314.9 落在
+ *      合并后的 [−1060,−1470] 内 ⇒ 与 z4 并成 1 个 mesh，不再单独占 DC）；
+ *   ③ wall：2 区 → **`ZONE_EDGES_1`**(1 区) ⇒ 2 → 1 DC。
+ *   ⇒ 32 − 3 = **29**（`getCastleStats().tris` 逐位不变 313,954、峰值帧逐位不变 193,258）。
+ *
+ * ⚠ **绝对不许把 ashlar 也并到 5 区**（主理人裁决，实测依据）：
+ *   ashlar z4+z5 主要是主殿（makeMainHall）所在的 hero 区，合并后远档/近档的球都变大、
+ *   剔除效率下降 —— 同树 74 帧仿真实测把主殿段的**细节余量从 24,800 tri 压到 8,080**
+ *   （即中段可视 tri 会反涨 ≈16.7k）。gold/dark 是装饰层（金饰带/门洞暗件），并区只影响
+ *   「已驶过的深段」的剔除粒度，峰值帧（carZ=−420，两族 z4/z5 距车 >740m 早已出闸门）
+ *   一位都不动。
+ *
+ * ⚠⚠ **farTier 键必须与近档区索引同表**（本轮唯一的静默失效陷阱）：
+ *   `buildFarTier()` 用 `${family}-z${i}` 作键，`addMergedByZone()` 用同一 `i` 去消费。
+ *   两处若各用各的区表（例如近档用 5 区、远档仍用 6 区），gold 的 `z4` 会配上**错的**
+ *   远档几何、`z5` 永远配不上 ⇒ 该区 LOD **静默失效**（不报错、探针看不出来，
+ *   只有中段 tri 反涨能发现）。故两边**同读 `ZONE_EDGES_BY_FAMILY`**，单一真源。
+ */
+const ZONE_EDGES_5 = [60, -340, -460, -760, -1060, -1470] as const;
+/** wall 专用：**1 区**（全域 2,784 tri = castle 的 0.89%，最不值钱的一族，合并成单 mesh） */
+const ZONE_EDGES_1 = [60, -1470] as const;
+
 type ZoneEdges = readonly number[];
+
+/**
+ * R39-P9 **单一真源**：族 → 分区表。`commitStatics`（近档）与 `buildFarTier`（远档）
+ * 同读此表 ⇒ 区索引不可能错位（见上方 farTier 陷阱注）。
+ * 表外族（flame / 四可选桶 / 变体桶）不分区、全局 1 mesh。
+ * `grey` 仍是 6 区（实测只有 z1 非空 = 1 DC，与 5 区表同结果，不为此多改一处）。
+ */
+const ZONE_EDGES_BY_FAMILY: {
+  ashlar: ZoneEdges;
+  gold: ZoneEdges;
+  dark: ZoneEdges;
+  wall: ZoneEdges;
+} = {
+  ashlar: ZONE_EDGES_6,
+  gold: ZONE_EDGES_5,
+  dark: ZONE_EDGES_5,
+  wall: ZONE_EDGES_1
+};
 
 /**
  * R31 运行时治理②：分区 mesh 的**观看距离显隐**。
@@ -1028,16 +1080,41 @@ export class Castle {
     // 分了也不见得被剔除，白增 DC。
     // R38-P0-2 B1：z0 按 z=−150 一分为二（+1 DC/族）。−150 是 z0 实测 bbox [−359,61]
     // 的中点 ⇒ 两半各 ≈210m，长度均衡；切割走**精确裁剪**（splitGeometryByZ），
-    // 不按重心近似 ⇒ 外形逐位复现。两族合计 +2 DC ⇒ 静态 30(B3 后) + 2 = **32**（硬顶）。
-    this.addMergedByZone(this.statics.ashlar, this.stone('ashlar'), 'castle-ashlar', ZONE_EDGES_6, Z0_SPLIT_PLANE);
+    // 不按重心近似 ⇒ 外形逐位复现。
+    // R39-P9：区表改走 ZONE_EDGES_BY_FAMILY 单一真源（ashlar 6 / gold 5 / dark 5 / wall 1）
+    // ⇒ 静态 32 → **29**（几何逐位不变）。详见 ZONE_EDGES_BY_FAMILY 上方长注。
+    this.addMergedByZone(
+      this.statics.ashlar,
+      this.stone('ashlar'),
+      'castle-ashlar',
+      ZONE_EDGES_BY_FAMILY.ashlar,
+      Z0_SPLIT_PLANE
+    );
     // R35：内庭围合墙改走 inner-stone 变体（暗冷做旧内壁；复用 ashlar 图集 ⇒ 0 新贴图、0 新 DC）。
-    this.addMergedByZone(this.statics.wall, this.variantMaterial('inner-stone'), 'castle-wall', ZONE_EDGES_3);
+    this.addMergedByZone(
+      this.statics.wall,
+      this.variantMaterial('inner-stone'),
+      'castle-wall',
+      ZONE_EDGES_BY_FAMILY.wall
+    );
     // R31 运行时治理①延伸：gold（135k）/ dark（34k）体量远非「量小」，且沿整条御桥+城门+内城
     // 铺开（bbox 跨整个 z 走廊），若保持全局 1 个 mesh，行车时永不被视锥剔除 ⇒ 每帧全量提交。
-    // 改为按 z 分区（与 ashlar 同 6 区），越过车后的区被剔除（视野前方仍可见，但已过的段不再提交）。
-    // 共享同一材质（stone/dark 各自按 key 缓存）⇒ 贴图张数与 tri 不变，仅 DC 由 1→≤6（仍 < castleDc 32）。
-    this.addMergedByZone(this.statics.gold, this.stone('gold'), 'castle-gold', ZONE_EDGES_6, Z0_SPLIT_PLANE);
-    this.addMergedByZone(this.statics.dark, this.special('dark', () => tunnelMaterial()), 'castle-dark', ZONE_EDGES_6);
+    // 改为按 z 分区（ashlar 6 区 / gold·dark 5 区，见 ZONE_EDGES_BY_FAMILY），越过车后的区
+    // 被剔除（视野前方仍可见，但已过的段不再提交）。
+    // 共享同一材质（stone/dark 各自按 key 缓存）⇒ 贴图张数与 tri 不变，仅 DC 由 1→≤7。
+    this.addMergedByZone(
+      this.statics.gold,
+      this.stone('gold'),
+      'castle-gold',
+      ZONE_EDGES_BY_FAMILY.gold,
+      Z0_SPLIT_PLANE
+    );
+    this.addMergedByZone(
+      this.statics.dark,
+      this.special('dark', () => tunnelMaterial()),
+      'castle-dark',
+      ZONE_EDGES_BY_FAMILY.dark
+    );
     this.addMerged(this.statics.flame, this.special('flame', () => flameMaterial()), 'castle-flame');
     // R29 新族：桶非空才建 mesh（castleKit 未补桶时这里全部跳过 ⇒ DC 不变）
     for (const key of EXTRA_BUCKETS) {
@@ -1052,8 +1129,10 @@ export class Castle {
       if (!parts || parts.length === 0) continue;
       this.addMerged(parts, this.variantMaterial(VARIANT_BUCKETS[key]), `castle-${key}`);
     }
-    // R37-A 灰石强调：走 6 区分区提交（理由见 VARIANT_BUCKETS.grey 注释）。
-    // 空区不建 mesh ⇒ 只有真正铺了灰石的那个区占 1 DC（实测 1 个 ⇒ 30→31）。
+    // R37-A 灰石强调：走分区提交（理由见 VARIANT_BUCKETS.grey 注释）。
+    // 空区不建 mesh ⇒ 只有真正铺了灰石的那个区占 1 DC（实测 z1 一个，48 tri）。
+    // R39-P9：仍用 6 区表 —— 灰石 cz≈−358.5 在 5 区/6 区表里都归 z1（DC 数不变），
+    // 不为「表统一」而多改一处（多改一处就多一份漂移风险）。
     for (const key of ZONED_VARIANT_BUCKETS) {
       const parts = this.extras.get(key);
       if (!parts || parts.length === 0) continue;
@@ -1074,9 +1153,9 @@ export class Castle {
    * R32 C-5：远档 LOD 变体几何（铁律 33 合规：low 档只降装饰密度，几何长度不变）。
    *
    * 为什么重跑一遍工厂：castleKit 的密度开关是**模块级全局**（setDetailLevel /
-   * isLowDetail），远档「只主体」几何只能以 low 档整体重产一次，再按同一套
-   * ZONE_EDGES_6 分区 merge。工厂无模块级累积状态（grep 实证：castleKit 只有
-   * LOW_DETAIL 一个可变全局，DEEP_FAR 由各工厂自置自复）⇒ 重跑安全。
+   * isLowDetail），远档「只主体」几何只能以 low 档整体重产一次，再按**各族的同一套区表**
+   * （`ZONE_EDGES_BY_FAMILY`，R39-P9 起三族不再共用一张）分区 merge。工厂无模块级累积状态
+   * （grep 实证：castleKit 只有 LOW_DETAIL 一个可变全局，DEEP_FAR 由各工厂自置自复）⇒ 重跑安全。
    * 成本 = 一倍几何生成（high 档 warm ≈850ms ⇒ 首建 ≈1.7s；用户令「首建时长不限」
    * 明确豁免）。stoneTexture 缓存键不变（kind|size|weather|repeat 与档无关）⇒ 0 额外贴图。
    *
@@ -1110,7 +1189,13 @@ export class Castle {
       ['gold', low.gold],
       ['dark', low.dark]
     ] as const) {
-      const zones = splitByZone(parts, ZONE_EDGES_6);
+      /* ⚠⚠ R39-P9：**必须按族取各自区表**（`ZONE_EDGES_BY_FAMILY`），不能像改前那样
+       * 三族共用 `ZONE_EDGES_6`。原因：远档键是 `${family}-z${i}`，`addMergedByZone`
+       * 用近档同一 `i` 去消费 ⇒ 两档区表不同时会「配上错的远档 / 某区永远配不上」，
+       * 该区 LOD **静默失效**（不报错、探针无异常，只有中段 tri 反涨能发现）。
+       * 改前 gold/dark 都是 6 区、与近档同表；R39 把这两族并到 5 区后，若此处仍写死
+       * ZONE_EDGES_6，gold 的 low `z5` 会覆盖到近档 `z4` 的位置 —— 正是上面那个坑。 */
+      const zones = splitByZone(parts, ZONE_EDGES_BY_FAMILY[family]);
       for (let i = 0; i < zones.length; i += 1) {
         if (zones[i].length === 0) continue;
         const merged = mergeSafe(zones[i]);
@@ -1161,7 +1246,7 @@ export class Castle {
     edges: ZoneEdges,
     /**
      * R38-P0-2 B1：把 **0 区**按该 z 平面一分为二（`castle-*-z0a` / `-z0b`）。
-     * 只对 ashlar / gold 传（它们各自 +1 静态 DC，总账 30 → 32，压在 castleDc 硬顶内）。
+     * 只对 ashlar / gold 传（它们各自 +1 静态 DC；R38 当时总账 30 → 32，R39 终态 29）。
      * 依据：`ashlar-z0`+`gold-z0` 是 z 跨度 **420m** 的合批条（球 r≈212、球心在车后
      * 122m），逐三角形实测 **83.8%~100% 在视锥外**却整条递交；切成 2 段后车后那半
      * 能被整块剔除（同树仿真：R=650 峰值 241,630 → 222,406，−8.0%，且**峰值帧 DC
@@ -1274,19 +1359,55 @@ export class Castle {
    * R31 运行时治理② + R32 C-5 治理③：按观看者世界 z 开关各区 mesh + 换近/远档。
    * Game 帧循环每帧调用一次（内部滞回，多数帧直接返回）；
    * 首帧（lastViewerZ=NaN）必算一次 ⇒ 不存在「从未显隐」的窗口。
-   * 同一遍遍历里：① 距离显隐（≥ZONE_VIEW_RANGE 整区 visible=false）；
-   * ② 远档 LOD（>D+滞回 换 lo、<D−滞回 换 hi；同 mesh 换 geometry，DC 不变）。
-   * 顺序保证弹入瞬间档位就是新的（先置 visible 再判档）⇒ 无「弹入时是旧档」帧。
+   * 两段遍历（R39 起**频率不同**，见下方 R39-P0）：
+   * ① 距离显隐（≥ZONE_VIEW_RANGE 整区 visible=false）—— **逐帧**；
+   * ② 远档 LOD（>D+滞回 换 lo、<D−滞回 换 hi；同 mesh 换 geometry，DC 不变）—— 每 20m 一次。
+   * 顺序保证弹入瞬间档位就是对的（显隐先算，LOD 随后；且区在 550m 闸门外一直判着 'lo'
+   * ⇒ 弹入时手上已经是远档，无「弹入时是旧档」帧）。
+   *
+   * ══ R39-P0（淡入「弹入瞬间不是雾色」的根因修复）════════════════════════════════
+   * 症状（外部逐帧审查 2026-10-28 拍到）：区弹入那一帧是「补丁级突变」（5px 宽、色差 284）。
+   * 根因有两层，**只修第二层不够**（本轮实测已证）：
+   *   ① 显隐判定带 **20m 陈旧度**：显隐只在 `|z−lastViewerZ| ≥ ZONE_VIEW_HYSTERESIS` 时重算，
+   *      而淡入是逐帧按连续距离写的 ⇒ 区跨 550 闸门那**一帧**的 d 可能已经走到 532m，
+   *      `uFade=(550−532)/100 = 0.18` ⇒ 弹入即 18% 实体。
+   *      实测（`.qa/r39_b/probe.mjs fade`，250km/h 逐帧 1.157m/帧，**改前 R38 树 22 个分区 mesh**）：
+   *      **13 次弹入 / 13 次 uFade>0.001 / max 0.1844**（60km/h max 0.1495）。
+   *   ② 若**只**在弹入帧把 `uFade` 强制成 0（很多实现的第一反应），跳变只是**推迟一帧**：
+   *      实测「弹入帧 = 0，下一帧 = 0.196」⇒ 单帧 Δ 仍 0.196，肉眼照样是补丁。
+   * 故本轮两层一起修：
+   *   · **显隐改逐帧判定**（入口不带陈旧度）+ 保留 20m **状态滞回**（已显 ⇒ d ≥ R+20 才隐）
+   *     ⇒ 区在 d 首次 <550 的那一帧就显，此刻 `uFade ≤ 0.0116`（一步的距离/淡入带）；
+   *   · 弹入帧仍显式置 0 作**护栏**（防抖动路径/重显路径留下残值），但只在 d > FADE_NEAR_DIST
+   *     时置 —— 否则「自由机位/瞬移」把区一步送进 450m 内时会被强制淡成雾，反而闪一帧。
+   * 实测（修后，19 个分区 mesh）：**弹入帧 uFade = 0（11/11）**、弹入点 d 全部落在
+   *   **549.1~550.0m**（改前 531~543）、逐帧 |ΔuFade| 最大 **0.0230**（≈ 两步；60km/h **0.0052**）
+   *   ⇒ 相对修前 0.1844 **降 8.0×**。
+   * 成本：显隐循环从「每 20m 一次」变成「每帧 19 次减法+比较」——量级 <1µs/帧，
+   *   且**与淡入循环本来就每帧在算的距离同源**，没有新增三角/矩阵运算。
+   * ⚠ 只改**入口**的判定频率；远档 LOD 仍走 20m 滞回重算（换档带自带 20m 滞回，边界不抖）。
+   * ⚠ 不改 `FADE_COLOR_UNIFORM` 的雾色取值（另一条「按真实背景色淡入」的路线风险更大，
+   *   本轮不做）；`revealAllZones()` 行为不变 —— 它显式把 fade 置 1 且不经过本循环。
    */
   updateViewerZ(z: number): void {
     // R38-P0-3：淡入**必须逐帧**更新（弹入那 100m 内要连续渐变），故放在滞回早退**之前**。
-    // 成本：每区 1 次减法 + 1 次比较（绝大多数区在淡入带外直接跳过）⇒ 30 个区 < 1µs/帧。
+    // 成本：每区 1 次减法 + 1 次比较（绝大多数区在淡入带外直接跳过）⇒ 19 个区 < 1µs/帧。
     this.updateFades(z);
+    /* ① 距离显隐：**逐帧**（R39-P0 见上）。20m 滞回降级为**状态滞回**：
+     *    未显的区 d < R 才显（入口精确）、已显的区 d < R+H 才隐（闸门附近不抖）。 */
+    for (const zv of this.zoneViews) {
+      const d = Math.abs(zv.cz - z);
+      const wasVisible = zv.mesh.visible;
+      const gate = wasVisible ? ZONE_VIEW_RANGE + ZONE_VIEW_HYSTERESIS : ZONE_VIEW_RANGE;
+      zv.mesh.visible = d < gate;
+      // R39-P0 护栏：弹入帧从**纯雾色**起（仅在淡入带内才置 0，见长注的瞬移告警）
+      if (!wasVisible && zv.mesh.visible && d > FADE_NEAR_DIST) zv.fade.value = 0;
+    }
+    /* ② 远档 LOD：仍按 20m 观看者滞回重算（省掉每帧换档判定；换档带自带 20m 滞回） */
     if (Number.isFinite(this.lastViewerZ) && Math.abs(z - this.lastViewerZ) < ZONE_VIEW_HYSTERESIS) return;
     this.lastViewerZ = z;
     for (const zv of this.zoneViews) {
       const d = Math.abs(zv.cz - z);
-      zv.mesh.visible = d < ZONE_VIEW_RANGE;
       if (!zv.lo) continue;
       if (zv.tier === 'hi' && d > LOD_NEAR_DIST + LOD_HYSTERESIS) this.setZoneTier(zv, 'lo');
       else if (zv.tier === 'lo' && d < LOD_NEAR_DIST - LOD_HYSTERESIS) this.setZoneTier(zv, 'hi');

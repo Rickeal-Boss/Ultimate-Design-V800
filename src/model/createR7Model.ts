@@ -80,6 +80,12 @@ interface ExtrudeShaping {
   planTaperNose?: { zFrom: number; zTo: number; amount: number; yGate?: number; yFade?: number };
   planTaperTail?: { zFrom: number; zTo: number; amount: number; yGate?: number; yFade?: number };
   waistBulge?: { yCenter: number; ySpan: number; amount: number };
+  /**
+   * R20-3 清单A：沿**挤出深度方向**的冠面。t = sz / depth ∈ [0,1]，整圈截面沿
+   * axis 平移 base + amp·sin(πt)（两端 base、中点 base+amp）。坐垫类件用它把
+   * 平板挤出变成「中间鼓起来」的坐盆；不增顶点、不增 draw call。
+   */
+  crown?: { axis: 'x' | 'y'; base: number; amp: number };
 }
 
 function extrudeSmooth01(t: number): number {
@@ -97,7 +103,8 @@ function applyExtrudeShaping(geo: THREE.BufferGeometry, depth: number, shaping: 
   const nose = shaping.planTaperNose;
   const tail = shaping.planTaperTail;
   const waist = shaping.waistBulge;
-  if (!th && !nose && !tail && !waist) return;
+  const crown = shaping.crown;
+  if (!th && !nose && !tail && !waist && !crown) return;
   const pos = geo.getAttribute('position') as THREE.BufferAttribute;
   const side = (shaping.space ?? 'side') === 'side';
   const off = shaping.nodeOffset ?? [0, 0, 0];
@@ -133,6 +140,14 @@ function applyExtrudeShaping(geo: THREE.BufferGeometry, depth: number, shaping: 
       m *= 1 + waist.amount * Math.exp(-d * d);
     }
     wx *= m;
+    if (crown) {
+      // 藏在同一遍循环里：sz 是 extrude 局部 z（已含 bevel 的 translate，仍落在
+      // [0, depth]），所以 t 不需要任何额外采样；side 空间下 sz 同样是深度方向。
+      const ct = depth > 1e-6 ? sz / depth : 0;
+      const bump = crown.base + crown.amp * Math.sin(Math.PI * (ct < 0 ? 0 : ct > 1 ? 1 : ct));
+      if (crown.axis === 'x') wx += bump;
+      else wy += bump;
+    }
     if (side) pos.setXYZ(i, sx, wy, depth / 2 - wx);
     else pos.setXYZ(i, wx, wy - off[1], wz - off[2]);
   }
@@ -145,10 +160,14 @@ function applyExtrudeShaping(geo: THREE.BufferGeometry, depth: number, shaping: 
 // bevel 语义（R6 骨架波）：bevel.size + 负 bevel.offset → 中段保持原轮廓、
 // 两端端面内缩 size（车身最宽线留在中段，端面圆角收进）；keepWidth：depth 内缩
 // 2×thickness 并 translate 回 [0, depth]，节点定位约定不变。
-function buildExtrudeGeometry(profile: { points: [number, number][]; depth: number; holes?: [number, number][][]; ovalHoles?: { cx: number; cy: number; rx: number; ry: number }[]; bevel?: { thickness: number; size: number; offset?: number; segments?: number }; shaping?: ExtrudeShaping }): THREE.BufferGeometry {
+// R20-3：steps 由 profile.steps 显式声明（默认 1 = 旧行为逐位不变）。它是
+// shaping.crown 的必要配套 —— steps:1 只有两端两圈环，深度方向没有中间顶点，
+// 冠面无处落地（实测：crown 在 steps:1 上是纯 no-op）。
+function buildExtrudeGeometry(profile: { points: [number, number][]; depth: number; holes?: [number, number][][]; ovalHoles?: { cx: number; cy: number; rx: number; ry: number }[]; bevel?: { thickness: number; size: number; offset?: number; segments?: number }; steps?: number; shaping?: ExtrudeShaping }): THREE.BufferGeometry {
   const holes = [...(profile.holes ?? []), ...((profile.ovalHoles ?? []).map((o) => ovalLoop(o.cx, o.cy, o.rx, o.ry)))];
   const shape = buildExtrudeShape(profile.points, holes);
   const bevel = profile.bevel;
+  const steps = Math.max(1, Math.min(12, Math.round(profile.steps ?? 1)));
   if (bevel && bevel.thickness > 0) {
     const bt = bevel.thickness;
     const depth = profile.depth - 2 * bt;
@@ -159,6 +178,7 @@ function buildExtrudeGeometry(profile: { points: [number, number][]; depth: numb
       bevelSize: bevel.size,
       bevelOffset: bevel.offset ?? 0,
       bevelSegments: bevel.segments ?? 3,
+      steps,
     });
     geo.translate(0, 0, bt);
     applyExtrudeShaping(geo, profile.depth, profile.shaping);
@@ -167,11 +187,12 @@ function buildExtrudeGeometry(profile: { points: [number, number][]; depth: numb
   const geo = new THREE.ExtrudeGeometry(shape, {
     depth: profile.depth,
     bevelEnabled: false,
-    steps: 1,
+    steps,
   });
   applyExtrudeShaping(geo, profile.depth, profile.shaping);
   return weldSmooth(geo);
 }
+
 
 function buildLatheGeometry(profile: { points: [number, number][]; segments?: number }): THREE.LatheGeometry {
   const points = profile.points.map(([x, y]) => new THREE.Vector2(Math.max(0.0001, x), y));
@@ -4349,13 +4370,13 @@ export function createLuxeedR7Model(options: ProceduralModelOptions = {}): THREE
     node_dash_lower_89.position.set(0.89, -0.16, 0.0);
     node_dash_lower_89.rotation.set(0.0, -1.5708, 0.0);
   }
-  node_dash_lower_89.userData.sculptComponent = {"id": "dash-lower", "name": "下仪表台（米白）", "level": "meso", "role": "interior", "importance": 0.9, "confidence": 0.9, "primitive": "extrude", "topologyClass": "conforming-shell", "topologyRationale": "仪表台下体侧视断面挤出，膝部空间留 y0.74 以下", "geometryDescriptor": {"profile2D": {"points": [[0.995, 0.955], [0.716, 0.955], [0.7, 0.9], [0.716, 0.74], [0.995, 0.74]], "depth": 1.78, "bevel": {"thickness": 0.006, "size": 0.01, "offset": -0.01, "segments": 2}}, "topologyIntent": "lower dash", "edgeTreatment": {"type": "rounded", "bevelRadius": 0.01, "segments": 2}, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals"}, "parent": "cabin-interior", "attachment": null, "dimensions": {"width": 1.78, "height": 0.215, "depth": 0.295, "units": "meters", "confidence": 0.9}, "transform": {"position": [0.89, -0.16, 0], "rotation": [0, -1.5708, 0], "scale": [1, 1, 1]}, "actionProfile": {"animationRole": "static", "pivot": {"mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.9}, "transformChannels": {"translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true}, "sockets": [], "collider": {"type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": ""}, "constraints": [], "destruction": {"breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base"}}, "material": "leather-ivory", "materialLayers": ["leather-ivory"], "deformations": [], "joints": [], "seams": [], "localFeatures": [], "surfaceDetail": {"macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": ""}, "evidenceRefs": ["img-r7-dash"], "details": [], "fidelityTier": "hero", "colorMaterialRecipe": {"dominantAlbedo": "rgba(237, 230, 218, 1.0)", "secondaryAlbedo": "rgba(237, 230, 218, 0.85)", "materialClass": "fabric", "materialClassConfidence": 0.9}};
+  node_dash_lower_89.userData.sculptComponent = {"id": "dash-lower", "name": "下仪表台（米白）", "level": "meso", "role": "interior", "importance": 0.9, "confidence": 0.9, "primitive": "extrude", "topologyClass": "conforming-shell", "topologyRationale": "仪表台下体侧视断面挤出；下沿落到座舱地板：工厂口径 y0.05 起（profile 0.21 − position.y 0.16），经 R7Adapter R27 内饰抬升 +0.26 后装配态底面 0.310 与 cabin-floor 顶面精确相接", "geometryDescriptor": {"profile2D": {"points": [[0.995, 0.955], [0.716, 0.955], [0.7, 0.9], [0.716, 0.21], [0.995, 0.21]], "depth": 1.78, "bevel": {"thickness": 0.006, "size": 0.01, "offset": -0.01, "segments": 2}}, "topologyIntent": "lower dash", "edgeTreatment": {"type": "rounded", "bevelRadius": 0.01, "segments": 2}, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals"}, "parent": "cabin-interior", "attachment": null, "dimensions": {"width": 1.78, "height": 0.745, "depth": 0.295, "units": "meters", "confidence": 0.9}, "transform": {"position": [0.89, -0.16, 0], "rotation": [0, -1.5708, 0], "scale": [1, 1, 1]}, "actionProfile": {"animationRole": "static", "pivot": {"mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.9}, "transformChannels": {"translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true}, "sockets": [], "collider": {"type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": ""}, "constraints": [], "destruction": {"breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base"}}, "material": "leather-ivory", "materialLayers": ["leather-ivory"], "deformations": [], "joints": [], "seams": [], "localFeatures": [], "surfaceDetail": {"macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": ""}, "evidenceRefs": ["img-r7-dash"], "details": [], "fidelityTier": "hero", "colorMaterialRecipe": {"dominantAlbedo": "rgba(237, 230, 218, 1.0)", "secondaryAlbedo": "rgba(237, 230, 218, 0.85)", "materialClass": "fabric", "materialClassConfidence": 0.9}};
   node_dash_lower_89.userData.actionProfile = {"animationRole": "static", "pivot": {"mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.9}, "transformChannels": {"translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true}, "sockets": [], "collider": {"type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": ""}, "constraints": [], "destruction": {"breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base"}};
   (nodes["cabin-interior"] ?? root).add(node_dash_lower_89);
   nodes["dash-lower"] = node_dash_lower_89;
   const mesh_dash_lower_89Geometry = endpoint_dash_lower_89
     ? new THREE.CylinderGeometry(endpoint_dash_lower_89.endRadius, endpoint_dash_lower_89.baseRadius, endpoint_dash_lower_89.length, 16, 6)
-    : buildExtrudeGeometry({"points": [[0.995, 0.955], [0.716, 0.955], [0.7, 0.9], [0.716, 0.74], [0.995, 0.74]], "depth": 1.78, "bevel": {"thickness": 0.006, "size": 0.01, "offset": -0.01, "segments": 2}});
+    : buildExtrudeGeometry({"points": [[0.995, 0.955], [0.716, 0.955], [0.7, 0.9], [0.716, 0.21], [0.995, 0.21]], "depth": 1.78, "bevel": {"thickness": 0.006, "size": 0.01, "offset": -0.01, "segments": 2}});
   if (!endpoint_dash_lower_89) {
     mesh_dash_lower_89Geometry.scale(1.0, 1.0, 1.0);
   }
@@ -4370,7 +4391,7 @@ export function createLuxeedR7Model(options: ProceduralModelOptions = {}): THREE
   }
   mesh_dash_lower_89.castShadow = options.castShadow ?? true;
   mesh_dash_lower_89.receiveShadow = options.receiveShadow ?? true;
-  mesh_dash_lower_89.userData.sculptComponent = {"id": "dash-lower", "name": "下仪表台（米白）", "level": "meso", "role": "interior", "importance": 0.9, "confidence": 0.9, "primitive": "extrude", "topologyClass": "conforming-shell", "topologyRationale": "仪表台下体侧视断面挤出，膝部空间留 y0.74 以下", "geometryDescriptor": {"profile2D": {"points": [[0.995, 0.955], [0.716, 0.955], [0.7, 0.9], [0.716, 0.74], [0.995, 0.74]], "depth": 1.78, "bevel": {"thickness": 0.006, "size": 0.01, "offset": -0.01, "segments": 2}}, "topologyIntent": "lower dash", "edgeTreatment": {"type": "rounded", "bevelRadius": 0.01, "segments": 2}, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals"}, "parent": "cabin-interior", "attachment": null, "dimensions": {"width": 1.78, "height": 0.215, "depth": 0.295, "units": "meters", "confidence": 0.9}, "transform": {"position": [0.89, -0.16, 0], "rotation": [0, -1.5708, 0], "scale": [1, 1, 1]}, "actionProfile": {"animationRole": "static", "pivot": {"mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.9}, "transformChannels": {"translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true}, "sockets": [], "collider": {"type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": ""}, "constraints": [], "destruction": {"breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base"}}, "material": "leather-ivory", "materialLayers": ["leather-ivory"], "deformations": [], "joints": [], "seams": [], "localFeatures": [], "surfaceDetail": {"macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": ""}, "evidenceRefs": ["img-r7-dash"], "details": [], "fidelityTier": "hero", "colorMaterialRecipe": {"dominantAlbedo": "rgba(237, 230, 218, 1.0)", "secondaryAlbedo": "rgba(237, 230, 218, 0.85)", "materialClass": "fabric", "materialClassConfidence": 0.9}};
+  mesh_dash_lower_89.userData.sculptComponent = {"id": "dash-lower", "name": "下仪表台（米白）", "level": "meso", "role": "interior", "importance": 0.9, "confidence": 0.9, "primitive": "extrude", "topologyClass": "conforming-shell", "topologyRationale": "仪表台下体侧视断面挤出；下沿落到座舱地板：工厂口径 y0.05 起（profile 0.21 − position.y 0.16），经 R7Adapter R27 内饰抬升 +0.26 后装配态底面 0.310 与 cabin-floor 顶面精确相接", "geometryDescriptor": {"profile2D": {"points": [[0.995, 0.955], [0.716, 0.955], [0.7, 0.9], [0.716, 0.21], [0.995, 0.21]], "depth": 1.78, "bevel": {"thickness": 0.006, "size": 0.01, "offset": -0.01, "segments": 2}}, "topologyIntent": "lower dash", "edgeTreatment": {"type": "rounded", "bevelRadius": 0.01, "segments": 2}, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals"}, "parent": "cabin-interior", "attachment": null, "dimensions": {"width": 1.78, "height": 0.745, "depth": 0.295, "units": "meters", "confidence": 0.9}, "transform": {"position": [0.89, -0.16, 0], "rotation": [0, -1.5708, 0], "scale": [1, 1, 1]}, "actionProfile": {"animationRole": "static", "pivot": {"mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.9}, "transformChannels": {"translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true}, "sockets": [], "collider": {"type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": ""}, "constraints": [], "destruction": {"breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base"}}, "material": "leather-ivory", "materialLayers": ["leather-ivory"], "deformations": [], "joints": [], "seams": [], "localFeatures": [], "surfaceDetail": {"macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": ""}, "evidenceRefs": ["img-r7-dash"], "details": [], "fidelityTier": "hero", "colorMaterialRecipe": {"dominantAlbedo": "rgba(237, 230, 218, 1.0)", "secondaryAlbedo": "rgba(237, 230, 218, 0.85)", "materialClass": "fabric", "materialClassConfidence": 0.9}};
   node_dash_lower_89.add(mesh_dash_lower_89);
   meshes["dash-lower"] = mesh_dash_lower_89;
   colliders["dash-lower"] = {"type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": ""};

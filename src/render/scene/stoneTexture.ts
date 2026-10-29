@@ -352,6 +352,29 @@ interface MasonryProfile {
    * 同样只写 tone，不动缝色带（深灰 #97948c ↔ 浅褐 #d0bb99）与基色。
    */
   seamShade: number;
+  /* ── R39 极致细化新增层（**只对 ashlar 开**；wall 全 0 ⇒ `makeField` 返回 null ⇒ 零开销、逐位不变）
+   * 三个都是「结构层」：作用在**缝口倒角带**或**大尺度低频**上，不做均匀加噪
+   * （均匀加噪只会在 mip 后变成一层灰，等于白烧 CPU）。 */
+  /**
+   * 砌块边缘**凿痕/微倒角**·低频层（法线侧）：倒角宽度沿缝长方向缓慢起伏
+   * （周期 8×16 ⇒ 世界尺度 0.15m×0.075m，读作「手工修边不齐」）。
+   * 只写 height ⇒ 法线真源，**不碰 roughness[]**（ΔroughMean 结构性地为 0）。
+   */
+  edgeChiselLo: number;
+  /** 砌块边缘**凿痕**·高频层（法线侧）：凿子齿痕（周期 64×128 ⇒ ≈1.9cm 齿距，近景可辨） */
+  edgeChiselHi: number;
+  /**
+   * 灰缝**深度扰动**（albedo AO + 法线同源）：缝芯高度与压暗随整数周期 fbm(3×3) 游走
+   * ⇒ 同一道缝忽深忽浅、缝底积灰不均（旧实现缝深是全图恒定常数 ⇒ 近景读作「刻出来的槽」）。
+   * 法线与 AO 由同一份 `jd` 驱动 ⇒ 不可能错位（R29 硬约束①）。
+   */
+  jointDepth: number;
+  /**
+   * **大尺度色带/水渍**低频（tone-only）：fbm **1×2 整数周期** ⇒ 一个 tile 在 x 向恰好
+   * 一个周期 ⇒ 天然 tile-aligned，平铺**不可能**出硬缝（本轮最重要的平铺红线）。
+   * 读作「整片墙的矿脉色差 / 大块水渍」，零均值（(field−0.5)）⇒ 不漂 lumMean。
+   */
+  bandLow: number;
 }
 
 const MASONRY: Record<'ashlar' | 'wall', MasonryProfile> = {
@@ -413,7 +436,26 @@ const MASONRY: Record<'ashlar' | 'wall', MasonryProfile> = {
      *   ⇒ "近景更脏更立体、远看整体明度不变"，不会把白石墙改暗。 */
     weatherCloud: 0.16,
     weatherSpeck: 0.11,
-    seamShade: 0.13
+    seamShade: 0.13,
+    /* ── R39 结构层细化（ashlar = 外墙 hero 族，唯一开这三层的族）──────────────
+     * ① edgeChiselLo 0.030：倒角宽度沿缝长缓慢起伏（8×16 周期）—— 「手工修边不齐」；
+     * ② edgeChiselHi 0.018：凿子齿痕（64×128 周期 ⇒ ≈1.9cm@1.2m/tile）—— 近景石面被凿过；
+     * ③ jointDepth    0.10：缝深/缝底积灰随 fbm(3×3) 游走 —— 同一道缝忽深忽浅；
+     * ④ bandLow       0.05：fbm 1×2 **整数周期**大尺度色带 —— tile-aligned 无硬缝。
+     * 前两项只写 height（法线），③写 height + tone（AO），④只写 tone
+     * ⇒ **roughness[] 一行不碰** ⇒ ΔroughMean 结构性 0（R37 判据 ±0.015 的 1000× 余量）。
+     * 幅度定档依据（**实测**，`.qa/r39_b/stats256.mjs`(256² 与 r37_texture 同参) +
+     * `.qa/r39_b/tex_stats.mjs`(1024²)）：
+     *   · 256²：lumMean 201.817(R36 锚点) → **200.518**（Δ −1.299，判据 |Δ|∈[0.3,5] 内）、
+     *     lumStd **24.915**（带内 20~30）、contrast **77**（≥70）、roughMean **0.848889**
+     *     （vs 0.848877，Δ **+0.000012** —— 与 R37 同值，因为确实没碰 roughness）；
+     *   · 1024²：lumMean 211.5→**211.7**、lumStd 15.9→16.1、contrast 57→**58**、
+     *     grain 2.48→**2.50**、n|xy| 0.1414→**0.1421**、ḡ **0.834367 逐位不变**；
+     *   · 平铺接缝：左右列均值差 **0.19 级**、上下行 **0.43 级**（<1 级 ⇒ 无硬缝）。 */
+    edgeChiselLo: 0.03,
+    edgeChiselHi: 0.018,
+    jointDepth: 0.1,
+    bandLow: 0.05
   },
   wall: {
     // R32：5×5 @ 2.4m/tile = 0.48m 见方（rows==cols，勿拉成长条）
@@ -455,6 +497,11 @@ const MASONRY: Record<'ashlar' | 'wall', MasonryProfile> = {
     weatherCloud: 0,
     weatherSpeck: 0,
     seamShade: 0,
+    /* R39：三层结构层同样**只开给 ashlar**（wall 保持 R37 冻结态，逐位不变） */
+    edgeChiselLo: 0,
+    edgeChiselHi: 0,
+    jointDepth: 0,
+    bandLow: 0,
     jointShade: 0.88,
     seep: 0.9,
     edgeNick: 0.14
@@ -610,6 +657,25 @@ const VEIN = {
   finePeriodX: 8,
   finePeriodY: 32,
   polish: 0.06
+};
+
+/**
+ * ══ R39：大理石结构层细化（主殿/祭坛近景族，512² 不变 ⇒ **0 新增显存**）═══════════
+ * 三项都对「细磨石」这个材质身份成立，且都**只加结构、不加均匀噪声**：
+ *  ① `veinChatter`：**沿脉凿痕**（法线侧）。脉不是一条平的光带 —— 真石上脉缘被磨出
+ *     细微起伏；用高频 value noise（128×64 ⇒ ≈1.3cm@1.6m/tile）乘脉遮罩压进高度场。
+ *  ② `pitFine`：**细矿坑**（法线 + 极轻明度）。fbm(256, 48×48, 2oct) 门限 0.72 取
+ *     稀疏坑点（覆盖 ≈4%），读作「磨面上零星的晶洞」。
+ *  ③ `bandLow`：**大尺度色带**（tone-only）。fbm **1×2 整数周期**（x 向整 tile 一周期）
+ *     ⇒ tile-aligned，平铺无硬缝；零均值 ⇒ 不漂 lumMean（大白石不会变灰）。
+ * 全部为整数周期且整除各自字段 res ⇒ 接缝天然环绕对齐。
+ * ⚠ roughness 只由 ③ 之外的既有层决定 ⇒ 本组**不碰 `roughness[]`**（ḡ 不漂，
+ *   `variantRoughness` 的 1/ḡ 反算对 marble 相关材质零影响）。
+ */
+const MARBLE_DETAIL = {
+  veinChatter: 0.022,
+  pitFine: 0.05,
+  bandLow: 0.055
 };
 
 /** 乱石坡面 / 鎏金的缝底亮度比 */
@@ -822,13 +888,24 @@ function normalizeSize(size: number | undefined): number {
 }
 
 /**
- * 质量档 → 贴图边长。high 只对「主角面」（ashlar 立面 / floor 地面）给 1024，
- * 其余族 512 —— 石材是**重复平铺**的，512² 已有 183 px/m，1024 对远景是纯浪费。
+ * 质量档 → 贴图边长。high 只对「主角面」给 1024，其余族 512。
+ *
+ * ══ R39-P1（显存吃满预算）：hero 集 ashlar → **ashlar + wood** ══════════════════
+ * 依据（实测，`.qa/r39_b/probe.mjs tex`）：
+ *   · 改前 high 档实测 **16 张 / 29.33 MiB**（预算 castleTexMB 40 ⇒ 余 **10.67**）；
+ *   · wood 同时供 `wood` 桶**与** `door` 变体（城门门扇 / 龛内木梁）—— 是**内饰近景件**，
+ *     1.6m/tile 下 512² 只有 320px/m，门板弦切弯纹（0.4m 板宽）只剩 128px 宽 ⇒ 糊；
+ *   · 512²→1024²（noRough 两张 albedo+normal）净增 **+8.00 MiB** ⇒ **37.33 MiB**，
+ *     仍在 38 MB 目标内（余 2.67 MiB 是刻意留给后续波次的，不把预算打穿到 0）。
+ * ⚠ 中/低档**保持 512/256 不变**（低端机吃不住 1024；`castleTexSyncSize=256` 同步段
+ *   也不因此变长，因为 max(256, target) 对 medium 仍是 512）。
  */
 export function stoneTextureSize(kind: StoneKind, tier: QualityTier): number {
-  const hero = kind === 'ashlar';
-  if (tier === 'high') return hero ? 1024 : 512;
-  if (tier === 'medium') return hero ? 512 : 256;
+  if (tier === 'high') {
+    // R39：wood 进 hero 集（见上）；ashlar 仍是外墙/走道主角面
+    return kind === 'ashlar' || kind === 'wood' ? 1024 : 512;
+  }
+  if (tier === 'medium') return kind === 'ashlar' ? 512 : 256;
   return 256;
 }
 
@@ -940,6 +1017,17 @@ function prepMasonry(
     () => noiseField(Math.min(256, size), 96, 96, seed + 337),
     size
   );
+  /* ── R39 三个结构层驱动场（ashlar 专属；wall amp=0 ⇒ null ⇒ 零开销）──────────
+   * 凿痕低频 8×16：沿缝长方向 0.15m×0.075m 一拍 ⇒ 「修边不齐」，不产生高频噪点；
+   * 凿痕高频 64×128：≈1.9cm@1.2m/tile，是**凿子齿**而不是 sensor 噪声（mip 后会柔化）；
+   * 缝深 fbm 3×3×2oct：同一道缝沿长度方向 2~4 个起伏；
+   * 色带 fbm **1×2**×3oct：x 向整 tile 一个周期 ⇒ tile-aligned（红线见 MasonryProfile 注）。
+   * ⚠ 所有周期都是整数且整除字段 res（8/16、64/128 整除 256；3、6 / 1,2,4,8 整除 64/96）
+   *   ⇒ 接缝天然环绕对齐，平铺无硬缝。 */
+  const chatLoF = makeField(prof.edgeChiselLo, () => noiseField(Math.min(256, size), 8, 16, seed + 347), size);
+  const chatHiF = makeField(prof.edgeChiselHi, () => noiseField(Math.min(256, size), 64, 128, seed + 349), size);
+  const jointDepthF = makeField(prof.jointDepth, () => fbmField(96, 3, 3, 2, seed + 353), size);
+  const bandF = makeField(prof.bandLow, () => fbmField(64, 1, 2, 3, seed + 359), size);
 
   // 颗粒白噪按 2px 粒度预生成再查表
   const grainRes = Math.max(64, size >> 1);
@@ -989,6 +1077,10 @@ function prepMasonry(
       fillField(nickF, y0, y1);
       fillField(cloudF, y0, y1);
       fillField(speckF, y0, y1);
+      fillField(chatLoF, y0, y1);
+      fillField(chatHiF, y0, y1);
+      fillField(jointDepthF, y0, y1);
+      fillField(bandF, y0, y1);
       const baseFbm = baseFbmF ? baseFbmF.out : EMPTY;
       const stainField = stainF ? stainF.out : EMPTY;
       const reliefField = reliefF ? reliefF.out : EMPTY;
@@ -1006,6 +1098,10 @@ function prepMasonry(
       const nickField = nickF ? nickF.out : EMPTY;
       const cloudField = cloudF ? cloudF.out : EMPTY;
       const speckField = speckF ? speckF.out : EMPTY;
+      const chatLoField = chatLoF ? chatLoF.out : EMPTY;
+      const chatHiField = chatHiF ? chatHiF.out : EMPTY;
+      const jointDepthField = jointDepthF ? jointDepthF.out : EMPTY;
+      const bandField = bandF ? bandF.out : EMPTY;
 
       for (let y = y0; y < y1; y += 1) {
         const row = Math.min(prof.rows - 1, Math.floor(y / rowH));
@@ -1057,6 +1153,23 @@ function prepMasonry(
           h += (chiselV - 0.5) * prof.chisel * bevel; // R30 中频凿点（精切石肌理）
           h -= pitMask * prof.pit * bevel; // R32 凹坑压低石面（法线真源）
           h += grain * prof.grain;
+          /* ── R39 结构层（法线侧）：缝口倒角带的凿痕（低频修边不齐 + 高频凿子齿）
+           *    + 缝深扰动。三者都只写 `h`（法线真源）⇒ **不碰 roughness[]**。
+           * 倒角带遮罩 `bevel·(1−bevel)·4` 峰在 bevel=0.5（缝口到块面的过渡带），
+           * 缝芯与块面两端都归 0 ⇒ 凿痕只出现在「该被凿的棱边上」，不会把块面做成噪面。 */
+          let edgeChat = 0;
+          if (chatLoField.length || chatHiField.length) {
+            const chatBand = bevel * (1 - bevel) * 4;
+            const lo = chatLoField.length ? chatLoField[index] - 0.5 : 0;
+            const hi = chatHiField.length ? chatHiField[index] - 0.5 : 0;
+            edgeChat = chatBand * (lo * prof.edgeChiselLo + hi * prof.edgeChiselHi);
+          }
+          h += edgeChat;
+          let jointDeep = 0;
+          if (jointDepthField.length) {
+            jointDeep = (1 - bevel) * prof.jointDepth * jointDepthField[index];
+            h -= jointDeep;
+          }
           height[index] = clamp01(h);
 
           // —— 明度（tone）——
@@ -1090,6 +1203,11 @@ function prepMasonry(
             const fadeOut = 1 - smoothstep(bevelEnd, bevelEnd + prof.bevelPx * 1.8, edge);
             t -= shoulder * fadeOut * prof.seamShade * (0.55 + 0.45 * weather);
           }
+          /* R39：① 缝底积灰 AO —— 与 `jointDeep` **同源**（同一份 fbm 驱动高度与压暗）
+           *         ⇒ 法线的凹槽与 albedo 的暗部严格对齐（R29 硬约束①）；
+           *      ② 大尺度色带/水渍（fbm 1×2 整数周期 ⇒ tile-aligned，零均值 ⇒ 不漂 lumMean）。 */
+          t -= jointDeep * 0.6;
+          if (bandField.length) t += (bandField[index] - 0.5) * prof.bandLow;
 
           let rough = prof.jointRough + (prof.faceRough - prof.jointRough) * smoothstep(0.42, 0.95, bevel);
           rough += (reliefV - 0.5) * 0.08 * weather;
@@ -1860,6 +1978,13 @@ function prepMarble(
   const fineVein = makeField(V.fineVeinAmp, () => fbmField(fres, V.finePeriodX, V.finePeriodY, 3, seed + 83), size);
   // R32 抛光差异（低频斑块局部更光 ⇒ roughness 分层：镜面台基 vs 哑光柱身的石板差异）
   const polishF = makeField(1, () => fbmField(128, 4, 4, 2, seed + 101), size)!;
+  /* ── R39 结构层驱动场（MARBLE_DETAIL 见注释；全整数周期）──────────────────────
+   * 沿脉凿痕 128×64：≈1.3cm@1.6m/tile 的齿痕（乘脉遮罩后才生效）；
+   * 细矿坑 fbm 48×48×2oct（48 整除 256）；
+   * 色带 fbm 1×2×3oct：x 整 tile 一周期 ⇒ tile-aligned。 */
+  const chatterF = makeField(MARBLE_DETAIL.veinChatter, () => noiseField(Math.min(256, size), 128, 64, seed + 113), size);
+  const pitFineF = makeField(MARBLE_DETAIL.pitFine, () => fbmField(256, 48, 48, 2, seed + 127), size);
+  const bandF = makeField(MARBLE_DETAIL.bandLow, () => fbmField(64, 1, 2, 3, seed + 131), size);
 
   const grainRes = Math.max(64, size >> 1);
   const grainStep = size / grainRes;
@@ -1878,12 +2003,18 @@ function prepMarble(
       fillField(speck, y0, y1);
       fillField(fineVein, y0, y1);
       fillField(polishF, y0, y1);
+      fillField(chatterF, y0, y1);
+      fillField(pitFineF, y0, y1);
+      fillField(bandF, y0, y1);
       const veinA = vein.out;
       const fineA = fine.out;
       const cloudA = cloud.out;
       const speckA = speck.out;
       const fineVeinA = fineVein ? fineVein.out : EMPTY;
       const polishA = polishF.out;
+      const chatterA = chatterF ? chatterF.out : EMPTY;
+      const pitFineA = pitFineF ? pitFineF.out : EMPTY;
+      const bandA = bandF ? bandF.out : EMPTY;
       for (let y = y0; y < y1; y += 1) {
         const dstRow = y * size;
         const grainRow = Math.floor(y / grainStep) * grainRes;
@@ -1904,6 +2035,13 @@ function prepMarble(
           h -= vm * 0.12;
           h -= fm * 0.05; // R32 细脉微凹
           h += sp * V.grain * 0.8; // R30 晶屑微起伏
+          /* ── R39 结构层（法线侧）──────────────────────────────────────────────
+           * ① 沿脉凿痕：脉缘被磨出细微齿痕（乘脉遮罩 ⇒ 只在脉上，块面仍是细磨面）；
+           * ② 细矿坑：门限 0.72 取稀疏坑点（fbm 值向 0.5 集中 ⇒ 门限必须实测标定，
+           *    0.72 对应覆盖 ≈4%，见 `.qa/r39_b/tex_stats.mjs` 的 grain/pit 读数）。 */
+          if (chatterA.length) h += (chatterA[index] - 0.5) * MARBLE_DETAIL.veinChatter * vm;
+          const pitM = pitFineA.length ? smoothstep(0.72, 0.86, pitFineA[index]) : 0;
+          h -= pitM * MARBLE_DETAIL.pitFine;
           height[index] = clamp01(h);
 
           let t = 0.5 + (c - 0.5) * 0.3 * (0.5 + 0.5 * weather);
@@ -1913,6 +2051,10 @@ function prepMarble(
           t += grain * V.grain * 2.2;
           t += sp * 0.05; // R30 晶屑明暗
           t += pol * 0.03; // R32 抛光处更亮
+          /* ── R39（tone-only）：细矿坑压暗 + 大尺度色带（fbm 1×2 整数周期 ⇒ tile-aligned）
+           * 色带零均值 ⇒ 不漂 lumMean；矿坑只在 4% 像素上压暗一档（读作「晶洞」）。 */
+          t -= pitM * 0.09;
+          if (bandA.length) t += (bandA[index] - 0.5) * MARBLE_DETAIL.bandLow;
           tone[index] = clamp01(t);
 
           let rough = V.faceRough + (V.veinRough - V.faceRough) * vm;
@@ -2423,6 +2565,18 @@ function pixelCanvas(size: number, data: Uint8ClampedArray): HTMLCanvasElement {
   return canvas;
 }
 
+/**
+ * R39-P1：石材贴图的各向异性过滤级别（**免费的地面/掠射清晰度**）。
+ * 为什么不设 = 1：御桥路面、走道、桥面板都是**掠射视角**（相机 2m 高、路面延伸 400m），
+ * 各向同性 mip 在掠射方向会过早掉到低 mip ⇒ 远处路面糊成一片色块；8× 各向异性
+ * 能把「掠射方向 = 高 mip / 垂直方向 = 高分辨率」分开采样 ⇒ 同样的显存下缝/凿痕
+ * 一直看得清（纯采样器设置，0 字节显存）。
+ * ⚠ three 在 `WebGLTextures` 里按 `Math.min(texture.anisotropy, maxAnisotropy)`
+ *   上传 ⇒ 低端 GPU（maxAnisotropy=2/4）自动降级，不会报错、不影响兼容性。
+ * ⚠ 只作用于石材族（本模块产的三张图）；车漆/车身贴图有自己的路径，不受影响。
+ */
+export const STONE_ANISOTROPY = 8;
+
 function toTexture(
   canvas: HTMLCanvasElement,
   colorSpace: THREE.ColorSpace,
@@ -2434,6 +2588,7 @@ function toTexture(
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.RepeatWrapping;
   tex.repeat.set(repeat[0], repeat[1]);
+  tex.anisotropy = STONE_ANISOTROPY; // R39-P1：掠射清晰度（见上）
   tex.needsUpdate = true;
   return tex;
 }
@@ -2517,6 +2672,7 @@ function makeFallbackMaps(repeat: [number, number], channels: StoneChannels = 'f
     tex.wrapS = THREE.RepeatWrapping;
     tex.wrapT = THREE.RepeatWrapping;
     tex.repeat.set(repeat[0], repeat[1]);
+    tex.anisotropy = STONE_ANISOTROPY; // R39：兜底路径与生产路径同设置（避免两代不一致）
     return tex;
   };
   return {
@@ -2628,16 +2784,24 @@ export const STONE_VARIANTS: Record<StoneVariantId, StoneVariantSpec> = {
     texKind: 'ashlar',
     label: '内壁暗石',
     color: 0x8e979e,
-    rough: 0.92,
+    /* ══ R39：0.92 → **0.83**（从「被钳」改成**真生效**）════════════════════════
+     * 改前 0.92 > ashlar ḡ(1024 运行尺寸)=0.834367 ⇒ raw=1.1026 ⇒ 被 min(1,·) 钳 ⇒
+     *   material.roughness=1 ⇒ **effective 恒等于 ḡ=0.834367**（spec 白写）。
+     * 定 0.83 的两个硬约束（缺一不可，别只看着一个改）：
+     *   ① **必须 ≤ ḡ**：0.83 ≤ 0.834367 ⇒ raw=0.9948 **未触钳** ⇒ material.roughness
+     *      =0.9948、effective=**0.83**（真生效）。余量只有 0.004367 ⇒ 若将来 ashlar
+     *      图集 ḡ 掉到 <0.83（例如又加了一层压暗缝芯的结构层），这档会重新被钳，
+     *      `variantRoughness` 的 warn 会立刻打出来（别把 warn 当噪声删掉）。
+     *   ② **不能等于 ashlar-grey 的 0.80**：R37 的回归判据是「inner-stone 与
+     *      ashlar-grey 的 effective 差 ≥0.03」（R37 修的就是两支归一成 0.848889 的 bug）。
+     *      0.83 − 0.80 = **0.030** 刚好达标 ⇒ 语义也成立：内壁(0.83) 比灰石(0.80) 更哑、
+     *      比外墙(0.834367) 略抛 = 「未抛光内壁」。
+     * ⚠ 若主理人要 0.80，先改 R37 那条 ≥0.03 判据并说明观感，否则等于把老 bug 装回去。 */
+    rough: 0.83,
     metalness: 0,
     env: 0.45,
     normalScale: 0.8,
-    /* ⚠ R37 P2-8 实测：本档 rough 0.92 **被钳、不生效** —— ashlar 族 ḡ=0.848889，
-     *   0.92/0.848889 = 1.084 > 1 ⇒ material.roughness = 1 ⇒ **effective = 0.848889**。
-     *   保留 0.92 的理由：改动它会改变 R35/R36 已验收的内庭围合墙观感（本轮不动观感），
-     *   故按「显式承认被钳」处理（见 variantRoughness 的处置纪律②）。
-     *   若将来要让它真生效，把它降到 ≤0.8489（例如 0.84 → effective 0.84）。 */
-    note: 'ashlar 图集 + 冷暗乘子；env 0.85→0.45。⚠ rough 0.92 被 min(1,·) 钳住 ⇒ effective = ḡ = 0.8489（未生效，已登记）'
+    note: 'ashlar 图集 + 冷暗乘子；env 0.85→0.45。R39：rough 0.92→0.83 **真生效**（effective 0.83，material.roughness 0.9948<1），与 ashlar-grey 0.80 差 0.030 保住 R37 判据'
   },
   // b) 木门/木梁：复用 wood 图集（本轮已细化木纹节奏：弦切弯纹 + 早晚材带 + 导管细线）。
   //    wood 是 'noRough' ⇒ 无 roughnessMap，rough 直接给常数（铁律 34 的 ḡ 反算不适用）。
@@ -2657,15 +2821,18 @@ export const STONE_VARIANTS: Record<StoneVariantId, StoneVariantSpec> = {
     texKind: 'gold',
     label: '暗金做旧',
     color: 0xd2cec4,
-    rough: 0.55,
+    /* ══ R39：0.55 → **0.45**（从「被钳」改成**真生效**）════════════════════════
+     * 改前 0.55 > gold ḡ=0.503534 ⇒ raw=1.0923 ⇒ 钳到 1 ⇒ effective 恒为 0.503534。
+     * 0.45 ≤ ḡ ⇒ raw=0.8937 未触钳 ⇒ material.roughness=0.8937、effective=**0.45**。
+     * 语义：新金主体 `TARGET_ROUGH.gold = 0.42`（castle.ts）⇒ 做旧金 0.45 **比新金更哑**
+     * =「氧化过的旧金属」；同时仍比 it 前的 0.5035（钳后值）更亮一档 ⇒ 门钉/徽章在
+     * 城门阴影里不会糊成一块哑铁（0.45 的抛光反射 + env 0.85 才读得出「旧金」）。
+     * ⚠ floor/wood 那两档不走这条路径（noRough ⇒ 无 roughnessMap ⇒ 无钳制），别混。 */
+    rough: 0.45,
     metalness: 0.8,
     env: 0.85,
     normalScale: 0.7,
-    /* ⚠ R37 P2-8 实测：rough 0.55 **被钳、不生效** —— gold 族 ḡ=0.504538，
-     *   0.55/0.504538 = 1.090 > 1 ⇒ material.roughness = 1 ⇒ **effective = 0.504538**。
-     *   保留原值的理由同 inner-stone：改动即改 R36 已验收的暗金观感。
-     *   要生效须降到 ≤0.5045。 */
-    note: 'gold 图集 + 近中性压暗；保 R30b 色相档（env 1.4→0.85）。⚠ rough 0.55 被钳 ⇒ effective = ḡ = 0.5045（未生效，已登记）'
+    note: 'gold 图集 + 近中性压暗；保 R30b 色相档（env 1.4→0.85）。R39：rough 0.55→0.45 **真生效**（effective 0.45，比新金 0.42 略哑 ⇒ 做旧金读作旧金属）'
   },
   // d) 桥面/地面深色石板：复用 floor 图集（本轮新增 damp 微湿低频斑）。
   //    ⚠ 微湿感**只走 albedo**：floor 是 'noRough'，挂 roughnessMap 会因 ḡ≈0.5 让
@@ -2674,16 +2841,25 @@ export const STONE_VARIANTS: Record<StoneVariantId, StoneVariantSpec> = {
     texKind: 'floor',
     label: '桥面深色石板',
     color: 0x8b9094,
+    /* ══ R39 复核：**0.8 本来就是真生效的**，本来就没有「被钳」（旧台账写错了）════════
+     * floor 的通道预算是 'noRough'（castle.ts STONE_CHANNELS）⇒ **没有 roughnessMap**
+     * ⇒ `variantRoughness` 第一行 `if (!hasRoughMap) return target` 早退 ⇒ 既不 1/ḡ 反算
+     * 也不钳 ⇒ material.roughness = 0.8 = **effective 0.8**（`.qa/r39_b/tex_stats.mjs`
+     * 逐档复算表可证：pave-damp 的 hasRoughMap=no、effective 0.800000）。
+     * 「0.8 被钳成 ḡ=0.4751」是 R37 台账里的**旧读**（当时误用 `makeStoneMaps` 默认
+     * channels='full' 去算的）—— R37 自己的 r37_rough.test.ts:128-130 已写明这点。
+     *
+     * ⚠ 那为什么**不给 floor 挂 roughnessMap**（主理人给的二选一，此处选「不挂 + 承认口径」）：
+     *   挂了反而更差 —— target 0.8 > floor ḡ 0.475118 ⇒ raw=1.684 ⇒ 必然被钳到 1 ⇒
+     *   effective 从现在的 **0.8 掉到 0.4751**（表面**更滑**，正是「400m 掠射镜成湿沥青」
+     *   的方向，castle.ts:960-967 有 R29 双重实证的警告），代价 +1.33 MiB 与一份镜面风险，
+     *   **收益为负**。故维持 noRough：微湿感只走 albedo（CRAZY_PAVE.damp 低频水渍），
+     *   粗糙度这一档保持均匀 0.8 的干面。 */
     rough: 0.8,
     metalness: 0,
     env: 0.25,
     normalScale: 0.85,
-    /* ⚠ R37 P2-8 实测：rough 0.8 **被钳、不生效** —— floor 族 ḡ=0.475119，
-     *   0.8/0.475119 = 1.684 > 1 ⇒ material.roughness = 1 ⇒ **effective = 0.475119**。
-     *   即「目标 0.8 的哑光石板」实际只有 0.475（偏滑）。这正是上面那句「历史坑」的
-     *   真实后果：微湿感只能走 albedo，粗糙度这一档**本来就抬不上去**（受图集 ḡ 限制）。
-     *   要真哑光须降到 ≤0.4751（或换 ḡ 更高的图集）。 */
-    note: 'floor 图集 + 冷暗乘子；微湿感走 damp 低频水渍（albedo）。⚠ rough 0.8 被钳 ⇒ effective = ḡ = 0.4751（偏滑，已登记）'
+    note: 'floor 图集 + 冷暗乘子；微湿感走 damp 低频水渍（albedo）。R39 复核：**effective = 0.8 真生效**（noRough ⇒ 无 roughMap ⇒ 无钳制）；刻意不挂 roughMap——挂上会把 effective 拉到 ḡ=0.4751（更滑 + 掠射镜面风险），收益为负'
   },
   /* e) R37-A **灰石强调（外装）**：复用 ashlar 图集，砌块形制/缝宽与主体白石
    *    **完全一致**（只改颜色乘子 ⇒ 远看是同一堵墙的阴影面，不是另一种石材）。
@@ -2728,10 +2904,16 @@ export const STONE_VARIANTS: Record<StoneVariantId, StoneVariantSpec> = {
  *   该材质的 **effective = material.roughness × ḡ 恒等于 ḡ**，spec 里写的 target
  *   **完全不生效**（等于白写）。这不是某一档填错，而是**整个图集族共用同一个天花板**。
  *
- *   实测（256² 运行尺寸）：
- *     · ashlar 族 ḡ=0.848889 ⇒ 任何 target > 0.8489 的 ashlar 变体都退化成 0.8489；
- *     · floor 族  ḡ=0.475119 ⇒ pave-damp（target 0.8）被钳，effective = 0.4751；
- *     · gold 族   ḡ=0.504538 ⇒ gilded-aged（target 0.55）被钳，effective = 0.5045。
+ *   实测（**R39 复测，运行尺寸**，`.qa/r39_b/tex_stats.mjs` 逐档复算表）：
+ *     · ashlar 族 ḡ=0.834367（1024²）/0.848889（256²）⇒ 两档都 ≤ ḡ，**均真生效**：
+ *         inner-stone 0.83（raw 0.9948）、ashlar-grey 0.80（raw 0.9588）；
+ *     · gold 族 ḡ=0.503534 ⇒ gilded-aged 0.45（raw 0.8937）**真生效**；
+ *     · floor 0.475118 / wood 0.835849 两族是 'noRough'/'albedo' 通道 ⇒ **无 roughnessMap**
+ *       ⇒ 走本函数第一行 `if (!hasRoughMap) return target` 早退 ⇒ **不存在钳制**
+ *       （pave-damp 0.8、inner-wood 0.82 都是真生效）。
+ *   ⇒ **R39 起全 5 档都真生效，没有任何一档靠「被钳」活着**。历史上被钳的两档是
+ *     inner-stone 0.92 与 gilded-aged 0.55（R37 P2-8 登记），本轮已降到 ≤ḡ 修好。
+ *     旧台账写的「pave-damp 0.8 被钳成 0.4751」是**误用默认 channels='full' 的旧读**。
  *   下界 `Math.max(0.05, …)` 同样要留意：target/ḡ < 0.05（即 target 极低）时会被抬到
  *   0.05 ⇒ effective 变成 0.05·ḡ。当前无变体触及下界，但排查时两个边界都要看。
  *

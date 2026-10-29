@@ -114,7 +114,10 @@ describe('R31 区域距离剔除（updateViewerZ / revealAllZones）', () => {
     castle.updateViewerZ(-1300); // 深区内城 ⇒ 必重算，近区改藏
     const deep = readVisible(scene).sig;
     expect(deep).not.toEqual(a);
-    expect(deep.some((n) => n.endsWith('-z0'))).toBe(false); // 入口区在深处不可见
+    /* R39-P9：`-z0` 不再代表「入口区」—— wall 合并成 1 区后 `castle-wall-z0` 覆盖全域
+     * （cz≈−906，z=−1300 时 d≈394 ⇒ 仍在 550m 闸门内，本就该可见）。
+     * 入口区按**族 + z0 段**点名：ashlar/gold 的 z0a/z0b（实测 z=−1300 时 0 个可见）。 */
+    expect(deep.filter((n) => /^castle-(ashlar|gold)-z0[ab]$/.test(n))).toEqual([]);
     castle.dispose();
   }, 30000);
 

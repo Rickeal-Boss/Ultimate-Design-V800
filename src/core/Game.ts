@@ -115,6 +115,57 @@ function syntheticResult(): RunResult {
   };
 }
 
+/**
+ * R39 帧成本探针（DEV only，URL hash `#r39perf` 触发；构建产物为死代码）。
+ *
+ * 为什么需要它：「移动速度越快越跳帧」是本轮用户主诉，而既有 `#fprobe` 只记
+ * 每帧位置/DC，**记不到两件关键事实**：
+ *   ① 这一帧的阴影贴图到底有没有重绘（`drew`）——只能从 three 自己的状态门
+ *      `sun.shadow.needsUpdate` 在 render 前后的翻转读出（它在真正绘完才清零，
+ *      所以「render 前 true、render 后 false」== 本帧确实重绘过；被外层
+ *      `renderer.shadowMap` 闸门拦下时该标志会**粘住**保持 true）；
+ *   ② （R39 定稿后已无节流 ⇒ `due`/`jump` 恒 0；字段保留只为与历史 dump 对齐。
+ *      节流期的证据留在 `.qa/r39_perf/r39_probe_baseline_B.json`：jump 命中率 100%）
+ *
+ * 全部写入**预分配 TypedArray**（零分配）：探针自己若每帧 new 对象，会把 GC 抖动
+ * 混进被测的帧时分布里，等于用污染的尺子量抖动。
+ */
+interface R39Probe {
+  cap: number;
+  n: number;
+  /** performance.now() 采样点（wall dt 由离线脚本差分，避开 Loop 的 0.1s 上限钳制） */
+  t: Float64Array;
+  /** Loop 传给 frame 的 dt（已按 maxFrameTime 钳制，仅作对照） */
+  dt: Float32Array;
+  speed: Float32Array;
+  carZ: Float32Array;
+  /** 本帧阴影贴图是否真的重绘（0/1） */
+  drew: Uint8Array;
+  /** 本帧光照节流是否由「焦点跳变」命中（0/1） */
+  jump: Uint8Array;
+  /** 本帧光照节流是否置了 needsUpdate（0/1，含间隔命中与强制） */
+  due: Uint8Array;
+  calls: Uint16Array;
+  tris: Uint32Array;
+  /** 城堡当前可见分区数（判「流式显隐」是否与尖峰同帧） */
+  zones: Uint8Array;
+  /**
+   * 已上传的 GPU 几何数（`renderer.info.memory.geometries`，只在首次绑定/上传时自增）。
+   * 用它证明「行车中仍有首见即上传」——即冷启动预算还没吃干净（R39 预热依据）。
+   */
+  geo: Uint16Array;
+  /** 已编译 program 数（同上口径，`info.programs.length`） */
+  prog: Uint16Array;
+  /** 已上传贴图数（`info.memory.textures`；城堡「先上架后升级」的热替换会在行车段自增） */
+  tex: Uint16Array;
+  /** 当前像素比（`AdaptiveQuality.pixelRatio`；变更即重建全部 RT ⇒ 已知一次性大 hitch） */
+  dpr: Float32Array;
+  /** 当前处于近档（hi）的分区数（与 zones 一起区分「显隐切换」与「远近档换入」） */
+  ztier: Uint8Array;
+  /** 探针脚本打的干扰标记时间点（如 teleport 复位），离线按 ±200ms 剔除 */
+  marks: number[];
+}
+
 /** 帧探针记录（perf-r14，字段全部是原始量，判据在离线脚本里算） */
 interface FrameProbeRecord {
   t: number;
@@ -167,8 +218,6 @@ export class Game {
    * tick / frame 都按它分流，退出时置 null 并 detach（键盘监听随之解绑）。
    */
   private freeDrive: FreeDrive | null = null;
-  /** R36-P2 高速阴影节流相位（隔帧更新；>8 m/s 时启用） */
-  private shadowFrame = 0;
 
   private time = 0;
   /** 窗口事件句柄（dispose 时统一解绑，避免 HMR 泄漏） */
@@ -210,6 +259,14 @@ export class Game {
    */
   private probeFrames: FrameProbeRecord[] | null = null;
   private probeTicks = 0;
+  /** R39 帧成本探针缓冲（null = 未启用；`#r39perf` 时分配，见构造函数） */
+  private r39: R39Probe | null = null;
+  /* R39 阴影参与度的判定口径（留档，防后人重踩）：
+   * 不用 `sun.shadow.needsUpdate` 翻转（autoUpdate=true 后没人再写它，恒 false）；
+   * 也不用包装 `WebGLShadowMap.render` 数 draw call 增量 —— 实测包装器每帧被调 16 次、
+   * 增量却恒 0，而「整帧 DC 类别」同时显示 159→168（+9 = 阴影 pass），两者矛盾，
+   * 说明该增量在 three 内部不是同步可见的。**结论：用整帧 DC 类别判**，
+   * 由离线脚本出表（.qa/r39_perf/r39_probe.mjs 的 shadowClass 段）。 */
   /** cabin 机位专用遮挡件（前挡玻璃），进入/离开车内视角时切换可见性 */
   private readonly windshieldMeshes: THREE.Mesh[] = [];
   /** cabin 机位专用遮挡材质（第一排座椅独占克隆）—— 按材质开关，与合批解耦 */
@@ -372,7 +429,69 @@ export class Game {
         }
       };
     }
+    /* ---- R39 帧成本探针（DEV + `#r39perf`）：真值口径，不预测、不推断 ----
+     * 采到的四件事各自证伪一条假设（详见 R39Probe 注释）：
+     *   drew  → 阴影重绘**实际**节拍（vs 代码里「以为」的节拍）
+     *   jump  → 「跳变阈值」在高速下是否每帧误触
+     *   zones → 城堡分区流式显隐是否与帧时尖峰同帧
+     *   t     → wall dt（绕开 Loop 的 0.1s 钳制，否则慢帧会被记成 100ms 整） */
+    if (import.meta.env.DEV && window.location.hash.includes('r39perf')) {
+      const cap = 30000;
+      const probe: R39Probe = {
+        cap,
+        n: 0,
+        t: new Float64Array(cap),
+        dt: new Float32Array(cap),
+        speed: new Float32Array(cap),
+        carZ: new Float32Array(cap),
+        drew: new Uint8Array(cap),
+        jump: new Uint8Array(cap),
+        due: new Uint8Array(cap),
+        calls: new Uint16Array(cap),
+        tris: new Uint32Array(cap),
+        zones: new Uint8Array(cap),
+        geo: new Uint16Array(cap),
+        prog: new Uint16Array(cap),
+        tex: new Uint16Array(cap),
+        dpr: new Float32Array(cap),
+        ztier: new Uint8Array(cap),
+        marks: []
+      };
+      this.r39 = probe;
+      this.renderer.info.autoReset = false;
+      (window as unknown as Record<string, unknown>).__r39perf = {
+        clear: (): void => {
+          probe.n = 0;
+          probe.marks.length = 0;
+        },
+        mark: (): void => {
+          probe.marks.push(performance.now());
+        },
+        dump: (): unknown => ({
+          n: probe.n,
+          marks: probe.marks,
+          t: Array.from(probe.t.subarray(0, probe.n)),
+          dt: Array.from(probe.dt.subarray(0, probe.n)),
+          speed: Array.from(probe.speed.subarray(0, probe.n)),
+          carZ: Array.from(probe.carZ.subarray(0, probe.n)),
+          drew: Array.from(probe.drew.subarray(0, probe.n)),
+          jump: Array.from(probe.jump.subarray(0, probe.n)),
+          due: Array.from(probe.due.subarray(0, probe.n)),
+          calls: Array.from(probe.calls.subarray(0, probe.n)),
+          tris: Array.from(probe.tris.subarray(0, probe.n)),
+          zones: Array.from(probe.zones.subarray(0, probe.n)),
+          geo: Array.from(probe.geo.subarray(0, probe.n)),
+          prog: Array.from(probe.prog.subarray(0, probe.n)),
+          tex: Array.from(probe.tex.subarray(0, probe.n)),
+          dpr: Array.from(probe.dpr.subarray(0, probe.n)),
+          ztier: Array.from(probe.ztier.subarray(0, probe.n))
+        })
+      };
+    }
     // 首帧后回调（隐藏加载屏）
+    // R39：先把「首见即上传 / 首次编译」的冷启动成本在加载期一次性吃掉（见方法注释），
+    // 放在 rAF 之前 —— 本任务内同步执行，第一帧渲染时资源已就绪。
+    if (!import.meta.env.DEV || !window.location.hash.includes('noprewarm')) this.prewarmGpu();
     requestAnimationFrame(() => onFirstFrame());
 
     this.menu.show(true);
@@ -558,6 +677,80 @@ export class Game {
   }
 
   /** renderer 初始化见 render/Renderer.ts（结构要素 1：WebGLRenderer） */
+
+  /**
+   * R39 · 冷启动预算转移：把「首见即上传 / 首次编译」的一次性 hitch 从**行车段**
+   * 挪到**加载段**（用户指令：构建/加载时长不限，运行时每一帧必须平稳）。
+   *
+   * 为什么需要（这是本作最隐蔽的一类尖峰）：three 的 GPU 资源是**惰性创建**的 ——
+   * program 在材质首次参与绘制时编译（单个可 20~100ms），BufferGeometry 在 mesh
+   * 首次真正被绘制时上传（万级三角的城堡分区可 1~2ms/个）。而城堡分区是**按观看距离
+   * 流式显隐**的（castle.updateViewerZ），车上高速时新分区弹出的频率 ∝ 车速
+   * ⇒ 这类 hitch 天然「越快越密」，正好落在用户主诉上。
+   * 实测手段：探针逐帧记 `renderer.info.memory.geometries` / `info.programs.length`
+   * （只在首次上传/编译时自增），`__r39perf.dump()` 里的 geo/prog 序列能直接看到
+   * 「行车段还在长」的那些帧。
+   *
+   * 做法（两步都不改变任何几何/密度，只是**提前**做）：
+   *   ① `renderer.compile(scene, camera)`：把场景里全部材质（含当前不可见的分区、
+   *      内饰件、特效粒子）的 program 一次编译完；
+   *   ② `castle.revealAllZones()` 把全部分区放开成近档，用一台「看全场景」的相机
+   *      渲一帧到 **8×8 离屏 RT** —— 每个 mesh 都真正走一次绘制流水线 ⇒ buffer 上传完；
+   *      渲到离屏小目标 ⇒ 屏幕上不会闪一帧「全部分区同时出现」。
+   * 随后 `updateViewerZ(相机 z)` 还原真实显隐态（revealAllZones 会把 lastViewerZ 置
+   * NaN，所以这里一定能重算）。
+   *
+   * 成本：一次全场景绘制 + 一次全材质编译，只发生在加载期（用户已授权）。
+   * 失败兜底：整体 try/catch —— 预热失败最坏只是退回「首见即上传」的老行为，
+   * 绝不允许它把开局拖死（QA 钩子 `#noprewarm` 可在 DEV 下跳过，用于 A/B）。
+   */
+  private prewarmGpu(): void {
+    try {
+      /* 分段计时（R39 主理人要求）：三段的绝对增量必须可分——
+       *   compile   = `renderer.compile` 全材质 program 编译（真机预期最大的一段）；
+       *   rtWarm    = 8×8 离屏全场景渲染（含 400k tri 的 buffer 首传）；
+       *   restore   = revealAllZones 后的 updateViewerZ 还原。
+       * 真机与 SwiftShader 的量级差一个数量级以上，故只在 DEV 打，且必须分段。 */
+      const tStart = performance.now();
+      this.renderer.compile(this.scene, this.rig.camera);
+      const tCompile = performance.now();
+      this.castle.revealAllZones();
+      // 相机要能框住整条走廊（z 从 +70 到 −1300，城堡塔尖 y < 120）：
+      // 高度 900 + fov 120 ⇒ 可见半径 900·tan60° ≈ 1558m，俯视即可全覆盖。
+      const cam = new THREE.PerspectiveCamera(120, 1, 1, 20000);
+      cam.position.set(0, 900, -600);
+      cam.lookAt(0, 0, -640);
+      const rt = new THREE.WebGLRenderTarget(8, 8);
+      this.renderer.setRenderTarget(rt);
+      this.renderer.render(this.scene, cam);
+      this.renderer.setRenderTarget(null);
+      rt.dispose();
+      const tWarm = performance.now();
+      this.castle.updateViewerZ(this.rig.camera.position.z);
+      const tRestore = performance.now();
+      if (import.meta.env.DEV) {
+        const compile = tCompile - tStart;
+        const rtWarm = tWarm - tCompile;
+        const restore = tRestore - tWarm;
+        const total = tRestore - tStart;
+        console.info(
+          `[R39] 加载期 GPU 预热 ${total.toFixed(0)}ms = compile ${compile.toFixed(0)}` +
+            ` + rtWarm(8×8 全场景) ${rtWarm.toFixed(0)} + restore ${restore.toFixed(0)}` +
+            ` | geometries=${this.renderer.info.memory.geometries}` +
+            ` programs=${this.renderer.info.programs?.length ?? 0}`
+        );
+        // 首屏预算告警线（主理人口径）：>2500ms 说明真机上这一段过重，需要拆帧或延后
+        if (total > 2500) {
+          console.warn(
+            `[R39] 预热耗时 ${total.toFixed(0)}ms 超首屏预算 2500ms —— 申请拆帧执行（当前为加载屏内同步）`
+          );
+        }
+      }
+    } catch (e) {
+      // 预热是「收益项」不是「正确性项」：失败只回退到惰性加载，不影响玩法
+      console.warn('[R39] GPU 预热失败（已忽略，退回惰性上传）：', e);
+    }
+  }
 
   /**
    * 【车型装配注入点】按活动车型构建车模。
@@ -1194,22 +1387,34 @@ export class Game {
    * @param vehicle 挑战模式的车辆状态；自由探索传 null（帧探针只在挑战链路有意义）
    */
   private renderTail(dt: number, vehicle: VehicleState | null, alpha = 0): void {
-    /* ---- R36-P2 高速掉帧治理：阴影贴图更新节流 ----
-     * 热点定位（r31Budget 台账 + `#noshadowupd` 对照）：阴影贴图每帧全场景重绘
-     * （2048² = 实测 113 DC / 78k tri）是最大单项帧成本（冻结后帧时 −60%）。
-     * 车速快时唯一移动投射体是车 ⇒ 隔帧更新阴影（1 帧旧影在高速下不可感知）；
-     * 低速/静止保持逐帧（画质无损）。质量档只降更新频率，不改任何长度/密度。 */
-    const speedNow = vehicle ? Math.abs(vehicle.speed) : (this.freeDrive?.snapshot().speed ?? 0);
-    if (speedNow > 8) {
-      this.shadowFrame = (this.shadowFrame + 1) & 1;
-      this.renderer.shadowMap.autoUpdate = false;
-      this.renderer.shadowMap.needsUpdate = this.shadowFrame === 0;
-    } else {
-      this.renderer.shadowMap.autoUpdate = true;
-    }
+    /* ══ R39：删掉这里原有的「高速阴影节流」块（R36-P2 遗留）══
+     * 原实现：`speed > 8` 时置 `renderer.shadowMap.autoUpdate = false` +
+     * `needsUpdate = (shadowFrame===0)`（每 2 帧），低速则 `autoUpdate = true`。
+     * 与当时的 `Lighting.update`（`sun.shadow.autoUpdate=false` + **每 N 帧**置灯门，
+     * 那 N 就是**已删除**的 `quality.shadowUpdateInterval`）是**两套并联闸门**，
+     * 语义互相矛盾，实测后果（.qa/r39_perf）：
+     *   · three 的阴影 pass 门有两级：外层 `renderer.shadowMap`（WebGLShadowMap.js:95）
+     *     与每灯 `shadow.needsUpdate`（:170）；外层门关掉时**不清**灯门（:376 只清外层），
+     *     所以灯门会「粘住」，下一帧外层一开就立刻重绘 ⇒ 实际节拍 = min(两套间隔)，
+     *     高速下变成 **2 帧**（设计是 4 帧；节拍直方图实测 {2:146}）。
+     *   · 「高速才节流、低速每帧全开」的语义与性能直觉相反：低速段反而最贵。
+     * ══ R39 终态（**节流整体拆除，不再有 interval 配置项**）══════════════════════
+     * 刷新节拍现在只由 `Lighting` 一处决定：构造期 `sun.shadow.autoUpdate = true`
+     * ⇒ **每帧重绘、无节流、无 N 帧门**（`quality.shadowUpdateInterval` 键已删除）。
+     * 代价由两件事抵掉，且都**不改观感**：
+     *   ① 正交盒/贴图缩档：`shadowOrtho 20→10`、`shadowMapSize 2048→1024`（high）
+     *      ⇒ **texel 尺寸 0.01953m 逐位不变**（2048/20 = 1024/10）、覆盖面积 **0.25×**；
+     *   ② 加载期 `prewarmGpu()` 预热（首帧不把 shader/贴图冷启动算进帧时）。
+     * 收益：整帧 tri/DC **恒定**（168 / 103,953），不再有「奇偶帧交替」——
+     *   旧节流下轻重帧交替，逐帧探针会读到两种口径，预算账根本对不上。
+     * 高低速同一节拍 ⇒ 每帧成本与车速解耦（这正是用户主诉要的东西）。
+     * ⚠ 别再把节流写回这里：两处闸门必然漂移，而漂移后的「实际节拍」只能靠探针才看得见。 */
 
     // ---- 渲染（结构要素 1 的最终呈现）----
+    // 阴影是否参与本帧：R39 起 `autoUpdate=true` ⇒ **恒定参与**，判据改为「整帧 DC 类别」
+    // （离线出表：只有一类且比冻结态多 9 DC = 每帧都画）。这里只记录一个常量供 dump 对齐。
     this.postfx.render();
+    const drewShadow = true;
 
     // ---- 自适应画质 ----
     const dr = this.qualityGovernor.update(dt);
@@ -1218,6 +1423,50 @@ export class Game {
       this.postfx.setPixelRatio(this.qualityGovernor.pixelRatio);
     }
     void this.lastImpactStrength;
+
+    // ---- R39 帧成本探针（DEV only；读后清零 info 保证读数是整帧累计）----
+    if (this.r39 !== null) {
+      const p = this.r39;
+      const info = this.renderer.info;
+      if (p.n < p.cap) {
+        const i = p.n;
+        p.t[i] = performance.now();
+        p.dt[i] = dt;
+        p.speed[i] = Math.abs(vehicle ? vehicle.speed : (this.freeDrive?.state.speed ?? 0));
+        p.carZ[i] = this.car.root.position.z;
+        p.drew[i] = drewShadow ? 1 : 0;
+        // R39：阴影改为每帧重绘后，`due`/`jump` 两条节流口径已不存在（字段保留仅为
+        // 与历史 dump 对齐；恒 0 = 本帧没有「节流命中」，因为根本没有节流）。
+        // R39 定稿后无节流 ⇒ due/jump 恒 0（字段保留仅为与历史 dump 对齐）。
+        // 「阴影每帧都画」的证据在 calls 类别（整轮单一类别，且 = 冻结态 + 9 DC）。
+        p.due[i] = 0;
+        p.jump[i] = 0;
+        p.calls[i] = Math.min(65535, info.render.calls);
+        p.tris[i] = Math.min(4294967295, info.render.triangles);
+        // 城堡可见分区数：判「流式显隐」是否与帧时尖峰同帧（zoneViews 是运行时私有字段，
+        // 这里按 DEV 探针惯例结构化读取，不新增公开接口）
+        const zones = (this.castle as unknown as {
+          zoneViews?: { mesh: THREE.Mesh; tier?: 'hi' | 'lo' }[];
+        }).zoneViews;
+        let zVis = 0;
+        let zHi = 0;
+        if (zones) {
+          for (const zv of zones) {
+            if (zv.mesh.visible) zVis += 1;
+            if (zv.tier === 'hi') zHi += 1;
+          }
+        }
+        p.zones[i] = zVis;
+        p.ztier[i] = zHi;
+        p.geo[i] = Math.min(65535, info.memory.geometries);
+        p.prog[i] = Math.min(65535, info.programs?.length ?? 0);
+        p.tex[i] = Math.min(65535, info.memory.textures);
+        p.dpr[i] = this.qualityGovernor.pixelRatio;
+        p.n += 1;
+      }
+      this.probeTicks = 0;
+      info.reset();
+    }
 
     // ---- perf-r14 帧探针（DEV only；读后清零 info 保证读数是整帧累计）----
     if (this.probeFrames !== null && vehicle !== null) {
