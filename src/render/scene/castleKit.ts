@@ -1392,7 +1392,7 @@ export function makeGate(): StoneBuckets {
       topY: 29,
       reach: 6,
       depth: 1.1,
-      band: 0.66,
+      band: 0.55,
       pierW: 1.7,
       pinnacle: true,
       coping: true,
@@ -2001,7 +2001,7 @@ export function makeMainHall(): StoneBuckets {
         pour(
           b,
           mapParts(
-            traceryWindowZ({ halfW: 1.0, rise: 6.0, cusp: 0.8, frameOut: 0.5, plateBack: 0.32, mullions: 3, lights: true, recess: true }),
+            traceryWindowZ({ halfW: 0.55, rise: 7.0, cusp: 0.8, frameOut: 0.5, plateBack: 0.32, mullions: 3, lights: true, recess: true }),
             (g) => g.translate(wx, 6.5, zFront)
           )
         );
@@ -2009,7 +2009,7 @@ export function makeMainHall(): StoneBuckets {
         pour(
           b,
           mapParts(
-            crocketRun({ halfW: 1.0 * 0.92, rise: 6.0 * 0.9, count: 2, size: 0.16, cusp: 0.8 }),
+            crocketRun({ halfW: 0.55 * 0.92, rise: 7.0 * 0.9, count: 2, size: 0.16, cusp: 0.8 }),
             (g) => g.translate(wx, 6.5, zFront + 0.42)
           )
         );
@@ -2028,6 +2028,17 @@ export function makeMainHall(): StoneBuckets {
     // 檐口 + 垛口
     b.ashlar.push(box('ashlar', frontW + 2.4, 1.4, frontDepth + 1.8, 0, frontH - 0.7, zMidFront));
     b.gold.push(box('gold', frontW + 2.6, 0.26, frontDepth + 2, 0, frontH + 0.15, zMidFront));
+    // R4-2 主殿前排檐口加 corniceBand（参考图檐口退台线脚；rotateY(+π/2) 使局部 −x 外挑转到 +z 朝向观察者）。
+    // 落点 z 取 zFront+0.9（正脸在 z=-1300，既有檐口 box 前脸 ≈ -1299.1）：带体凸出约 0.3m，可见且不穿模（zMidFront 会埋入殿身 15m，已弃用）。
+    if (!isLowDetail()) {
+      pour(
+        b,
+        mapParts(
+          corniceBand({ len: frontW + 2.4, proj: 0.6, h: 1.2 }),
+          (g) => g.rotateY(Math.PI / 2).translate(0, frontH - 0.7, zFront + 0.9)
+        )
+      );
+    }
     const merlons = Math.floor(frontDepth / 2.4);
     for (let m = 0; m < merlons; m += 1) {
       const mz = zBack + 1 + (frontDepth * (m + 0.5)) / merlons;
@@ -2068,7 +2079,7 @@ export function makeMainHall(): StoneBuckets {
     for (const side of [-1, 1] as const) {
       const cx = side * (wingInner + wingOuter) / 2;
       const w = wingOuter - wingInner; // 37
-      b.wall.push(box('wall', w, wingH, frontDepth, cx, wingH / 2, zMidFront));
+      b.ashlar.push(box('ashlar', w, wingH, frontDepth, cx, wingH / 2, zMidFront));
       b.ashlar.push(box('ashlar', w + 0.8, 0.6, frontDepth + 0.8, cx, wingH + 0.3, zMidFront));
       b.gold.push(box('gold', w + 1, 0.24, frontDepth + 1, cx, wingH + 0.78, zMidFront));
       // 垛口 + 金齿饰
@@ -2195,7 +2206,7 @@ export function makeMainHall(): StoneBuckets {
           topY: 78,
           reach,
           depth: 1.4,
-          band: 0.8,
+          band: 0.55,
           pierW,
           pinnacle: true,
           coping: true,
@@ -2215,20 +2226,31 @@ export function makeMainHall(): StoneBuckets {
         })
       );
     }
-    // ③ 大龛拱卷叶（金券最外挑面 zFront+0.65 ⇒ 坐在其外）
-    pour(
-      b,
-      mapParts(
-        crocketRun({ halfW: clearW / 2, rise: clearH - 2.4, count: 8, size: 0.4, cusp: 1.1 }),
-        (g) => g.translate(0, 2.4, zFront + 0.65)
-      )
-    );
+    // ③ 大龛拱卷叶（R4-7：size 0.4 → 1.2 匹配 FBX Decor_1 量级；低配跳过）
+    if (!isLowDetail()) {
+      pour(
+        b,
+        mapParts(
+          crocketRun({ halfW: clearW / 2, rise: clearH - 2.4, count: 8, size: 1.2, cusp: 1.1 }),
+          (g) => g.translate(0, 2.4, zFront + 0.65)
+        )
+      );
+    }
     // ④ 雕像龛 ×5（正立面开间起点 |x|=13、窗顶之上 y 40）+ 冠座前脸
     for (const side of [-1, 1] as const) {
       pour(
         b,
         mapParts(statueNicheZ({ halfW: 0.8, rise: 3.0, cusp: 0.5 }), (g) => g.translate(side * 13, 40, zFront - 0.05))
       );
+    }
+    // R4-6 主殿 hero 雕像龛（中央拱两侧 + 翼墙外端；0 DC，复用 statueNicheZ，低配跳过）
+    if (!isLowDetail()) {
+      for (const side of [-1, 1] as const) {
+        pour(b, mapParts(statueNicheZ({ halfW: 0.8, rise: 3.0, cusp: 0.5 }), (g) => g.translate(side * 14, 30, zFront - 0.05)));
+      }
+      for (const side of [-1, 1] as const) {
+        pour(b, mapParts(statueNicheZ({ halfW: 0.8, rise: 3.0, cusp: 0.5 }), (g) => g.translate(side * (wingOuter - 6), 20, zFront - 0.05)));
+      }
     }
     // 冠座（y 96..101、路侧面 z = zMidFront+4.5）前脸
     pour(
@@ -2258,7 +2280,7 @@ export function makeMainHall(): StoneBuckets {
           topY: 62,
           reach: 9,
           depth: 1.5,
-          band: 0.85,
+          band: 0.55,
           pierW: 2.8,
           pinnacle: true
         });

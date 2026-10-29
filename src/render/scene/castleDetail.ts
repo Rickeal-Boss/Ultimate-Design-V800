@@ -328,7 +328,7 @@ export function flyingButtress(o: ButtressOpts): DetailParts {
   const p = parts();
   const baseY = o.baseY ?? 0;
   const depth = o.depth ?? 0.9;
-  const band = o.band ?? 0.66;
+  const band = o.band ?? 0.55;
   const pierW = o.pierW ?? 1.7;
   const rise = o.topY - o.springY;
   const pierX = o.reach - pierW * 0.5;
@@ -340,7 +340,7 @@ export function flyingButtress(o: ButtressOpts): DetailParts {
   for (const pz of pierZs) {
     p.ashlar.push(box('ashlar', pierW + 1.1, 0.5, depth + 1.1, pierX, baseY + 0.25, pz));
     p.ashlar.push(box('ashlar', pierW + 0.6, 0.45, depth + 0.6, pierX, baseY + 0.72, pz));
-    p.ashlar.push(pierColumn(pierW, pierW * 0.74, pierH, pierX, baseY + 0.95, pz));
+    p.ashlar.push(pierColumn(pierW, pierW * 0.48, pierH, pierX, baseY + 0.95, pz));
     // ①b 墩顶尖拱覆盆（R32：archBand 2 段小尖拱坐在墩收分柱顶，读作压顶石）
     if (o.coping) {
       const cp = archBand(pierW * 0.44, o.springY + 0.02, pierW * 0.55, 0.24, depth * 0.96, 2, 0.5, 0.45);

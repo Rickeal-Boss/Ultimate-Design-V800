@@ -189,7 +189,7 @@ export const STONE_HEX: Record<StoneKind, { base: string; light: string; dark: s
  * - roof 1.6m（2.4 → 1.6）：12 皮 × 8 片 ⇒ 每片板岩 0.13×0.2m（真板岩尺度）；
  * - wood 1.6m（2.0 → 1.6）：4 块竖向木板 ⇒ 板宽 0.4m（真门板尺度）；
  * - glass 1.6m：3 行 × 2 列铅条窗格；
- * - marble 2.4m（3.2 → 2.4）：细磨石的脉络尺度（无块缝，竖脉）。
+ * - marble 1.6m（R38：**2.4 → 1.6**，更密铺，参照 FBX 主殿/祭坛柱身台基的细磨石节奏）：细磨石的脉络尺度（无块缝，竖脉）。
  *
  * ⚠ 铁律 35：改本表前先 grep 消费点 —— `castleKit.ts` 在模块初始化时快照了
  * `{...STONE_TILE_METERS}`（TILE），`castleDetail.ts` 直接读 `STONE_TILE_METERS.*`
@@ -205,7 +205,7 @@ export const STONE_TILE_METERS: Record<StoneKind, number> = {
   roof: 1.6,
   wood: 1.6,
   glass: 1.6,
-  marble: 2.4
+  marble: 1.6
 };
 
 /** 按目标边长（米）换算 repeat，省得调用方各自算错 */
@@ -826,10 +826,21 @@ function normalizeSize(size: number | undefined): number {
  * 其余族 512 —— 石材是**重复平铺**的，512² 已有 183 px/m，1024 对远景是纯浪费。
  */
 export function stoneTextureSize(kind: StoneKind, tier: QualityTier): number {
-  const hero = kind === 'ashlar' || kind === 'floor';
+  const hero = kind === 'ashlar';
   if (tier === 'high') return hero ? 1024 : 512;
   if (tier === 'medium') return hero ? 512 : 256;
   return 256;
+}
+
+/**
+ * R38-P0-8：辅助通道（roughness）边长。**主角面 albedo/normal 维持 `stoneTextureSize`
+ * 的 1024²（high），但粗糙度通道封顶 512²** —— 粗糙度细节在远景/平铺下 512 已足，
+ * 且生成公式与 albedo 同源 ⇒ 视觉无损、显存省一档（ashlar 高档 roughness 1024²→512²）。
+ * 非主角面本就 ≤512 ⇒ 取 `min(size,512)` 即恒等于 `size`（无副作用）。
+ * 消费点：`assembleStoneMaps` 据此对 roughness 做整数倍降采样。
+ */
+export function stoneTextureAuxSize(kind: StoneKind, tier: QualityTier): number {
+  return Math.min(stoneTextureSize(kind, tier), 512);
 }
 
 // ── 带状烘焙引擎 ──────────────────────────────────────────────────────
@@ -1114,7 +1125,16 @@ function prepMasonry(
             const wv = mortarVarField.length ? smoothstep(0.34, 0.66, mortarVarField[index]) : 0.5;
             jointWarmOut![index] = clamp01(0.5 + (wv - 0.5) * prof.jointWarm) * 255;
           }
-          if (seepOut) seepOut[index] = clamp01(seepMask) * 255;
+          // R38-P1-10：宏变异层（weatherCloud 低频云斑，fbm 2×2 **整数周期** ⇒ 天然
+          // tile-aligned，平铺无硬缝）扩展到 **seep 通道**：雨水渍随墙面大尺度色差起伏
+          // （不再均匀死板）。零均值因子（均值 1.0）⇒ 整体渍量不变 ⇒ 不漂 lumMean
+          // （r37 回归护栏）；仅 ashlar 生效（wall 的 cloudField 为 null，保持 R37 不动）。
+          // 大尺度渍痕与平铺对齐 ⇒ 不会每 1 个 tile 重复出一道均匀渍带。
+          if (seepOut) {
+            let sv = clamp01(seepMask);
+            if (cloudField.length) sv = clamp01(sv * (1 + 0.3 * (cloudField[index] - 0.5) * 2));
+            seepOut[index] = sv * 255;
+          }
           fx += invColW;
         }
       }
@@ -2419,10 +2439,53 @@ function toTexture(
 }
 
 /**
+ * 整数倍降采样（roughness 1024→512）：逐 dst 像素对 src 的 step×step 块做均值箱滤波。
+ * 仅在 `roughSize !== size`（高档主角面）时调用；盒滤波保边缘、比最近邻更顺。
+ */
+function downsampleRGBA(srcSize: number, dstSize: number, src: Uint8ClampedArray): Uint8ClampedArray {
+  const dst = new Uint8ClampedArray(dstSize * dstSize * 4);
+  const step = srcSize / dstSize;
+  for (let dy = 0; dy < dstSize; dy += 1) {
+    const sy0 = Math.floor(dy * step);
+    const sy1 = Math.floor((dy + 1) * step);
+    for (let dx = 0; dx < dstSize; dx += 1) {
+      const sx0 = Math.floor(dx * step);
+      const sx1 = Math.floor((dx + 1) * step);
+      let r = 0;
+      let g = 0;
+      let b = 0;
+      let a = 0;
+      let n = 0;
+      for (let sy = sy0; sy < sy1; sy += 1) {
+        const base = sy * srcSize;
+        for (let sx = sx0; sx < sx1; sx += 1) {
+          const o = (base + sx) * 4;
+          r += src[o];
+          g += src[o + 1];
+          b += src[o + 2];
+          a += src[o + 3];
+          n += 1;
+        }
+      }
+      const od = (dy * dstSize + dx) * 4;
+      dst[od] = r / n;
+      dst[od + 1] = g / n;
+      dst[od + 2] = b / n;
+      dst[od + 3] = a / n;
+    }
+  }
+  return dst;
+}
+
+/**
  * R31 贴图数量治理③：把三张像素图按 `channels` 预算装配成 StoneMaps。
  * 'albedoOnly' 只产 albedo（normal/rough 为 null）；'noRough' 产 albedo + normal；
  * 'full' 三张全产。像素计算（makeStonePixelSet）始终全算（stats 需要），
  * 仅**跳过不挂的 CanvasTexture 创建** —— 这才是 GPU/内存真正省下的部分。
+ *
+ * R38-P0-8：roughness 通道边长封顶 512²（`Math.min(size,512)`）—— 高档主角面
+ * albedo/normal 仍 1024²，roughness 降 512² 上传（视觉无损，见 `stoneTextureAuxSize`）。
+ * 降采样只发生在装配期，不影响 `stats.roughMean`（取自 `size` 分辨率原数组）。
  */
 function assembleStoneMaps(
   size: number,
@@ -2433,10 +2496,12 @@ function assembleStoneMaps(
   stats: StoneStats,
   channels: StoneChannels
 ): StoneMaps {
+  const roughSize = channels === 'full' ? Math.min(size, 512) : 0;
+  const roughSrc = roughSize > 0 && roughSize !== size ? downsampleRGBA(size, roughSize, rough) : rough;
   return {
     map: toTexture(pixelCanvas(size, albedo), THREE.SRGBColorSpace, repeat),
     normalMap: channels === 'albedoOnly' ? null : toTexture(pixelCanvas(size, normal), THREE.NoColorSpace, repeat),
-    roughnessMap: channels === 'full' ? toTexture(pixelCanvas(size, rough), THREE.NoColorSpace, repeat) : null,
+    roughnessMap: roughSize > 0 ? toTexture(pixelCanvas(roughSize, roughSrc), THREE.NoColorSpace, repeat) : null,
     stats
   };
 }
