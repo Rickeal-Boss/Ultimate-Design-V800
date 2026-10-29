@@ -89,8 +89,17 @@ function triOf(g: THREE.BufferGeometry): number {
   return pos ? pos.count / 3 : 0;
 }
 
-/** 六点行车采样（口径②）：距离显隐 + LOD + Frustum，与 .qa/r32_tmp_audit/r32_probe.mjs 同模型 */
-const DRIVE_SAMPLES = [40, 0, -200, -500, -900, -1300] as const;
+/**
+ * ⚠ R38-A2：六点盲采会漏掉真实峰值带（z∈[−280,−360]，比六点 −500 还高 ~25k tri），
+ * 故改成 **20m 步长逐帧扫描（74 帧，与预研探针 `tools/r38_peak_scan.mjs` 同口径）**，
+ * 取全场最大值判 `visibleTri` —— 这才是真护栏（峰值 192,410 ≤ 200,000）。
+ * −200 / −500 恰为步长整数倍 ⇒ 下方趋势断言照旧从扫描里取数。
+ */
+const DRIVE_SAMPLES: number[] = (() => {
+  const out: number[] = [];
+  for (let z = 60; z >= -1400; z -= 20) out.push(z);
+  return out;
+})();
 
 /**
  * ⚠ R33 C 线口径修正（**根因记录，勿回退成 bbox**）—— 改前本函数用

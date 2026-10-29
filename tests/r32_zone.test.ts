@@ -140,20 +140,29 @@ describe('zoneIndexOf：z 中值归区语义', () => {
 });
 
 describe('R32 C-4 · 建桶结构与 DC 设计公式', () => {
-  it('分区 mesh 命名落 z 区划，DC = 设计公式内（6+3+6+6+1+4+3+2=31 ≤ castleDc）', () => {
+  it('分区 mesh 命名落 z 区划，DC = 设计公式内（7+2+7+6+1+4+3+2=32 ≤ castleDc）', () => {
     const { scene, castle } = buildCastle();
     try {
       const stats = castle.getCastleStats();
-      // 区划结构：ashlar/gold 6 区全非空、wall 3 区全非空
+      // 区划结构：R38-P0-2 B1 把 ashlar/gold 的 z0 按 z=−150 一分为二（z0a/z0b），其余 z1..z5 不变；
+      // wall 经 R38-P0-2 B3 把 ZONE_EDGES_3 由 4 界收成 3 界 ⇒ 只剩 z0/z1 两段。
       for (let i = 0; i < 6; i += 1) {
-        expect(castleMesh(scene, `castle-ashlar-z${i}`), `castle-ashlar-z${i} 缺失`).toBeDefined();
-        expect(castleMesh(scene, `castle-gold-z${i}`), `castle-gold-z${i} 缺失`).toBeDefined();
+        if (i === 0) {
+          expect(castleMesh(scene, 'castle-ashlar-z0a'), 'castle-ashlar-z0a 缺失').toBeDefined();
+          expect(castleMesh(scene, 'castle-ashlar-z0b'), 'castle-ashlar-z0b 缺失').toBeDefined();
+          expect(castleMesh(scene, 'castle-gold-z0a'), 'castle-gold-z0a 缺失').toBeDefined();
+          expect(castleMesh(scene, 'castle-gold-z0b'), 'castle-gold-z0b 缺失').toBeDefined();
+        } else {
+          expect(castleMesh(scene, `castle-ashlar-z${i}`), `castle-ashlar-z${i} 缺失`).toBeDefined();
+          expect(castleMesh(scene, `castle-gold-z${i}`), `castle-gold-z${i} 缺失`).toBeDefined();
+        }
       }
-      for (let i = 0; i < 3; i += 1) {
+      for (let i = 0; i < 2; i += 1) {
         expect(castleMesh(scene, `castle-wall-z${i}`), `castle-wall-z${i} 缺失`).toBeDefined();
       }
-      // 设计公式：分区族非空区上限 + flame 1 + 可选桶 4 + 变体桶 3（R36-A2）+ 铺装 2
-      const DESIGN_MAX_DC = 6 + 3 + 6 + 6 + 1 + 4 + 3 + 2;
+      // 设计公式：ashlar 7 + wall 2 + gold 7 + dark 6 + flame 1 + 可选桶 4 + 变体桶 3（R36-A2）+ 铺装 2 = 32
+      // （R38-P0-2：ashlar/gold 各 +1 因 z0 二分、wall −1 因 ZONE_EDGES_3 收界；净 +1，压在 castleDc 32 硬顶内）
+      const DESIGN_MAX_DC = 7 + 2 + 7 + 6 + 1 + 4 + 3 + 2;
       expect(DESIGN_MAX_DC).toBeLessThanOrEqual(R31_BUDGET.castleDc);
       // 实测 30（dark z0 空 + R36-A2 变体桶 3）⇒ 区间断言吸收 A 线几何漂移。
       // ⚠ 不要把下界钉到 30、上界钉到 31 之外：

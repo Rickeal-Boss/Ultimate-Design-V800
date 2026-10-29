@@ -4623,6 +4623,40 @@ export function createV800CarAdapter(tier: QualityTier = 'high', paintId: PaintI
     }
   };
 
+  /* ══════════════ R38-P1-5（E2）：阴影 caster 瘦身 ══════════════════════════
+   * 实测（探针 `tools/r38_frameload.mjs`）：**castle / Terrain / Road 的 castShadow 全为 0**
+   * ⇒ 阴影 pass 是**车模独占 41 DC / 23,308 tri**（车模 184 mesh 中 41 个 castShadow）。
+   * 41 个 caster 里 **28 个的 tri < 500**（合计仅 3,772 tri，占阴影 tri 的 16%），
+   * 却占 68% 的阴影 draw call —— 典型「DC 多、面少」。
+   * 关掉它们（只改 flag，**不动任何几何**）：
+   *   · 阴影 pass **41 → 13 DC（−68%）**，阴影 tri 23,308 → 19,536（−16%）；
+   *   · 保留的 13 个是全部「大件」：`batch/paint-upper` 5,616 + `r22-hub-bright`×4
+   *     (5,472) + `轮胎`×4 (4,224) + `大饼轮圈`×4 (4,224) = 19,536 tri，
+   *     即车影的**可见轮廓全由这 13 件决定**。
+   * 观感风险与判据：被关的是轮心盾徽 / 字标 / 门把手 / 灯组小件这类**亚 0.1m 级**投影，
+   *   其阴影在 2048² 正交（texel 0.0195m）下本就近乎噪声；且行车机位下车影只在车底
+   *   一撮，细节件投影根本不落在可见区。⇒ 判定为「不可见损失」，需验收线 A/B 确认。
+   * ⚠ 阈值是**装配期一次性**判定的常量，不是每帧计算 ⇒ 零运行时开销。 */
+  const SHADOW_CASTER_MIN_TRIS = 500;
+  {
+    let off = 0;
+    let kept = 0;
+    root.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh || !m.castShadow) return;
+      const g = m.geometry;
+      const idx = g.getIndex();
+      const tris = (idx ? idx.count : g.getAttribute('position').count) / 3;
+      if (tris < SHADOW_CASTER_MIN_TRIS) {
+        m.castShadow = false;
+        off += 1;
+      } else {
+        kept += 1;
+      }
+    });
+    console.info(`[V800Adapter] R38-P1-5 阴影 caster 瘦身：关闭 ${off} 个 <${SHADOW_CASTER_MIN_TRIS} tri 小件，保留 ${kept} 个大件`);
+  }
+
   const api: CarLike = {
     root,
     body,

@@ -3307,5 +3307,8 @@ export function makeInnerCity(): StoneBuckets {
       extra(b, 'wood', box('wood', 0.34, 0.34, 4.4, s * 2.2, 11.6, cz));
     }
   }
+  // R38-P0-9：本函数块循环里会把 DEEP_FAR 置 true（最远 1/3 街区），**必须在退出前复位**，
+  // 否则该模块级全局会泄漏给后续工厂 pass / 重跑，静默丢卷叶 / 立像 / 子拱 / 窗棂。
+  setDeepFar(false);
   return b;
 }

@@ -66,7 +66,22 @@ const TIERS: Record<QualityTier, Omit<QualitySettings, 'tier' | 'isMobile' | 'gp
     shadowMapSize: 2048,
     // R31：28 → 20。texel 0.027m → 0.019m（更细），同时阴影视锥里的 caster 数下降。
     shadowOrtho: 20,
-    shadowUpdateInterval: 2,
+    /**
+     * ══ R38-P1-5（A3）：2 → **4 帧** ══════════════════════════════════════════
+     * 依据：本文件头「冻结阴影更新后帧时 −60%」⇒ 每帧重绘 ≈60% 帧时，隔帧（2）≈30%，
+     *   **4 帧 ≈15%** ⇒ 再省 ≈15% 帧时，是本波性价比最高的一项（改一个常数）。
+     * 拖影论证（承 R31 本键的自有论证，参数更新）：阴影相机是**正交**且 texel 对齐，
+     *   节流期间只是贴图停在上一刷新帧的位置；焦点恒在 ±20m 正交盒内、
+     *   深度恒落在 [near=1, far=160] 内（光源沿 sunDirection 后退 60m）。
+     *   250 km/h（69 m/s）下 **4 帧位移 = 4/60 × 69 = 4.6m ≪ 20m** ⇒ 无可见拖影。
+     * 双闸门同相位（已核实）：`Lighting.update` 按本值置 `sun.shadow.needsUpdate`，
+     *   `Game.renderTail` 在 speed>8 时置 `renderer.shadowMap.autoUpdate=false`
+     *   + `needsUpdate=(shadowFrame===0)`（每 2 帧）⇒ three 的 `WebGLShadowMap.render`
+     *   先过外墙再过单灯 ⇒ 实际刷新周期 = **lcm 语义下的每 4 帧**（两计数器同为
+     *   每渲染帧 +1，偶帧重合）。
+     * ⚠ 观感验收（必做）：高速段连拍 3 帧，确认车下阴影边界无「台阶」位移。
+     */
+    shadowUpdateInterval: 4,
     msaaSamples: 4,
     bloom: true,
     bloomScale: 1,
@@ -157,7 +172,16 @@ export function detectQualityTier(gpu: GpuClass = 'unknown'): QualityTier {
  * - pixelRatio 2 → 1.5：1080p@2x 是 8.3M 像素，1.5x 只要 4.7M（−44% 填充）；
  * - msaaSamples 4 → 2：MSAA 的 resolve 带宽与显存减半（4x 在核显上收益递减）；
  * - bloomScale 1 → 0.5：bloom 的 5 级 mip blur 面积降到 1/4；
- * - shadowMapSize 2048 → 1536：2048² 阴影每帧全场景重绘（实测 113 DC / 78k tri）是核显第二大固定开销；
+ * - shadowMapSize 2048 → 1536：2048² 阴影每帧全场景重绘是核显第二大固定开销；
+ *   ⚠ **R38-P1-6 账实校正**：这里原写「实测 **113 DC / 78k tri**」是**过期错值**。
+ *     探针实证（`tools/r38_frameload.mjs`）：**castle / Terrain / Road 的 castShadow
+ *     全为 0**（castle.ts addMesh 显式置 false）⇒ 阴影 pass 是**车模独占**，
+ *     实测 **41 DC / 23,308 tri**（车模 184 mesh 中 41 个 castShadow；
+ *     再经 R38-P1-5 E2 关掉 28 个 <500 tri 的小件后为 **13 DC / 19,536 tri**）。
+ *     错因：113/78k 是 R31 之前「城堡还投影」时代的读数，几何与 shadow flag 都改过后
+ *     未回填 —— 正是本项目最危险的失效类型（数字不跟着实物走）。
+ *     选 1536² 的结论**不受影响**（依据仍是「2048² 全场景重绘是第二大固定开销」，
+ *     且 R38-P1-5 把更新间隔拉到 4 帧后该开销又降一半），但错值必须消掉。
  * - 画布 antialias 关掉：最终呈现走 composer 的 RT，默认帧缓冲再开 MSAA 纯属白付带宽。
  */
 function applyIntegratedBudget(s: QualitySettings): QualitySettings {

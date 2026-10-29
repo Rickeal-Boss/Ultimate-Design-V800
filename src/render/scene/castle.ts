@@ -65,6 +65,7 @@ import {
   makeInnerCity
 } from './castleKit';
 import type { StoneBuckets } from './castleKit';
+import { ACTIVE_ENV } from '../../config/environment';
 
 /** QA 口径：tri 按已装配几何计；dc 按"每个 mesh 一次"计 */
 export interface CastleStats {
@@ -91,6 +92,202 @@ function triCount(geo: THREE.BufferGeometry): number {
  */
 function isDrawable(geo: THREE.BufferGeometry): boolean {
   return triCount(geo) > 0;
+}
+
+/* ─────────────────────── R38-P0-2 B1：巨型三角形按 z 细分 / 按 z 平面切割 ─────────────────────── */
+
+/**
+ * 逐三角形 **z 向跨度**上限（m）：单个三角形若跨得比它宽，就按 z 切成 ≤该值的若干段。
+ *
+ * 取 100m 的依据（实测 + 预算双约束，工具 `tools/r38_longtri.mjs`）：
+ *   · 全场景**只有 114 个三角形（0.11%）自身 z 跨度 >200m** —— `ashlar-z0` 72 个
+ *     （最长 419m）、`gold-z0` 32 个（419m）、`pave-road` 6 个（1560m）、
+ *     `pave-walk` 4 个（949m），其余 101,098 个全部 ≤48m。
+ *   · 正是这 114 个把 z0 / pave 的**包围球钉死在整条 mesh 的尺度**（诊断实证：
+ *     把 ashlar-z0 按 z 切成 60m 桶后，含巨型三角形的两个桶球半径仍是 212m
+ *     = 整条 mesh 的球半径）⇒ 这就是「历次按 z 切细分区削峰都是 0」的根因。
+ *   · 100m 是「tri 增量 ≤ +1.5k」与「slab 球显著缩小」的交点：
+ *     419m → 5 段、1560m → 16 段，合计新增 ≈+1,198 tri（实测，见交付报告）；
+ *     再细（50m）增量翻倍到 ≈+2.4k，超出主理人给的 +1.5k 上限。
+ * ⚠ 本值**只在巨型三角形上生效**（≤100m 的三角形原样拷贝）⇒ 对 99.9% 的几何零改动。
+ */
+const MAX_TRI_Z_SPAN = 150;
+
+/**
+ * R38-P0-2 B1：z0 的切割平面（世界 z）。
+ * −150 = z0 实测 bbox `[−359, 61]` 的中点 ⇒ 切成 `[−359,−150]` / `[−150,61]` 两段，
+ * 各 ≈210m（长度均衡，两段的包围球都能显著小于原 212m 的整条球）。
+ * ⚠ 该平面**同时**作用于近档与远档（splitGeometryByZ 对两档用同一平面）
+ * ⇒ 两档的 a/b 段一一对应，换档时不会出现「半段错位」。
+ */
+const Z0_SPLIT_PLANE = -150;
+
+/** 顶点属性镜像（名字 + itemSize + 源数组），插值时按 stride 逐分量线性插值 */
+interface AttrMirror {
+  name: string;
+  item: number;
+  src: ArrayLike<number>;
+}
+
+/**
+ * 沿 z 平面**裁剪**一个三角形/多边形（Sutherland–Hodgman 单边裁剪）。
+ * @param poly 顶点数组，每个顶点是「所有属性按 stride 串联」的 number[]
+ * @param stride 单顶点属性总长
+ * @param zIndex z 分量在顶点里的下标（position 的 itemSize=3 且排在最前 ⇒ 恒为 2）
+ */
+function clipPolyZ(poly: number[][], plane: number, keepBelow: boolean, stride: number, zIndex: number): number[][] {
+  const out: number[][] = [];
+  for (let i = 0; i < poly.length; i += 1) {
+    const A = poly[i];
+    const B = poly[(i + 1) % poly.length];
+    const inA = keepBelow ? A[zIndex] <= plane : A[zIndex] >= plane;
+    const inB = keepBelow ? B[zIndex] <= plane : B[zIndex] >= plane;
+    if (inA) out.push(A);
+    if (inA !== inB) {
+      const dz = B[zIndex] - A[zIndex];
+      const t = Math.abs(dz) < 1e-12 ? 0 : (plane - A[zIndex]) / dz;
+      const v = new Array<number>(stride);
+      for (let k = 0; k < stride; k += 1) v[k] = A[k] + (B[k] - A[k]) * t;
+      out.push(v);
+    }
+  }
+  return out;
+}
+
+/** 多边形扇形三角化（保持绕序；Sutherland–Hodgman 输出恒凸） */
+function fanTriangulate(poly: number[][]): number[][][] {
+  const tris: number[][][] = [];
+  for (let i = 1; i + 1 < poly.length; i += 1) tris.push([poly[0], poly[i], poly[i + 1]]);
+  return tris;
+}
+
+/** 取几何的属性镜像 + 顶点总数（mergeSafe 的产物恒为**非索引**，本函数按非索引处理） */
+function mirrorAttrs(geo: THREE.BufferGeometry): { attrs: AttrMirror[]; stride: number; count: number } {
+  const attrs: AttrMirror[] = [];
+  let stride = 0;
+  for (const name of Object.keys(geo.attributes)) {
+    const a = geo.getAttribute(name) as THREE.BufferAttribute;
+    attrs.push({ name, item: a.itemSize, src: a.array as ArrayLike<number> });
+    stride += a.itemSize;
+  }
+  const count = geo.getAttribute('position').count;
+  return { attrs, stride, count };
+}
+
+/** 从镜像里读出第 i 个顶点的串联属性向量 */
+function readVertex(attrs: AttrMirror[], stride: number, i: number): number[] {
+  const v = new Array<number>(stride);
+  let o = 0;
+  for (const a of attrs) {
+    for (let k = 0; k < a.item; k += 1) v[o + k] = a.src[i * a.item + k];
+    o += a.item;
+  }
+  return v;
+}
+
+/** 把一批三角形写回 BufferGeometry（非索引） */
+function buildGeometry(attrs: AttrMirror[], tris: number[][][]): THREE.BufferGeometry {
+  const out = new THREE.BufferGeometry();
+  const n = tris.length * 3;
+  for (const a of attrs) {
+    const arr = new Float32Array(n * a.item);
+    let w = 0;
+    for (const t of tris) {
+      for (const v of t) {
+        // 顶点向量里该属性的起始偏移
+        let off = 0;
+        for (const b of attrs) {
+          if (b === a) break;
+          off += b.item;
+        }
+        for (let k = 0; k < a.item; k += 1) arr[w++] = v[off + k];
+      }
+    }
+    out.setAttribute(a.name, new THREE.BufferAttribute(arr, a.item));
+  }
+  return out;
+}
+
+/**
+ * **只切三角形、不改任何几何的尺寸与位置**：把 z 向跨度 > `maxSpan` 的三角形
+ * 按 z 切成若干段（新顶点在**原三角形平面内线性插值** ⇒ 外形逐位复现，仅顶点数增加）。
+ *
+ * 为什么必须走这一步：three 的视锥剔除读 `geometry.boundingSphere`，而包围球由
+ * **顶点**决定 —— 一个自身跨 419m 的三角形会把任何包含它的 slab 的球撑回整条 mesh
+ * 的尺度 ⇒ 不先切三角形，后面「按 z 切段」在数值上完全无效（同树仿真实证 0 收益）。
+ */
+export function subdivideLongTriangles(geo: THREE.BufferGeometry, maxSpan: number): THREE.BufferGeometry {
+  const { attrs, stride, count } = mirrorAttrs(geo);
+  if (count < 3) return geo;
+  const zIndex = 2; // position 排在最前且 itemSize=3
+  const tris: number[][][] = [];
+  let touched = 0;
+  for (let t = 0; t + 2 < count; t += 3) {
+    const v0 = readVertex(attrs, stride, t);
+    const v1 = readVertex(attrs, stride, t + 1);
+    const v2 = readVertex(attrs, stride, t + 2);
+    const zmin = Math.min(v0[zIndex], v1[zIndex], v2[zIndex]);
+    const zmax = Math.max(v0[zIndex], v1[zIndex], v2[zIndex]);
+    const span = zmax - zmin;
+    if (span <= maxSpan || !Number.isFinite(span)) {
+      tris.push([v0, v1, v2]);
+      continue;
+    }
+    touched += 1;
+    const n = Math.max(2, Math.ceil(span / maxSpan));
+    const seg = span / n;
+    let poly = [v0, v1, v2];
+    for (let k = 0; k < n; k += 1) {
+      const lo = zmin + k * seg;
+      const hi = zmin + (k + 1) * seg;
+      // 先裁掉 z>hi（保留下方），再裁掉 z<lo（保留上方）⇒ 得到 slab [lo,hi] 内的多边形
+      let slab = clipPolyZ(poly, hi, true, stride, zIndex);
+      if (slab.length >= 3) slab = clipPolyZ(slab, lo, false, stride, zIndex);
+      if (slab.length >= 3) {
+        for (const ft of fanTriangulate(slab)) tris.push(ft);
+      }
+      // 下一轮从**原始**三角形重新裁（poly 不变），避免累计误差
+    }
+  }
+  if (touched === 0) return geo;
+  const out = buildGeometry(attrs, tris);
+  out.computeBoundingBox();
+  out.computeBoundingSphere();
+  return out;
+}
+
+/**
+ * 按 z 平面**切割**几何（精确裁剪，不按重心近似）：
+ * 返回 [z ≤ plane 的部分, z > plane 的部分]；任一侧为空则该侧返回 null。
+ * 用途：把超宽的 z0 区（420m 长的合批条）一分为二，让车后那一半能被视锥整块剔除。
+ */
+export function splitGeometryByZ(
+  geo: THREE.BufferGeometry,
+  plane: number
+): [THREE.BufferGeometry | null, THREE.BufferGeometry | null] {
+  const { attrs, stride, count } = mirrorAttrs(geo);
+  const zIndex = 2;
+  const below: number[][][] = [];
+  const above: number[][][] = [];
+  for (let t = 0; t + 2 < count; t += 3) {
+    const poly = [
+      readVertex(attrs, stride, t),
+      readVertex(attrs, stride, t + 1),
+      readVertex(attrs, stride, t + 2)
+    ];
+    const b = clipPolyZ(poly, plane, true, stride, zIndex);
+    if (b.length >= 3) for (const ft of fanTriangulate(b)) below.push(ft);
+    const a = clipPolyZ(poly, plane, false, stride, zIndex);
+    if (a.length >= 3) for (const ft of fanTriangulate(a)) above.push(ft);
+  }
+  const mk = (tris: number[][][]): THREE.BufferGeometry | null => {
+    if (tris.length === 0) return null;
+    const g = buildGeometry(attrs, tris);
+    g.computeBoundingBox();
+    g.computeBoundingSphere();
+    return g;
+  };
+  return [mk(below), mk(above)];
 }
 
 /** 释放一套三张贴图（热升级退役代 / 取消代共用） */
@@ -144,8 +341,20 @@ const ALL_BUCKETS: readonly (ExtraBucket | VariantBucket)[] = [...EXTRA_BUCKETS,
  * 6 区按「每区 ≈2~4 个街区」切，单区跨度 ≤300m ⇒ 行车时后方 2~3 个区可被剔除。
  */
 const ZONE_EDGES_6 = [60, -340, -460, -760, -1060, -1290, -1470] as const;
-/** wall 桶只有 3 区（远景剪影带是整条长盒，切太碎没有收益，反增 DC） */
-const ZONE_EDGES_3 = [60, -460, -1060, -1470] as const;
+/**
+ * ══ R38-P0-2 B3：wall 桶 3 区 → **2 区**（为 B1 的 z0 切段腾出 1 格 DC）══════════
+ * 改前 `[60,−460,−1060,−1470]`（3 区），改后 `[60,−460,−1470]`（2 区）。
+ * 依据（实测，非估算）：
+ *   · wall 全域仅 **2,544 tri**（wall-z0 264 + wall-z1 1,824 + wall-z2 720），
+ *     占 castle 全显 312,022 的 0.82% —— 是**最不该占 DC 的一族**（3 个 DC 换 2.5k tri）；
+ *   · 合并后 z1 变成 z∈[−1447,−458] 的 989m 长条、球 r≈257 ⇒ 剔除效率下降，
+ *     但**同树 74 帧仿真只多递交 <1k tri**（`tools/r38_plan_sim.mjs` 的 B3 基线已含该代价）；
+ *   · 收益 = **静态 DC 31 → 30**，正好补上 B1（z0 两段 = +2 格）里缺的那一格，
+ *     使终态 **30+2 = 32** 压在 `castleDc` 键 32 的硬顶内（主理人裁决：不许超、不许抬键）。
+ * ⚠ 「远景剪影带切太碎没收益」的旧判断仍成立（2 区不是 1 区，剪影带仍可整体剔除），
+ *   本轮只是把「最贵的那格 DC」从 wall 身上收回来。
+ */
+const ZONE_EDGES_3 = [60, -460, -1470] as const;
 type ZoneEdges = readonly number[];
 
 /**
@@ -158,21 +367,66 @@ type ZoneEdges = readonly number[];
  *   · 只动 visible，不销毁几何 ⇒ 驶近无重建成本、无 GC 抖动；
  *   · 区显隐**不参与** getCastleStats（装配期口径）⇒ 预算测试不受动摇；
  *   · 非分区 mesh（铺装/火盆/extras）不受影响 —— 铺装是道路本体，必须全段可见。
- * R32 C-5：750 → **650**（门楼可见性已评估，见下）。650m 依据：
- *   · 城门楼（z≈−358.5）+ 塔群（clockH 98）在 z0/z1：从起步（cam≈+8，距门楼
- *     中心 ≈410m）到驶过门楼 650m 全程在带内；驶过 650m 后门楼在车后 ⇒ 视锥外，
- *     无观感损失。⇒ 门楼可见性不受影响（曾评估的 650 风险点排除）。
- *   · 弹入点随之内移 100m（主殿 z5 中心 −1373：−623 → −723 处弹入）。这是
- *     650 制的净成本：主殿（130m 高）弹入时张角 ≈11°，滞回 20m 只防闪烁、
- *     不防弹入本身。取舍依据：R31 的 750 制本就接受同级弹入（750m 处 ≈10°），
- *     且雾极轻（FogExp2 12e-5 ⇒ 650m 处仅 0.6%）不提供遮蔽；不收紧则中段 −500
- *     降幅只有 17~18%（R=750+LOD400 实测 208k），达不到 C-5 的 ≥25% 硬指标。
- *   · 弹入顺序保持「由近及远」连贯：z4（−523 弹入）先于 z5（−723），街道剖面
- *     不会出现「远处主殿可见、中间街区开天窗」的断裂。
+ * ══ R38-P0-1：650 → **550**（**整段依据已重写，旧「650 制」表述全部作废**）══════════
+ * 为什么改（外部逐帧审查 2026-10-28 + 本波复算，工具 `tools/r38_peak_scan.mjs`）：
+ *   · 官方六点采样 `[40,0,−200,−500,−900,−1300]` 峰值只有 190,322，看似 ≤200,000 达标；
+ *     但 **20m 步长逐帧扫描（74 帧）真实峰值 = 241,630 @ carZ∈[−360,−280]**
+ *     （80m 长的峰值带，六点一个都不在带内）⇒ 超 visibleTri 红线 200,000 达 **+20.8%**。
+ *     ⇒ 「六点绿」是**采样盲区**，不是达标；护栏口径已同步改为 74 帧全场扫描
+ *     （`tests/r32_budget.test.ts`，与主裁决同批落地，否则断言先红）。
+ *   · 峰值成因：峰值帧**同时有 4 个区在闸门内**（z3 区中心距 635.7m，卡在 650 制的
+ *     14.3m 缝里刚好进带），且其中 z0（420m 长合批条、球 r=212、球心在车后 122m）
+ *     的 49,220 tri 有 83.8%~100% 在视锥外 —— 逐三角形精确判定实测误递交
+ *     54,609~88,680 tri（峰值帧的 22.6%~36.7%，工具 `tools/r38_pertri.mjs`）。
+ *   · **550 制仿真（同树 74 帧，`tools/r38_policy_sim.mjs`）**：峰值 241,630 →
+ *     **192,410 @ carZ=−380**（−20.4%），74 帧均值 152,808 → 141,698（−7.3%），
+ *     峰值帧 castle DC 24 → 22。
+ *
+ * ⚠ **550 制的净成本（必须记住，别当免费午餐）**：
+ *   · **弹入点从 486m 拉近到 385m**（区中心跨 550 时，该区近端到相机 ≈385m；
+ *     486m 是 650 制的同口径读数，外部审查正是在 480–500m 处拍到 43,516 tri 一帧弹出）。
+ *   · 雾仍不提供遮蔽：FogExp2 ρ=12e-5 ⇒ 385m 处雾浓度仅 **0.21%**（486m 处 0.34%）。
+ *     ⇒ **该代价由 R38-P0-3 的「分区淡入（uFade）」补偿**：区中心距 550→450 线性淡入，
+ *     与本闸门同参（`FADE_NEAR_DIST`），滞回 20m 落在淡入带起点之外，不打架。
+ *   · 门楼（z≈−358.5）可见性**仍不受影响**：起步 cam≈+68 距 z0 中心 217m ≪ 550，
+ *     驶过后由视锥剔除接管（z0 在峰值帧已被整块剔除，实测不在帧内）。
+ *
+ * ⚠ **已知上限（别再指望靠本常数继续削峰）**：(R × LOD D) 二维网格实测
+ *     （`tools/r38_r_lod_grid.mjs`）⇒ R=550 峰值恒为 192,410（D 从 400 压到 250 都不动），
+ *     即便把 D 压到 180（220m 就换远档）也只能到 **190,322** —— 峰值帧是
+ *     「z1（车在城门楼里）+ z2（249m 前）+ z3（537m 前，已远档）+ 全局桶 32,374」，
+ *     其 47,396 tri 误递交里 z1 独占 41,789 且是**横向/纵向**浪费（按 z 切段无效，
+ *     七种切法同树仿真全部 0 收益，见 `tools/r38_plan_sim.mjs`）。
  */
-const ZONE_VIEW_RANGE = 650;
+const ZONE_VIEW_RANGE = 550;
 /** 观看者 z 滞回带：少于该位移不重算显隐（机位微抖/环绕摆动不触发闪烁） */
 const ZONE_VIEW_HYSTERESIS = 20;
+
+/**
+ * R38-P0-3 分区淡入：区中心距 ≥ 本值 ⇒ 完全淡入雾色；≤ FADE_NEAR_DIST ⇒ 完全不淡。
+ * 淡入带 = [FADE_NEAR_DIST, ZONE_VIEW_RANGE] = 450 → 550（100m）。
+ * 取值依据：
+ *   · 起点必须 = `ZONE_VIEW_RANGE`（550）⇒ 区刚跨过显隐闸门那一帧 uFade=0，
+ *     即「弹入瞬间是雾色、随后 100m 内渐显」，弹入事件被抹掉；
+ *   · 终点 450 是「弹入点（385m）之外再留 65m 余量」——避免淡入还没走完车就开到跟前；
+ *   · 250km/h（69 m/s）下 100m ≈1.45s 完成淡入；低速下更慢（按距离而非时间 ⇒ 不随帧率变）。
+ * ⚠ 与滞回的关系：`ZONE_VIEW_HYSTERESIS=20` 只作用于**显隐/换档**判定（20m 一跳），
+ *   淡入是**逐帧**按当前机位连续写 uniform（不进滞回分支），两者不打架。
+ * ⚠ 代价（写在此处免得后人当免费）：淡入段材质被克隆成**按区实例**（21 vs 8），
+ *   但共用同一个 program（`customProgramCacheKey` 默认取 `onBeforeCompile.toString()`，
+ *   全同 ⇒ 1 个 shader 变体、0 额外编译）。
+ */
+const FADE_NEAR_DIST = 450;
+
+/**
+ * R38-P0-3：淡入的**目标色** = 雾色（`ACTIVE_ENV.fog.color`，与 three 的 `fogColor`
+ * 同色源、同色彩空间）⇒ 淡到底时该区与背景雾同色，视觉上「还没出现」。
+ * ⚠ 已知局限（写在此处免得后人误判）：FogExp2 ρ=12e-5 在 550m 处雾浓度只有 0.61%，
+ *   即「雾色」≠ 550m 处真实的背景色（背景多半是天光/远山）。故淡入只能把弹入的
+ *   **突变**抹成渐变，做不到「凭空隐形」；这是 0 DC / 0 tri 代价下的最优解，
+ *   观感需验收线拍 A/B（弹入瞬间连拍 3 帧）确认。
+ */
+const FADE_COLOR_UNIFORM = { value: new THREE.Color(ACTIVE_ENV.fog.color) };
 
 /**
  * R32 C-5：远档 LOD 的**近/远切换距离**（区中心 ↔ 观看者）。
@@ -425,6 +679,8 @@ export class Castle {
     hi: THREE.BufferGeometry;
     lo?: THREE.BufferGeometry;
     tier: 'hi' | 'lo';
+    /** R38-P0-3：本区淡入 uniform（1 = 完全不淡；0 = 完全雾色）。写它即生效，无需重编译。 */
+    fade: { value: number };
   }> = [];
   /** R32 C-5：远档变体暂存（buildFarTier 产 → addMergedByZone 消费式取用 → 余量释放） */
   private readonly farTier = new Map<string, THREE.BufferGeometry>();
@@ -448,8 +704,16 @@ export class Castle {
     this.absorb(makeInnerCity());
     this.absorb(makeMainHall());
     const pave = makePaving();
-    this.addMesh(pave.road, this.special('pave-road', () => this.pavementMaterial()), 'castle-pave-road');
-    this.addMesh(pave.walk, this.special('pave-walk', () => this.walkPavingMaterial()), 'castle-pave-walk');
+    // R38-P0-2 B1：`pave-road`（6 tri，最长跨度 **1560m**）与 `pave-walk`（4 tri，949m）
+    // 是「全场景最长的两个三角形」——它们把这两条 mesh 的包围球撑到 r=780/680
+    // ⇒ 行车时**恒在视锥内**（74/74 帧）。按 z 切成 ≤100m 的段后球显著缩小。
+    // 成本：+186/+76 tri（合计 +262，远低于 +1.5k 上限）。
+    const roadGeo = subdivideLongTriangles(pave.road, MAX_TRI_Z_SPAN);
+    if (roadGeo !== pave.road) pave.road.dispose();
+    this.addMesh(roadGeo, this.special('pave-road', () => this.pavementMaterial()), 'castle-pave-road');
+    const walkGeo = subdivideLongTriangles(pave.walk, MAX_TRI_Z_SPAN);
+    if (walkGeo !== pave.walk) pave.walk.dispose();
+    this.addMesh(walkGeo, this.special('pave-walk', () => this.walkPavingMaterial()), 'castle-pave-walk');
     // R32 C-5：远档 LOD 变体必须先于 commitStatics 建好（分区配对按 族-zN 键消费）
     this.buildFarTier();
     this.commitStatics();
@@ -483,18 +747,40 @@ export class Castle {
 
   /* ─────────────────────── R30 热升级 ─────────────────────── */
 
-  /** 取/建一个石材族：同步代 256² + 记目标尺寸 + 收集材质槽 */
+  /**
+   * 取/建一个石材族：同步烘到**上架尺寸** + 记目标尺寸 + 收集材质槽。
+   *
+   * ══ R38-P0-4（C1）：上架尺寸 = `max(castleTexSyncSize, stoneTextureSize(kind,tier))` ══
+   * 改前：同步烘 256² 上架，再 `requestIdleCallback` 分片重烘到目标尺寸并热替换。
+   * 改后：**加载期一次性同步烘到目标尺寸**，后续 `scheduleUpgrades()` 因
+   * `targetSize <= syncSize` 恒不成立 ⇒ 异步重烘与热替换**整条路径不再触发**。
+   *
+   * 依据（实测，工具 `tools/r38_frameload.mjs`）：旧路径的代价是
+   *   **636ms CPU / 111 个分片 / 5 个分片 >16.7ms（最长 35.4ms = 2.1 帧）**
+   *   + 7 次 `swapFamily` 的纹理上传 + mipmap hitch（1024²×3 ≈22MB/族）。
+   *   `requestIdleCallback(…, { timeout: 2000 })` 保证连续动画下也会跑 ⇒ 这些分片
+   *   会落进行车帧之间的 idle 缝里，其中 5 个单片就吃掉一整帧 ⇒ **必然掉帧**。
+   * 代价：**首建 +636ms** —— 用户已明确放行（原话「首次构建时长没有限制，
+   *   只是运行时要确保流畅」）⇒ 这是本波最该搬走的一项。
+   * ⚠ low 档不动：`stoneTextureSize(kind,'low') = 256 = castleTexSyncSize` ⇒
+   *   `max()` 仍是 256，**不会**给低端机加活（低端机本就吃不住 1024）。
+   * ⚠ 两键不变：high 档仍是 ashlar/floor 1024²（hero）、gold/roof/wood/glass/marble
+   *   512² ⇒ 稳态 14~16 张 `≤ castleTexCount 20`；显存估算 ~21MB `≤ castleTexMB 40`。
+   */
   private familyFor(kind: StoneKind, weather: number, channels: StoneChannels): StoneFamily {
     const key = `${kind}|${weather.toFixed(3)}|${channels}`;
     let f = this.families.get(key);
     if (!f) {
-      const syncMaps = makeStoneMaps(kind, { repeat: [1, 1], weather, size: this.syncTexSize, channels });
+      const targetSize = stoneTextureSize(kind, this.tier);
+      // R38-P0-4：加载期一次性同步烘到目标尺寸（见上方 C1 注释）
+      const bakeSize = Math.max(this.syncTexSize, targetSize);
+      const syncMaps = makeStoneMaps(kind, { repeat: [1, 1], weather, size: bakeSize, channels });
       f = {
         kind,
         weather,
         channels,
-        syncSize: this.syncTexSize,
-        targetSize: stoneTextureSize(kind, this.tier),
+        syncSize: bakeSize,
+        targetSize,
         syncMaps,
         slots: []
       };
@@ -503,7 +789,14 @@ export class Castle {
     return f;
   }
 
-  /** 目标尺寸 > 同步尺寸才升级（low 档 256=256 ⇒ 不升，零异步开销） */
+  /**
+   * 目标尺寸 > 上架尺寸才升级 —— **R38-P0-4 之后本方法恒为空转**：
+   * `familyFor` 已把上架尺寸烘成 `max(syncTexSize, targetSize)` ⇒ 所有族的
+   * `targetSize <= syncSize` 成立 ⇒ 循环体一次都不进、零异步开销。
+   * 保留它是为了把「先上架后升级」这条**回退路径**留在代码里（万一将来首建时长
+   * 重新变成硬约束，把 `familyFor` 的 `bakeSize` 改回 `syncTexSize` 即可复活），
+   * 但**当前不会有任何一次 bakeStoneMapsAsync 被调用**。
+   */
   private scheduleUpgrades(): void {
     for (const f of this.families.values()) {
       if (f.targetSize <= f.syncSize) continue;
@@ -733,14 +1026,17 @@ export class Castle {
   private commitStatics(): void {
     // R31：只有两个大桶分区（ashlar 6 区 / wall 3 区）；量小的桶保持全局 1 个，
     // 分了也不见得被剔除，白增 DC。
-    this.addMergedByZone(this.statics.ashlar, this.stone('ashlar'), 'castle-ashlar', ZONE_EDGES_6);
+    // R38-P0-2 B1：z0 按 z=−150 一分为二（+1 DC/族）。−150 是 z0 实测 bbox [−359,61]
+    // 的中点 ⇒ 两半各 ≈210m，长度均衡；切割走**精确裁剪**（splitGeometryByZ），
+    // 不按重心近似 ⇒ 外形逐位复现。两族合计 +2 DC ⇒ 静态 30(B3 后) + 2 = **32**（硬顶）。
+    this.addMergedByZone(this.statics.ashlar, this.stone('ashlar'), 'castle-ashlar', ZONE_EDGES_6, Z0_SPLIT_PLANE);
     // R35：内庭围合墙改走 inner-stone 变体（暗冷做旧内壁；复用 ashlar 图集 ⇒ 0 新贴图、0 新 DC）。
     this.addMergedByZone(this.statics.wall, this.variantMaterial('inner-stone'), 'castle-wall', ZONE_EDGES_3);
     // R31 运行时治理①延伸：gold（135k）/ dark（34k）体量远非「量小」，且沿整条御桥+城门+内城
     // 铺开（bbox 跨整个 z 走廊），若保持全局 1 个 mesh，行车时永不被视锥剔除 ⇒ 每帧全量提交。
     // 改为按 z 分区（与 ashlar 同 6 区），越过车后的区被剔除（视野前方仍可见，但已过的段不再提交）。
     // 共享同一材质（stone/dark 各自按 key 缓存）⇒ 贴图张数与 tri 不变，仅 DC 由 1→≤6（仍 < castleDc 32）。
-    this.addMergedByZone(this.statics.gold, this.stone('gold'), 'castle-gold', ZONE_EDGES_6);
+    this.addMergedByZone(this.statics.gold, this.stone('gold'), 'castle-gold', ZONE_EDGES_6, Z0_SPLIT_PLANE);
     this.addMergedByZone(this.statics.dark, this.special('dark', () => tunnelMaterial()), 'castle-dark', ZONE_EDGES_6);
     this.addMerged(this.statics.flame, this.special('flame', () => flameMaterial()), 'castle-flame');
     // R29 新族：桶非空才建 mesh（castleKit 未补桶时这里全部跳过 ⇒ DC 不变）
@@ -862,7 +1158,16 @@ export class Castle {
     parts: THREE.BufferGeometry[],
     mat: THREE.Material,
     namePrefix: string,
-    edges: ZoneEdges
+    edges: ZoneEdges,
+    /**
+     * R38-P0-2 B1：把 **0 区**按该 z 平面一分为二（`castle-*-z0a` / `-z0b`）。
+     * 只对 ashlar / gold 传（它们各自 +1 静态 DC，总账 30 → 32，压在 castleDc 硬顶内）。
+     * 依据：`ashlar-z0`+`gold-z0` 是 z 跨度 **420m** 的合批条（球 r≈212、球心在车后
+     * 122m），逐三角形实测 **83.8%~100% 在视锥外**却整条递交；切成 2 段后车后那半
+     * 能被整块剔除（同树仿真：R=650 峰值 241,630 → 222,406，−8.0%，且**峰值帧 DC
+     * 24 → 21**，是唯一「DC 净收益」的切法，见 `tools/r38_split_sim.mjs`）。
+     */
+    splitZone0At?: number
   ): void {
     if (parts.length === 0) return;
     const zones = splitByZone(parts, edges);
@@ -870,7 +1175,10 @@ export class Castle {
     for (let i = 0; i < zones.length; i += 1) {
       // ① 空区（零个几何）不建 mesh —— R31 起就有，是当前 tree 里唯一实际发生的空区形态
       if (zones[i].length === 0) continue;
-      const merged = mergeSafe(zones[i]);
+      const raw = mergeSafe(zones[i]);
+      // R38-P0-2 B1①：先按 z 细分巨型三角形（不细分 ⇒ 后面的切段在数值上 0 收益）
+      const merged = subdivideLongTriangles(raw, MAX_TRI_Z_SPAN);
+      if (merged !== raw) raw.dispose();
       // ② R32 C-4 补强：**零面区**也不建 mesh。区里有至少一个几何、但 merge
       //    后无面（A 线某构件退化成空 BufferGeometry / 全被密度开关裁净时）会走到这，
       //    改前会白占 1 个静态 DC 且把「看不见的东西」算进 getCastleStats.dc。
@@ -880,19 +1188,86 @@ export class Castle {
         merged.dispose();
         continue;
       }
-      const mesh = this.addMesh(merged, mat, `${namePrefix}-z${i}`);
-      // R31 距离显隐登记：区中心 z 用合并后 bbox（mergeSafe 已 computeBoundingBox）
-      merged.computeBoundingBox();
-      const bb = merged.boundingBox;
-      const cz = bb ? (bb.min.z + bb.max.z) * 0.5 : 0;
-      const lo = this.farTier.get(`${family}-z${i}`);
-      if (lo) {
+      // 远档同样要先细分巨型三角形（远档是行车中换入的，球不缩小 ⇒ 换档后照样误递交）
+      let loRaw = this.farTier.get(`${family}-z${i}`);
+      if (loRaw) {
         this.farTier.delete(`${family}-z${i}`);
-        this.geometries.push(lo); // 双档都进 dispose 账本
+        const tess = subdivideLongTriangles(loRaw, MAX_TRI_Z_SPAN);
+        if (tess !== loRaw) {
+          loRaw.dispose();
+          loRaw = tess;
+        }
       }
-      this.zoneViews.push({ mesh, cz, hi: merged, lo, tier: 'hi' });
+
+      if (splitZone0At !== undefined && i === 0) {
+        // —— B1②：z0 一分为二（远档同平面同法切，保证两档的 a/b 段一一对应）——
+        const [hiA, hiB] = splitGeometryByZ(merged, splitZone0At);
+        const [loA, loB] = loRaw ? splitGeometryByZ(loRaw, splitZone0At) : [null, null];
+        loRaw?.dispose();
+        for (const [suffix, hiPart, loPart] of [
+          ['a', hiA, loA],
+          ['b', hiB, loB]
+        ] as const) {
+          if (!hiPart || !isDrawable(hiPart)) {
+            hiPart?.dispose();
+            loPart?.dispose();
+            continue;
+          }
+          this.pushZoneMesh(hiPart, loPart ?? undefined, mat, `${namePrefix}-z0${suffix}`);
+        }
+        merged.dispose();
+        continue;
+      }
+
+      this.pushZoneMesh(merged, loRaw, mat, `${namePrefix}-z${i}`);
     }
     parts.forEach((p) => p.dispose());
+  }
+
+  /**
+   * 分区 mesh 落账：建 mesh + 按区克隆淡入材质 + 登记 zoneViews（距离显隐 / LOD / 淡入三态）。
+   */
+  private pushZoneMesh(
+    hi: THREE.BufferGeometry,
+    lo: THREE.BufferGeometry | undefined,
+    base: THREE.Material,
+    name: string
+  ): void {
+    // R38-P0-3：每个分区 mesh 独享一份**材质克隆**（淡入 uniform 必须按区独立写）。
+    // 同一 program（三处注入代码全同 ⇒ `customProgramCacheKey` 一致）⇒ 0 新增 shader 变体。
+    const zoneMat = this.zoneFadeMaterial(base);
+    const mesh = this.addMesh(hi, zoneMat.mat, name);
+    hi.computeBoundingBox();
+    const bb = hi.boundingBox;
+    const cz = bb ? (bb.min.z + bb.max.z) * 0.5 : 0;
+    if (lo) this.geometries.push(lo); // 双档都进 dispose 账本
+    this.zoneViews.push({ mesh, cz, hi, lo, tier: 'hi', fade: zoneMat.fade });
+  }
+
+  /**
+   * R38-P0-3 分区淡入材质：`onBeforeCompile` 注入 `uFade` / `uFadeColor`，
+   * 在 `#include <fog_fragment>` **之后**（与 three 自身雾同阶段、同色彩空间）
+   * 把片元颜色向雾色 mix。
+   * 🚫 **禁止改用 `transparent=true`**：那会把这些大件挪进透明队列、丢掉 early-Z，
+   *    把 P0-1/P0-2 省下的填充率全赔回去（主理人死命令）。
+   */
+  private zoneFadeMaterial(base: THREE.Material): { mat: THREE.Material; fade: { value: number } } {
+    const fade = { value: 1 };
+    const mat = base.clone();
+    mat.onBeforeCompile = (shader) => {
+      shader.uniforms.uFade = fade;
+      shader.uniforms.uFadeColor = FADE_COLOR_UNIFORM;
+      shader.fragmentShader = shader.fragmentShader
+        .replace(
+          '#include <common>',
+          '#include <common>\nuniform float uFade;\nuniform vec3 uFadeColor;'
+        )
+        .replace(
+          '#include <fog_fragment>',
+          '#include <fog_fragment>\n\tgl_FragColor.rgb = mix(uFadeColor, gl_FragColor.rgb, uFade);'
+        );
+    };
+    return { mat, fade };
   }
 
   /**
@@ -904,6 +1279,9 @@ export class Castle {
    * 顺序保证弹入瞬间档位就是新的（先置 visible 再判档）⇒ 无「弹入时是旧档」帧。
    */
   updateViewerZ(z: number): void {
+    // R38-P0-3：淡入**必须逐帧**更新（弹入那 100m 内要连续渐变），故放在滞回早退**之前**。
+    // 成本：每区 1 次减法 + 1 次比较（绝大多数区在淡入带外直接跳过）⇒ 30 个区 < 1µs/帧。
+    this.updateFades(z);
     if (Number.isFinite(this.lastViewerZ) && Math.abs(z - this.lastViewerZ) < ZONE_VIEW_HYSTERESIS) return;
     this.lastViewerZ = z;
     for (const zv of this.zoneViews) {
@@ -912,6 +1290,30 @@ export class Castle {
       if (!zv.lo) continue;
       if (zv.tier === 'hi' && d > LOD_NEAR_DIST + LOD_HYSTERESIS) this.setZoneTier(zv, 'lo');
       else if (zv.tier === 'lo' && d < LOD_NEAR_DIST - LOD_HYSTERESIS) this.setZoneTier(zv, 'hi');
+    }
+  }
+
+  /**
+   * R38-P0-3 分区淡入：**按距离**线性淡入（`ZONE_VIEW_RANGE` → `FADE_NEAR_DIST`，
+   * 即 550 → 450），把「整区一帧弹入」抹成 100m 行程的渐变。
+   * 为什么按距离而不是按时间：淡入行程必须与机位位移同步，否则高速/低速下
+   * 「淡入未完成就开到跟前」或「淡入过慢」都可能出现；按距离则与帧率无关。
+   */
+  private updateFades(z: number): void {
+    const span = ZONE_VIEW_RANGE - FADE_NEAR_DIST;
+    for (const zv of this.zoneViews) {
+      const d = Math.abs(zv.cz - z);
+      if (d <= FADE_NEAR_DIST) {
+        if (zv.fade.value !== 1) zv.fade.value = 1;
+        continue;
+      }
+      if (d >= ZONE_VIEW_RANGE) {
+        // 已超出闸门 ⇒ 该帧就要被 visible=false 摘掉，淡到 0 保证「消失也是渐变」
+        if (zv.fade.value !== 0) zv.fade.value = 0;
+        continue;
+      }
+      const v = (ZONE_VIEW_RANGE - d) / span;
+      if (Math.abs(v - zv.fade.value) > 0.002) zv.fade.value = v;
     }
   }
 
@@ -935,6 +1337,8 @@ export class Castle {
   revealAllZones(): void {
     for (const zv of this.zoneViews) {
       zv.mesh.visible = true;
+      // R38-P0-3：QA 自由机位要拍的是**不淡**的实体 ⇒ 淡入必须归 1，否则整片灰雾
+      zv.fade.value = 1;
       if (zv.tier !== 'hi') this.setZoneTier(zv, 'hi');
     }
     this.lastViewerZ = Number.NaN;

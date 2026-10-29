@@ -41,6 +41,24 @@
  * ⚠ **累计 vs 每帧 DC 的判读教训（在案）**：castleDc 32 是**静态 mesh 数**（全显
  *    口径的累计 draw call 上限），不是每帧 DC；每帧 DC 含阴影 pass（R31 基线整帧
  *    188，其中阴影 ~26~29）。看到「DC 27」别当整帧 27 用，也别拿它和 188 比大小。
+ *
+ * ══ **R38-P1-6 账实校正：阴影 pass 的「113 DC / 78k tri」是过期错值** ══════════
+ *   错值出处：本文件旧注与 `src/config/quality.ts` 的 `applyIntegratedBudget` 注释，
+ *     都写「2048² 阴影每帧全场景重绘（**实测 113 DC / 78k tri**）」。
+ *   探针实证（`tools/r38_frameload.mjs`，2026-10-29）：
+ *     · **castle / Terrain / Road 的 `castShadow` 全为 0**（castle.ts `addMesh` 显式
+ *       置 false；Terrain/Road 同样）⇒ 阴影 pass **不含任何环境几何**；
+ *     · 车模 184 mesh 中 **41 个 castShadow** ⇒ 阴影 pass = **41 DC / 23,308 tri**
+ *       （经 R38-P1-5 E2 关掉 28 个 <500 tri 小件后：**13 DC / 19,536 tri**）。
+ *   为什么错（**本项目最危险的失效类型，写在此处警醒后人**）：113/78k 是
+ *     **R31 之前「城堡还投影」时代**的读数；之后 castle.ts 把 addMesh 的
+ *     castShadow/receiveShadow 双双置 false（R31 治理①的配套），几何也换过几代，
+ *     而这条注释**一次都没跟着改** ⇒ 它继续以「实测」的名义被后人拿来选型
+ *     （`applyIntegratedBudget` 正是靠它决定把 high 档 shadowMapSize 降到 1536²）。
+ *     ⇒ 数字不是被改错，而是**没跟着实物走**；本台账存在的意义就是防止这件事。
+ *   结论是否受影响：**不受影响**（选 1536² 的依据是「2048² 全场景重绘是第二大
+ *     固定开销」，与 caster 数无关；且 R38-P1-5 把更新间隔拉到 4 帧后该开销又减半），
+ *     但错值必须消掉 —— 已在 `quality.ts` 与本段同步回填。
  * ⚠ **transmission 翻倍警告**：本场景玻璃走 transparent alpha（R12 铁律⑤），
  *    **不存在透射 pass** ⇒ DC 不会因 transmission 翻倍；若将来回退 transmission，
  *    本台账的 DC 口径全部作废重测。
