@@ -1630,8 +1630,15 @@ export function makeTowerGroup(): StoneBuckets {
     const { w, totalH, bellY, bellOpenH } = TOWER_GROUP.bell;
     const shaftTop = 68; // 檐口
     b.ashlar.push(box('ashlar', w + 2.4, 2, w + 2.4, cx, 1, gz)); // 台基
-    b.ashlar.push(box('ashlar', w + 0.6, 33, w + 0.6, cx, 2 + 16.5, gz)); // 塔身下段 2..35
-    b.ashlar.push(box('ashlar', w, shaftTop - 35, w, cx, 35 + (shaftTop - 35) / 2, gz)); // 塔身上段 35..68
+    // R40 P0-1 塔身「上白下灰」垂直材质分区（参考图双通道像素明证，代码此前上下全 ashlar）：
+    //   下段 2..35 改走已有 grey 桶（castle.ts variantMaterial('ashlar-grey')，复用 ashlar
+    //   图集 ⇒ 0 新贴图 / 0 新材质实例）；上段 35..68 保持 ashlar 象牙白。台基保留白石（基座惯例）。
+    //   ⚠ 与翼墙灰石（L1742/L1790）完全同构：box 第一参仍传 'ashlar'（UV 图集族 = TILE.ashlar
+    //     1.2m），否则砌块尺度差一倍（R37-A 落地审查 P2-1 教训，tests/r37_castle.test.ts 锁比值 1.0）。
+    //   ⚠ DC：塔身 bbox z 中值 = gz = −358.5，与翼墙灰石同落 ZONE_EDGES_6 的 z1 区（−340..−460）；
+    //     grey-z1 mesh 已存在（翼墙），本件 merge 进去 ⇒ **静态 DC +0**（灰石仍 1 个分区 mesh）。
+    pushVariant(b, 'grey', box('ashlar', w + 0.6, 33, w + 0.6, cx, 2 + 16.5, gz)); // 塔身下段 2..35（灰石）
+    b.ashlar.push(box('ashlar', w, shaftTop - 35, w, cx, 35 + (shaftTop - 35) / 2, gz)); // 塔身上段 35..68（白石）
     b.ashlar.push(box('ashlar', w + 1.6, 1.2, w + 1.6, cx, shaftTop + 0.6, gz)); // 檐口
     b.gold.push(box('gold', w + 1.8, 0.22, w + 1.8, cx, shaftTop + 1.35, gz)); // 檐口金线
     // 尖顶：**R29 改白石**（原 dark 深色坡顶）。参考图（7cd7329c / 2497fab5）双铃塔
@@ -2745,11 +2752,15 @@ export function makeMainHall(): StoneBuckets {
       extra(b, 'marble', box('marble', 4.8, 0.7, 1.8, 0, 2.35, az - 0.6));
       b.gold.push(box('gold', 0.24, 1.8, 0.24, 0, 3.6, az - 1.1)); // 坛背金十字
       b.gold.push(box('gold', 1.1, 0.24, 0.24, 0, 4.1, az - 1.1));
-      // 木梁天花（wood 桶：龛顶 6 根横梁，驱车穿街时抬头可见的木构读法）
-      for (let i = 0; i < 6; i += 1) {
-        const bz = zFront - 2.0 - i * 2.4;
-        extra(b, 'wood', box('wood', clearW - 1.2, 0.5, 0.55, 0, clearH - 1.2, bz));
-      }
+      // R40 P1-2 死几何清理：删除龛顶 6 根木梁天花（原 6×12=72 tri，wood 全局单 mesh 常驻递交）。
+      //   定罪（tools/r40_geo_probe.mjs 逐几何 bbox，Δ fresh-vs-fresh）：这 6 根
+      //     x −9.4..9.4 / y 42.55..43.05 / z −1314.28..−1301.72，bbox **完全落在殿身前排
+      //     实心盒**（frontW 88 × bodyH 88.7 × frontDepth 30 ⇒ x±44 / y2.7..91.4 / z−1330..−1300）
+      //     内部；前方又被同盒实心前脸 + 暗龛背板（archPlate @ zFront+0.04）遮挡 ⇒ 永不可见。
+      //   与 R39 记录「6 根门洞木梁死几何（72 tri 全局常驻）」一致，此处落实删除。
+      //   ⚠ 保留：①翼墙顶连廊 2 根（corridorGallery，x±46..102 / y≈65，在殿身盒外，可见）；
+      //     ②城门隧道 8 根（makeGate L1166-1169，y≈28.2）——门洞可贯通、隧道内仰视可见，
+      //     前方花格屏仅 y≤17 且城门无暗龛背板，**无法证明永不可见 ⇒ 保留**（不盲删）。
     }
     // ⑪ 广场列阵火盆 +2/侧（z 节拍 5，接在既有 arrayCount 之后）
     {

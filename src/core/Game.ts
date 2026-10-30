@@ -226,6 +226,13 @@ export class Game {
     window.setTimeout(() => this.resize(), 250);
   };
   private prevDistance = 0;
+  /**
+   * R40 P0-B：自由探索「上一物理步」的位姿快照（**值拷贝**，非引用）。
+   * frameFree 用 alpha 在 [prevFree, 当前步] 间插值，抹平「每帧 tick 数量化」的位移抖动；
+   * 与挑战路径 L1108 的 prevDistance 同语义（Gaffer 固定步长插值）。
+   */
+  private prevFreeX = 0;
+  private prevFreeZ = 0;
   private brakeFlash = 0;
   private pendingResult: { result: RunResult; delay: number } | null = null;
   private crashElapsed = 0;
@@ -957,7 +964,7 @@ export class Game {
   }
 
   /** 自由探索渲染帧：车体位姿 / 车轮 / 音效 / 相机 / HUD（不碰挑战链路） */
-  private frameFree(dt: number): void {
+  private frameFree(dt: number, alpha: number): void {
     const fd = this.freeDrive;
     if (!fd) return;
     const s = fd.state;
@@ -969,7 +976,21 @@ export class Game {
     // ---- 车体位姿 ----
     // root 承载偏航（root.quaternion 同时喂给 CameraRig 的 local 机位）；
     // body 只承载基准偏航 π + 视觉俯仰/侧倾（基准偏航由 resetVisuals 写入，此处不动）。
-    this.car.root.position.set(s.x, 0, s.z);
+    // R40 P0-B：按 alpha 在「上一物理步 prevFree ↔ 当前步 s」间插值（Gaffer 同挑战路径 L1241），
+    // 抹平「每帧 tick 数量化」的位移抖动（R39 探针实测的正是这条无插值路径）。
+    // 防拉丝：两态距离 > 5m（≈远大于单步 travel<1m、又远小于传送/复位的百米级）时
+    // 视为传送/复位/R 键/首帧未初始化，直接吸附到当前态（此帧不插值）。
+    const jumpX = s.x - this.prevFreeX;
+    const jumpZ = s.z - this.prevFreeZ;
+    if (jumpX * jumpX + jumpZ * jumpZ > 25) {
+      this.prevFreeX = s.x;
+      this.prevFreeZ = s.z;
+    }
+    this.car.root.position.set(
+      lerp(this.prevFreeX, s.x, alpha),
+      0,
+      lerp(this.prevFreeZ, s.z, alpha)
+    );
     this.car.root.rotation.y = s.heading;
     this.car.body.rotation.x = s.pitch;
     this.car.body.rotation.z = s.roll;
@@ -1102,6 +1123,12 @@ export class Game {
     if (this.probeFrames !== null) this.probeTicks++;
     // 自由探索：整条挑战链路（会话状态机 / 踏板 / 撞击结算）全部让位给运动学驾驶器
     if (this.freeDrive) {
+      // R40 P0-B：step **之前**快照当前位姿到 prevFree*（值拷贝）。
+      // 每步都覆写 ⇒ 一帧跑 N 步时 prevFree 落在「最后一步之前」，alpha∈[0,1) 只插最后一步，
+      // 与挑战路径 prevDistance（L1108 同样在 sm.step 前赋值）完全同语义。
+      // 只读驾驶器 state，不写回 ⇒ 不触碰 FreeDrive 内部物理态。
+      this.prevFreeX = this.freeDrive.state.x;
+      this.prevFreeZ = this.freeDrive.state.z;
       this.freeDrive.step(step);
       return;
     }
@@ -1218,7 +1245,7 @@ export class Game {
     this.time += dt;
     // R29：自由探索走独立分支（驾驶器 / 车体位姿 / HUD 全不同），帧尾渲染共用
     if (this.freeDrive) {
-      this.frameFree(dt);
+      this.frameFree(dt, alpha);
       return;
     }
     let simDt = dt;
@@ -1316,8 +1343,14 @@ export class Game {
     this.syncInteriorOcclusion();
     // R31 运行时治理②：城堡分区按观看距离显隐（内部 20m 滞回，零遍历开销）
     this.castle.updateViewerZ(this.rig.camera.position.z);
+    // R40 P0-C：速度自适应运动模糊按「本帧世界位移」给强度，覆盖掉帧帧的位移放大（M1）。
+    // 基准 = 顶速 55.5 m/s × 16.7ms ≈ 0.925m/帧 → 强度 0.12；掉帧帧（33ms→1.83m）线性
+    // 上探、硬上限 0.18 防糊死；低速（v=5→0.0108）几乎不糊。仅 pedaling 且非 countdown。
+    const frameDisp = Math.abs(vehicle.speed) * dt;
     const speedBlur =
-      pedaling && this.sm.phase !== 'countdown' ? Math.min(1, vehicle.speed / 72) ** 1.6 * 0.07 : 0;
+      pedaling && this.sm.phase !== 'countdown'
+        ? Math.min(0.18, (frameDisp / 0.925) * 0.12)
+        : 0;
     this.postfx.setSpeedBlur(speedBlur);
     this.brakeFlash = Math.max(0, this.brakeFlash - dt * 2.2);
     this.postfx.setFlash(this.brakeFlash);

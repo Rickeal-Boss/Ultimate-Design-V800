@@ -375,6 +375,12 @@ interface MasonryProfile {
    * 读作「整片墙的矿脉色差 / 大块水渍」，零均值（(field−0.5)）⇒ 不漂 lumMean。
    */
   bandLow: number;
+  /* ── R40 白石大板·**水平层缝强化**（tone-only，ashlar 专属；wall=0 ⇒ 分支不进、逐位不变）
+   * 参考图双通道判读："水平砌缝为主、水平层缝清晰"——当前实现四边缝等权（`edge` =
+   *   min(到竖缝, 到水平缝)），缺「水平主导」读法。本层在**水平床缝两侧**叠一层窄而柔的
+   *   暗带，并用已有 `grime` 场做低幅调制（缝深沿缝长轻微游走，不读作画死的黑线）。
+   * 只写 tone，**绝不碰 roughness[]/height[]** ⇒ ΔroughMean 结构性为 0。 */
+  courseAO: number;
 }
 
 const MASONRY: Record<'ashlar' | 'wall', MasonryProfile> = {
@@ -455,7 +461,13 @@ const MASONRY: Record<'ashlar' | 'wall', MasonryProfile> = {
     edgeChiselLo: 0.03,
     edgeChiselHi: 0.018,
     jointDepth: 0.1,
-    bandLow: 0.05
+    bandLow: 0.05,
+    /* ── R40 水平层缝强化（ashlar 专属，tone-only）──────────────────────────
+     * courseAO 0.06：在水平床缝两侧叠窄柔暗带（+grime 低幅调制 0.7~1.3×），把参考图
+     *   "水平砌缝为主 / 水平层缝清晰"做出来——当前四边缝等权，缺水平主导读法。
+     * 只写 tone ⇒ ΔroughMean=0；幅度按 256² 实测标定在 lumMean∈[−5,−0.3]、contrast≥70、
+     *   lumStd∈(20,30) 窗口内（见下方 R40 统计量日志）。 */
+    courseAO: 0.06
   },
   wall: {
     // R32：5×5 @ 2.4m/tile = 0.48m 见方（rows==cols，勿拉成长条）
@@ -502,6 +514,8 @@ const MASONRY: Record<'ashlar' | 'wall', MasonryProfile> = {
     edgeChiselHi: 0,
     jointDepth: 0,
     bandLow: 0,
+    /* R40：水平层缝强化同样只开给 ashlar（wall 保持 R37/R39 冻结态，逐位不变） */
+    courseAO: 0,
     jointShade: 0.88,
     seep: 0.9,
     edgeNick: 0.14
@@ -1208,6 +1222,16 @@ function prepMasonry(
            *      ② 大尺度色带/水渍（fbm 1×2 整数周期 ⇒ tile-aligned，零均值 ⇒ 不漂 lumMean）。 */
           t -= jointDeep * 0.6;
           if (bandField.length) t += (bandField[index] - 0.5) * prof.bandLow;
+          /* R40 白石大板·水平层缝强化（tone-only）：仅在**水平床缝两侧**叠窄柔暗带
+           * （dh = 到最近水平床缝的距离），用已有 grime 场低幅调制（0.7~1.3×）⇒ 缝深
+           * 沿缝长轻微游走，不读作画死的黑线。参考图"水平砌缝为主、水平层缝清晰"。
+           * 只写 tone、不碰 roughness[]/height[] ⇒ ΔroughMean 结构性为 0。
+           * amp=0（wall）⇒ `if` 不进 ⇒ 与 R39 冻结态逐位相同。 */
+          if (prof.courseAO > 0) {
+            const dh = Math.min(ly, rowH - ly) / jw;
+            const courseBand = 1 - smoothstep(halfJoint, bevelEnd * 1.35, dh);
+            t -= courseBand * prof.courseAO * (0.7 + 0.6 * grime) * (0.55 + 0.45 * weather);
+          }
 
           let rough = prof.jointRough + (prof.faceRough - prof.jointRough) * smoothstep(0.42, 0.95, bevel);
           rough += (reliefV - 0.5) * 0.08 * weather;
