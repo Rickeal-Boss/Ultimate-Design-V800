@@ -2117,6 +2117,24 @@ export function makeMainHall(): StoneBuckets {
      *   读法；但主理人判断"两个圆叠在一起"本身就是冗余 ⇒ 本版直接删除整个语汇，
      *   门洞上方改用"花格屏 + 小玫瑰窗"，立面只剩 **一个** 大圆（y62 玫瑰窗）。
      */
+    /* ══ R42-P1-D 中央拱特写加密（FBX 级细部；isLowDetail 守卫，低档 0 产出）════════
+     * ① 外层券（1.9m band）外缘再挂一圈小金卷叶（count 10 / size 0.5）：既有 8 片
+     *    卷叶（R30，半径 clearW/2=8、前脸 +0.65）只贴门洞线；本圈抬到半径
+     *    openHalf+1.2、前脸 +0.98（落在最外层 1.9m 券外沿），读作"双层券叶"的哥特
+     *    纵深感。② 拱顶锁石金饰（菱形金板 + 金尖）收口。只用既有
+     *    crocketRun/boxRot/spire（UV 由 pour 统一按 mesh 自身 bbox 归一）。 */
+    if (!isLowDetail()) {
+      const pApex = PORTAL_SPRING + rise + PORTAL_CUSP; // 44.0（拱顶）
+      pour(
+        b,
+        mapParts(
+          crocketRun({ halfW: openHalf + 1.2, rise: rise * 0.98, count: 10, size: 0.5, cusp: PORTAL_CUSP, side: 'both' }),
+          (g) => g.translate(0, PORTAL_SPRING, zFront + 0.98)
+        )
+      );
+      b.gold.push(boxRot('gold', 1.4, 1.4, 0.3, 0, pApex + 0.5, zFront + 1.0, Math.PI / 4));
+      b.gold.push(spire('gold', 0.5, 0, 1.7, 4, 0, pApex + 1.5, zFront + 1.0));
+    }
     // 门龛两侧尖拱窗列（R29 横向拓展：按 frontW 分 4 开间/侧，铺满 88m 立面）
     /* ── R39 ⑤ 比例修正（hero 窗）───────────────────────────────────────────
      * 实测硬伤：hero 尖窗高宽比 **3.33**（rise 7.0 / 净宽 2.1〔halfW .55×2 + frameOut .5×2〕），
@@ -2137,7 +2155,7 @@ export function makeMainHall(): StoneBuckets {
         pour(
           b,
           mapParts(
-            traceryWindowZ({ halfW: 0.55, rise: 9.5, cusp: 0.8, frameOut: 0.35, plateBack: 0.32, mullions: 3, lights: true, recess: true }),
+            traceryWindowZ({ halfW: 0.55, rise: 9.5, cusp: 0.8, frameOut: 0.35, plateBack: 0.32, mullions: 4, lights: true, recess: true }),
             (g) => g.translate(wx, 6.5, zFront)
           )
         );
@@ -2197,7 +2215,7 @@ export function makeMainHall(): StoneBuckets {
           pour(
             b,
             mapParts(
-              traceryWindowZ({ halfW: 0.85, rise: 15, cusp: 0.7, frameOut: 0.3, plateBack: 0.32, mullions: 3, lights: true, recess: true }),
+              traceryWindowZ({ halfW: 0.85, rise: 15, cusp: 0.7, frameOut: 0.3, plateBack: 0.32, mullions: 4, lights: true, recess: true }),
               (g) => g.translate(wx, 74, zFront)
             )
           );
@@ -2313,7 +2331,8 @@ export function makeMainHall(): StoneBuckets {
      * 88m 宽的立面顶部是一条平线 ⇒ 读作"白盒子"（verify/r29_c1/hall_front.png）。
      * 这里沿 frontW 铺一排 13 根小尖塔（16 tri/根）+ 顶部金饰线脚。 */
     {
-      const n = 13;
+      // R42-P1-D：檐口小尖塔 13 → 17（参考图「密集 crocket pinnacle」天际线；+4 根 ≈112 tri，间距同步收密）
+      const n = 17;
       for (let k = 0; k < n; k += 1) {
         const px = -frontW / 2 + 1.6 + (k * (frontW - 3.2)) / (n - 1);
         b.ashlar.push(box('ashlar', 1.5, 1.3, 1.5, px, frontH + 1.5, zFront - 1.2));
@@ -2535,9 +2554,34 @@ export function makeMainHall(): StoneBuckets {
           pinnacle: true,
           coping: true,
           goldStrips: true,
-          pairGap: 3.2
+          pairGap: 3.2,
+          detail: !isLowDetail() // R42-P1-D+：主殿前排飞扶壁开启基座线脚+柱身凹槽（hi-only）
         });
         pour(b, mapParts(fb, (g) => g.rotateY(-Math.PI / 2).translate(side * wx, 0, zFront)));
+        /* R42-P1-D（item1 飞券补强）：沿主飞券顶缘加 4 枚金肋（局部帧跨 depth 1.05 < 束带 1.4），
+         * 让 R41 已落地的飞扶壁从"光板斜撑"读作"金饰飞券"（参考图金是主构件）。
+         * 中心线复刻 flyingButtress 的 ② 主弧撑 cl（springY 12 / topY 78 / band 0.55），
+         * 取中间 4 点（两端留咬合）⇒ 4×6 座 = 24 肋 ≈ 288 tri。0 新材质/DC。 */
+        {
+          const sY = 12, tY = 78, rs = tY - sY;
+          const px0 = reach - pierW * 0.5;
+          const cl: Array<[number, number]> = [
+            [px0 + pierW * 0.28, sY + 0.10],
+            [reach * 0.82, sY + rs * 0.22],
+            [reach * 0.60, sY + rs * 0.46],
+            [reach * 0.36, sY + rs * 0.70],
+            [reach * 0.16, sY + rs * 0.90],
+            [0.12, tY - 0.10]
+          ];
+          const rot = new THREE.Matrix4().makeRotationY(-Math.PI / 2);
+          const trans = new THREE.Matrix4().makeTranslation(side * wx, 0, zFront);
+          const M = new THREE.Matrix4().multiplyMatrices(trans, rot);
+          for (let i = 1; i < cl.length - 1; i += 1) {
+            const rib = box('gold', 0.34, 0.36, 1.05, cl[i][0], cl[i][1] + 0.46, 0);
+            rib.applyMatrix4(M);
+            b.gold.push(rib);
+          }
+        }
       }
     }
     // ② 翼墙盲拱列（7 龛/侧，窗带 6..11.6 之上 y 14 起）

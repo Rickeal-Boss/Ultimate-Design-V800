@@ -205,7 +205,11 @@ export class Terrain {
     // （CLIFF_POLICY.nearCliffs='delete'）—— 巨型沙丘吞桥实证见文件头 ④。
     const rock = emptyPatch();
     this.buildGorge(rock);
-    const rockMesh = new THREE.Mesh(toGeometry(rock), this.material(ROCK_GAIN_NEAR, THREE.DoubleSide));
+    // R42-P0-A：峡谷内衬改 **FrontSide**（配合下方两侧岩壁 flip 翻转）。
+    // 探针实测（1344 网格射线）：岩壁面法线实际**朝外**，与文件旧注释「法线朝内」相反 ——
+    // 只改 side 不翻绕序 ⇒ 桥外仍被挡 297 格、谷内反而看不到岩壁。两处必须同改。
+    // 改后：bridge_side_low 桥外看穿、谷内仍见峡谷壁 28.4%、谷底保留 18.1%、封口不露穿。
+    const rockMesh = new THREE.Mesh(toGeometry(rock), this.material(ROCK_GAIN_NEAR, THREE.FrontSide));
     rockMesh.name = 'terrain-rock';
     rockMesh.frustumCulled = false;
     scene.add(rockMesh);
@@ -298,7 +302,10 @@ export class Terrain {
     const nz = Math.max(2, Math.round((zNear - zFar) / zStep));
     const ny = Math.max(2, Math.round((top - bed) / yStep));
 
-    // ── 两侧岩壁（法线朝走廊中心）──
+    // ── 两侧岩壁（R42-P0-A：绕序翻转为「正面朝走廊内」）──
+    // 原 `side > 0` 让法线朝**外**（与旧注释相反），DoubleSide 时桥外能看到背面实体 ⇒
+    // 与 ground 叠加把桥下柱列封死。改 `side < 0` 后配合 material FrontSide：
+    // 走廊内（玩家/桥上）看到岩壁正面，桥外背面被剔除 ⇒ 桥下柱列露出。
     for (const side of [-1, 1] as const) {
       addGrid(
         out,
@@ -317,7 +324,7 @@ export class Terrain {
           return rockTint(z / 30, j / ny, 0.15 + 0.85 * (j / ny));
         },
         ROCK_NEAR,
-        side > 0
+        side < 0
       );
     }
 

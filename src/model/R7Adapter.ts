@@ -1108,6 +1108,16 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: PaintId 
 
   const mergeResult = batchMergeStatic(model, {
     excludeObjects: dynamicNodes,
+    /* R42-P0-B-R7：hood 不参与 paint-green 合批（车内保留引擎盖前缘，与 V800 的
+     * hood-panel 同法）。病史（R41，R7Adapter.ts L1194 探针实证）：
+     *   `batch[body-lower,hood,front-fascia,tailgate] <paint-green>` 车内下半屏首命中
+     *   228 次(49.4%)；setPaintShadow(true) 整批隐藏 paint-green ⇒ 连引擎盖一起拿掉。
+     * 处置：只把 `hood`（R7 spec 组件 id = `hood`，材质 paint-green，顶级 leaf 无子件）
+     *   从合批摘出（excludeIds，不改合批核心）。hood 保持独立 mesh、复用同一 paint-green
+     *   实例（0 新实例）；它不在 paintShadowPairs 内（wireBatchPaintShadow 只认 batch/*、
+     *   L1173 暗面块只认 body-lower/root 自身 id）⇒ 车内 hood 恒可见、离车恢复。
+     * 代价：可见 DC +1；tri/材质实例/UV/外观不变。回退：删本 excludeIds 一行。 */
+    excludeIds: ['hood'],
     excludeMaterialIds: UV_CONTENT_MATERIAL_IDS,
     mergeTarget: model,
   });

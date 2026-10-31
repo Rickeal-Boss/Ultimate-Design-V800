@@ -322,6 +322,9 @@ export interface ButtressOpts {
   goldStrips?: boolean;
   /** 扶壁对：双墩 z 间距（>0 时同位置起双墩；参考图「3 对递减扶壁」；默认 0 单墩） */
   pairGap?: number;
+  /** R42-P1-D+：墩基线脚（3 级）+ 柱身下段竖凹槽（fluting）——主殿前排飞扶壁开启，
+   *  high 档；默认 false（gate/tower/innerCity 等既有调用零影响） */
+  detail?: boolean;
 }
 
 export function flyingButtress(o: ButtressOpts): DetailParts {
@@ -351,6 +354,30 @@ export function flyingButtress(o: ButtressOpts): DetailParts {
     if (o.goldStrips) {
       for (const sz of [-1, 1] as const) {
         p.gold.push(goldUV(box('gold', pierW * 0.5, pierH * 0.82, 0.14, pierX, baseY + 0.95 + pierH * 0.45, pz + sz * (depth / 2 + 0.02))));
+      }
+    }
+    /* R42-P1-D+：墩基线脚（3 级）+ 柱身下段竖凹槽（fluting；仅 detail 开启）。
+     * 落 ashlar 桶、0 新 DC/材质；锥形柱身(pierColumn 1→0.48)贴直凹槽会锥度穿帮 ⇒ 采用
+     * 「直段带槽基座」：在墩身下段套一节略宽的**棱柱直段**（pedW=pierW+0.16，盖住下段），
+     * 直面上排 8 道细凸棱（4 面各 2）读作凹槽，直线无锥度问题。共 12 个 box/pier。 */
+    if (o.detail) {
+      p.ashlar.push(box('ashlar', pierW + 1.55, 0.18, depth + 1.55, pierX, baseY + 0.09, pz)); // 下大底脚
+      p.ashlar.push(box('ashlar', pierW + 0.95, 0.14, depth + 0.95, pierX, baseY + 0.52, pz));  // 中部凹弧台阶
+      p.ashlar.push(box('ashlar', pierW + 0.28, 0.18, depth + 0.28, pierX, baseY + 0.99, pz));  // 柱脚颈环
+      const pedH = Math.min(2.6, pierH * 0.52);
+      const pedY0 = baseY + 1.10;
+      const pedW = pierW + 0.24;
+      const pedYc = pedY0 + pedH / 2;
+      p.ashlar.push(box('ashlar', pedW, pedH, pedW, pierX, pedYc, pz)); // 直段带槽基座体
+      p.ashlar.push(box('ashlar', pedW + 0.08, 0.16, pedW + 0.08, pierX, pedY0 + pedH, pz)); // 柱身槽段顶压顶环（框出凹槽带）
+      const ribW = 0.24, ribD = 0.16;
+      const faceOff = pedW / 2 + ribD / 2 - 0.03; // 贴面外凸（读作竖棱/凹槽）
+      const sideOff = pedW * 0.26;
+      for (const s of [-1, 1] as const) {
+        p.ashlar.push(box('ashlar', ribD, pedH, ribW, pierX + s * faceOff, pedYc, pz + sideOff)); // ±x 面
+        p.ashlar.push(box('ashlar', ribD, pedH, ribW, pierX + s * faceOff, pedYc, pz - sideOff));
+        p.ashlar.push(box('ashlar', ribW, pedH, ribD, pierX + sideOff, pedYc, pz + s * faceOff)); // ±z 面
+        p.ashlar.push(box('ashlar', ribW, pedH, ribD, pierX - sideOff, pedYc, pz + s * faceOff));
       }
     }
   }

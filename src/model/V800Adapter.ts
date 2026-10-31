@@ -4152,6 +4152,26 @@ export function createV800CarAdapter(tier: QualityTier = 'high', paintId: PaintI
   }
 
   const batchStats = batchMergeStatic(model, {
+    /* ══ R42-P0-B：hood-panel 不参与 paint-upper 合批（车内保留引擎盖前缘）══════════════
+     * 病史（R41，外部视觉定罪）：车内机位 `setPaintShadow(true)` 把 paint-* 批次整批
+     *   visible=false。但 paint-upper 合批把 `body-lower / hood-panel / roof-panel /
+     *   front-end` **并成同一个 `batch/paint-upper` mesh**（探针实证 `.qa/r41_cabin`：
+     *   `batch[body-lower,hood-panel,roof-panel,front-end] <paint-upper>`）⇒ 整批隐藏必然
+     *   把引擎盖也一起拿掉，车内前挡风内形成「无引擎盖前缘的空洞」。
+     * 处置：**只把 hood-panel 从合批里摘出**（`excludeIds`，用 batchMergeStatic 内置的
+     *   组件 ID 精确排除通道，**不改合批核心**）。它保持独立 mesh、并**复用同一
+     *   paint-upper 材质实例**（0 新实例，材质实例预算 80/80 不动）。`setPaintShadow`
+     *   仍整批隐藏 `batch/paint-upper`（body-lower/roof-panel/front-end 等挡视线件），
+     *   但 hood-panel **不在 `paintShadowPairs` 内**（`wireBatchPaintShadow` 只认 `batch/*`
+     *   产出件；L4601 的 R19f 暗面块只认 body-lower/root 自身 id）⇒ 车内保持可见 =
+     *   透过风挡看到引擎盖前缘 + 前方道路；离车恢复全部（hood 从不需要恢复，一直可见）。
+     * 代价与口径：
+     *   · **可见 DC 73 → 74（+1）**：hood-panel 由「并入 1 个批次」变为「独立 1 个 mesh」；
+     *   · **tri / 材质实例 / UV / 外观逐像素不变**（几何与材质原样，仅批处理拓扑改变；
+     *     hood 与 batch 共用同一 paint-upper 实例，collectMaterials 按 uuid 去重仍计 1）；
+     *   · 阴影 pass：**不变**（实测 hood-panel = 236 tri、castShadow=false —— 已被 R38-E2
+     *     「<500 tri 关 caster」规则关掉 ⇒ 拆分后不新增 caster DC，阴影 tri 也不变）。
+     * 回退：删掉下面 `excludeIds: ['hood-panel']` 一行即可退回 R41「整批隐藏」行为。 */
     excludeObjects: [
       ...wheels.map((w) => w.spin),
       ...caps,
@@ -4162,6 +4182,7 @@ export function createV800CarAdapter(tier: QualityTier = 'high', paintId: PaintI
       ...r23Exclude,
       ...r24Exclude,
     ],
+    excludeIds: ['hood-panel'], // R42-P0-B：引擎盖保持独立 mesh（车内不随 paint 批整批隐藏）
     excludeMaterialIds: UV_CONTENT_MATERIAL_IDS
   });
   if (batchStats.problems.length > 0) {

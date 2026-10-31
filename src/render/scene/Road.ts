@@ -35,7 +35,7 @@ import { mergeSafe } from '../../util/geo';
 import { TRACK } from '../../config/physics';
 import { canvasTexture, makeCanvas, paintNoise } from '../../util/canvasTex';
 import { makeLcg } from '../../util/math';
-import { MAIN_HALL, R27_PALETTE, VIADUCT } from './r28Layout';
+import { GORGE_HALF, MAIN_HALL, R27_PALETTE, VIADUCT } from './r28Layout';
 
 /**
  * 河谷几何契约（R14 订立，**R32 C-6 起只剩契约、视觉层实现已删除**）。
@@ -270,7 +270,11 @@ export class Road {
   private buildGround(scene: THREE.Scene, center: number): void {
     const holeNear = VIADUCT.zNear; // +60（车行上游侧 = 车后方）
     const holeFar = VIADUCT.zFar; // -358.5（= GATE.z，城门中心）
-    const holeHalfX = VIADUCT.totalHalf; // 16.72
+    // R42-P0-A：地面开槽半宽改用独立 `GORGE_HALF`(18)，不再跟桥体半宽 `totalHalf`(12.6)。
+    // 原因：桥墩柱束中心 x≈12.1 紧贴桥体边缘 12.6，槽若只挖到 12.6，东西两块地面 slab
+    // 就从 ±12.6 起铺，低机位掠射角下糊成一堵贴脸墙挡住桥下通天柱列（消去法实测 48.1%
+    // 首命中）。加宽到 18 后桥墩露出 306 采样、且不穿帮。详见 r28Layout.ts `GORGE_HALF` 长注。
+    const holeHalfX = GORGE_HALF;
     const southEdge = center - 3000; // -3870
     const northEdge = center + 3000; // 2130
 

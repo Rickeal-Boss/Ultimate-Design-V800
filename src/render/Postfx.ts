@@ -173,6 +173,37 @@ export class Postfx {
     this.composer.render();
   }
 
+  /**
+   * 加载期预热（R42-P1）：把 EffectComposer **全部 pass 的 program** 一次编译完。
+   *
+   * 为什么需要（这是 `prewarmGpu()` 的结构性盲区，本波补）：
+   *   `renderer.compile(scene, camera)` 与 `renderer.render(scene, cam)` 都只走
+   *   **场景材质**这条路径 —— 它们**不会**触达 composer 的
+   *   `UnrealBloomPass`（自带 ~10 个内部材质/blur 链）/ `ShaderPass`(SpeedBlur) /
+   *   `OutputPass` 的 program。这些 program 全都要等**首帧 `postfx.render()`**
+   *   才惰性编译（弱机上可达数十 ms 的一次性首帧尖峰）。
+   * 用户已放行首建时长 ⇒ 用 **8×8 小目标**先渲一帧 composer，把后处理 program 全部
+   *   编译完。program 编译与 RT 尺寸无关，8×8 把 14 个全屏 pass 的填充成本压到可忽略
+   *   （远小于全分辨率渲一帧），纯加载期开销。
+   * 韧性：整段 try/catch —— 预热是「收益项」不是「正确性项」，失败最坏退回首帧编译，
+   *   绝不允许它阻断开局；finally 无条件把 composer 尺寸还原成真实值，运行期观感/行为
+   *   逐位不变（首帧 `postfx.render()` 复用的是同一批 program，直接命中缓存）。
+   */
+  prewarm(): void {
+    const w = this.width;
+    const h = this.height;
+    try {
+      this.composer.setSize(8, 8);
+      this.composer.render();
+    } catch {
+      /* 预热失败最坏退回首帧编译，不影响玩法 */
+    } finally {
+      // 还原真实尺寸（这一步会重建 RT，但同样只发生在加载期；与 resize() 同路径）
+      this.composer.setSize(w, h);
+      this.applyBloomSize();
+    }
+  }
+
   dispose(): void {
     this.composer.dispose();
   }

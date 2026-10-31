@@ -237,11 +237,26 @@ export function createQualitySettings(overrideTier?: QualityTier): QualitySettin
  *
  * perf-r14 追加：降档步长 0.25 → 0.125（pixelRatio），把单次 RT 重建的画面跳变减半；
  * 冷却保持 8s，最多 4 次即到底（1.5→1.0），总 hitch 次数不变。
+ *
+ * ══ R42-P1 降档「连续 2 窗」改造（治「越快越掉帧」残留正反馈，主理人已裁决）══════
+ * 背景（R42 复算）：真正造成可见 hitch 的不是分区递交量阶跃（那 <0.5ms），而是
+ *   **pixelRatio 变更触发的 composer 全 RT 重建（估 5~80ms/次）**。旧逻辑「单窗 fps<42
+ *   即降档」在高速段（负载最高、帧时抖动最大）会被**单个瞬时坏窗**（一次性 hitch / GC /
+ *   切后台回补 / 分区弹入帧）误触发 ⇒ 降档 → 又一次 RT 重建 hitch → 帧更差 → 冷却后
+ *   再降 ⇒ 「1 坏窗 → 降档 → RT 重建 → 更坏」正反馈，且误判概率 ∝ 车速。
+ * 改法：降档由「单窗」改「**连续 2 窗** fps<42」（与升档「连续 3 窗」同构、但更急 ——
+ *   降档 2 窗 < 升档 3 窗）。任一窗 fps≥42（含 42~58 死区）即断连，反复在 42~45 抖的
+ *   机器不会被误降档。代价：真弱机最坏多等 1 个统计窗（2s）才获保护 —— 主理人裁定可接受。
+ * 值守：冷却 8s / 阈值 42·58 / 步长 0.125 / minPixelRatio 一律不动，只加「连续窗」闸。
+ * 计数口径：`slowStreak` 只在 fps<42 且仍在 floor 之上时自增；其余分支清零（与 fastStreak
+ *   对称）。冷却期内两 streak 冻结（不进分支），与旧 fastStreak 行为一致。
  */
 export class AdaptiveQuality {
   private frames = 0;
   private time = 0;
   private fastStreak = 0;
+  /** R42-P1：连续「fps<42」统计窗计数（降档需 ≥2 窗，过滤单窗瞬时 hitch 误触发） */
+  private slowStreak = 0;
   private currentRatio: number;
   /** 距上次 pixelRatio 变更的冷却计时（s） */
   private cooldown = 0;
@@ -267,11 +282,19 @@ export class AdaptiveQuality {
     const floor = this.settings.minPixelRatio;
     if (this.cooldown > 0) return 0; // 冷却期内不做任何变更（RT 重建 hitch 代价高，必须拉开间隔）
     if (fps < 42 && this.currentRatio > floor) {
-      this.currentRatio = Math.max(floor, this.currentRatio - 0.125);
-      this.cooldown = 8;
+      // R42-P1：**连续 2 窗** fps<42 才降档（过滤单窗瞬时 hitch 触发的无谓 RT 重建）。
+      // 第 1 个坏窗只累计、不降档（也不设冷却，好让下一个好窗能立刻清零重启）；
+      // 第 2 个连续坏窗才真正降档 + 设 8s 冷却。
+      this.slowStreak += 1;
       this.fastStreak = 0;
+      if (this.slowStreak >= 2) {
+        this.currentRatio = Math.max(floor, this.currentRatio - 0.125);
+        this.cooldown = 8;
+        this.slowStreak = 0;
+      }
     } else if (fps > 58 && this.currentRatio < this.settings.pixelRatio) {
       this.fastStreak++;
+      this.slowStreak = 0;
       if (this.fastStreak >= 3) {
         this.currentRatio = Math.min(this.settings.pixelRatio, this.currentRatio + 0.125);
         this.cooldown = 8;
@@ -279,6 +302,7 @@ export class AdaptiveQuality {
       }
     } else {
       this.fastStreak = 0;
+      this.slowStreak = 0;
     }
     return this.currentRatio - before;
   }

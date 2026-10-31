@@ -809,16 +809,22 @@ export class Game {
       // revealAllZones 把 lastViewerZ 置 NaN ⇒ 这里必完整重算（显隐 + LOD），还原真实态
       this.castle.updateViewerZ(this.rig.camera.position.z);
       const tRestore = performance.now();
+      /* R42-P1：后处理 composer program 预热（renderer.compile/render 只覆盖场景材质，
+       * 不覆盖 bloom/blur/output pass ⇒ 首帧 postfx.render() 才编译，一次性首帧尖峰）。
+       * 8×8 小目标渲一帧 composer 把后处理 program 全部编译完，纯加载期开销。 */
+      this.postfx.prewarm();
+      const tPostfx = performance.now();
       if (import.meta.env.DEV) {
         const compile = tCompile - tStart;
         const rtWarmHi = tWarmHi - tCompile;
         const rtWarmLo = tWarmLo - tWarmHi;
         const restore = tRestore - tWarmLo;
-        const total = tRestore - tStart;
+        const postfx = tPostfx - tRestore;
+        const total = tPostfx - tStart;
         console.info(
           `[R41] 加载期 GPU 预热 ${total.toFixed(0)}ms = compile ${compile.toFixed(0)}` +
             ` + rtWarmHi(8×8) ${rtWarmHi.toFixed(0)} + rtWarmLo(8×8, ${loWarmed} 区) ${rtWarmLo.toFixed(0)}` +
-            ` + restore ${restore.toFixed(0)}` +
+            ` + restore ${restore.toFixed(0)} + postfx(8×8) ${postfx.toFixed(0)}` +
             ` | geometries hi=${geoAfterHi}→lo=${geoAfterLo} (+${geoAfterLo - geoAfterHi})` +
             ` programs hi=${progAfterHi}→lo=${progAfterLo} (+${progAfterLo - progAfterHi})`
         );
