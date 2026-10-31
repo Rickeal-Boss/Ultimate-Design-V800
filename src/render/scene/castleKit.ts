@@ -2514,8 +2514,18 @@ export function makeMainHall(): StoneBuckets {
         [21.5, 6.2, 2.3],
         [29.5, 5.4, 2.0]
       ] as const) {
+        /* ── R41 悬空修复（用户主诉：主殿左右两边的柱子悬空了）──────────────────
+         * 病根：原 `baseY: 2.7` 是**殿身底**（殿身 y2.7..62.7），但飞扶壁外墩落在
+         *   z≈zFront+5.7 的**广场**上（台基 frontDepth 只到 z=−1295.5，墩在 −1294.3
+         *   即台基之外的广场），广场承托面 y≈0.012。⇒ 基座底 minY=2.70 悬空 **2.69m**，
+         *   副拱肋最低点 1.42 也悬空（probe2 实测 `.img2threejs/r41_probe2_bundle.mjs`）。
+         *   ⚠ 探针"支撑面检索"命中的 y[2.70,3.20] 承托件其实是**它自己的基座**
+         *     （自证伪影），不是地面 —— 别拿它当"已接合"的证据。
+         * 修复：baseY 2.7 → **−0.02**（= ground 顶 y−0.02；x=13.5 处步道 0.014 会略埋
+         *   3.4cm、x=21.5/29.5 处与地面齐平；基座 1.1m 宽的外扩体把这点埋深完全盖住）。
+         *   零 tri 变化：pierColumn 是 4 面柱、高度不进面数；box 恒 12 tri。 */
         const fb = flyingButtress({
-          baseY: 2.7,
+          baseY: -0.02,
           springY: 12,
           topY: 78,
           reach,
@@ -2633,8 +2643,10 @@ export function makeMainHall(): StoneBuckets {
      * ⑧ 主尖塔簇 ×2（pinnacleCluster：前排段冠座两肩）+ 祭坛台座（marble）。 */
     for (const side of [-1, 1] as const) {
       for (const wx of [52, 70]) {
+        /* R41 同款悬空修复：两翼飞扶壁墩落在 |x|=52/70 的广场地面（y−0.02），
+         * 原 baseY 2.7 同样悬空 2.69m（probe2 实测）。零 tri 变化。 */
         const fb = flyingButtress({
-          baseY: 2.7,
+          baseY: -0.02,
           springY: 34,
           topY: 62,
           reach: 9,

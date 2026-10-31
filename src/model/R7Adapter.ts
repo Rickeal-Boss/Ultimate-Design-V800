@@ -1188,9 +1188,26 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: PaintId 
     }
     console.info(`[R7Adapter] 内舱暗面配对 → ${paintShadowPairs.length} 组（含合批批次）`);
   })();
+  /**
+   * ══ R41 车内机位「车漆外壳整批隐藏」（与 V800 同构，用户令：遮挡需下移或直接去除）══
+   * 实测定罪（`tools/r41_cabin_probe.mjs`）：R7 cabin 下半屏(py≥95,462采样) 首命中
+   *   `batch[body-lower,hood,front-fascia,tailgate] <paint-green>` **228 次(49.4%)**、
+   *   距 0.30~0.83m；另 `dash-upper <leather-plum>` 44(9.5%) 上缘 py≈304。
+   *   ⇒ 遮挡主体是车漆外壳（引擎盖/机盖），比 V800 更严重（近半屏）。
+   * 处置：车内机位整批 visible=false（用户授权"直接去除"），离车恢复。
+   *   露出的仪表台/方向盘距 0.76~0.96m，全在机盖之后 ⇒ 看到的是该看的东西。
+   * 0 tri / 0 DC；外部机位逐像素不变。回退：删 `p.mesh.visible = !interior;` 一行。
+   * ⚠ 真机目检项：车内视角露出的仪表台/方向盘无空洞、侧窗与顶棚完整。
+   */
   const setPaintShadow = (interior: boolean): void => {
     for (const p of paintShadowPairs) {
-      p.mesh.material = interior ? p.interior : p.exterior;
+      if (interior) {
+        p.mesh.visible = false;
+        p.mesh.material = p.interior;
+      } else {
+        p.mesh.material = p.exterior;
+        p.mesh.visible = true;
+      }
     }
   };
 

@@ -698,25 +698,32 @@ export class Game {
    * （只在首次上传/编译时自增），`__r39perf.dump()` 里的 geo/prog 序列能直接看到
    * 「行车段还在长」的那些帧。
    *
-   * 做法（两步都不改变任何几何/密度，只是**提前**做）：
+   * 做法（三步都不改变任何几何/密度，只是**提前**做）：
    *   ① `renderer.compile(scene, camera)`：把场景里全部材质（含当前不可见的分区、
    *      内饰件、特效粒子）的 program 一次编译完；
    *   ② `castle.revealAllZones()` 把全部分区放开成近档，用一台「看全场景」的相机
-   *      渲一帧到 **8×8 离屏 RT** —— 每个 mesh 都真正走一次绘制流水线 ⇒ buffer 上传完；
-   *      渲到离屏小目标 ⇒ 屏幕上不会闪一帧「全部分区同时出现」。
+   *      渲一帧到 **8×8 离屏 RT** —— 每个 mesh 都真正走一次绘制流水线 ⇒ **hi 档**
+   *      geometry 的 buffer 上传完；渲到离屏小目标 ⇒ 屏幕上不会闪一帧「全部分区同时出现」。
+   *   ③ **R41-M3 远档 lo 预热**（本波补的结构性漏洞，见方法内长注）：revealAllZones
+   *      只把 mesh.geometry 置成 `hi`，那一帧离屏渲染**只上传了 hi 档**。远档 `zv.lo`
+   *      （buildFarTier 产出，从未被任何绘制真正绑定）要等运行时车驶远、updateViewerZ
+   *      → setZoneTier 换几何那一刻 GPU 才首次建 buffer+上传 = 冷启动 hitch，且频率
+   *      ∝ 车速（越快越密）。这里临时把有 zv.lo 的 mesh 切到 lo 再渲一帧 8×8，把 lo
+   *      buffer 上传也挪到加载期，渲完 finally 还原 hi，随后照旧 updateViewerZ 重设档位。
    * 随后 `updateViewerZ(相机 z)` 还原真实显隐态（revealAllZones 会把 lastViewerZ 置
-   * NaN，所以这里一定能重算）。
+   * NaN，所以这里一定能重算，档位按真实机位重设，行为与改前逐位一致）。
    *
-   * 成本：一次全场景绘制 + 一次全材质编译，只发生在加载期（用户已授权）。
+   * 成本：一次全材质编译 + 两帧 8×8 全场景离屏绘制（hi + lo），只发生在加载期（用户已授权）。
    * 失败兜底：整体 try/catch —— 预热失败最坏只是退回「首见即上传」的老行为，
    * 绝不允许它把开局拖死（QA 钩子 `#noprewarm` 可在 DEV 下跳过，用于 A/B）。
    */
   private prewarmGpu(): void {
     try {
-      /* 分段计时（R39 主理人要求）：三段的绝对增量必须可分——
-       *   compile   = `renderer.compile` 全材质 program 编译（真机预期最大的一段）；
-       *   rtWarm    = 8×8 离屏全场景渲染（含 400k tri 的 buffer 首传）；
-       *   restore   = revealAllZones 后的 updateViewerZ 还原。
+      /* 分段计时（R39 主理人要求，R41 增 lo 段）：四段的绝对增量必须可分——
+       *   compile    = `renderer.compile` 全材质 program 编译（真机预期最大的一段）；
+       *   rtWarmHi   = 8×8 离屏全场景渲染（hi 档 geometry 的 buffer 首传）；
+       *   rtWarmLo   = R41-M3：切远档 lo 再渲一帧 8×8（lo 档 geometry 的 buffer 首传）；
+       *   restore    = revealAllZones 后的 updateViewerZ 还原。
        * 真机与 SwiftShader 的量级差一个数量级以上，故只在 DEV 打，且必须分段。 */
       const tStart = performance.now();
       this.renderer.compile(this.scene, this.rig.camera);
@@ -729,33 +736,102 @@ export class Game {
       cam.lookAt(0, 0, -640);
       const rt = new THREE.WebGLRenderTarget(8, 8);
       this.renderer.setRenderTarget(rt);
+
+      // ---- ① 近档 hi：revealAllZones 已把全部分区强制 hi + fade=1，渲一帧上传 hi buffer ----
       this.renderer.render(this.scene, cam);
+      const tWarmHi = performance.now();
+      const geoAfterHi = this.renderer.info.memory.geometries;
+      const progAfterHi = this.renderer.info.programs?.length ?? 0;
+
+      /* ══ R41-M3 · 远档 lo geometry 预热（结构性根因修复，只在 Game.ts，不碰 castle.ts）══
+       * 根因（R40 已定性）：revealAllZones()（castle.ts）把每个 zoneView 的 tier 强制设 hi
+       * 并把 mesh.geometry 指向 hi。⇒ 上面那帧 8×8 离屏渲染**只上传了 hi 档 geometry**。
+       * 远档 lo geometry 由 buildFarTier()（castle.ts，仅 high 档建）产出、存在 `zv.lo`，
+       * 但在加载期从未被任何绘制真正绑定；要等运行时车驶远、updateViewerZ→setZoneTier
+       * 把同一 mesh 的 geometry 引用换成 lo 那一刻，GPU 才首次为 lo 建 buffer + 上传
+       * = 冷启动 hitch。相邻分区中心约 226m，55m/s 每 ~4.1s 触发一次换档、10m/s 每
+       * ~22.6s 一次 ⇒ 这类 hitch 频率 ∝ 车速（约 5.5×），正是用户「越快越掉帧」的结构项。
+       *
+       * 做法：临时把有 zv.lo 的 mesh 切到 lo（同 mesh 换 geometry 引用 + 关视锥剔除，
+       * 保证这一帧必走绘制流水线 ⇒ buffer 必上传）再渲一帧 8×8；渲完用 finally 无条件
+       * 还原 hi geometry 与原 frustumCulled，绝不让预热态泄漏到首帧。zoneViews 是 castle
+       * 运行时私有字段，按 DEV 探针惯例（本文件 L1481）结构化类型断言读取，不新增 castle.ts
+       * 公开接口。档位不在此处理：revealAllZones 已把 lastViewerZ 置 NaN，结尾 updateViewerZ
+       * 必完整重算显隐 + LOD，按真实机位重设（与改前逐位一致）。 */
+      const zones = (this.castle as unknown as {
+        zoneViews?: Array<{
+          mesh: THREE.Mesh;
+          hi: THREE.BufferGeometry;
+          lo?: THREE.BufferGeometry;
+          tier: 'hi' | 'lo';
+        }>;
+      }).zoneViews;
+      let loWarmed = 0;
+      // QA A/B 钩子（DEV only，构建产物为死代码）：`#r41hionly` 跳过 lo 档预热，
+      // 复现 R40「只预热 hi」基线，供探针逐帧比对「运行时首进远档 geometry 增量」。
+      // ⚠ 键名不能含子串 `noprewarm`：入口守卫 `hash.includes('noprewarm')` 会把整段
+      // prewarmGpu 一起跳过（那样测的是「完全不预热」而非「只预热 hi」），A/B 口径就废了。
+      const skipLoWarm = import.meta.env.DEV && window.location.hash.includes('r41hionly');
+      if (zones && !skipLoWarm) {
+        const swapped: Array<{
+          mesh: THREE.Mesh;
+          hi: THREE.BufferGeometry;
+          frustumCulled: boolean;
+        }> = [];
+        for (const zv of zones) {
+          if (!zv.lo) continue;
+          // 记录原态，供 finally 逐位还原
+          swapped.push({ mesh: zv.mesh, hi: zv.hi, frustumCulled: zv.mesh.frustumCulled });
+          zv.mesh.geometry = zv.lo;
+          // 8×8 离屏相机虽能俯视全覆盖，但显式关剔除可 100% 保证这些 mesh 进入绘制
+          // 流水线（buffer 上传由「真正被绘制」触发，不受相机远裁剪/包围球偶然性影响）。
+          zv.mesh.frustumCulled = false;
+        }
+        try {
+          if (swapped.length > 0) {
+            this.renderer.render(this.scene, cam);
+            loWarmed = swapped.length;
+          }
+        } finally {
+          // 无论渲染是否抛错，逐位还原 hi 几何与剔除态 —— 预热是收益项，绝不能污染首帧态
+          for (const s of swapped) {
+            s.mesh.geometry = s.hi;
+            s.mesh.frustumCulled = s.frustumCulled;
+          }
+        }
+      }
+      const tWarmLo = performance.now();
+      const geoAfterLo = this.renderer.info.memory.geometries;
+      const progAfterLo = this.renderer.info.programs?.length ?? 0;
+
       this.renderer.setRenderTarget(null);
       rt.dispose();
-      const tWarm = performance.now();
+      // revealAllZones 把 lastViewerZ 置 NaN ⇒ 这里必完整重算（显隐 + LOD），还原真实态
       this.castle.updateViewerZ(this.rig.camera.position.z);
       const tRestore = performance.now();
       if (import.meta.env.DEV) {
         const compile = tCompile - tStart;
-        const rtWarm = tWarm - tCompile;
-        const restore = tRestore - tWarm;
+        const rtWarmHi = tWarmHi - tCompile;
+        const rtWarmLo = tWarmLo - tWarmHi;
+        const restore = tRestore - tWarmLo;
         const total = tRestore - tStart;
         console.info(
-          `[R39] 加载期 GPU 预热 ${total.toFixed(0)}ms = compile ${compile.toFixed(0)}` +
-            ` + rtWarm(8×8 全场景) ${rtWarm.toFixed(0)} + restore ${restore.toFixed(0)}` +
-            ` | geometries=${this.renderer.info.memory.geometries}` +
-            ` programs=${this.renderer.info.programs?.length ?? 0}`
+          `[R41] 加载期 GPU 预热 ${total.toFixed(0)}ms = compile ${compile.toFixed(0)}` +
+            ` + rtWarmHi(8×8) ${rtWarmHi.toFixed(0)} + rtWarmLo(8×8, ${loWarmed} 区) ${rtWarmLo.toFixed(0)}` +
+            ` + restore ${restore.toFixed(0)}` +
+            ` | geometries hi=${geoAfterHi}→lo=${geoAfterLo} (+${geoAfterLo - geoAfterHi})` +
+            ` programs hi=${progAfterHi}→lo=${progAfterLo} (+${progAfterLo - progAfterHi})`
         );
         // 首屏预算告警线（主理人口径）：>2500ms 说明真机上这一段过重，需要拆帧或延后
         if (total > 2500) {
           console.warn(
-            `[R39] 预热耗时 ${total.toFixed(0)}ms 超首屏预算 2500ms —— 申请拆帧执行（当前为加载屏内同步）`
+            `[R41] 预热耗时 ${total.toFixed(0)}ms 超首屏预算 2500ms —— 申请拆帧执行（当前为加载屏内同步）`
           );
         }
       }
     } catch (e) {
       // 预热是「收益项」不是「正确性项」：失败只回退到惰性加载，不影响玩法
-      console.warn('[R39] GPU 预热失败（已忽略，退回惰性上传）：', e);
+      console.warn('[R41] GPU 预热失败（已忽略，退回惰性上传）：', e);
     }
   }
 

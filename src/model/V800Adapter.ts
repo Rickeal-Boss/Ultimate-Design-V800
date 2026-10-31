@@ -4617,9 +4617,35 @@ export function createV800CarAdapter(tier: QualityTier = 'high', paintId: PaintI
     }
     console.info(`[V800Adapter] 内舱暗面配对 → ${paintShadowPairs.length} 组（含合批批次）`);
   })();
+  /**
+   * ══ R41 车内机位「车漆外壳整批隐藏」（用户令：方向盘区域材质遮挡需下移或直接去除）══
+   * 病史：R19/R19c 切 BackSide → 单壳实心体被剔除、看穿进壳体、满屏暗色（更糟）；
+   *       R19f 改「换暗漆克隆保留实体」→ 车内仍是一整块深灰面。
+   * 本轮实测定罪（`tools/r41_cabin_probe.mjs`，主理人独立复跑，屏幕 1080×608 口径）：
+   *   V800 cabin 下半屏(py≥95,462采样) 首命中 `batch[body-lower,hood-panel,roof-panel,
+   *   front-end] <paint-upper>` **150 次(32.5%)**、距 0.42~0.69m；中心列 py456–608
+   *   全是它。R7 同族 `<paint-green>` 更狠 **228(49.4%)**。
+   *   ⇒ 用户截图里那块「深灰褐大面板」= 引擎盖/甲板（y≈1.09 全宽平顶）从车内看的暗漆面，
+   *     **不是**仪表台几何过高，也**不是**方向盘偏高（方向盘在它后面 0.6~0.76m）。
+   * 处置（用户授权「直接去除」）：车内机位把 paint-* 外壳批次 **visible=false 整批不画**，
+   *   离车无条件恢复。为什么这次不会重蹈 R19c 覆辙：R19c 是改 side（表面还在、反面朝内
+   *   把整屏填满）；本方案是把这块面**整个拿掉**，露出的正是它后面的仪表台/三联屏/方向盘
+   *   （探针实测这三者距 0.60~0.73m，全在甲板之后）——即用户要的「看到该看到的东西」。
+   * 代价：0 tri / 0 DC（车内机位运行时可见性，静态预算不变）；外部三机位逐像素不变。
+   * ⚠ 真机目检项（沙箱无 GPU 浏览器，本机无法出图）：确认车内视角下露出的仪表台/屏幕/
+   *   方向盘无空洞、侧窗与车顶（cabin-roof-carpet 独立件）仍完整。回退：删本函数中
+   *   `p.mesh.visible = !interior;` 一行即退回 R19f 的「染暗保留」行为。
+   */
   const setPaintShadow = (interior: boolean): void => {
     for (const p of paintShadowPairs) {
-      p.mesh.material = interior ? p.interior : p.exterior;
+      if (interior) {
+        // 车内：整批隐藏（材质级再兜一层，防合批 mesh 被别的路径重新置可见）
+        p.mesh.visible = false;
+        p.mesh.material = p.interior;
+      } else {
+        p.mesh.material = p.exterior;
+        p.mesh.visible = true;
+      }
     }
   };
 

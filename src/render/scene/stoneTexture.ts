@@ -466,8 +466,13 @@ const MASONRY: Record<'ashlar' | 'wall', MasonryProfile> = {
      * courseAO 0.06：在水平床缝两侧叠窄柔暗带（+grime 低幅调制 0.7~1.3×），把参考图
      *   "水平砌缝为主 / 水平层缝清晰"做出来——当前四边缝等权，缺水平主导读法。
      * 只写 tone ⇒ ΔroughMean=0；幅度按 256² 实测标定在 lumMean∈[−5,−0.3]、contrast≥70、
-     *   lumStd∈(20,30) 窗口内（见下方 R40 统计量日志）。 */
-    courseAO: 0.06
+     *   lumStd∈(20,30) 窗口内（见下方 R40 统计量日志）。
+     * ── R41 贴图极致细化：0.06 → **0.13**（R40 台账明示"0.12~0.15 仍全绿"的授权余量）──
+     * 用户主诉"贴图也需要极致细化"。参考图 7cd7329c 的水平砌缝是**主导语汇**，0.06 在
+     *   近景仍偏弱。0.13 让水平层缝读法明确、同时保留 grime 沿缝游走（不画死黑线）。
+     * 判据不变（r37_texture.test.ts）：|ΔlumMean| ≤ 5（R40 已用 1.410，余 3.59）、
+     *   contrast ≥ 70、lumStd ∈ (20,30)、roughMean 逐位不变（tone-only ⇒ 结构性 0）。 */
+    courseAO: 0.13
   },
   wall: {
     // R32：5×5 @ 2.4m/tile = 0.48m 见方（rows==cols，勿拉成长条）

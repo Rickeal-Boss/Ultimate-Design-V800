@@ -461,10 +461,20 @@ export const R27_PALETTE = {
   goldBright: 0xf3ca88,
   /** 石板路面（StoneFloor）。L≈64，是白石(L≈220) 的 0.29 ⇒ **别做成中灰** */
   roadDark: 0x413f3d,
-  /** 崖体岩石（Rock_CliffCoastal5）。细节对比 13.7 = 白石 2 倍 ⇒ 岩石强噪声、白石要平 */
-  rockCliff: 0x665a4d,
-  /** 暖岩（DarkRockDesert） */
-  rockWarm: 0x816e55
+  /**
+   * 崖体岩石（Rock_CliffCoastal5）。细节对比 13.7 = 白石 2 倍 ⇒ 岩石强噪声、白石要平。
+   * ══ R41 去棕（用户主诉：桥梁及 castle 外部区域的棕色材质隔断遮住下方细节）══════
+   * 改前 `0x665a4d`（暖棕，B−R −25）在低机位掠射角下整片糊成"棕色挡墙"：
+   * 探针实测（`.img2threejs/r41_probe_out.txt` + probe2 消去法）桥侧低机位
+   * `ground` 首命中 @2.8m、桥头引道 `ground` @31.7m → `terrain-rock` @84.2m，
+   * 桥下通天柱列/拱券全部被棕色地形面挡在后面。
+   * 且文件头 §① 自述「参考图里城堡两侧是**灰白崖体 + 岩石**」—— 实现长期偏离参考。
+   * 改后取冷中性灰（B−R +5，与白石同色相族、明度低于 ashlar 一档），
+   * 既**去除棕色隔断**，又与参考图灰白崖体一致；0 tri / 0 DC / 0 贴图。
+   */
+  rockCliff: 0x8d8a85,
+  /** 暖岩（DarkRockDesert）。R41 同步去棕：0x816e55 → 冷灰褐（保留远景层次，B−R 由 −44 收到 −8） */
+  rockWarm: 0x9d968c
 } as const;
 
 /** R28 追加键（V §7.2 受光对照 + 灯焰）：只增不改旧键 */
