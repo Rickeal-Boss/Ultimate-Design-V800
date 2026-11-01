@@ -52,6 +52,8 @@ const SKY_UNIFORMS_GLSL = /* glsl */ `
   uniform vec3 uMid;
   uniform vec3 uHorizon;
   uniform vec3 uGround;
+  /** R43-P0B/P4：雾色（深俯角把地面色拉向雾，免疫未来几何缺口漏出平涂棕） */
+  uniform vec3 uFogColor;
   uniform vec3 uSunColor;
   uniform vec3 uCloudLit;
   uniform vec3 uCloudDark;
@@ -99,6 +101,11 @@ const SKY_COLOR_GLSL = /* glsl */ `
       col = mix(col, uZenith, t2);
     } else {
       col = mix(horizonCol, uGround, smoothstep(0.0, 0.08, -h));
+      // R43-P0B/P4（保险丝）：深俯角（h < −0.35）把 uGround 拉向雾色 ——
+      // 世界一旦再出现几何缺口，露出的是「空气透视的远谷」而不是巧克力色平涂。
+      // R42 事故（无底环带漏出 0x4b4038 纯平涂，用户读作贴脸棕墙）的免疫层；
+      // 不动 uGround 本体（它同时喂 PMREM 地面反弹板，见下方 uniform 注）。
+      col = mix(col, uFogColor, smoothstep(0.35, 0.9, -h));
     }
     // ── 逆光暖晕 = 贴着地平线的**横向亮带**（不是一个圆盘）─────────────────
     // ①② 方位集中度：pow(sd,4) 宽底 + pow(sd,16) 收窄，两项等权（结构按要求保留）；
@@ -236,6 +243,8 @@ function skyUniforms(sunDir: THREE.Vector3, preset: EnvPreset): Record<string, T
     uMid: { value: new THREE.Color(preset.sky.mid) },
     uHorizon: { value: new THREE.Color(preset.sky.horizon) },
     uGround: { value: new THREE.Color(preset.sky.ground) },
+    // R43-P0B/P4：与场景雾同源（scene.fog 同色），深俯角把 uGround 拉向它
+    uFogColor: { value: new THREE.Color(preset.fog.color) },
     uSunColor: { value: new THREE.Color(preset.sky.sunColor) },
     uCloudLit: { value: cloudLit },
     uCloudDark: { value: cloudDark },

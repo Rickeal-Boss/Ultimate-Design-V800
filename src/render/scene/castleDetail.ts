@@ -1650,18 +1650,45 @@ export function bellTower(o: { w: number; totalH: number; clock?: boolean; pendu
     ring.translate(cx, cy, w * 0.46 - 0.4);
     p.gold.push(goldUV(ring));
   }
-  // ③ 金钟（WCBell：宽/高 ≈0.77 → 钟宽 = chamberH×0.77；三段收分 + 唇杆）
-  //   R32：钟挂到左拱开口前缘（x=−archCx、z=+w*0.18）—— 从拱开口看得见
-  const bellH = chamberH * 0.6;
-  const bellR = bellH * 0.36;
+  // ③ 金钟（R43-P1D/Z3：形制按 WCBell_1 实测重建，`.qa/r43_castle/bell_measure.json`）
+  //   实测：口径/体高 = **1.38**（矮胖钟）—— 旧实现 0.72 错近一倍（读成瘦锥子）；
+  //   半径-高度曲线 r/R：u[0,.13,.30,.52,.70,.95,1.0] → [1,.87,.73,.62,.58,.575,.19]，
+  //   冠部 0.575R 后**平封口**（旧版收成尖顶=形制错）；唇缘外撇已含在曲线首段。
+  //   Lathe 12 段：外壁 8 环 192 tri + 内腔 3 环 72 tri + 吊梁/立柱 24 tri ≈ 288/座
+  //   （旧 72 tri/座，净 +216 × 10 座 = +2,160；Z1/Z2 省 1,600 ⇒ 净 +560，预算内）。
+  //   受拱宽约束：R = min(chamberH*0.6*0.69, archHalf*0.78)，避免钟比拱还宽。
+  const bellR = Math.min(chamberH * 0.6 * 0.69, archHalf * 0.78);
+  const bellH = bellR * 1.45; // 口径/体高 1.38 ⇒ 体高 = 直径/1.38
   const bx = -archCx;
   const bz = w * 0.18;
   const by = cy + chamberH * 0.14;
-  p.gold.push(spire('gold', bellR, bellR * 0.62, bellH * 0.58, 8, bx, by, bz));
-  p.gold.push(spire('gold', bellR * 0.62, bellR * 0.4, bellH * 0.28, 8, bx, by + bellH * 0.58, bz));
-  p.gold.push(spire('gold', bellR * 0.4, 0, bellH * 0.14, 8, bx, by + bellH * 0.86, bz));
-  p.gold.push(box('gold', bellR * 1.9, 0.16, 0.16, bx, by, bz)); // 钟唇
-  p.gold.push(box('gold', 0.16, 0.16, bellR * 1.9, bx, by, bz));
+  {
+    const CURVE = [1.0, 0.87, 0.73, 0.62, 0.58, 0.575];
+    const US = [0, 0.13, 0.3, 0.52, 0.7, 0.95, 1.0];
+    const prof: THREE.Vector2[] = [];
+    for (let k = 0; k < US.length; k += 1) {
+      const r = k === US.length - 1 ? bellR * 0.19 : bellR * CURVE[k];
+      prof.push(new THREE.Vector2(Math.max(r, 0.004), by + US[k] * bellH));
+    }
+    prof.push(new THREE.Vector2(0.004, by + bellH)); // 冠部平封口
+    const body = new THREE.LatheGeometry(prof, 12);
+    body.translate(bx, 0, bz);
+    p.gold.push(goldUV(body));
+    // 内腔（从拱下仰视不穿帮）：点序反转 ⇒ 绕序翻转 ⇒ 法线朝内
+    const inner = new THREE.LatheGeometry(
+      [
+        new THREE.Vector2(bellR * 0.82, by + bellH * 0.78),
+        new THREE.Vector2(bellR * 0.62, by + bellH * 0.34),
+        new THREE.Vector2(bellR * 0.8, by + 0.02)
+      ],
+      12
+    );
+    inner.translate(bx, 0, bz);
+    p.gold.push(goldUV(inner));
+    // 吊梁（Z5：实测 yoke = 1.54×口径，截面 Z 0.178×D / Y 0.103×D）
+    p.gold.push(box('gold', bellR * 3.08, bellR * 0.21, bellR * 0.36, bx, by + bellH + bellR * 0.2, bz));
+    p.gold.push(box('gold', bellR * 0.3, bellR * 0.34, bellR * 0.3, bx, by + bellH + bellR * 0.04, bz)); // 冠钮
+  }
   // ③b 钟摆（R32：吊梁 + 摆杆 + 摆锤，挂在**右拱开口**内（钟在左拱，互不穿插）；
   //     静态斜置读作摆动——几何不动画，避免运行时成本）
   if (o.pendulum !== false && !isLowDetail()) {
@@ -1683,18 +1710,19 @@ export function bellTower(o: { w: number; totalH: number; clock?: boolean; pendu
     const cd = w / 6;
     const ccy = cy + chamberH * 0.52;
     const ccz = w * 0.46 - 0.06;
-    // 金圈（16 面开口筒，32 tri）
-    const ring = new THREE.CylinderGeometry(cd / 2 + 0.1, cd / 2 + 0.1, 0.22, 16, 1, true);
+    // 金圈（R43-P1D/Z2：16→12 面；钟楼 57° 仰角 + 33m 横距下 16/12 面无差）
+    const ring = new THREE.CylinderGeometry(cd / 2 + 0.1, cd / 2 + 0.1, 0.22, 12, 1, true);
     ring.rotateX(Math.PI / 2);
     ring.translate(0, ccy, ccz);
     p.gold.push(goldUV(ring));
-    // 近黑盘面（16 面，32 tri）
-    const face = new THREE.CylinderGeometry(cd / 2, cd / 2, 0.3, 16, 1, false);
+    // 近黑盘面（12 面）
+    const face = new THREE.CylinderGeometry(cd / 2, cd / 2, 0.3, 12, 1, false);
     face.rotateX(Math.PI / 2);
     face.translate(0, ccy, ccz - 0.02);
     p.dark.push(face);
-    // 罗马字刻度环（12 颗金珠 = 钟点刻度；低配档减半）
-    const ticks = isLowDetail() ? 6 : 12;
+    // 罗马字刻度环（R43-P1D/Z1：12→6 颗金珠 —— 仰角 57°/横距 33m 下原 12 颗 <1px，
+    // 省下的 1,440 tri 挪给 Z3 钟体形制）
+    const ticks = 6;
     for (let i = 0; i < ticks; i += 1) {
       const a = (i / ticks) * Math.PI * 2;
       const tk = new THREE.CylinderGeometry(cd * 0.045, cd * 0.045, 0.16, 6, 1, false);

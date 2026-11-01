@@ -1452,16 +1452,14 @@
        "topScale": 0.98
       },
       "planTaperNose": {
-       "zFrom": 1.6,
-       "zTo": 2.41,
-       "amount": 0.03,
-       "yGate": 1.12
+       "zFrom": 2.1,
+       "zTo": 2.412,
+       "amount": 0.235
       },
       "planTaperTail": {
-       "zFrom": -1.8,
+       "zFrom": -2.12,
        "zTo": -2.42,
-       "amount": 0.03,
-       "yGate": 1.12
+       "amount": 0.215
       }
      }
     },

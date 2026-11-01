@@ -56,7 +56,8 @@ const SpeedBlurFlashShader = {
   `
 };
 
-/** 增强版：7 tap 径向加权采样 + RGB 分离（色差），high/medium 档专用 */
+/** 增强版：5 tap 径向加权采样 + RGB 分离（色差），high/medium 档专用
+ *  R43-P0C/C：7→5 tap（真机上后处理是纯填充开销，5 tap 视觉差可忽略） */
 const SpeedBlurFlashEnhancedShader = {
   name: 'SpeedBlurFlashEnhanced',
   uniforms: SpeedBlurFlashShader.uniforms,
@@ -71,8 +72,8 @@ const SpeedBlurFlashEnhancedShader = {
       float dist = length(dir);
       vec4 sum = vec4(0.0);
       float total = 0.0;
-      for (int i = 0; i < 7; i++) {
-        float t = float(i) / 6.0;
+      for (int i = 0; i < 5; i++) {
+        float t = float(i) / 4.0;
         float w = 1.0 - t * 0.65;
         vec2 off = dir * strength * dist * t;
         // RGB 分离：边缘色差随径向距离增强（速度感）

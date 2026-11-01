@@ -255,7 +255,11 @@ export class Road {
    *
    * R14–R26 挖的是 RIVER 河谷槽口（x ±150 / z −530..−370）；R27 河谷已停用、
    * 那一段归城内大街（实体地面），改为挖御桥走廊：
-   *   |x| ≤ VIADUCT.totalHalf (16.72) 且 z ∈ [VIADUCT.zFar (−358.5), VIADUCT.zNear (60)]
+   *   开槽半宽 = **GORGE_HALF**（R43 起 = 70，真山谷），z ∈ [VIADUCT.zFar (−358.5), VIADUCT.zNear (+60)]。
+   *   ⚠ 口径铁律（R42 事故）：本槽半宽与 `Terrain.buildGorge` 的岩壁/封口/谷底
+   *   **必须同源** —— 那边 R43 起直接 import 本常量；若再出现「槽 18 / 壁 12.6」
+   *   之类的双口径，就会裂出无底环带，视线穿缝直抵天空球 uGround（实拍 #382c24，
+   *   用户读作「深棕贴脸墙」）。
    * 理由（用户 + 几何线共同约束）：
    *   ① 御桥是**高架桥**，桥面 y=0 与路面同高 ⇒ 走廊里再铺一层 y=−0.02 的地面会
    *      与桥面结构 z-fighting；
@@ -270,10 +274,12 @@ export class Road {
   private buildGround(scene: THREE.Scene, center: number): void {
     const holeNear = VIADUCT.zNear; // +60（车行上游侧 = 车后方）
     const holeFar = VIADUCT.zFar; // -358.5（= GATE.z，城门中心）
-    // R42-P0-A：地面开槽半宽改用独立 `GORGE_HALF`(18)，不再跟桥体半宽 `totalHalf`(12.6)。
-    // 原因：桥墩柱束中心 x≈12.1 紧贴桥体边缘 12.6，槽若只挖到 12.6，东西两块地面 slab
-    // 就从 ±12.6 起铺，低机位掠射角下糊成一堵贴脸墙挡住桥下通天柱列（消去法实测 48.1%
-    // 首命中）。加宽到 18 后桥墩露出 306 采样、且不穿帮。详见 r28Layout.ts `GORGE_HALF` 长注。
+    // R43-P0B：开槽半宽 = `GORGE_HALF`（现 70，真山谷）。历史沿革：
+    //   ≤R41 槽=桥体半宽 totalHalf(12.6) ⇒ 低机位掠射下 ground 糊成贴脸墙挡柱列；
+    //   R42 槽加宽到 18 但 Terrain 岩壁没跟 ⇒ 3~5.4m 无底环带，视线穿缝直抵天空球
+    //   uGround 0x4b4038（用户读作「深棕贴脸墙」，实拍 #382c24）；
+    //   R43 双口径合一（Terrain 直接 import 本常量）+ 拓宽到 70（A/B 见
+    //   .qa/r43_occlusion/REPORT.md）。⚠ 本槽与岩壁口径由该常量单一真源锁定。
     const holeHalfX = GORGE_HALF;
     const southEdge = center - 3000; // -3870
     const northEdge = center + 3000; // 2130
@@ -296,10 +302,36 @@ export class Road {
     pieces.push(slab(3000, northEdge - holeNear, 0, (northEdge + holeNear) / 2));
     // 南块（城门以南整幅，z ∈ [−3870, −358.5]，含原河谷段 —— 那里已恢复实体地面）
     pieces.push(slab(3000, holeFar - southEdge, 0, (southEdge + holeFar) / 2));
-    // 西 / 东两块（走廊 ±16.72 之外，z ∈ [−358.5, +60]）
+    // 西 / 东两块（走廊两侧，z ∈ [−358.5, +60]）—— R43-P0B/地形改为**离谷下倾坡地**：
+    // GPU 取证（.qa/r43_occlusion/ P2/P5 + vision 复核）显示：缝闭合后桥上看外翼，
+    // 与桥面同高的 3000m 平面仍读成「贴脸平涂墙」（占画面 1/3）。真山谷需要外侧
+    // 地形**低于桥面**：洞缘 y=−0.02 与岩壁顶同点 ⇒ 向外 0.22 坡度下潜（≈136m 处
+    // 到底 −30m，之后平缓延伸），沿 z 两端 70m 渐变回洞缘高度（与南北整幅大地
+    // 平滑衔接，不产生断崖）。40×8 细分（+636 tri×2 侧；UV 平铺口径不变）。
+    // 物理零风险：physics/World.ts 地面是独立 addStatic 盒体（y=0 全程）。
     const sideW = 1500 - holeHalfX;
     for (const side of [-1, 1]) {
-      pieces.push(slab(sideW, holeNear - holeFar, side * (holeHalfX + sideW / 2), (holeNear + holeFar) / 2));
+      const g = new THREE.PlaneGeometry(sideW, holeNear - holeFar, 40, 8);
+      g.rotateX(-Math.PI / 2);
+      g.translate(side * (holeHalfX + sideW / 2), -0.02, (holeNear + holeFar) / 2);
+      const pos = g.getAttribute('position') as THREE.BufferAttribute;
+      for (let i = 0; i < pos.count; i++) {
+        const wx = pos.getX(i);
+        const wz = pos.getZ(i);
+        const xr = Math.abs(wx) - holeHalfX; // 离谷缘距离
+        const dip = Math.min(xr * 0.22, 30); // 下潜深度（0 → −30m @136m）
+        const zr = Math.min(wz - holeFar, holeNear - wz); // 距走廊两端
+        const fade = THREE.MathUtils.smoothstep(zr, 0, 70);
+        pos.setY(i, -0.02 - dip * fade);
+      }
+      pos.needsUpdate = true;
+      g.computeVertexNormals();
+      const uv = g.getAttribute('uv') as THREE.BufferAttribute;
+      for (let i = 0; i < uv.count; i++) {
+        uv.setXY(i, (uv.getX(i) * sideW) / TILE, (uv.getY(i) * (holeNear - holeFar)) / TILE);
+      }
+      uv.needsUpdate = true;
+      pieces.push(g);
     }
     // R26：地面贴图曾经完全没有 repeat —— 256² 的土壤噪点被拉伸到 ~2000m 见方的
     // 大地上，等于一张纯色（俯瞰图 verify/r26b/aerial.png 里整片死褐色，无任何细节）。

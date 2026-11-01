@@ -60,6 +60,25 @@ const ASSEMBLED =
 /** R15：`#assembled&vehicle=r7` 切换到第二辆车（智界 R7）的装配产物 */
 const PREVIEW_R7 =
   ASSEMBLED && /(?:^|[#&])vehicle=r7/i.test(window.location.hash);
+// ---- R43 QA（dev-only）：`#logpost=<name>` 把 console 断言日志回传给存图服务落 .txt ----
+// 为什么需要：本机无 headless 浏览器（msedge 需提权），MCP 浏览器工具也没有 console 通道，
+// 而 `#uvassert` / `#lightassert` / `#batchmerge` 的判据**只写到 console**
+// ⇒ 把这几类日志镜到本地文件，才能留下可复核的取证（不是靠"我看过了"）。
+// ⚠ 镜像必须装在**适配器构造之前**（挂在模块顶部），否则构造期打的断言全漏。
+const LOGPOST = /[#&]logpost=([\w.-]+)/.exec(
+  typeof window !== 'undefined' ? window.location.hash : ''
+);
+const LOG_BUF: string[] = [];
+if (LOGPOST) {
+  for (const lv of ['info', 'warn', 'error'] as const) {
+    const orig = console[lv].bind(console);
+    console[lv] = (...args: unknown[]): void => {
+      LOG_BUF.push(`[${lv}] ${args.map((a) => (typeof a === 'string' ? a : String(a))).join(' ')}`);
+      orig(...args);
+    };
+  }
+}
+
 const model: THREE.Object3D = ASSEMBLED
   ? (PREVIEW_R7 ? createR7CarAdapter('high') : createV800CarAdapter('high')).root
   : createZunjieV800LuxuryMPVModel({ textureSize: 1024 });
@@ -141,6 +160,49 @@ window.__v800Capture = (
   status.textContent = `captured:${name}`;
   return renderer.domElement.toDataURL('image/png');
 };
+
+// ---- R43 QA（dev-only）：`#cam=<az>,<pitch>,<dist>&shot=<name>` 机位覆盖 + 自回传存图 ----
+// 也支持多机位：`#shots=<name>:<az>,<pitch>,<dist>;<name>:...`（一次加载连拍，省重载）
+// 为什么不用 puppeteer：本机 msedge.exe 需要提权（spawn EACCES / "requires elevation"），
+// 无法 headless 起浏览器。改为「人工浏览器打开 → 页面自己取机位 → canvas PNG POST 给
+// tools/r43_shot_server.mjs 落盘」。仅 dev 入口，vite build 不含本文件。
+const shotsMatch = /[#&]shots=([^&]+)/.exec(window.location.hash);
+const camMatch = /[#&]cam=(-?[\d.]+),(-?[\d.]+),(-?[\d.]+)/.exec(window.location.hash);
+const postShot = (name: string, url: string): void => {
+  fetch(`http://127.0.0.1:5399/shot?name=${encodeURIComponent(name)}`, {
+    method: 'POST',
+    mode: 'no-cors',
+    body: url
+  }).catch(() => { /* 存图服务未起时静默（页面本身仍可人看） */ });
+};
+if (shotsMatch) {
+  const list = decodeURIComponent(shotsMatch[1]).split(';').filter(Boolean);
+  window.setTimeout(() => {
+    for (const item of list) {
+      const [nm, rest] = item.split(':');
+      const [az, pitch, dist] = (rest || '').split(',');
+      postShot(nm, window.__v800Capture(nm, +az, +(pitch ?? 6), +(dist ?? 9.2)));
+    }
+    status.textContent = 'ready';
+  }, 120);
+} else if (camMatch) {
+  const shotName = (/[#&]shot=([\w.-]+)/.exec(window.location.hash) || [])[1] || 'shot';
+  window.setTimeout(() => {
+    postShot(shotName, window.__v800Capture(shotName, +camMatch[1], +camMatch[2], +camMatch[3]));
+    status.textContent = 'ready';
+  }, 120);
+}
+
+// ---- R43 QA（dev-only）：`#logpost=<name>` 断言日志回传（见模块顶部的 console 镜像）----
+if (LOGPOST) {
+  window.setTimeout(() => {
+    fetch(`http://127.0.0.1:5399/note?name=${encodeURIComponent(LOGPOST[1])}`, {
+      method: 'POST',
+      mode: 'no-cors',
+      body: LOG_BUF.join('\n')
+    }).catch(() => { /* 存图服务未起时静默 */ });
+  }, 3000);
+}
 
 const strippedMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
 

@@ -268,6 +268,15 @@ export class Game {
   private probeTicks = 0;
   /** R39 帧成本探针缓冲（null = 未启用；`#r39perf` 时分配，见构造函数） */
   private r39: R39Probe | null = null;
+  /** R43-P0C/G 帧日志（null = 未启用；`#framelog` 时分配）——真机取数用 */
+  private frameLog: {
+    rows: number[];
+    speed: number[];
+    tris: number[];
+    calls: number[];
+    dpr: number[];
+    lastT: number;
+  } | null = null;
   /* R39 阴影参与度的判定口径（留档，防后人重踩）：
    * 不用 `sun.shadow.needsUpdate` 翻转（autoUpdate=true 后没人再写它，恒 false）；
    * 也不用包装 `WebGLShadowMap.render` 数 draw call 增量 —— 实测包装器每帧被调 16 次、
@@ -493,6 +502,27 @@ export class Game {
           dpr: Array.from(probe.dpr.subarray(0, probe.n)),
           ztier: Array.from(probe.ztier.subarray(0, probe.n))
         })
+      };
+    }
+    /* ---- R43-P0C/G 帧日志钩子（DEV + `#framelog`）：真机取数，一轮定案 ----
+     * 背景：沙箱 SwiftShader 无 GPU，三轮「越快越掉帧」归因都只能拿到 CPU 侧结论；
+     * 本钩子让真机（核显/独显）跑一局后 `__v800framelog.dump()` 直接导出
+     * frameGap p50/p95/p99/max + speed/tris/calls/dpr 逐帧序列 ——
+     * 拿着这份数据就能回答「真机上帧时是否随车速/位置增长」，不再靠猜。 */
+    if (import.meta.env.DEV && window.location.hash.includes('framelog')) {
+      this.frameLog = { rows: [], speed: [], tris: [], calls: [], dpr: [], lastT: performance.now() };
+      (window as unknown as Record<string, unknown>).__v800framelog = {
+        dump: (): unknown => this.dumpFrameLog(),
+        clear: (): void => {
+          const f = this.frameLog;
+          if (!f) return;
+          f.rows.length = 0;
+          f.speed.length = 0;
+          f.tris.length = 0;
+          f.calls.length = 0;
+          f.dpr.length = 0;
+          f.lastT = performance.now();
+        }
       };
     }
     // 首帧后回调（隐藏加载屏）
@@ -1531,6 +1561,20 @@ export class Game {
     this.postfx.render();
     const drewShadow = true;
 
+    // ---- R43-P0C/G 帧日志采样（`#framelog`；gap 用 wall-clock，绕开 Loop 0.1s 钳制）----
+    if (this.frameLog) {
+      const now = performance.now();
+      const f = this.frameLog;
+      if (f.rows.length < 30000) {
+        f.rows.push(now - f.lastT);
+        f.speed.push(Math.abs(vehicle ? vehicle.speed : (this.freeDrive?.state.speed ?? 0)));
+        f.tris.push(this.renderer.info.render.triangles);
+        f.calls.push(this.renderer.info.render.calls);
+        f.dpr.push(this.qualityGovernor.pixelRatio);
+      }
+      f.lastT = now;
+    }
+
     // ---- 自适应画质 ----
     const dr = this.qualityGovernor.update(dt);
     if (dr !== 0) {
@@ -1611,6 +1655,25 @@ export class Game {
       this.probeTicks = 0;
       info.reset();
     }
+  }
+
+  /** R43-P0C/G：帧日志汇总导出（`window.__v800framelog.dump()`）——真机一局定案用 */
+  private dumpFrameLog(): unknown {
+    const f = this.frameLog;
+    if (!f) return null;
+    const rows = f.rows.slice().sort((a, b) => a - b);
+    const q = (p: number): number =>
+      rows.length ? rows[Math.min(rows.length - 1, Math.floor(p * rows.length))] : 0;
+    return {
+      n: rows.length,
+      gapMs: { p50: q(0.5), p95: q(0.95), p99: q(0.99), max: rows.length ? rows[rows.length - 1] : 0 },
+      meanSpeed: f.speed.length ? f.speed.reduce((a, b) => a + b, 0) / f.speed.length : 0,
+      gap: f.rows.slice(),
+      speed: f.speed.slice(),
+      tris: f.tris.slice(),
+      calls: f.calls.slice(),
+      dpr: f.dpr.slice()
+    };
   }
 
   resize(): void {

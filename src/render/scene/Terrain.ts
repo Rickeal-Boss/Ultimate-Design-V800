@@ -47,7 +47,7 @@
 import * as THREE from 'three';
 import { MeshLambertMaterial } from 'three';
 import { ACTIVE_ENV } from '../../config/environment';
-import { R27_PALETTE, VIADUCT } from './r28Layout';
+import { GORGE_HALF, R27_PALETTE, VIADUCT } from './r28Layout';
 
 /** 近景岩石（峡谷壁）albedo —— Rock_CliffCoastal5 实测中位 */
 const ROCK_NEAR = new THREE.Color(R27_PALETTE.rockCliff);
@@ -205,11 +205,14 @@ export class Terrain {
     // （CLIFF_POLICY.nearCliffs='delete'）—— 巨型沙丘吞桥实证见文件头 ④。
     const rock = emptyPatch();
     this.buildGorge(rock);
-    // R42-P0-A：峡谷内衬改 **FrontSide**（配合下方两侧岩壁 flip 翻转）。
-    // 探针实测（1344 网格射线）：岩壁面法线实际**朝外**，与文件旧注释「法线朝内」相反 ——
-    // 只改 side 不翻绕序 ⇒ 桥外仍被挡 297 格、谷内反而看不到岩壁。两处必须同改。
-    // 改后：bridge_side_low 桥外看穿、谷内仍见峡谷壁 28.4%、谷底保留 18.1%、封口不露穿。
-    const rockMesh = new THREE.Mesh(toGeometry(rock), this.material(ROCK_GAIN_NEAR, THREE.FrontSide));
+    // R43-P0B/P3：回退 R42 的 FrontSide+翻绕序，恢复 **DoubleSide**。
+    // 秦核源 A/B 实测（.qa/r43_occlusion/gorge_ab.json）：R42 的两行改动对「棕洞」
+    // 只减 0.5pp（8.0→8.0 / 51.7→51.2）——棕墙根本不是剔面问题，是**世界缺口**
+    // （R42 把地面开槽 GORGE_HALF 加宽到 18，而本文件 buildGorge 全部尺寸还停在
+    // totalHalf 12.6 ⇒ 3~5.4m 宽 × 66.5m 深 × 418.5m 长的无底环带，视线穿缝直抵
+    // 天空球 uGround 0x4b4038）。R43-P1 已把 half 对齐 GORGE_HALF，缝闭合；
+    // DoubleSide 让谷壁在桥两侧都能读到（用户要的是"山谷"，两侧都要有壁）。
+    const rockMesh = new THREE.Mesh(toGeometry(rock), this.material(ROCK_GAIN_NEAR, THREE.DoubleSide));
     rockMesh.name = 'terrain-rock';
     rockMesh.frustumCulled = false;
     scene.add(rockMesh);
@@ -292,7 +295,12 @@ export class Terrain {
    * 谷底向下 45% 压暗（shade），读作见不到阳光的谷底阴影。
    */
   private buildGorge(out: Patch): void {
-    const half = VIADUCT.totalHalf;
+    // R43-P0B/P1：`half` 从 `VIADUCT.totalHalf`(12.6) 改为 `GORGE_HALF`。
+    // ⚠ 口径铁律：本函数所有横向尺寸**必须**跟 `Road.buildGround` 的开槽半宽
+    // `GORGE_HALF` 同源——R42 事故（槽 18 / 壁 12.6 ⇒ 3~5.4m 无底环带，视线穿缝
+    // 直抵天空球 uGround，实拍 #382c24 与用户截图逐通道差 ≤4/255）即两边口径漂移。
+    // 改 GORGE_HALF 只需动 r28Layout.ts 一处，本函数自动跟随。
+    const half = GORGE_HALF;
     const zNear = VIADUCT.zNear;
     const zFar = VIADUCT.zFar;
     const top = -0.02;
@@ -302,10 +310,9 @@ export class Terrain {
     const nz = Math.max(2, Math.round((zNear - zFar) / zStep));
     const ny = Math.max(2, Math.round((top - bed) / yStep));
 
-    // ── 两侧岩壁（R42-P0-A：绕序翻转为「正面朝走廊内」）──
-    // 原 `side > 0` 让法线朝**外**（与旧注释相反），DoubleSide 时桥外能看到背面实体 ⇒
-    // 与 ground 叠加把桥下柱列封死。改 `side < 0` 后配合 material FrontSide：
-    // 走廊内（玩家/桥上）看到岩壁正面，桥外背面被剔除 ⇒ 桥下柱列露出。
+    // ── 两侧岩壁（R43-P0B/P3：绕序还原为「正面朝走廊外」，配合 DoubleSide）──
+    // 壁面起伏（wob）必须**随深度归零**（R43-P1）：j=0 是壁顶（y=top，与大地洞边同点），
+    // 若顶上仍有 0~2.4m 外凸，壁顶与洞边之间又会裂出一条缝（R42 事故的直接成因之一）。
     for (const side of [-1, 1] as const) {
       addGrid(
         out,
@@ -314,22 +321,33 @@ export class Terrain {
         (i, j) => {
           const z = zNear + ((zFar - zNear) * i) / nz;
           const y = top + ((bed - top) * j) / ny;
-          // 壁面向岩体一侧起伏（**只向外凹，不向内凸**，避免侵占走廊与桥面争空间）
-          const wob = 2.4 * fbm2(z * 0.06 + (side > 0 ? 31.7 : 5.1), y * 0.05);
+          const t = j / ny; // 0=崖顶（贴洞边）→ 1=谷底
+          const wob = 2.4 * fbm2(z * 0.06 + (side > 0 ? 31.7 : 5.1), y * 0.05) * (t <= 0.38 ? t : 0.38 + 0.25 * t);
           const zw = 1.6 * (noise2(z * 0.11 + 2.3, y * 0.09 + side * 7.7) - 0.5);
-          return [side * (half + wob), y, z + zw];
+          // R43-P0B/地形（GPU 取证后追加）：竖直岩壁在 12° 低阳下 diffuse≈0，
+          // 从桥上读作「无明暗平涂墙」（P2/P5 取证，vision 复核）。改为参考图
+          // 「垂直节理 + 阶梯石台」语言：上 38% 直崖（贴洞边，护桥墩/栏板视线），
+          // 下 62% 内倾阶坡（崖肩 y≈−25.4 → 坡脚内收 45m）——坡面法线带 +y 分量，
+          // 太阳能照出明暗分带，谷读作地形。wob 在坡段按比例衰减防坡脚离床缝。
+          const CLIFF_T = 0.38;
+          const TALUS_IN = 45;
+          const inward = t <= CLIFF_T ? 0 : TALUS_IN * ((t - CLIFF_T) / (1 - CLIFF_T));
+          return [side * (half - inward + wob), y, z + zw];
         },
         (i, j) => {
           const z = zNear + ((zFar - zNear) * i) / nz;
-          return rockTint(z / 30, j / ny, 0.15 + 0.85 * (j / ny));
+          return rockTint(z / 30, ((top + ((bed - top) * j) / ny) / 2.8), 0.15 + 0.85 * (j / ny));
         },
         ROCK_NEAR,
-        side < 0
+        side > 0
       );
     }
 
     // ── 两端封口（z = zNear 朝 +z，z = zFar 朝 −z）──
-    const nx = 4;
+    // R43-P0B/P1：nx 4→6 加密，且封口横向范围扩到壁脚之外（bh = half+2），
+    // 盖住谷底与壁脚之间 0~2.4m 的接缝（与谷底同宽，从两端看进去不露穿）。
+    const nx = 6;
+    const bh = half + 2;
     for (const [zEnd, flip] of [
       [zNear, true],
       [zFar, false]
@@ -339,7 +357,7 @@ export class Terrain {
         nx,
         ny,
         (i, j) => {
-          const x = -half + ((2 * half) * i) / nx;
+          const x = -bh + ((2 * bh) * i) / nx;
           const y = top + ((bed - top) * j) / ny;
           const zw = 2.0 * (noise2(x * 0.13 + 8.9, y * 0.08) - 0.5);
           return [x, y, zEnd + (zEnd === zNear ? -Math.abs(zw) : Math.abs(zw))];
@@ -351,16 +369,22 @@ export class Terrain {
     }
 
     // ── 谷底（法线朝上）──
+    // R43-P0B/地形：起伏 ±0.55m → **±2.6m** + 色变化按世界尺度（x/22, z/17）——
+    // GPU 取证 P2/P5 里谷底读作「大面积纯色平面」的主因就是又平又匀。
     addGrid(
       out,
-      nx,
+      12,
       nz,
       (i, j) => {
-        const x = -half + ((2 * half) * i) / nx;
+        const x = -bh + ((2 * bh) * i) / 12;
         const z = zNear + ((zFar - zNear) * j) / nz;
-        return [x, bed + 1.1 * (fbm2(x * 0.09 + 17.3, z * 0.05) - 0.5), z];
+        return [x, bed + 5.2 * (fbm2(x * 0.05 + 17.3, z * 0.045) - 0.5), z];
       },
-      (i, j) => rockTint(i / nx, j / nz, 1),
+      (i, j) => {
+        const x = -bh + ((2 * bh) * i) / 12;
+        const z = zNear + ((zFar - zNear) * j) / nz;
+        return rockTint(x / 22, z / 17, 0.8);
+      },
       ROCK_NEAR,
       false
     );

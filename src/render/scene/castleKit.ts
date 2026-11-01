@@ -1561,6 +1561,17 @@ export function makeTowerGroup(): StoneBuckets {
     // 指针贴在盘面前缘（R31 旧位 cz−0.2 埋在盘后 ⇒ 不可见）
     b.gold.push(box('gold', 0.32, clockD * 0.62, 0.12, 0, clockY, f3 + 0.28)); // 时针（垂直）
     b.gold.push(box('gold', clockD * 0.48, 0.32, 0.12, clockD * 0.24, clockY, f3 + 0.28)); // 分针
+    // R43-P1D：钟面刻度环（12 颗金珠）。中央钟楼正对桥轴、100~250m 正面可见，
+    // clockD≈6.5m ⇒ 150m 处 ≈25px —— 刻度是「读得出这是钟」的关键 identity
+    //（旧版只有圈+盘+双针，无刻度）。288 tri / 仅 1 座，hi/lo 同付。
+    for (let i = 0; i < 12; i += 1) {
+      const a = (i / 12) * Math.PI * 2;
+      const tk = new THREE.CylinderGeometry(clockD * 0.028, clockD * 0.028, 0.18, 6, 1, false);
+      tk.rotateX(Math.PI / 2);
+      tk.translate(Math.cos(a) * clockD * 0.4, clockY + Math.sin(a) * clockD * 0.4, f3 + 0.28);
+      planarUV(tk, TILE.gold);
+      b.gold.push(tk);
+    }
     // ③b 双联尖拱窗 ×2 组（钟左右；subArches = Window2_4 双联语汇）
     //   R36 A3+B2：hero 窗竖棂 2→5（宽窗 3.1m，FBX 3–5 根带内）+ 真凹腔
     for (const side of [-1, 1] as const) {

@@ -185,7 +185,14 @@ export function detectQualityTier(gpu: GpuClass = 'unknown'): QualityTier {
  */
 function applyIntegratedBudget(s: QualitySettings): QualitySettings {
   if (s.tier !== 'high') return s;
-  s.pixelRatio = Math.min(window.devicePixelRatio, 1.5);
+  // R43-P0C/B（严过关实测裁决）：核显 pixelRatio 上限 1.5 → **1.25**、下限 1 → **0.85**。
+  // 依据：分辨率扫描拟合 `gap ≈ 334ms + 1.96 ms/kpx`（.qa/r43_perf/r43_res_sweep.json）
+  // ⇒ 帧时与像素数**线性**；1.5x→1.25x = 像素 −31% ⇒ 帧时同幅下降。
+  // 用户裁决「面数可抬高，只要不掉帧跳帧黑帧」⇒ 像素预算继续向流畅倾斜；
+  // 1.25x 在 1080p 物理屏上是 2400×1350，视觉仍高于原生 1080p。
+  s.pixelRatio = Math.min(window.devicePixelRatio, 1.25);
+  // R43-P0C/B：自适应降档 floor 1 → 0.85（AdaptiveQuality.update 的 `floor` 读本字段）
+  s.minPixelRatio = 0.85;
   s.msaaSamples = 2;
   s.bloomScale = 0.5;
   // R39：high 现默认 1024 → 核显 **768**（ortho 仍 10）⇒ texel 2×10/768 = 0.0260 m
