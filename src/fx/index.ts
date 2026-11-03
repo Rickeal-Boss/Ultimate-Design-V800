@@ -20,19 +20,34 @@ export interface FxModule {
 
 /**
  * 轮位（root 系偏移，x/z 单位 m）。
- * 与 createV800Model 的 wheel-fl/fr/rl/rr transform 对齐（x ±0.855 / z ±1.715，
+ * 默认值与 createV800Model 的 wheel-fl/fr/rl/rr transform 对齐（x ±0.855 / z ±1.715，
  * 来自 object-sculpt-spec.json 实测值；R5 轮芯内收 0.875→0.855，胎外缘 0.9825 < 侧皮 1.003）。
  * 旧值 ±0.88 / ∓1.55 ±1.88 是已删除的
  * Car.ts buildWheel 口径，纵向偏差 16.5cm——旧 Car.ts 删除后此常量失去依据，特此更正。
  * 注意 carRoot（root）自身 identity，body.rotation.y = π 只影响渲染朝向，
  * fx 发射点直接加在 root.position 上，故此处写世界系偏移。
+ *
+ * R44：外部壳装载成功后，适配器经 {@link setFxWheelOffsets} 把四轮位改写成
+ * 外部 hub × scale 的世界系偏移（每车不同：V800 轴距 3.47m / R7 2.95m），
+ * 未装载时保持程序化默认值，切换车 = Game 重建装配 = 重设一次。
  */
-const WHEEL_LOCAL: ReadonlyArray<readonly [number, number]> = [
+const WHEEL_LOCAL_DEFAULT: ReadonlyArray<readonly [number, number]> = [
   [-0.855, -1.715],
   [0.855, -1.715],
   [-0.855, 1.715],
   [0.855, 1.715]
 ];
+let WHEEL_LOCAL: ReadonlyArray<readonly [number, number]> = WHEEL_LOCAL_DEFAULT;
+
+/** R44：适配器在外部壳装载成功后同步四轮世界系偏移（fl/fr/rl/rr 顺序） */
+export function setFxWheelOffsets(offsets: ReadonlyArray<readonly [number, number]>): void {
+  if (offsets.length === 4) WHEEL_LOCAL = offsets;
+}
+
+/** QA/测试用：恢复程序化默认轮位 */
+export function resetFxWheelOffsets(): void {
+  WHEEL_LOCAL = WHEEL_LOCAL_DEFAULT;
+}
 /** 轮胎接地高度（路面 y=0） */
 const CONTACT_Y = 0.02;
 

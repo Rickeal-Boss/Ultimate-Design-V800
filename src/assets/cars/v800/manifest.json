@@ -1,0 +1,86 @@
+{
+ "car": "v800",
+ "scale": 4.75,
+ "wheelRadius": 0.4123,
+ "hubs": {
+  "fl": [
+   0.1789,
+   0.086,
+   0.3655
+  ],
+  "fr": [
+   -0.1833,
+   0.087,
+   0.365
+  ],
+  "rl": [
+   0.1821,
+   0.0867,
+   -0.3351
+  ],
+  "rr": [
+   -0.1869,
+   0.0875,
+   -0.3352
+  ]
+ },
+ "bodyBBox": {
+  "min": [
+   -0.2512049973011017,
+   -0.0,
+   -0.5753520131111145
+  ],
+  "max": [
+   0.24777600169181824,
+   0.38529399037361145,
+   0.5815460085868835
+  ]
+ },
+ "variants": [
+  {
+   "id": "white",
+   "file": "basecolor-white.webp"
+  },
+  {
+   "id": "black",
+   "file": "basecolor-black.webp"
+  },
+  {
+   "id": "gold",
+   "file": "basecolor-gold.webp"
+  }
+ ],
+ "textures": {
+  "normal": "normal.png",
+  "mr": "mr.png"
+ },
+ "tri": {
+  "body": 1499904,
+  "totalSource": 1499912
+ },
+ "bridgeTriangles": 0,
+ "generator": "r44_bake.py",
+ "semantic": {
+  "glass": {
+   "tri": 187838,
+   "parts": [
+    9,
+    5,
+    10
+   ]
+  },
+  "lamp_rear": {
+   "tri": 20154,
+   "parts": [
+    6
+   ]
+  },
+  "lamp_front": {
+   "tri": 24584,
+   "parts": [
+    14
+   ]
+  }
+ },
+ "bodyTri": 1267336
+}

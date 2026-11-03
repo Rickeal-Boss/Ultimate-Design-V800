@@ -8,10 +8,19 @@ import * as THREE from 'three';
 import { GRAVITY } from '../config/physics';
 import { carTextureSizeFor, type QualityTier } from '../config/quality';
 // R37-C 车漆配色（开始界面多色选择）：单一真源在 config，装配层只消费
-import { applyPaintSlot, getPaintSpec, resolvePaintId, type PaintId } from '../config/vehiclePaint';
+import { applyPaintSlot, getPaintSpec } from '../config/vehiclePaint';
 import { damp, makeLcg } from '../util/math';
 import { mergeSafe } from '../util/geo';
 import { batchMergeStatic, UV_CONTENT_MATERIAL_IDS } from './batchMerge';
+// R44 外观 GLB 资产化：外部壳装载 + 程序化外观隐藏 + fx 轮位同步
+import {
+  loadExternalShell,
+  mountExternalWheel,
+  wheelOffsetsWorldXZ,
+  type ExternalShellHandle
+} from './external/ExternalShell';
+import { setFxWheelOffsets } from '../fx';
+import { DEFAULT_VARIANT } from '../config/vehiclePaint';
 import { applyReferenceTextures } from './refTextures';
 import { mountLicensePlate } from './plateTexture';
 import { createTailgateCreaseGeometry } from './parts/tailgatePanel';
@@ -1739,20 +1748,23 @@ const SHADOW_CASTER_MATERIAL_IDS = new Set<string>(['paint-upper', 'paint-lower'
 export const V800_MATERIAL_INSTANCE_BUDGET = 80;
 
 /**
- * 车模 tri **可见口径**红线（= 渲染器 `info.render.triangles` 口径；实测 79,798）。
- * brief §3 / `r32_lead_phase3_spec.md` §3 写的「tri #assembled ~79.9k，红线 90k」
- * 指的就是这条 —— 79,798 与历史 `r24_b_report.md` 的 79,878 同口径。
+ * 车模 tri **可见口径**红线（= 渲染器 `info.render.triangles` 口径）。
+ * R44 授权抬高（BRIEF §一「预算红线全部可抬，唯一硬约束=运行时不掉帧」）：
+ * 程序化基线实测 ~79.8k；外部壳就绪后 = 内饰可见部分 + 外部壳
+ * （manifest 口径：v800 body 1,181,310 + 4 轮 ~322,838 ≈ 1.50M，
+ *  外壳 5 DC 共用 1 材质）。红线 = 内饰 ~20k + 外壳 1.55M（留 5% 余量）。
  */
-export const V800_VISIBLE_TRI_BUDGET = 90_000;
+export const V800_VISIBLE_TRI_BUDGET = 1_650_000;
 
 /**
  * 车模 tri **全树 #assembled 口径**（含 `visible=false` 的备选/占位几何，
  * InstancedMesh 按 count 计倍）红线。
- * 处置建议（非本波执行）：要么把这条正式改成「可见口径 90k + 全树 ≤100k 双线」，
- * 要么立项清掉 19,860 tri 的死几何（届时可降回 90k）。在此之前本常量按实测登记，
- * 保证 CI 不红、数字不撒谎。
+ * R44 授权抬高：程序化基线 ~99.9k + 外部壳 ~1.50M（body 1,181,310 + 轮 322,838，
+ * manifest tri 台账）≈ 1.60M，取 1.70M 留余量。外部壳未装载（回退态）时实际
+ * 远低于红线 —— 红线的意义是「外壳在场时 CI 也不红」，实际数字以
+ * window.__r44Shell + perfhud 台账为准。
  */
-export const V800_ASSEMBLED_TRI_BUDGET = 100_000;
+export const V800_ASSEMBLED_TRI_BUDGET = 1_700_000;
 
 /**
  * 同参材质实例判定：**全量**渲染参数签名。
@@ -1801,11 +1813,11 @@ export function v800MaterialSignature(m: THREE.Material): string {
 
 /**
  * @param tier 质量档
- * @param paintId 车漆配色（R37-C 开始界面多色选择）。默认走 `resolvePaintId()`
- *   （URL `#paint=` > localStorage > 香槟金）。**换色只改既有材质实例**，
- *   不 new 材质 ⇒ 材质实例预算（V800_MATERIAL_INSTANCE_BUDGET）不受影响。
+ * @param paintId R44 起语义 = **外部壳外观变体 id**（'white'|'black'|'gold'，来自
+ *   vehiclePaint 变体表 / URL `#paint=`）。程序化车漆不再消费该参数，固定走
+ *   R36 香槟金基线（外部壳装载失败时的回退外观）。
  */
-export function createV800CarAdapter(tier: QualityTier = 'high', paintId: PaintId = resolvePaintId()): CarLike {
+export function createV800CarAdapter(tier: QualityTier = 'high', paintId: string = DEFAULT_VARIANT.v800): CarLike {
   const model = createZunjieV800LuxuryMPVModel({ textureSize: carTextureSizeFor(tier) });
   const runtime = model.userData.runtime as ProceduralModelRuntime | undefined;
 
@@ -1890,7 +1902,8 @@ export function createV800CarAdapter(tier: QualityTier = 'high', paintId: PaintI
   /* R37-C：上/下段漆面改由色表驱动（上列数值即色表 champagne 一档的原值）。
    * 默认档逐位不动的保证：champagne 的 upper/lower 数值与这里的历史值完全相同，
    * 且它的 clearcoat 是 undefined（不覆写、沿用工厂值）⇒ 不换色时与 R36 一致。 */
-  const paintSpec = getPaintSpec(paintId);
+  /* R44：程序化车漆固定香槟金基线（paintId 参数已改语义为外部壳变体 id） */
+  const paintSpec = getPaintSpec();
   const paintMat = matById.get('paint-upper');
   if (paintMat) {
     applyPaintSlot(paintMat, paintSpec.upper);
@@ -4657,7 +4670,33 @@ export function createV800CarAdapter(tier: QualityTier = 'high', paintId: PaintI
    *   方向盘无空洞、侧窗与车顶（cabin-roof-carpet 独立件）仍完整。回退：删本函数中
    *   `p.mesh.visible = !interior;` 一行即退回 R19f 的「染暗保留」行为。
    */
+  // ---- R44 状态：外部壳句柄 / 程序化外观隐藏标记 / 最近一次内舱态 ----
+  // （声明在 setPaintShadow 之前，异步装载回调与既有内舱语义共用）
+  let shellHandle: ExternalShellHandle | null = null;
+  let proceduralExteriorHidden = false;
+  let lastInteriorState = false;
+  /** spinWheels 弧长→角度换算半径；外部壳装载成功后取 manifest.wheelRadius */
+  let wheelSpinRadius = 0.382;
+
   const setPaintShadow = (interior: boolean): void => {
+    lastInteriorState = interior;
+    // R44：外部壳 body（含玻璃）随内舱态整体显隐（轮挂 spin 枢轴下，保持旋转）
+    if (shellHandle) {
+      shellHandle.bodyMesh.visible = !interior;
+      // R44-6：glass/lamp 语义件与外壳同显隐（cabin 态整壳隐藏，外景态透明玻璃
+      // 透出程序化内饰——外景态 model.visible 恢复见下）
+      for (const sm of [...shellHandle.glassMeshes, ...shellHandle.lampMeshes]) {
+        sm.visible = !interior;
+      }
+      // R44 终解 + R44-6 修订：程序化 model 树恒可见 —— 外景态由 setExteriorHidden(true)
+      // 的材质白名单管「外观藏/内饰留」，透明玻璃（depthWrite=false）透出内饰 = 官图
+      // 座舱观感；不透明车身 FrontSide+深度遮挡保证内饰不透金属。cabin 态外壳整隐、
+      // 内饰全显（语义不变）。原「整树隐藏」是玻璃不透明时代的 poke-through 根治，
+      // 玻璃透明后必须放行内饰；残余 poke 由玻璃深 tint 0.55 + QA front34 目检把关。
+      model.visible = true;
+      if (welcomeMesh) welcomeMesh.visible = !interior;
+    }
+    setPokeHidden(!interior); // R44：车顶穿透件外景藏、cabin 态恢复
     for (const p of paintShadowPairs) {
       if (interior) {
         // 车内：整批隐藏（材质级再兜一层，防合批 mesh 被别的路径重新置可见）
@@ -4665,7 +4704,8 @@ export function createV800CarAdapter(tier: QualityTier = 'high', paintId: PaintI
         p.mesh.material = p.interior;
       } else {
         p.mesh.material = p.exterior;
-        p.mesh.visible = true;
+        // R44：外部壳在场时程序化外壳保持隐藏（外部壳接手外观）
+        p.mesh.visible = !proceduralExteriorHidden;
       }
     }
   };
@@ -4704,6 +4744,172 @@ export function createV800CarAdapter(tier: QualityTier = 'high', paintId: PaintI
     console.info(`[V800Adapter] R38-P1-5 阴影 caster 瘦身：关闭 ${off} 个 <${SHADOW_CASTER_MIN_TRIS} tri 小件，保留 ${kept} 个大件`);
   }
 
+  /* ══════════════ R44 外部壳（外观 GLB 资产化）══════════════
+   * 装配尾挂：异步装载 bake 产物（src/assets/cars/v800/），任一步失败静默回退
+   * 程序化外观（本块不做任何不可逆操作）。装载成功后依次：
+   *  1. 程序化外观隐藏——按材质 id 白名单（内饰可见）+ id-less 材质按 mesh 名白名单；
+   *     只设 visible=false 不 dispose（回退路径完好），材质级隐藏对合批批次同样生效；
+   *  2. body 挂本 body 组（body 已 rotY(π)，GLB +Z 车头一致，直接挂；scale=manifest.scale）；
+   *  3. 外部轮挂现有 wheels[i].spin（就近配对）+ spin 迁外部 hub（mountExternalWheel
+   *     矩阵反解，兼容 hub 组与工厂枢轴两种结构）；
+   *  4. spinWheels 半径 0.382 → manifest.wheelRadius（钳制 MAX_WHEEL_STEP_PER_FRAME 不动）；
+   *  5. setPaintShadow 语义扩展：外壳 body 随内舱态显隐（上文）；
+   *  6. fx WHEEL_LOCAL 同步外部 hub 世界系偏移（刹车痕/烟贴外部轮位）。 */
+  const R44_INTERIOR_MATERIAL_IDS = new Set<string>([
+    // 座舱内饰白名单：dash/屏/方向盘/座椅/地毯/headliner/水晶旋钮/窗帘/氛围
+    'carpet', 'curtain', 'crystal', 'gauge-ui', 'headliner-suede', 'leather-dark',
+    'leather-ivory', 'leather-warm', 'pillar-trim', 'screen-ui', 'starlight', 'wood'
+  ]);
+  // id-less 材质 mesh 的名字白名单（集成层内饰件：踏板/舱内衬毯/地面光毯）
+  const R44_KEEP_MESH_NAMES = new Set<string>([
+    'brake-pedal', 'cabin-floor-carpet', 'cabin-roof-carpet', 'welcome-carpet'
+  ]);
+  const r44HiddenMaterials = new Set<THREE.Material>();
+  const r44HiddenMeshes = new Set<THREE.Mesh>();
+  const setExteriorHidden = (hidden: boolean): void => {
+    root.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      if ((mesh.userData as { r44External?: boolean }).r44External === true) return; // 外部壳本体
+      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      const keepByName = R44_KEEP_MESH_NAMES.has(mesh.name);
+      let hasId = false;
+      for (const mt of mats) {
+        if (!mt) continue;
+        const ud = mt.userData as { sculptMaterial?: { id?: string }; cabinHidable?: boolean };
+        if (ud?.cabinHidable === true) {
+          hasId = true;
+          continue; // 座舱遮挡克隆归 Game 的 cabinOccluder 显隐链路管，不碰
+        }
+        const id = ud?.sculptMaterial?.id;
+        if (id) hasId = true;
+        const keep = keepByName || (id != null && R44_INTERIOR_MATERIAL_IDS.has(id));
+        if (hidden && !keep) {
+          if (mt.visible) {
+            mt.visible = false;
+            r44HiddenMaterials.add(mt);
+          }
+        } else if (!hidden && r44HiddenMaterials.has(mt)) {
+          mt.visible = true;
+          r44HiddenMaterials.delete(mt);
+        }
+      }
+      // 无任何 sculpt 材质 id 的 mesh（集成层外观件：灯组/轮徽/后视镜/前 fascia 等）
+      if (!hasId && !keepByName) {
+        if (hidden) {
+          if (mesh.visible) {
+            mesh.visible = false;
+            r44HiddenMeshes.add(mesh);
+          }
+        } else if (r44HiddenMeshes.has(mesh)) {
+          mesh.visible = true;
+          r44HiddenMeshes.delete(mesh);
+        }
+      }
+    });
+    proceduralExteriorHidden = hidden;
+  };
+
+  /* R44 二次打回项 2：车顶黑色悬空物定罪 = 程序化内饰顶棚堆叠（headliner 批次
+   * y1.7 / starlight 1.68 / cabin-roof-carpet 1.668 / curtain 1.7 / pillar-trim 1.75）
+   * 穿透外壳车顶轮廓。这些件座舱视角必需、外景必须藏 ⇒ 按「外壳顶玻璃线」阈值
+   * 挑出 pokeList，随 setPaintShadow 的内外舱态切换显隐（cabin 态恢复完整内饰）。 */
+  const r44PokeMeshes: THREE.Mesh[] = [];
+  const r44PokeShown = new Set<THREE.Mesh>();
+  const buildPokeList = (roofGlassY: number): void => {
+    r44PokeMeshes.length = 0;
+    const box = new THREE.Box3();
+    root.updateWorldMatrix(true, true);
+    root.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      if ((mesh.userData as { r44External?: boolean }).r44External === true) return;
+      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      const whitelisted = mats.some((mt) => {
+        const ud = mt?.userData as { sculptMaterial?: { id?: string }; cabinHidable?: boolean } | undefined;
+        if (ud?.cabinHidable) return false;
+        const id = ud?.sculptMaterial?.id;
+        return id != null && R44_INTERIOR_MATERIAL_IDS.has(id);
+      });
+      if (!whitelisted && !R44_KEEP_MESH_NAMES.has(mesh.name)) return;
+      box.setFromObject(mesh);
+      if (box.max.y > roofGlassY) r44PokeMeshes.push(mesh);
+    });
+    console.info(`[V800Adapter] R44 车顶穿透件：${r44PokeMeshes.length} 个（阈值 y>${roofGlassY.toFixed(2)}）`);
+  };
+  const setPokeHidden = (hidden: boolean): void => {
+    for (const mesh of r44PokeMeshes) {
+      if (hidden) {
+        if (mesh.visible) { mesh.visible = false; r44PokeShown.add(mesh); }
+      } else if (r44PokeShown.has(mesh)) {
+        mesh.visible = true;
+        r44PokeShown.delete(mesh);
+      }
+    }
+  };
+
+  void (async () => {
+    try {
+    const shell = await loadExternalShell('v800', paintId);
+    if (!shell) return; // 失败：保持程序化外观（含回退车漆），运行时零改动
+    shellHandle = shell;
+    // 标记外部壳子树：setExteriorHidden 必须跳过（外部壳材质无 sculpt id，
+    // 否则会被「id-less 材质按名隐藏」规则连同程序化外观一起藏掉 = 壳隐形）
+    shell.bodyMesh.traverse((o) => {
+      (o.userData as { r44External?: boolean }).r44External = true;
+    });
+    for (const wm of Object.values(shell.wheelMeshes)) {
+      (wm.userData as { r44External?: boolean }).r44External = true;
+    }
+    // R44-6 语义部件：glass（透明）/ lamp（emissive）与 bodyMesh 同级挂 body 组
+    for (const sm of [...shell.glassMeshes, ...shell.lampMeshes]) {
+      (sm.userData as { r44External?: boolean }).r44External = true;
+      sm.castShadow = false; // 透明玻璃不投影（避免全窗阴影黑块）
+      body.add(sm);
+    }
+    body.add(shell.bodyMesh);
+    // 外部轮 ↔ 工厂 spin 枢轴就近配对（约定同为 fl/fr/rl/rr，这里按世界距离兜底）
+    // 先隐藏程序化外观再挂轮：挂轮环节任何异常都不能把「程序化外观残留」留在画面上
+    // （R44 打回项 1：R7 曾因挂轮异常跳过隐藏 ⇒ glass-dark/matte-black 逃逸可见）
+    setExteriorHidden(true);
+    setPaintShadow(lastInteriorState);
+    buildPokeList(shell.manifest.bodyBBox.max[1] * shell.manifest.scale * 0.90);
+    setPokeHidden(!lastInteriorState);
+    const hubTags = ['fl', 'fr', 'rl', 'rr'] as const;
+    const usedSpin = new Set<THREE.Object3D>();
+    // 切割退化（静态轮）：无外部轮 mesh 时整段跳过
+    for (const tag of Object.keys(shell.wheelMeshes).length > 0 ? hubTags : []) {
+      try {
+        const hubModel = shell.manifest.hubs[tag];
+        const hubWorld = new THREE.Vector3(hubModel[0], hubModel[1], hubModel[2]);
+        shell.bodyMesh.updateWorldMatrix(true, false);
+        shell.bodyMesh.localToWorld(hubWorld);
+        let best: { spin: THREE.Object3D; d2: number } | null = null;
+        for (const w of wheels) {
+          if (usedSpin.has(w.spin)) continue;
+          w.spin.updateWorldMatrix(true, false);
+          const p = w.spin.getWorldPosition(new THREE.Vector3());
+          const d2 = p.distanceToSquared(hubWorld);
+          if (!best || d2 < best.d2) best = { spin: w.spin, d2 };
+        }
+        if (!best) break;
+        usedSpin.add(best.spin);
+        mountExternalWheel(shell.bodyMesh, hubModel, best.spin, shell.wheelMeshes[tag], shell.manifest.scale);
+      } catch (err) {
+        console.error(`[R44] 外部轮 ${tag} 挂载失败（该轮回退程序化轮位）:`, err);
+      }
+    }
+    wheelSpinRadius = shell.wheelRadius;
+    setFxWheelOffsets(wheelOffsetsWorldXZ(shell.manifest));
+    console.info(
+      `[V800Adapter] R44 外部壳就绪：body ${shell.manifest.tri.body} tri + 4 轮，` +
+        `scale=${shell.manifest.scale} wheelR=${shell.wheelRadius} variant=${shell.variant}`
+    );
+    } catch (e) {
+    console.error(`[V800Adapter] R44 装配失败：`, String(e));
+  }
+  })();
+
   const api: CarLike = {
     root,
     body,
@@ -4714,7 +4920,7 @@ export function createV800CarAdapter(tier: QualityTier = 'high', paintId: PaintI
       return heat;
     },
     spinWheels(dist: number, _dt: number): void {
-      const raw = (dist / 0.382) * MS_TO_RPM_SCALE;
+      const raw = (dist / wheelSpinRadius) * MS_TO_RPM_SCALE;
       // 钳制单帧转角并保留符号，避免高速下频闪/倒转错觉
       const step = Math.sign(raw) * Math.min(Math.abs(raw), MAX_WHEEL_STEP_PER_FRAME);
       for (const w of wheels) {
@@ -4767,6 +4973,13 @@ export function createV800CarAdapter(tier: QualityTier = 'high', paintId: PaintI
       snapT = damp(snapT, 0, 6, dt);
       if (snapT < 0.001) snapT = 0;
       if (tailMat) tailMat.emissiveIntensity = brakeLevel + snapGain;
+      // R44-6 外部壳灯组：尾灯 emissive 随刹车（0.35 待机 → +2.2×brakeLevel+snap），
+      // 头灯随 headLevel（DRL 0.12 待机）。程序化灯材质被 setExteriorHidden 隐藏，
+      // 外景态灯组反馈由这两个材质接管（cabin 态外壳隐藏，无可视灯组无影响）。
+      const extRear = shellHandle?.lampRearMat;
+      if (extRear) extRear.emissiveIntensity = 0.35 + (brakeLevel + snapGain) * 2.2;
+      const extFront = shellHandle?.lampFrontMat;
+      if (extFront) extFront.emissiveIntensity = 0.12 + headLevel * 0.9;
       // R21-B：手写尾灯（独占材质，刹车联动在旧件链路之外单独走）
       if (tailLampMats) {
         tailLampMats.red.emissiveIntensity =
@@ -4874,6 +5087,9 @@ export function createV800CarAdapter(tier: QualityTier = 'high', paintId: PaintI
       }
     },
     dispose(): void {
+      // R44 外部壳（几何/材质/贴图独立持有，显式释放）
+      shellHandle?.dispose();
+      shellHandle = null;
       model.traverse((o) => {
         const m = o as THREE.Mesh;
         if (m.isMesh) {

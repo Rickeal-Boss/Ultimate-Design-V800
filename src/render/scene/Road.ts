@@ -298,20 +298,39 @@ export class Road {
       uv.needsUpdate = true;
       return g;
     };
-    // 北块（车后方整幅，z ∈ [+60, +2130]）
-    pieces.push(slab(3000, northEdge - holeNear, 0, (northEdge + holeNear) / 2));
+    // 北块（车后方整幅，z ∈ [+60, +2130]）—— R44 随侧翼外缘 2500 同步加宽：
+    // 侧块外缘推到 ±2500 后，若南北块仍 3000 宽，走廊两端 z=+60/−358.5 处
+    // x∈[1500,2500] 会裂出新的 VOID 直边（R42「无底环带」同族事故）。
+    // 平面 2 tri 不随宽度变，加宽零 tri 成本；顺带把远环半径 2000 处
+    // 「环底 y=−10 vs 大地断边 ±1500」的旧 VOID 带埋掉（环脚落地）。
+    const GROUND_HALF_W = 2500;
+    pieces.push(slab(GROUND_HALF_W * 2, northEdge - holeNear, 0, (northEdge + holeNear) / 2));
     // 南块（城门以南整幅，z ∈ [−3870, −358.5]，含原河谷段 —— 那里已恢复实体地面）
-    pieces.push(slab(3000, holeFar - southEdge, 0, (southEdge + holeFar) / 2));
+    pieces.push(slab(GROUND_HALF_W * 2, holeFar - southEdge, 0, (southEdge + holeFar) / 2));
     // 西 / 东两块（走廊两侧，z ∈ [−358.5, +60]）—— R43-P0B/地形改为**离谷下倾坡地**：
     // GPU 取证（.qa/r43_occlusion/ P2/P5 + vision 复核）显示：缝闭合后桥上看外翼，
     // 与桥面同高的 3000m 平面仍读成「贴脸平涂墙」（占画面 1/3）。真山谷需要外侧
-    // 地形**低于桥面**：洞缘 y=−0.02 与岩壁顶同点 ⇒ 向外 0.22 坡度下潜（≈136m 处
-    // 到底 −30m，之后平缓延伸），沿 z 两端 70m 渐变回洞缘高度（与南北整幅大地
-    // 平滑衔接，不产生断崖）。40×8 细分（+636 tri×2 侧；UV 平铺口径不变）。
+    // 地形**低于桥面**：洞缘 y=−0.02 与岩壁顶同点 ⇒ 向外下潜（≈136m 处到底 −30m，
+    // 之后平缓延伸），沿 z 两端渐变回洞缘高度（与南北整幅大地平滑衔接，不产生断崖）。
     // 物理零风险：physics/World.ts 地面是独立 addStatic 盒体（y=0 全程）。
-    const sideW = 1500 - holeHalfX;
+    //
+    // R44（.qa/r44_env/：CPU 光栅消去法 elim_ranking.json + elim_BASE_R43.json）：
+    // 消去法实证 R43 的 −30m 下潜不够 —— viaduct_side `ground` 首命中 30.8%@139m、
+    // aerial 28.6%@373m，与桥面近高的平顶段仍把峡谷与远处 skyline 挡在身后
+    // （隐藏 ground 后 valleySee +14.5pp / +27.4pp）。本轮三参数扩大：
+    //   · 深度 −30 → **−45m**（坡度仍 0.22 起步，改 smoothstep 饱和 —— 洞缘与平台两端
+    //     切线水平，无新硬棱）；
+    //   · 纵向 z 渐变 70 → **140m**（走廊两端与南北整幅大地的衔接带加长）；
+    //   · 横向覆盖 1500 → **2500**（外缘推到远环半径之外，−45m 平台从侧翼机位读作
+    //     大地下潜而非「大地在 1500m 处断掉的边」）。
+    // 细分 40×8 → 48×16（205m 坡度段 ≥4 段 / 140m z 渐变带 ≥5 段，smoothstep 不被
+    // 顶点行采样糊掉）；UV 平铺口径不变（TILE=6）。
+    const DIP_DEPTH = 45;
+    const DIP_RUN = 140; // smoothstep 饱和点：中段最大坡度 0.48（R43 均匀坡 0.22），坡面法线带倾斜 ⇒ 低阳下有 Lambert 明暗
+    const Z_FADE = 140;
+    const sideW = 2500 - holeHalfX;
     for (const side of [-1, 1]) {
-      const g = new THREE.PlaneGeometry(sideW, holeNear - holeFar, 40, 8);
+      const g = new THREE.PlaneGeometry(sideW, holeNear - holeFar, 48, 16);
       g.rotateX(-Math.PI / 2);
       g.translate(side * (holeHalfX + sideW / 2), -0.02, (holeNear + holeFar) / 2);
       const pos = g.getAttribute('position') as THREE.BufferAttribute;
@@ -319,9 +338,11 @@ export class Road {
         const wx = pos.getX(i);
         const wz = pos.getZ(i);
         const xr = Math.abs(wx) - holeHalfX; // 离谷缘距离
-        const dip = Math.min(xr * 0.22, 30); // 下潜深度（0 → −30m @136m）
+        // smoothstep 饱和坡：0 → −45m @205m，两端切线水平（无硬棱）
+        const xramp = Math.min(xr / DIP_RUN, 1);
+        const dip = DIP_DEPTH * xramp * xramp * (3 - 2 * xramp);
         const zr = Math.min(wz - holeFar, holeNear - wz); // 距走廊两端
-        const fade = THREE.MathUtils.smoothstep(zr, 0, 70);
+        const fade = THREE.MathUtils.smoothstep(zr, 0, Z_FADE);
         pos.setY(i, -0.02 - dip * fade);
       }
       pos.needsUpdate = true;

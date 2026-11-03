@@ -47,6 +47,8 @@
 import * as THREE from 'three';
 import { MeshLambertMaterial } from 'three';
 import { ACTIVE_ENV } from '../../config/environment';
+import { canvasTexture, makeCanvas } from '../../util/canvasTex';
+import { makeLcg } from '../../util/math';
 import { GORGE_HALF, R27_PALETTE, VIADUCT } from './r28Layout';
 
 /** 近景岩石（峡谷壁）albedo —— Rock_CliffCoastal5 实测中位 */
@@ -127,12 +129,38 @@ function rockTint(u: number, v: number, shade: number): number {
   return k * (1 - 0.45 * shade);
 }
 
+/**
+ * R44 谷壁分带：3 条水平层理分界（= 4 条岩层带）+ 总体明度梯度（顶亮 → 谷底暗）。
+ *
+ * 治什么：12° 低阳下竖直壁面 NdotL≈0，Lambert 无明暗可言（R43 P2/P5 取证）；
+ * R43 的阶坡只救了下部 62%，上 38% 直崖仍是平涂。层理是**几何无关**的明度台阶，
+ * 走顶点色 ⇒ 0 tri / 0 DC / 0 显存，优先于贴图方案（BRIEF §二.3）。
+ *
+ * 口径纪律：
+ *  · 明度红线（本文件头）：只向下压，不向上抬 —— 每条分界向下 −12%，梯度 −0.16；
+ *  · 分界取**深度比例**（0.24 / 0.48 / 0.72），过渡带 ±0.022（≈1.5m，1/3 顶点行距，
+ *    GPU 两轮实测 −5%/±0.05 与 −9%/±0.028 均被节理噪声糊平（.qa/r44_env/ 差值剖面
+ *    + vision 判读「层理 0 条」），故收到 −12%/±0.022）；
+ *  · 与 rockTint 的遮挡 shade（谷底压暗）相乘后谷底总明度 ≈ albedo 的 0.54×0.55 ≈
+ *    0.30 —— 谷底阴影语义保持，未抬过 rockCliff 顶。
+ */
+function strataTint(y: number): number {
+  const d = Math.min(1, Math.max(0, -y / VIADUCT.gorgeDepth)); // 0=壁顶 → 1=谷底
+  let k = 1 - 0.16 * d; // 总体明度梯度
+  for (const b of [0.24, 0.48, 0.72]) {
+    // 分界向下 −12%：|d−b|→0 处减满，过渡带 ±0.022 平滑
+    k -= 0.12 * (1 - THREE.MathUtils.smoothstep(Math.abs(d - b), 0, 0.022));
+  }
+  return k;
+}
+
 /* ═══════════════════ 网格累加器 ═══════════════════ */
 
 interface Patch {
   pos: number[];
   col: number[];
   idx: number[];
+  uv?: number[];
 }
 
 const emptyPatch = (): Patch => ({ pos: [], col: [], idx: [] });
@@ -141,6 +169,7 @@ function toGeometry(patch: Patch): THREE.BufferGeometry {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(patch.pos, 3));
   geo.setAttribute('color', new THREE.Float32BufferAttribute(patch.col, 3));
+  if (patch.uv) geo.setAttribute('uv', new THREE.Float32BufferAttribute(patch.uv, 2));
   geo.setIndex(patch.idx);
   geo.computeVertexNormals();
   return geo;
@@ -149,6 +178,8 @@ function toGeometry(patch: Patch): THREE.BufferGeometry {
 /**
  * 铺一张 (nu+1)×(nv+1) 的四边形网格。
  * `flip` 只翻绕序（决定正面朝哪边），几何本身不变。
+ * `uvAt`（R44 可选）：逐顶点 UV —— 谷壁分带贴图用（顶点行距 5m/z 列距 10m，
+ * 顶点色物理上做不出米级颗粒，两轮 vision 判读后按 BRIEF §二.3 预案升级贴图）。
  */
 function addGrid(
   out: Patch,
@@ -157,7 +188,8 @@ function addGrid(
   at: (i: number, j: number) => readonly [number, number, number],
   tint: (i: number, j: number) => number,
   base: THREE.Color,
-  flip: boolean
+  flip: boolean,
+  uvAt?: (i: number, j: number) => readonly [number, number]
 ): void {
   const origin = out.pos.length / 3;
   const tmp = new THREE.Color();
@@ -167,6 +199,11 @@ function addGrid(
       out.pos.push(p[0], p[1], p[2]);
       tmp.copy(base).multiplyScalar(tint(i, j));
       out.col.push(tmp.r, tmp.g, tmp.b);
+      if (uvAt) {
+        const uv = uvAt(i, j);
+        if (!out.uv) out.uv = [];
+        out.uv.push(uv[0], uv[1]);
+      }
     }
   }
   const row = nu + 1;
@@ -181,6 +218,79 @@ function addGrid(
     }
   }
 }
+
+/* ═══════════════════ 谷壁分带贴图（R44，512²，确定性 LCG） ═══════════════════ */
+
+/**
+ * 岩壁层理贴图：4 条水平岩层带 + 层界错缝 + 逐带竖向节理（相位错位）+ 细颗粒。
+ *
+ * 为什么升级贴图（BRIEF §二.3 预案）：顶点色网格行距 5m / 列距 10m，任何顶点属性
+ * 都是低频插值 —— GPU 两轮目检 + vision 判读（.qa/r44_env/）实证层理台阶
+ * （−5%/−9%/−12% 三档试参）均被节理噪声与插值糊平，读作「过于平滑的纯色块」。
+ * 512² @ 53m/周期 ≈ 7.7px/m，能出米级层理与节理错位。
+ *
+ * 口径：
+ *  · 画布 y=0 = 壁顶（world y=−0.02），y=512 = 谷底 —— 与壁面 UV `v = 1 − j/ny`
+ *    （flipY=true）逐点对应；层界画在深度比例 0.24/0.48/0.72，与 strataTint 同位；
+ *  · 明度红线：带均值只向下（238→196），整体均值 ≈0.92（≈ albedo 九折上限内，
+ *    净压暗 ≈6%，不抬 rockCliff 相对明度）；
+ *  · castleTexMB 预算：512² RGBA + mip ≈ 1.33MB，红线余 2.67MB 内；
+ *  · 0 tri / 0 DC（仍并入 terrain-rock 单 mesh）。
+ */
+function rockStrataTexture(): THREE.CanvasTexture {
+  const S = 512;
+  const [canvas, ctx] = makeCanvas(S, S);
+  const random = makeLcg(44771033);
+  // 4 条岩层带：壁顶亮 → 谷底暗（与 strataTint 梯度同向）
+  const bandTops = [0, 0.24, 0.48, 0.72, 1.0];
+  const bandGray = [238, 224, 209, 194];
+  for (let b = 0; b < 4; b += 1) {
+    const y0 = Math.round(bandTops[b] * S);
+    const y1 = Math.round(bandTops[b + 1] * S);
+    ctx.fillStyle = `rgb(${bandGray[b]},${bandGray[b] - 2},${bandGray[b] - 5})`;
+    ctx.fillRect(0, y0, S, y1 - y0);
+    // 带内水平沉积微层（明暗相间的细横纹，2~5px）
+    let y = y0 + 2;
+    while (y < y1 - 2) {
+      const h = 2 + random() * 4;
+      const g = bandGray[b] + (random() - 0.5) * 26;
+      ctx.fillStyle = `rgba(${g},${g - 2},${g - 6},${(0.10 + random() * 0.12).toFixed(3)})`;
+      ctx.fillRect(0, y, S, h);
+      y += h + random() * 5;
+    }
+    // 带内竖向节理（暗缝）：每带独立 x 相位 ⇒ 层界处竖纹错位（岩层强读法）
+    const phase = random() * 40;
+    const pitch = 9 + random() * 8;
+    for (let x = phase; x < S; x += pitch) {
+      const w = 1 + random() * 2;
+      const yj = y0 + random() * 4;
+      const hj = y1 - yj - random() * 6;
+      ctx.fillStyle = `rgba(70,66,60,${(0.10 + random() * 0.14).toFixed(3)})`;
+      ctx.fillRect(x + (random() - 0.5) * 3, yj, w, hj);
+    }
+  }
+  // 层界错缝：2px 暗线 + 1px 亮线（下侧受光棱）
+  for (const t of [0.24, 0.48, 0.72]) {
+    const y = Math.round(t * S);
+    ctx.fillStyle = 'rgba(58,54,48,0.5)';
+    ctx.fillRect(0, y - 1, S, 3);
+    ctx.fillStyle = 'rgba(255,252,246,0.28)';
+    ctx.fillRect(0, y + 2, S, 1);
+  }
+  // 细颗粒（确定性：不用 Math.random 的 paintNoise）
+  for (let i = 0; i < 9000; i += 1) {
+    const g = Math.floor(150 + random() * 100);
+    ctx.fillStyle = `rgba(${g},${g},${g},${(0.06 + random() * 0.10).toFixed(3)})`;
+    ctx.fillRect(random() * S, random() * S, 1 + random() * 1.6, 1 + random() * 1.6);
+  }
+  const tex = canvasTexture(canvas);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  return tex;
+}
+
+/** 贴图横向周期（米）：418.5m 谷长 ≈ 8 个周期，512px/53m ≈ 7.7px/m */
+const ROCK_TEX_PERIOD = 53;
 
 /* ═══════════════════ Terrain ═══════════════════ */
 
@@ -212,16 +322,17 @@ export class Terrain {
     // totalHalf 12.6 ⇒ 3~5.4m 宽 × 66.5m 深 × 418.5m 长的无底环带，视线穿缝直抵
     // 天空球 uGround 0x4b4038）。R43-P1 已把 half 对齐 GORGE_HALF，缝闭合；
     // DoubleSide 让谷壁在桥两侧都能读到（用户要的是"山谷"，两侧都要有壁）。
-    const rockMesh = new THREE.Mesh(toGeometry(rock), this.material(ROCK_GAIN_NEAR, THREE.DoubleSide));
+    const rockMesh = new THREE.Mesh(toGeometry(rock), this.material(ROCK_GAIN_NEAR, THREE.DoubleSide, rockStrataTexture()));
     rockMesh.name = 'terrain-rock';
     rockMesh.frustumCulled = false;
     scene.add(rockMesh);
   }
 
-  private material(gain: number, side: THREE.Side): MeshLambertMaterial {
+  private material(gain: number, side: THREE.Side, map?: THREE.Texture): MeshLambertMaterial {
     return new MeshLambertMaterial({
       color: new THREE.Color(gain, gain, gain),
       vertexColors: true,
+      map,
       side,
       // 远景岩体必须吃雾（旧 MeshBasic 环是这块场景里唯一不随距离衰减的东西）
       fog: true
@@ -336,10 +447,24 @@ export class Terrain {
         },
         (i, j) => {
           const z = zNear + ((zFar - zNear) * i) / nz;
-          return rockTint(z / 30, ((top + ((bed - top) * j) / ny) / 2.8), 0.15 + 0.85 * (j / ny));
+          const y = top + ((bed - top) * j) / ny;
+          // R44：顶点色 y 分带（3 层理 + 明度梯度，见 strataTint）—— 竖直壁面在
+          // 12° 低阳下 Lambert≈0，明度台阶替代光照对比。
+          // R44 iter4（GPU 两轮 vision 判读「层理 0 条」后追加）：层界的地质本质
+          // 是**节理竖纹错位**——每层给 u 一个相位偏移，竖纹过层界即跳变，
+          // 层界读作水平错缝（岩层强读法）；乘性台阶（−12%）保持不变。
+          const d = Math.min(1, Math.max(0, -y / VIADUCT.gorgeDepth));
+          const band = (d > 0.24 ? 1 : 0) + (d > 0.48 ? 1 : 0) + (d > 0.72 ? 1 : 0);
+          return rockTint(z / 30 + band * 13.7, y / 2.8, 0.15 + 0.85 * (j / ny)) * strataTint(y);
         },
         ROCK_NEAR,
-        side > 0
+        side > 0,
+        // R44：壁面 UV —— u 沿 z（53m/周期），v 全高 0..1（v=1 壁顶 ↔ 贴图 y=0，
+        // flipY=true 逐点对应 rockStrataTexture 的层界深度比例）
+        (i, j) => [
+          (i / nz) * ((zNear - zFar) / ROCK_TEX_PERIOD),
+          1 - j / ny
+        ] as const
       );
     }
 
@@ -362,9 +487,20 @@ export class Terrain {
           const zw = 2.0 * (noise2(x * 0.13 + 8.9, y * 0.08) - 0.5);
           return [x, y, zEnd + (zEnd === zNear ? -Math.abs(zw) : Math.abs(zw))];
         },
-        (i, j) => rockTint(i / nx, j / ny, 0.15 + 0.85 * (j / ny)),
+        (i, j) => {
+          const y = top + ((bed - top) * j) / ny;
+          // R44：两端封口同走 y 分带（与侧壁同口径，含节理相位错位，从谷口两端看不露平涂）
+          const d = Math.min(1, Math.max(0, -y / VIADUCT.gorgeDepth));
+          const band = (d > 0.24 ? 1 : 0) + (d > 0.48 ? 1 : 0) + (d > 0.72 ? 1 : 0);
+          return rockTint(i / nx + band * 13.7, j / ny, 0.15 + 0.85 * (j / ny)) * strataTint(y);
+        },
         ROCK_NEAR,
-        flip
+        flip,
+        // R44：封口 UV —— u 沿 x，v 全高（与侧壁同口径）
+        (i, j) => [
+          (i / nx) * ((2 * bh) / ROCK_TEX_PERIOD),
+          1 - j / ny
+        ] as const
       );
     }
 
@@ -386,7 +522,14 @@ export class Terrain {
         return rockTint(x / 22, z / 17, 0.8);
       },
       ROCK_NEAR,
-      false
+      false,
+      // R44：谷底 UV —— u 按世界尺度平铺（颗粒/节理随距离变化）；
+      // v 取贴图深处单一行（0.08）不随 z 变 —— 层理只属于竖直壁面，
+      // 谷底不吃横向条带（避免谷底出现「悬空岩层」错觉）
+      (i) => [
+        ((-bh + ((2 * bh) * i) / 12) / ROCK_TEX_PERIOD),
+        0.08
+      ] as const
     );
   }
 }

@@ -18,8 +18,16 @@ import { createLuxeedR7Model, type ProceduralModelRuntime } from './createR7Mode
 import { batchMergeStatic, UV_CONTENT_MATERIAL_IDS } from './batchMerge';
 import { applyReferenceTextures } from './refTextures';
 import { mountLicensePlate } from './plateTexture';
-// R37-C 车漆配色：R7 只吃 upper 一档（单支漆面 paint-green）
-import { applyPaintSlot, getPaintSpec, type PaintId } from '../config/vehiclePaint';
+// R44 外观 GLB 资产化：外部壳装载 + 程序化外观隐藏 + fx 轮位同步。
+// R37-C 的 5 色落色路径退役：R7 程序化车漆固定工厂墨绿（外部壳失败时的回退基线）。
+import {
+  loadExternalShell,
+  mountExternalWheel,
+  wheelOffsetsWorldXZ,
+  type ExternalShellHandle
+} from './external/ExternalShell';
+import { setFxWheelOffsets } from '../fx';
+import { DEFAULT_VARIANT } from '../config/vehiclePaint';
 import { createR7FrontDetails } from './parts/r7FrontDetails';
 import { carTextureSizeFor, type QualityTier } from '../config/quality';
 import { damp } from '../util/math';
@@ -372,14 +380,11 @@ function drawCluster(
 /**
  * 建立 R7 的 Car 适配器。
  * @param tier 质量档：high 保持 spec 玻璃透光率；medium/low 提高玻璃不透明度并关掉部分细节。
+ * @param paintId R44 起语义 = **外部壳外观变体 id**（'white'|'purple'|'green'，来自
+ *   vehiclePaint 变体表 / URL `#paint=`）；null = 用各车默认（白）。程序化车漆
+ *   不再消费该参数，固定工厂墨绿（外部壳装载失败时的回退外观）。
  */
-/**
- * @param tier 质量档
- * @param paintId 车漆配色；**null = 保留工厂原色**（R7 基线墨绿，见 vehiclePaint.ts
- *   的 FACTORY_PAINT_CHOICE 注释）。与 V800 的双拼不同，R7 只有单支漆面
- *   paint-green ⇒ 只吃色表的 `upper` 一档。换色同样是改既有实例，不 new 材质。
- */
-export function createR7CarAdapter(tier: QualityTier = 'high', paintId: PaintId | null = null): CarLike {
+export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string | null = null): CarLike {
   const textureSize = carTextureSizeFor(tier);
   const model = createLuxeedR7Model({ textureSize });
   const runtime = model.userData.sculptRuntime as ProceduralModelRuntime | undefined;
@@ -480,9 +485,9 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: PaintId 
     paint.roughness = 0.18;
     paint.iridescence = 0.15;
     paint.envMapIntensity = 1.05;
-    // R37-C：玩家显式选了 5 色之一才覆写 color/金属度等（paintId=null ⇒ 原厂墨绿不动，
-    // 避免 R7 基线外观被本轮改动）。iridescence 是 R7 车漆的身份参数，任何配色都保留。
-    if (paintId) applyPaintSlot(paint, getPaintSpec(paintId).upper);
+    // R37-C 的显式选色落色路径退役（R44）：paintId 参数已改语义为外部壳变体 id，
+    // 程序化车漆固定工厂墨绿（R7 基线外观 = 回退路径）。iridescence 是 R7 车漆
+    // 的身份参数，保持不动。
     paint.needsUpdate = true;
   }
   const matte = matById.get('matte-black');
@@ -1209,17 +1214,191 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: PaintId 
    * 0 tri / 0 DC；外部机位逐像素不变。回退：删 `p.mesh.visible = !interior;` 一行。
    * ⚠ 真机目检项：车内视角露出的仪表台/方向盘无空洞、侧窗与顶棚完整。
    */
+  // ---- R44 状态：外部壳句柄 / 程序化外观隐藏标记 / 最近一次内舱态 ----
+  let shellHandle: ExternalShellHandle | null = null;
+  let proceduralExteriorHidden = false;
+  let lastInteriorState = false;
+  /** spinWheels 弧长→角度换算半径；外部壳装载成功后取 manifest.wheelRadius */
+  let wheelSpinRadius = WHEEL_RADIUS;
+
   const setPaintShadow = (interior: boolean): void => {
+    lastInteriorState = interior;
+    // R44：外部壳 body（含玻璃）随内舱态整体显隐（轮挂 spin 枢轴下，保持旋转）
+    if (shellHandle) {
+      shellHandle.bodyMesh.visible = !interior;
+      // R44-6：glass/lamp 语义件与外壳同显隐
+      for (const sm of [...shellHandle.glassMeshes, ...shellHandle.lampMeshes]) {
+        sm.visible = !interior;
+      }
+      // R44-6 修订（同 V800）：外景态恢复程序化内饰可见（透明玻璃透出座舱 =
+      // 官图观感）；不透明车身深度遮挡防内饰透金属；poke 由玻璃深 tint 把关。
+      model.visible = true;
+    }
+    setPokeHidden(!interior); // R44：车顶穿透件外景藏、cabin 态恢复
     for (const p of paintShadowPairs) {
       if (interior) {
         p.mesh.visible = false;
         p.mesh.material = p.interior;
       } else {
         p.mesh.material = p.exterior;
-        p.mesh.visible = true;
+        // R44：外部壳在场时程序化外壳保持隐藏（外部壳接手外观）
+        p.mesh.visible = !proceduralExteriorHidden;
       }
     }
   };
+
+  /* ══════════════ R44 外部壳（外观 GLB 资产化）══════════════
+   * 与 V800Adapter 同构（见彼处完整注释）。差异：R7 spin 枢轴自带 rotZ(90°)
+   * 基准四元数（lathe 轴），mountExternalWheel 用矩阵反解自动消化；
+   * R7 轴距 2.95m（外部 hub ×4.323），fx 轮位按 manifest 同步。 */
+  const R44_INTERIOR_MATERIAL_IDS = new Set<string>([
+    'ambient', 'carpet', 'gauge-ui', 'leather-charcoal', 'leather-ivory', 'leather-plum',
+    'pedal-metal', 'screen-ui', 'speaker-lattice', 'suede-ivory'
+  ]);
+  const R44_KEEP_MESH_NAMES = new Set<string>(['brake-pedal', 'cabin-floor-carpet', 'cabin-roof-carpet']);
+  const r44HiddenMaterials = new Set<THREE.Material>();
+  const r44HiddenMeshes = new Set<THREE.Mesh>();
+  const setExteriorHidden = (hidden: boolean): void => {
+    root.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      if ((mesh.userData as { r44External?: boolean }).r44External === true) return; // 外部壳本体
+      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      const keepByName = R44_KEEP_MESH_NAMES.has(mesh.name);
+      let hasId = false;
+      for (const mt of mats) {
+        if (!mt) continue;
+        const ud = mt.userData as { sculptMaterial?: { id?: string }; cabinHidable?: boolean };
+        if (ud?.cabinHidable === true) {
+          hasId = true;
+          continue;
+        }
+        const id = ud?.sculptMaterial?.id;
+        if (id) hasId = true;
+        const keep = keepByName || (id != null && R44_INTERIOR_MATERIAL_IDS.has(id));
+        if (hidden && !keep) {
+          if (mt.visible) {
+            mt.visible = false;
+            r44HiddenMaterials.add(mt);
+          }
+        } else if (!hidden && r44HiddenMaterials.has(mt)) {
+          mt.visible = true;
+          r44HiddenMaterials.delete(mt);
+        }
+      }
+      if (!hasId && !keepByName) {
+        if (hidden) {
+          if (mesh.visible) {
+            mesh.visible = false;
+            r44HiddenMeshes.add(mesh);
+          }
+        } else if (r44HiddenMeshes.has(mesh)) {
+          mesh.visible = true;
+          r44HiddenMeshes.delete(mesh);
+        }
+      }
+    });
+    proceduralExteriorHidden = hidden;
+  };
+
+  /* R44 二次打回项 2：车顶黑色悬空物定罪 = 程序化内饰顶棚堆叠（headliner 批次
+   * y1.7 / starlight 1.68 / cabin-roof-carpet 1.668 / curtain 1.7 / pillar-trim 1.75）
+   * 穿透外壳车顶轮廓。这些件座舱视角必需、外景必须藏 ⇒ 按「外壳顶玻璃线」阈值
+   * 挑出 pokeList，随 setPaintShadow 的内外舱态切换显隐（cabin 态恢复完整内饰）。 */
+  const r44PokeMeshes: THREE.Mesh[] = [];
+  const r44PokeShown = new Set<THREE.Mesh>();
+  const buildPokeList = (roofGlassY: number): void => {
+    r44PokeMeshes.length = 0;
+    const box = new THREE.Box3();
+    root.updateWorldMatrix(true, true);
+    root.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      if ((mesh.userData as { r44External?: boolean }).r44External === true) return;
+      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      const whitelisted = mats.some((mt) => {
+        const ud = mt?.userData as { sculptMaterial?: { id?: string }; cabinHidable?: boolean } | undefined;
+        if (ud?.cabinHidable) return false;
+        const id = ud?.sculptMaterial?.id;
+        return id != null && R44_INTERIOR_MATERIAL_IDS.has(id);
+      });
+      if (!whitelisted && !R44_KEEP_MESH_NAMES.has(mesh.name)) return;
+      box.setFromObject(mesh);
+      if (box.max.y > roofGlassY) r44PokeMeshes.push(mesh);
+    });
+    console.info(`[R7Adapter] R44 车顶穿透件：${r44PokeMeshes.length} 个（阈值 y>${roofGlassY.toFixed(2)}）`);
+  };
+  const setPokeHidden = (hidden: boolean): void => {
+    for (const mesh of r44PokeMeshes) {
+      if (hidden) {
+        if (mesh.visible) { mesh.visible = false; r44PokeShown.add(mesh); }
+      } else if (r44PokeShown.has(mesh)) {
+        mesh.visible = true;
+        r44PokeShown.delete(mesh);
+      }
+    }
+  };
+
+  void (async () => {
+    try {
+    const shell = await loadExternalShell('r7', paintId ?? DEFAULT_VARIANT.r7);
+    if (!shell) return;
+    shellHandle = shell;
+    // 标记外部壳子树：setExteriorHidden 必须跳过（外部壳材质无 sculpt id，
+    // 否则会被「id-less 材质按名隐藏」规则连同程序化外观一起藏掉 = 壳隐形）
+    shell.bodyMesh.traverse((o) => {
+      (o.userData as { r44External?: boolean }).r44External = true;
+    });
+    for (const wm of Object.values(shell.wheelMeshes)) {
+      (wm.userData as { r44External?: boolean }).r44External = true;
+    }
+    // R44-6 语义部件：glass（透明）/ lamp（emissive）与 bodyMesh 同级挂 body 组
+    for (const sm of [...shell.glassMeshes, ...shell.lampMeshes]) {
+      (sm.userData as { r44External?: boolean }).r44External = true;
+      sm.castShadow = false;
+      body.add(sm);
+    }
+    body.add(shell.bodyMesh);
+    // 先隐藏程序化外观再挂轮：挂轮环节任何异常都不能把「程序化外观残留」留在画面上
+    // （R44 打回项 1：R7 曾因挂轮异常跳过隐藏 ⇒ glass-dark/matte-black 逃逸可见）
+    setExteriorHidden(true);
+    setPaintShadow(lastInteriorState);
+    buildPokeList(shell.manifest.bodyBBox.max[1] * shell.manifest.scale * 0.90);
+    setPokeHidden(!lastInteriorState);
+    const hubTags = ['fl', 'fr', 'rl', 'rr'] as const;
+    const usedSpin = new Set<THREE.Object3D>();
+    // 切割退化（静态轮）：无外部轮 mesh 时整段跳过
+    for (const tag of Object.keys(shell.wheelMeshes).length > 0 ? hubTags : []) {
+      try {
+        const hubModel = shell.manifest.hubs[tag];
+        const hubWorld = new THREE.Vector3(hubModel[0], hubModel[1], hubModel[2]);
+        shell.bodyMesh.updateWorldMatrix(true, false);
+        shell.bodyMesh.localToWorld(hubWorld);
+        let best: { spin: THREE.Object3D; d2: number } | null = null;
+        for (const w of wheels) {
+          if (usedSpin.has(w.spin)) continue;
+          w.spin.updateWorldMatrix(true, false);
+          const p = w.spin.getWorldPosition(new THREE.Vector3());
+          const d2 = p.distanceToSquared(hubWorld);
+          if (!best || d2 < best.d2) best = { spin: w.spin, d2 };
+        }
+        if (!best) break;
+        usedSpin.add(best.spin);
+        mountExternalWheel(shell.bodyMesh, hubModel, best.spin, shell.wheelMeshes[tag], shell.manifest.scale);
+      } catch (err) {
+        console.error(`[R44] 外部轮 ${tag} 挂载失败（该轮回退程序化轮位）:`, err);
+      }
+    }
+    wheelSpinRadius = shell.wheelRadius;
+    setFxWheelOffsets(wheelOffsetsWorldXZ(shell.manifest));
+    console.info(
+      `[R7Adapter] R44 外部壳就绪：body ${shell.manifest.tri.body} tri + 4 轮，` +
+        `scale=${shell.manifest.scale} wheelR=${shell.wheelRadius} variant=${shell.variant}`
+    );
+    } catch (e) {
+    console.error(`[R7Adapter] R44 装配失败：`, String(e));
+  }
+  })();
 
   const api: CarLike = {
     root,
@@ -1237,7 +1416,7 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: PaintId 
     },
 
     spinWheels(dist: number, _dt: number): void {
-      const raw = (dist / WHEEL_RADIUS) * MS_TO_RPM_SCALE;
+      const raw = (dist / wheelSpinRadius) * MS_TO_RPM_SCALE;
       const step = Math.sign(raw) * Math.min(Math.abs(raw), MAX_WHEEL_STEP_PER_FRAME);
       if (step === 0) return;
       for (const rig of spinRigs) {
@@ -1297,6 +1476,16 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: PaintId 
       // 头灯
       headLevel = damp(headLevel, headTarget, 14, dt);
       for (const mat of headMats) mat.emissiveIntensity = headLevel;
+      // R44-6 外部壳灯组：尾灯跟随统一待机口径、头灯随 headLevel（外景态接管反馈）
+      const extRear = shellHandle?.lampRearMat;
+      if (extRear) {
+        extRear.emissiveIntensity =
+          (R7_TAIL_STANDBY_EI * (BRAKE_BASE_INTENSITY + brakeLevel)) /
+            (BRAKE_BASE_INTENSITY + R7_TAIL_STANDBY_LEVEL) +
+          snapT * SNAP_GAIN;
+      }
+      const extFront = shellHandle?.lampFrontMat;
+      if (extFront) extFront.emissiveIntensity = 0.12 + (headLevel / Math.max(headBaseIntensity, 1e-3)) * 0.78;
       // 刹车热：卡钳暗红自发光
       if (caliperMat) caliperMat.emissiveIntensity = heat * 1.1;
       // 方向盘回正
@@ -1307,6 +1496,9 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: PaintId 
     },
 
     dispose(): void {
+      // R44 外部壳（几何/材质/贴图独立持有，显式释放）
+      shellHandle?.dispose();
+      shellHandle = null;
       for (const tex of decalTextures) tex.dispose();
       if (clusterTex) clusterTex.dispose();
       const disposedMats = new Set<THREE.Material>();

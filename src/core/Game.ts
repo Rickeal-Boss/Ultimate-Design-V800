@@ -10,7 +10,7 @@ import { resolveAssemblyPaintId } from '../config/vehiclePaint';
 import { AdaptiveQuality, type QualitySettings, type QualityTier } from '../config/quality';
 import { World } from '../physics/World';
 import type { VehicleState } from '../physics/Vehicle';
-import { FxSystems } from '../fx';
+import { FxSystems, type FxFrameInput } from '../fx';
 import { cycleViewsFor, CameraRig, isInteriorMode } from '../render/CameraRig';
 import type { CameraMode } from '../render/CameraRig';
 import { Postfx } from '../render/Postfx';
@@ -233,6 +233,13 @@ export class Game {
    */
   private prevFreeX = 0;
   private prevFreeZ = 0;
+  /**
+   * R44-P1：自由探索「上一物理步」航向快照。frameFree 用 alpha 对 rotation.y 插值，
+   * 与 prevFreeX/Z 同语义 —— 120Hz 步进下每 tick 偏航 0.0075rad（0.43°），掉帧帧
+   * 一次跳 0.86°+，且 free 机位是 local 跟随（root 朝向直接驱动相机），属
+   * 「长帧位移跳变感知放大」同类（R40 P0-B 修了 x/z 漏了 heading）。
+   */
+  private prevFreeHeading = 0;
   private brakeFlash = 0;
   private pendingResult: { result: RunResult; delay: number } | null = null;
   private crashElapsed = 0;
@@ -268,15 +275,28 @@ export class Game {
   private probeTicks = 0;
   /** R39 帧成本探针缓冲（null = 未启用；`#r39perf` 时分配，见构造函数） */
   private r39: R39Probe | null = null;
-  /** R43-P0C/G 帧日志（null = 未启用；`#framelog` 时分配）——真机取数用 */
+  /** R43-P0C/G 帧日志（null = 未启用；`#framelog` 时分配）——真机取数用。
+   *  R44-P1：5 条 number[] 每帧 push → 定长 Float32Array（预分配零增长；DEV only） */
   private frameLog: {
-    rows: number[];
-    speed: number[];
-    tris: number[];
-    calls: number[];
-    dpr: number[];
+    rows: Float32Array;
+    speed: Float32Array;
+    tris: Float32Array;
+    calls: Float32Array;
+    dpr: Float32Array;
+    n: number;
     lastT: number;
   } | null = null;
+  /**
+   * R44-P1：每帧 fx 载荷复用。原先 frame/frameFree 各 new 一个对象字面量/帧
+   * （60fps × 60s = 3.6k 个短命对象/分钟，R43 实测 GC 29.3ms/轮是唯一真尖峰）。
+   * FxSystems.update 只同步读、不持有引用 ⇒ 原地改写安全（与 hudInput 同判据）。
+   */
+  private readonly fxInput: FxFrameInput = {
+    carRoot: null as unknown as THREE.Object3D,
+    brakeIntensity: 0,
+    speedMs: 0,
+    braking: false
+  };
   /* R39 阴影参与度的判定口径（留档，防后人重踩）：
    * 不用 `sun.shadow.needsUpdate` 翻转（autoUpdate=true 后没人再写它，恒 false）；
    * 也不用包装 `WebGLShadowMap.render` 数 draw call 增量 —— 实测包装器每帧被调 16 次、
@@ -510,17 +530,22 @@ export class Game {
      * frameGap p50/p95/p99/max + speed/tris/calls/dpr 逐帧序列 ——
      * 拿着这份数据就能回答「真机上帧时是否随车速/位置增长」，不再靠猜。 */
     if (import.meta.env.DEV && window.location.hash.includes('framelog')) {
-      this.frameLog = { rows: [], speed: [], tris: [], calls: [], dpr: [], lastT: performance.now() };
+      const cap = 30000;
+      this.frameLog = {
+        rows: new Float32Array(cap),
+        speed: new Float32Array(cap),
+        tris: new Float32Array(cap),
+        calls: new Float32Array(cap),
+        dpr: new Float32Array(cap),
+        n: 0,
+        lastT: performance.now()
+      };
       (window as unknown as Record<string, unknown>).__v800framelog = {
         dump: (): unknown => this.dumpFrameLog(),
         clear: (): void => {
           const f = this.frameLog;
           if (!f) return;
-          f.rows.length = 0;
-          f.speed.length = 0;
-          f.tris.length = 0;
-          f.calls.length = 0;
-          f.dpr.length = 0;
+          f.n = 0;
           f.lastT = performance.now();
         }
       };
@@ -1094,16 +1119,24 @@ export class Game {
     // 视为传送/复位/R 键/首帧未初始化，直接吸附到当前态（此帧不插值）。
     const jumpX = s.x - this.prevFreeX;
     const jumpZ = s.z - this.prevFreeZ;
-    if (jumpX * jumpX + jumpZ * jumpZ > 25) {
+    // R44-P1：航向 wrap 感知差值（heading 已归一 (−π,π]，跨 ±π 边界时按 2π 折回）；
+    // |Δh|>0.5rad 视为传送/复位/翻滚重置，直接吸附（与 5m 位移守卫同判据族）。
+    let dh = s.heading - this.prevFreeHeading;
+    if (dh > Math.PI) dh -= Math.PI * 2;
+    else if (dh < -Math.PI) dh += Math.PI * 2;
+    if (jumpX * jumpX + jumpZ * jumpZ > 25 || Math.abs(dh) > 0.5) {
       this.prevFreeX = s.x;
       this.prevFreeZ = s.z;
+      this.prevFreeHeading = s.heading;
+      dh = 0;
     }
     this.car.root.position.set(
       lerp(this.prevFreeX, s.x, alpha),
       0,
       lerp(this.prevFreeZ, s.z, alpha)
     );
-    this.car.root.rotation.y = s.heading;
+    // R44-P1：航向按 alpha 插值（原来直读 s.heading = 每 tick 0.43° 阶跃）
+    this.car.root.rotation.y = this.prevFreeHeading + dh * alpha;
     this.car.body.rotation.x = s.pitch;
     this.car.body.rotation.z = s.roll;
     // 车轮：弧长 = v·dt（有符号，倒车反转）；前轮转角走适配层既有 setSteer
@@ -1120,12 +1153,13 @@ export class Game {
     this.contactShadow.update(this.car.body);
 
     // ---- 特效 / 音效（Sfx 的 spool 一阶滞后常量不动，只喂速度）----
-    this.fx.update(dt, {
-      carRoot: this.car.root,
-      brakeIntensity: braking && absSpeed > 3 ? 0.35 : 0,
-      speedMs: absSpeed,
-      braking: braking && absSpeed > 3
-    });
+    // R44-P1：fx 载荷复用 this.fxInput（原每帧对象字面量，纯 GC 垃圾）
+    const fx = this.fxInput;
+    fx.carRoot = this.car.root;
+    fx.brakeIntensity = braking && absSpeed > 3 ? 0.35 : 0;
+    fx.speedMs = absSpeed;
+    fx.braking = braking && absSpeed > 3;
+    this.fx.update(dt, fx);
     this.sfx.updateEngine(speedKmh, s.throttle > 0);
     this.sfx.updateWind(absSpeed / (VEHICLE.maxSpeedKmh / MS_TO_KMH));
     this.sfx.updateSqueal(0, absSpeed);
@@ -1241,6 +1275,8 @@ export class Game {
       // 只读驾驶器 state，不写回 ⇒ 不触碰 FreeDrive 内部物理态。
       this.prevFreeX = this.freeDrive.state.x;
       this.prevFreeZ = this.freeDrive.state.z;
+      // R44-P1：heading 同帧快照（见字段注释；顺序必须在 step 之前，与 x/z 同语义）
+      this.prevFreeHeading = this.freeDrive.state.heading;
       this.freeDrive.step(step);
       return;
     }
@@ -1483,16 +1519,17 @@ export class Game {
     this.sfx.updateRegen(vehicle.regenPowerKw > 1);
 
     // ---- 特效（轮胎烟 / 刹车痕 / 火花；low 档内部自动关闭）----
-    this.fx.update(dt, {
-      carRoot: this.car.root,
-      brakeIntensity: braking
-        ? redundant
-          ? REDUNDANCY.forceRatio
-          : Math.min(1, this.sm.pedal.pedalForce / BRAKE.breakForceN)
-        : 0,
-      speedMs: vehicle.speed,
-      braking
-    });
+    // R44-P1：fx 载荷复用 this.fxInput（原每帧对象字面量，纯 GC 垃圾）
+    const fx = this.fxInput;
+    fx.carRoot = this.car.root;
+    fx.brakeIntensity = braking
+      ? redundant
+        ? REDUNDANCY.forceRatio
+        : Math.min(1, this.sm.pedal.pedalForce / BRAKE.breakForceN)
+      : 0;
+    fx.speedMs = vehicle.speed;
+    fx.braking = braking;
+    this.fx.update(dt, fx);
 
     // ---- 结算延迟 ----
     if (this.pendingResult) {
@@ -1565,12 +1602,14 @@ export class Game {
     if (this.frameLog) {
       const now = performance.now();
       const f = this.frameLog;
-      if (f.rows.length < 30000) {
-        f.rows.push(now - f.lastT);
-        f.speed.push(Math.abs(vehicle ? vehicle.speed : (this.freeDrive?.state.speed ?? 0)));
-        f.tris.push(this.renderer.info.render.triangles);
-        f.calls.push(this.renderer.info.render.calls);
-        f.dpr.push(this.qualityGovernor.pixelRatio);
+      if (f.n < f.rows.length) {
+        const i = f.n;
+        f.rows[i] = now - f.lastT;
+        f.speed[i] = Math.abs(vehicle ? vehicle.speed : (this.freeDrive?.state.speed ?? 0));
+        f.tris[i] = this.renderer.info.render.triangles;
+        f.calls[i] = this.renderer.info.render.calls;
+        f.dpr[i] = this.qualityGovernor.pixelRatio;
+        f.n += 1;
       }
       f.lastT = now;
     }
@@ -1661,18 +1700,18 @@ export class Game {
   private dumpFrameLog(): unknown {
     const f = this.frameLog;
     if (!f) return null;
-    const rows = f.rows.slice().sort((a, b) => a - b);
-    const q = (p: number): number =>
-      rows.length ? rows[Math.min(rows.length - 1, Math.floor(p * rows.length))] : 0;
+    const n = f.n;
+    const rows = Array.from(f.rows.subarray(0, n)).sort((a, b) => a - b);
+    const q = (p: number): number => (n ? rows[Math.min(n - 1, Math.floor(p * n))] : 0);
     return {
-      n: rows.length,
-      gapMs: { p50: q(0.5), p95: q(0.95), p99: q(0.99), max: rows.length ? rows[rows.length - 1] : 0 },
-      meanSpeed: f.speed.length ? f.speed.reduce((a, b) => a + b, 0) / f.speed.length : 0,
-      gap: f.rows.slice(),
-      speed: f.speed.slice(),
-      tris: f.tris.slice(),
-      calls: f.calls.slice(),
-      dpr: f.dpr.slice()
+      n,
+      gapMs: { p50: q(0.5), p95: q(0.95), p99: q(0.99), max: n ? rows[n - 1] : 0 },
+      meanSpeed: n ? Array.from(f.speed.subarray(0, n)).reduce((a, b) => a + b, 0) / n : 0,
+      gap: Array.from(f.rows.subarray(0, n)),
+      speed: Array.from(f.speed.subarray(0, n)),
+      tris: Array.from(f.tris.subarray(0, n)),
+      calls: Array.from(f.calls.subarray(0, n)),
+      dpr: Array.from(f.dpr.subarray(0, n))
     };
   }
 
