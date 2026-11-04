@@ -67,6 +67,8 @@ export interface ExternalShellStatus {
   variant?: string;
   error?: string;
   tri?: number;
+  /** 已接收的高精度资产字节数（解压后口径，QA/线上诊断用） */
+  bytes?: number;
 }
 
 /** QA 探针读的装载台账（模块级，进程内单例） */
@@ -100,8 +102,8 @@ const ASSET_URLS: Record<
     wheelL: new URL('../../assets/cars/v800/wheel-l.glb', import.meta.url).href,
     wheelR: new URL('../../assets/cars/v800/wheel-r.glb', import.meta.url).href,
     glass: new URL('../../assets/cars/v800/glass.glb', import.meta.url).href,
-    lampFront: new URL('../../assets/cars/v800/lamp-front.glb', import.meta.url).href,
-    lampRear: new URL('../../assets/cars/v800/lamp-rear.glb', import.meta.url).href,
+    lampFront: new URL('../../assets/cars/v800/lamp_front.glb', import.meta.url).href,
+    lampRear: new URL('../../assets/cars/v800/lamp_rear.glb', import.meta.url).href,
     basecolor: {
       white: new URL('../../assets/cars/v800/basecolor-white.webp', import.meta.url).href,
       black: new URL('../../assets/cars/v800/basecolor-black.webp', import.meta.url).href,
@@ -114,8 +116,8 @@ const ASSET_URLS: Record<
     wheelL: new URL('../../assets/cars/r7/wheel-l.glb', import.meta.url).href,
     wheelR: new URL('../../assets/cars/r7/wheel-r.glb', import.meta.url).href,
     glass: new URL('../../assets/cars/r7/glass.glb', import.meta.url).href,
-    lampFront: new URL('../../assets/cars/r7/lamp-front.glb', import.meta.url).href,
-    lampRear: new URL('../../assets/cars/r7/lamp-rear.glb', import.meta.url).href,
+    lampFront: new URL('../../assets/cars/r7/lamp_front.glb', import.meta.url).href,
+    lampRear: new URL('../../assets/cars/r7/lamp_rear.glb', import.meta.url).href,
     basecolor: {
       white: new URL('../../assets/cars/r7/basecolor-white.webp', import.meta.url).href,
       purple: new URL('../../assets/cars/r7/basecolor-purple.webp', import.meta.url).href,
@@ -157,6 +159,56 @@ const VARIANT_METALNESS: Record<string, number> = {
   purple: 0.6,
   green: 0.5
 };
+
+/**
+ * R45：外部壳是异步懒加载，且 V800 单车资产 ~49MB（gzip 传输 ~25MB）。慢网络下
+ * 加载要数分钟，此期间游戏显示程序化回退外观 —— 若无提示会被误判「构建没更新」。
+ * 这里挂一条轻量状态条：加载中显示已接收字节、就绪短提示、失败常驻告警。
+ */
+const SHELL_HUD_ID = 'r44-shell-hud';
+function shellHud(text: string | null, tone: 'info' | 'ok' | 'err' = 'info'): void {
+  if (typeof document === 'undefined') return;
+  let el = document.getElementById(SHELL_HUD_ID) as HTMLDivElement | null;
+  if (!text) { el?.remove(); return; }
+  if (!el) {
+    el = document.createElement('div');
+    el.id = SHELL_HUD_ID;
+    el.style.cssText =
+      'position:fixed;left:50%;bottom:34px;transform:translateX(-50%);z-index:60;' +
+      'padding:8px 14px;border-radius:8px;background:rgba(14,11,14,.88);' +
+      'font:13px/1.5 system-ui,-apple-system,sans-serif;letter-spacing:.3px;' +
+      'pointer-events:none;white-space:nowrap;box-shadow:0 2px 14px rgba(0,0,0,.45)';
+    document.body.appendChild(el);
+  }
+  el.style.color = tone === 'err' ? '#ff9b8a' : tone === 'ok' ? '#a8e6b0' : '#f3e9d2';
+  el.textContent = text;
+}
+
+/** 带字节进度的 fetch：显式校验 HTTP status（404 HTML 喂给 GLTFLoader 的错误不可读）。 */
+let shellBytes = 0;
+async function fetchTracked(url: string): Promise<ArrayBuffer> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status} ${url.split('/').pop()}`);
+  if (!res.body) return res.arrayBuffer();
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let received = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    received += value.length;
+    shellBytes += value.length;
+    for (const car of Object.keys(r44ShellStatus) as ExternalCarId[]) {
+      if (r44ShellStatus[car].state === 'loading') r44ShellStatus[car].bytes = shellBytes;
+    }
+    shellHud(`高精度车模加载中 · 已接收 ${(shellBytes / 1048576).toFixed(1)} MB（首次加载约 45 MB）`);
+  }
+  const out = new Uint8Array(received);
+  let off = 0;
+  for (const c of chunks) { out.set(c, off); off += c.length; }
+  return out.buffer;
+}
 
 function loadTexture(url: string, srgb: boolean): Promise<THREE.Texture> {
   const loader = new THREE.TextureLoader();
@@ -261,7 +313,9 @@ export async function loadExternalShell(
     r44ShellStatus[car] = { state: 'failed', error: 'disabled by #r44ext=off' };
     return null;
   }
-  r44ShellStatus[car] = { state: 'loading' };
+  r44ShellStatus[car] = { state: 'loading', bytes: 0 };
+  shellBytes = 0;
+  shellHud('高精度车模加载中 · 正在连接…（首次加载约 45 MB）');
   try {
     const urls = ASSET_URLS[car];
     const res = await fetch(urls.manifest);
@@ -275,17 +329,16 @@ export async function loadExternalShell(
     const fetchGlb = (url: string | undefined): Promise<{ scene: THREE.Object3D } | null> =>
       !url
         ? Promise.resolve(null)
-        : fetch(url)
-            .then((r) => (r.ok ? (r.arrayBuffer() as Promise<ArrayBuffer>) : Promise.reject(new Error(String(r.status)))))
+        : fetchTracked(url)
             .then((buf) => loader.parseAsync(buf, ''))
             .catch(() => null);
     const [bodyGltf, wlGltf, wrGltf, glassGltf, lfGltf, lrGltf, baseTex, nrmTex, mrTex] = await Promise.all([
-      fetch(urls.body).then((r) => r.arrayBuffer()).then((buf) => loader.parseAsync(buf, '')),
+      fetchTracked(urls.body).then((buf) => loader.parseAsync(buf, '')),
       hasWheelSplit
-        ? fetch(urls.wheelL).then((r) => r.arrayBuffer()).then((buf) => loader.parseAsync(buf, ''))
+        ? fetchTracked(urls.wheelL).then((buf) => loader.parseAsync(buf, ''))
         : Promise.resolve(null),
       hasWheelSplit
-        ? fetch(urls.wheelR).then((r) => r.arrayBuffer()).then((buf) => loader.parseAsync(buf, ''))
+        ? fetchTracked(urls.wheelR).then((buf) => loader.parseAsync(buf, ''))
         : Promise.resolve(null),
       hasSemantic ? fetchGlb(urls.glass) : Promise.resolve(null),
       hasSemantic ? fetchGlb(urls.lampFront) : Promise.resolve(null),
@@ -484,11 +537,15 @@ export async function loadExternalShell(
     r44ShellStatus[car] = {
       state: 'ready',
       variant,
-      tri: manifest.tri?.body ?? undefined
+      tri: manifest.tri?.body ?? undefined,
+      bytes: shellBytes
     };
+    shellHud('高精度车模已就绪', 'ok');
+    globalThis.setTimeout(() => shellHud(null), 4000);
     return handle;
   } catch (err) {
-    r44ShellStatus[car] = { state: 'failed', error: String(err) };
+    r44ShellStatus[car] = { state: 'failed', error: String(err), bytes: shellBytes };
+    shellHud(`高精度车模加载失败，当前显示简化外观 · ${String(err).slice(0, 90)}`, 'err');
     console.warn(`[ExternalShell] ${car} 装载失败，保持程序化外观：`, err);
     return null;
   }
