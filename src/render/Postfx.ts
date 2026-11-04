@@ -17,6 +17,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import type { QualitySettings } from '../config/quality';
+import { damp } from '../util/math';
 
 /** 速度径向模糊 + 撞击/断裂闪白（合并为单 pass，与原版 Lg 同职责） */
 const SpeedBlurFlashShader = {
@@ -100,6 +101,8 @@ export class Postfx {
   private readonly bloomScale: number;
   private width = 1;
   private height = 1;
+  /** R46 ③：一阶滞后后的实际强度（与 uniform 逐位一致；off 分支同步写回，避免切档残留） */
+  private blurCurrent = 0;
 
   constructor(
     renderer: THREE.WebGLRenderer,
@@ -145,8 +148,23 @@ export class Postfx {
     this.bloomPass.setSize(w, h);
   }
 
-  setSpeedBlur(strength: number): void {
-    this.blurPass.uniforms.strength.value = strength;
+  /**
+   * R46 ③ FX-A：强度一阶滞后，削掉「长帧糊一下、下一帧立刻不糊」的强度泵动
+   * （与 R43 治 DPR 清晰度泵动 / 音效 spool 惯性同哲学，但视觉常数更快）。
+   * - `smooth=false`（`#r46blur=off`）或 `dt<=0` ⇒ **严格 R45 基线**：直接写 uniform、无滞后。
+   * - `smooth=true` ⇒ `damp(current, target, k, dt)`，升 k=20（τ0.05s）/ 降 k=8（τ0.125s）。
+   *   升比降快：补偿要落在大跳发生的那一帧，回落慢一点才不产生二次阶跃。
+   * 目标值仍受 Game 侧 `min(0.18, ...)` 上限约束，本方法不放大强度。
+   */
+  setSpeedBlur(strength: number, dt = 0, smooth = false): void {
+    if (!smooth || dt <= 0) {
+      this.blurCurrent = strength;
+      this.blurPass.uniforms.strength.value = strength;
+      return;
+    }
+    const k = strength > this.blurCurrent ? 20 : 8;
+    this.blurCurrent = damp(this.blurCurrent, strength, k, dt);
+    this.blurPass.uniforms.strength.value = this.blurCurrent;
   }
 
   setFlash(flash: number): void {
@@ -168,6 +186,15 @@ export class Postfx {
 
   get currentPixelRatio(): number {
     return this.pixelRatio;
+  }
+
+  /**
+   * R46 Phase 2 ①：`#framelog` 只读本帧**实际写入**的 SpeedBlur uniform。
+   * 探针必须读 uniform 而不是 Game 侧算出的目标值，否则一阶滞后（③）后
+   * dump 的 blur 列与画面不一致，A/B 判据 `Σ(blur×jumpM)/ΣjumpM` 会失真。
+   */
+  get currentStrength(): number {
+    return this.blurPass.uniforms.strength.value as number;
   }
 
   render(): void {

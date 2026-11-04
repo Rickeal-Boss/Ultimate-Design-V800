@@ -9,18 +9,36 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import r44_bake as B
 
+# ⚠ R46 / Phase 2 定罪（.qa/r46/REPORT_PHASE1A.md §1.4 / §5.1）：
+#   v800 lamp_rear=[6] 是「后风挡玻璃带」y 0.2669–0.3396 ⇒ 红灯涂在尾窗；
+#   r7   lamp_rear=[18] 是「后车牌薄片」y 0.1013–0.1381 ⇒ 红灯涂在车牌。
+#   两组 100% 错位，part 索引已判废，禁止再用。
+#   R46 起 lamp_rear 由 .img2threejs/tools/r46_rebuild.py::lamp_rear_mask() 的
+#   **纯几何坐标判据 D + 三顶点全盒内二级过滤** 产出（红区召回 100%、
+#   y bbox 严格 0.22–0.26），并由 r46_rebuild.py::step_semantic() 统一重建
+#   body/glass/lamp_front/lamp_rear 四个 GLB。
+#   以下 lamp_rear 值改为废弃哨兵：本脚本若被重跑会直接报错，杜绝静默产出错误尾灯。
 PART_SRC = {
     'v800': ('C:/Users/WB/Desktop/R7/拆/V8.glb', {
         'glass': [9, 5, 10],
-        'lamp_rear': [6],
+        'lamp_rear': 'GEOM:r46_rebuild.lamp_rear_mask',
         'lamp_front': [14],
     }),
     'r7': ('C:/Users/WB/Desktop/R7/拆/R7.glb', {
         'glass': [3, 4, 6],
-        'lamp_rear': [18],
+        'lamp_rear': 'GEOM:r46_rebuild.lamp_rear_mask',
         'lamp_front': [14],
     }),
 }
+
+
+def _check_deprecated(car, sem):
+    for group, mis in sem.items():
+        if isinstance(mis, str):
+            raise SystemExit(
+                f'[R46] {car}.{group} 的 part 索引已判废（{mis}）。'
+                f'请改跑 `python .img2threejs/tools/r46_rebuild.py semantic`，'
+                f'勿再用 r44_semantic_split.py 重产 lamp_rear / 语义件。')
 
 def load_part_verts(path):
     gltf, binc = B.parse_glb(path)
@@ -51,6 +69,7 @@ def rebuild(idx_mask, pos, nrm, uv, indices, name):
 
 def main():
     for car, (ppath, sem) in PART_SRC.items():
+        _check_deprecated(car, sem)   # R46：禁止静默沿用错位的 lamp_rear part 索引
         cfg = B.CARS[car]
         print(f"\n=== {car} ===")
         pos, nrm, uv, indices = B.load_car_glb(os.path.join(B.SRC, cfg['geo_glb']))

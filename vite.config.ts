@@ -44,6 +44,7 @@ const SHARED_SRC = [
    * 让后来者无法再用块数一眼发现漏登记。⇒ 登记进 shared，块数回到 3。
    * ⚠ 维护纪律不变：以后任何**跨车共用**的新 config/model 模块，先加到本表。 */
   'src/config/vehiclePaint.ts',
+  'src/config/highDetail.ts',
   'src/model/batchMerge.ts',
   'src/model/plateTexture.ts',
   'src/model/refTextures.ts',

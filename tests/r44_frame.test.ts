@@ -93,3 +93,60 @@ describe('R44-P1 物理契约不触碰（fx 减速口径）', () => {
     expect(gameSrc).toContain('Math.min(0.18, (frameDisp / 0.925) * 0.12)');
   });
 });
+
+/* ══ R46 Phase 2 · FX-A / 探针契约（只新增断言，不删不改 R44 旧断言）══
+ * 与 r37_perf 同模式：Game.ts 顶层 await + window 依赖无法在 node 实例化，
+ * 故钉「源码结构不变量」。旧 R40 P0-C 公式字符串必须作为 #r46blur=off 分支保留，
+ * 否则本文件第 91-94 行的断言直接破绿（CI 门禁）。 */
+describe('R46 Phase 2 · 探针 / FX-A 契约', () => {
+  const postfxSrc = readFileSync(new URL('../src/render/Postfx.ts', import.meta.url), 'utf8');
+  const fxSrc = readFileSync(new URL('../src/fx/index.ts', import.meta.url), 'utf8');
+
+  it('① framelog 三列定长 TypedArray + 下标写（禁 push）+ dump 导出', () => {
+    expect(gameSrc).toContain('carZ: Float32Array;');
+    expect(gameSrc).toContain('alpha: Float32Array;');
+    expect(gameSrc).toContain('blur: Float32Array;');
+    expect(gameSrc).toContain('f.carZ[i] = this.car.root.position.z;');
+    expect(gameSrc).toContain('f.alpha[i] = alpha;');
+    expect(gameSrc).toContain('f.blur[i] = this.postfx.currentStrength;');
+    expect(gameSrc).toContain('carZ: Array.from(f.carZ.subarray(0, n))');
+    const sampleBlock = gameSrc.slice(
+      gameSrc.indexOf('if (this.frameLog) {'),
+      gameSrc.indexOf('f.lastT = now;')
+    );
+    expect(sampleBlock).not.toContain('.push(');
+  });
+
+  it('① 自由侧 renderTail 补传 alpha（R45 默认 0 是错的）', () => {
+    expect(gameSrc).toContain('this.renderTail(dt, null, alpha);');
+  });
+
+  it('② 自由探索补齐 gap 口径，且保留原纯速度映射作为 off 分支', () => {
+    expect(gameSrc).toContain('const frameDispFree = absSpeed * dt;');
+    expect(gameSrc).toContain('Math.min(0.18, (frameDispFree / 0.925) * 0.12)');
+    expect(gameSrc).toContain('Math.min(1, absSpeed / 72) ** 1.6 * 0.07');
+  });
+
+  it('③ FX-A：真实渲染跳距 + #r46blur=off 回滚钩子 + 旧公式字符串留存', () => {
+    expect(gameSrc).toContain('const renderDisp = Math.abs(prevZ - this.car.root.position.z);');
+    expect(gameSrc).toContain('Math.min(0.18, (renderDisp / 0.925) * 0.12)');
+    expect(gameSrc).toContain('r46blur=off');
+    // 旧断言所依赖的两行必须逐字仍在（防回退）
+    expect(gameSrc).toContain('const frameDisp = Math.abs(vehicle.speed) * dt;');
+    expect(gameSrc).toContain('Math.min(0.18, (frameDisp / 0.925) * 0.12)');
+  });
+
+  it('③ Postfx：一阶滞后（升 20 / 降 8）+ 只读 currentStrength getter', () => {
+    expect(postfxSrc).toContain('get currentStrength(): number');
+    expect(postfxSrc).toContain('damp(this.blurCurrent, strength, k, dt)');
+    expect(postfxSrc).toContain('strength > this.blurCurrent ? 20 : 8');
+    // off 分支必须能直写（严格 R45 基线）
+    expect(postfxSrc).toContain('if (!smooth || dt <= 0)');
+  });
+
+  it('④ fx 粒子：闭包提到模块级、数组解构改索引访问', () => {
+    expect(fxSrc).toContain('function randSigned(): number');
+    expect(fxSrc).not.toContain('const r = () => Math.random() * 2 - 1;');
+    expect(fxSrc).not.toContain('const [lx, lz] = WHEEL_LOCAL[w];');
+  });
+});

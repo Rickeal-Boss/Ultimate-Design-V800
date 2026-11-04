@@ -56,7 +56,11 @@
  },
  "tri": {
   "body": 1499904,
-  "totalSource": 1499912
+  "totalSource": 1499912,
+  "wheel-fl": 76983,
+  "wheel-fr": 76500,
+  "wheel-rl": 74747,
+  "wheel-rr": 75291
  },
  "bridgeTriangles": 0,
  "generator": "r44_bake.py",

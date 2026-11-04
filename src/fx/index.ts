@@ -51,6 +51,15 @@ export function resetFxWheelOffsets(): void {
 /** 轮胎接地高度（路面 y=0） */
 const CONTACT_Y = 0.02;
 
+/**
+ * R46 ④：原 `TireSmoke.spawn` 每发射 1 个粒子就 `new` 一个箭头闭包
+ * （全力刹车 ≈ 210 粒子/s/轮 × 4 轮 ≈ 840 个/秒，R43 定性 GC 29.3ms/轮是唯一真尖峰）。
+ * 提到模块级后随机调用次序逐位不变 ⇒ 行为零差异，纯削分配。
+ */
+function randSigned(): number {
+  return Math.random() * 2 - 1;
+}
+
 /** 每帧渲染的粒子着色器（圆形软边 + 每粒子 alpha/size） */
 function makeParticleMaterial(color: number, additive: boolean): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
@@ -156,14 +165,13 @@ export class TireSmoke implements FxModule {
     const i = p.cursor;
     p.cursor = (p.cursor + 1) % (p.maxLife.length);
     const i3 = i * 3;
-    const r = () => Math.random() * 2 - 1;
-    p.pos[i3] = origin.x + r() * 0.22;
+    p.pos[i3] = origin.x + randSigned() * 0.22;
     p.pos[i3 + 1] = origin.y + Math.random() * 0.1;
-    p.pos[i3 + 2] = origin.z + r() * 0.22;
+    p.pos[i3 + 2] = origin.z + randSigned() * 0.22;
     // 上升 + 随机扩散 + 轻微随车尾流后飘
-    p.vel[i3] = r() * 0.7;
+    p.vel[i3] = randSigned() * 0.7;
     p.vel[i3 + 1] = 0.8 + Math.random() * 1.2;
-    p.vel[i3 + 2] = r() * 0.7 + Math.min(1.4, speedMs * 0.05);
+    p.vel[i3 + 2] = randSigned() * 0.7 + Math.min(1.4, speedMs * 0.05);
     p.life[i] = 0;
     p.maxLife[i] = 0.9 + Math.random() * 0.8;
     p.baseSize[i] = 1.4 + Math.random() * 1.5;
@@ -423,7 +431,10 @@ export class FxSystems {
       this.fwd.z
     );
     for (let w = 0; w < WHEEL_LOCAL.length; w++) {
-      const [lx, lz] = WHEEL_LOCAL[w];
+      // R46 ④：索引访问代替数组解构（原每帧 4 次迭代器分配）
+      const wheel = WHEEL_LOCAL[w];
+      const lx = wheel[0];
+      const lz = wheel[1];
       this.tmp.set(lx, CONTACT_Y, lz).applyQuaternion(carRoot.quaternion).add(carRoot.position);
       if (this.skid && braking && brakeIntensity > 0.35 && speedMs > 2.5) {
         // 每行驶 0.8m 铺一段痕（单帧单轮最多 2 段，防掉帧瞬间冲掉池）

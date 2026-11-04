@@ -37,6 +37,16 @@ import { StateMachine } from './StateMachine';
 const PHYSICS_HZ = 120;
 
 /**
+ * R46 Phase 2 · FX-A 回滚开关（A/B 唯一变量，主理人授权「默认开启」）。
+ * `#r46blur=off` ⇒ 严格回退 R45 基线：挑战用 `frameDisp=|v|·dt` 原公式、自由用纯速度映射，
+ * SpeedBlur uniform 逐帧直写（无一阶滞后）；on/缺省 ⇒ 真实渲染跳距 + 一阶滞后。
+ * 用 URL hash 而非 DEV 判定 ⇒ 生产构建同样可一键回滚；window 缺失（SSR / 源码契约测试）默认开启。
+ * 物理链路零触碰：本开关只影响后处理 uniform，不进 tick、不改任何 Vehicle/Pedal 状态。
+ */
+const R46_BLUR_V2: boolean =
+  typeof window === 'undefined' || !window.location.hash.includes('r46blur=off');
+
+/**
  * B5（R30-D4）：R7 适配器按需动态加载（原 L18 静态 import 的改造）。
  *
  * 改前：`import { createR7CarAdapter } from '../model/R7Adapter'` 是静态 import ——
@@ -283,6 +293,11 @@ export class Game {
     tris: Float32Array;
     calls: Float32Array;
     dpr: Float32Array;
+    /* R46 Phase 2 ①：真实渲染跳距 / 插值余数 / 本帧实际模糊强度。
+     * 与 R44 同口径 —— 定长 Float32Array、下标写、零 push、零增长（探针自己不制造 GC）。 */
+    carZ: Float32Array;
+    alpha: Float32Array;
+    blur: Float32Array;
     n: number;
     lastT: number;
   } | null = null;
@@ -537,6 +552,9 @@ export class Game {
         tris: new Float32Array(cap),
         calls: new Float32Array(cap),
         dpr: new Float32Array(cap),
+        carZ: new Float32Array(cap),
+        alpha: new Float32Array(cap),
+        blur: new Float32Array(cap),
         n: 0,
         lastT: performance.now()
       };
@@ -1171,12 +1189,21 @@ export class Game {
     // R31 运行时治理②：城堡分区按观看距离显隐（内部 20m 滞回，零遍历开销）
     this.castle.updateViewerZ(this.rig.camera.position.z);
     this.env.update(this.rig.camera.position);
-    this.postfx.setSpeedBlur(Math.min(1, absSpeed / 72) ** 1.6 * 0.07);
+    /* R46 ②：自由探索原本是纯速度映射（不含 dt、顶速上限仅 0.07），而挑战路径
+     * R40 P0-C 早已按 `frameDisp = speed·dt` 补偿到 0.12~0.18 ⇒ 路径遗漏。
+     * 对齐同一口径；off 分支保留原纯速度映射字符串供一键回滚。 */
+    const frameDispFree = absSpeed * dt;
+    const freeBlur = R46_BLUR_V2
+      ? Math.min(0.18, (frameDispFree / 0.925) * 0.12)
+      : Math.min(1, absSpeed / 72) ** 1.6 * 0.07;
+    this.postfx.setSpeedBlur(freeBlur, dt, R46_BLUR_V2);
     this.postfx.setFlash(0);
 
     // ---- HUD（只写速度 + 挡位，踏板力/距离统计属挑战语义，不显示）----
     this.hud.updateFree(speedKmh, reverse ? 'R' : 'D');
-    this.renderTail(dt, null);
+    // R46 ①：自由侧原本丢掉 alpha（renderTail 默认 0），framelog 的 alpha 列恒为 0；
+    // 补传后两链路同源，A/B 可核对插值余数。渲染行为零变化。
+    this.renderTail(dt, null, alpha);
   }
 
   /**
@@ -1495,11 +1522,18 @@ export class Game {
     // 基准 = 顶速 55.5 m/s × 16.7ms ≈ 0.925m/帧 → 强度 0.12；掉帧帧（33ms→1.83m）线性
     // 上探、硬上限 0.18 防糊死；低速（v=5→0.0108）几乎不糊。仅 pedaling 且非 countdown。
     const frameDisp = Math.abs(vehicle.speed) * dt;
-    const speedBlur =
-      pedaling && this.sm.phase !== 'countdown'
-        ? Math.min(0.18, (frameDisp / 0.925) * 0.12)
-        : 0;
-    this.postfx.setSpeedBlur(speedBlur);
+    /* R46 ③ FX-A：改由**真实渲染跳距**驱动 —— `prevZ`（上一渲染帧 z）↔ 本帧插值终值。
+     * 原 `frameDisp` 用「当前物理步速度 × Loop 钳制 dt」：稳态 60fps 下与渲染位移近似相等，
+     * 但长帧 / `maxFrameTime` 钳制时会低估或高估；`renderDisp` 与画面逐位同源。
+     * ⚠ off 分支严格保留 R45 基线公式字符串（tests/r44_frame.test.ts:91-94 钉住，禁删禁改）。 */
+    const renderDisp = Math.abs(prevZ - this.car.root.position.z);
+    let speedBlur = 0;
+    if (pedaling && this.sm.phase !== 'countdown') {
+      speedBlur = R46_BLUR_V2
+        ? Math.min(0.18, (renderDisp / 0.925) * 0.12)
+        : Math.min(0.18, (frameDisp / 0.925) * 0.12);
+    }
+    this.postfx.setSpeedBlur(speedBlur, dt, R46_BLUR_V2);
     this.brakeFlash = Math.max(0, this.brakeFlash - dt * 2.2);
     this.postfx.setFlash(this.brakeFlash);
 
@@ -1609,6 +1643,11 @@ export class Game {
         f.tris[i] = this.renderer.info.render.triangles;
         f.calls[i] = this.renderer.info.render.calls;
         f.dpr[i] = this.qualityGovernor.pixelRatio;
+        // R46 ①：本帧插值终值 / 插值余数 / 实际写入的 SpeedBlur uniform。
+        // carZ 相邻差分 = 真实渲染跳距 jumpM（禁 speed×wall-gap，R39 三重错配）。
+        f.carZ[i] = this.car.root.position.z;
+        f.alpha[i] = alpha;
+        f.blur[i] = this.postfx.currentStrength;
         f.n += 1;
       }
       f.lastT = now;
@@ -1711,7 +1750,10 @@ export class Game {
       speed: Array.from(f.speed.subarray(0, n)),
       tris: Array.from(f.tris.subarray(0, n)),
       calls: Array.from(f.calls.subarray(0, n)),
-      dpr: Array.from(f.dpr.subarray(0, n))
+      dpr: Array.from(f.dpr.subarray(0, n)),
+      carZ: Array.from(f.carZ.subarray(0, n)),
+      alpha: Array.from(f.alpha.subarray(0, n)),
+      blur: Array.from(f.blur.subarray(0, n))
     };
   }
 

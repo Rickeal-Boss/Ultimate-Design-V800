@@ -22,6 +22,13 @@ import {
   setActivePaint,
   type PaintChoice
 } from '../config/vehiclePaint';
+import {
+  SHELL_TOTAL_MB,
+  cancelExternalShellLoad,
+  isHighDetailEnabled,
+  isShellLoadCancelled,
+  setHighDetailEnabled
+} from '../config/highDetail';
 import { byId, blurIfInside, el, setVisible } from './dom';
 
 /** 差异说明：一句话讲清「这辆车为什么玩法不同」（菜单卡片正文） */
@@ -192,6 +199,17 @@ function ensureSelectStyle(): void {
   border: 1px solid rgba(255, 255, 255, 0.35);
   box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.35);
 }
+
+/* ---- R46 LOAD-A 停止下载高精度模型 ----
+ * 复用既有 .btn ghost 骨架（styles.css:626），只收字号/字距：不新增行高、
+ * 不改变 btn-row 之前任何内容的高度 —— R37-P1 矮屏 1280x760 下
+ * 「开始挑战」曾被挤出可视区（实测可见 5.9%），本轮不得回归。
+ * 本段位于 CSS 模板字符串内部：注释里绝不能出现反引号。 */
+.menu-panel .hd-toggle {
+  font-size: 11.5px;
+  letter-spacing: .2px;
+  white-space: nowrap;
+}
 `;
   document.head.appendChild(style);
 }
@@ -245,6 +263,9 @@ export class Menu {
   private startButton: HTMLButtonElement;
   private readonly cards = new Map<VehicleId, HTMLElement>();
   private readonly swatches = new Map<PaintChoice, HTMLButtonElement>();
+  /** R46 LOAD-A：停止/恢复高精度车模按钮 + 当前车型（文案按车显示资产总量） */
+  private hdButton: HTMLButtonElement;
+  private hdVehicle: VehicleId;
 
   /**
    * @param onStart 开始挑战
@@ -312,16 +333,28 @@ export class Menu {
       rules,
       btnRow
     );
-    // 自由探索（R29 次级入口）：与开始挑战同排的次级按钮，不抢主按钮视觉权重
+    // 次级入口行（R29 自由探索 + R46 停止下载）：位于 btnRow【之后】，
+    // 不推高「开始挑战」之前任何内容 ⇒ 守住 R37-P1 矮屏首屏保 CTA 约束。
+    // 复用同一行：默认（有自由探索时）新增按钮零额外行高。
+    const subRow = el('div', 'btn-row btn-row-sub');
     if (onFreeExplore) {
       const freeButton = el('button', 'btn ghost') as HTMLButtonElement;
       freeButton.type = 'button';
       freeButton.textContent = '自由探索';
       freeButton.addEventListener('click', () => onFreeExplore());
-      const freeRow = el('div', 'btn-row btn-row-sub');
-      freeRow.append(freeButton);
-      panel.append(freeRow);
+      subRow.append(freeButton);
     }
+    // R46 LOAD-A：只放 #menu 起始菜单（绝不放 #loading 屏 —— main.ts 首帧即给
+    // #loading 加 done、styles.css 随即 pointer-events:none，可点窗口约 1 帧，
+    // 而 45MB 下载要数分钟）。菜单常驻期正是下载在途窗口。
+    this.hdVehicle = active;
+    this.hdButton = el('button', 'btn ghost hd-toggle') as HTMLButtonElement;
+    this.hdButton.type = 'button';
+    this.hdButton.dataset.highDetail = 'toggle';
+    this.hdButton.addEventListener('click', () => this.onHighDetailToggle());
+    this.updateHdButton();
+    subRow.append(this.hdButton);
+    panel.append(subRow);
     this.root.append(panel);
 
     this.startButton.addEventListener('click', onStart);
@@ -356,11 +389,70 @@ export class Menu {
     location.reload();
   }
 
+  /** 外部壳是否已就绪（读 window.__r44Shell 台账；Node / 无探针时恒 false） */
+  private shellReady(): boolean {
+    if (typeof window === 'undefined') return false;
+    const status = (window as unknown as {
+      __r44Shell?: Record<VehicleId, { state?: string }>;
+    }).__r44Shell;
+    return status?.[this.hdVehicle]?.state === 'ready';
+  }
+
+  /** 三态文案：允许高精度(未就绪) / 允许高精度(已就绪) / 已停止或偏好关闭 */
+  private hdButtonLabel(): string {
+    const total = SHELL_TOTAL_MB[this.hdVehicle];
+    if (!isHighDetailEnabled() || isShellLoadCancelled()) {
+      return `恢复高精度车模（约 ${total} MB）`;
+    }
+    return this.shellReady()
+      ? '下次启动使用默认车模'
+      : '停止下载高精度模型（使用默认车模）';
+  }
+
+  private updateHdButton(): void {
+    const label = this.hdButtonLabel();
+    this.hdButton.textContent = label;
+    this.hdButton.title = label;
+    this.hdButton.setAttribute('aria-label', label);
+    // B6 a11y（同 buildSwatch）：切换态走 aria-pressed，读屏能报「已选中」
+    this.hdButton.setAttribute(
+      'aria-pressed',
+      !isHighDetailEnabled() || isShellLoadCancelled() ? 'true' : 'false'
+    );
+  }
+
+  /**
+   * R46 LOAD-A 点击语义：
+   *  · 停止 = 中止在途 fetch（cancelExternalShellLoad → AbortController）+ 落盘 off；
+   *    loadExternalShell 返回 null ⇒ 两个 Adapter 的 `if (!shell) return` 保持
+   *    程序化外观完整（R45 已线上验证的 #r44ext=off 回退路径），运行时零感知。
+   *  · 壳已就绪态**不热卸载**（dispose + 恢复 setExteriorHidden 属独立变更）：
+   *    只落盘，下次启动生效。
+   *  · 恢复 = 写 on + location.reload()（与选车/换色同机制；abort 过的请求
+   *    无法断点续传，重载最稳且能复位模块级取消状态）。
+   */
+  private onHighDetailToggle(): void {
+    if (!isHighDetailEnabled() || isShellLoadCancelled()) {
+      setHighDetailEnabled(true);
+      this.startButton.disabled = true;
+      this.hdButton.disabled = true;
+      location.reload();
+      return;
+    }
+    if (!this.shellReady()) {
+      cancelExternalShellLoad('user');
+    }
+    setHighDetailEnabled(false);
+    this.updateHdButton();
+  }
+
   show(visible: boolean): void {
     // B6 a11y（R30-D2）：隐藏时撤掉面板内焦点 —— 「开始挑战」等按钮隐藏后若
     // 保持焦点，进行段按空格会重新触发其 click（startRun 重开一局），
     // 判据与推导见 dom.ts blurIfInside 注释。
     if (!visible) blurIfInside(this.root);
     setVisible(this.root, visible);
+    // R46：菜单重新显示时壳可能已就绪，刷新按钮三态（label / aria-pressed）
+    if (visible) this.updateHdButton();
   }
 }
