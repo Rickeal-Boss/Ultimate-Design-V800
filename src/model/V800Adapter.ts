@@ -3290,6 +3290,10 @@ export function createV800CarAdapter(tier: QualityTier = 'high', paintId: string
   const TAIL_BASE = 2.6; // R36-V6：2.5→2.6（尾灯签名弱；与 R7_TAIL_STANDBY_EI 同步抬基座）
   // 前脸签名增强（S5 朝向线索）：基础 2.5 正面视角辨识度不足，提到 3.2 ——
   // 只动常亮基础值，setHeadlights 开关 / damp 联动映射语义不变（headTarget 同源）
+/* R48：灯组过曝修复开关（`#r48tone=off` 逐位回滚 R47 公式）。
+ * 模块顶层求值一次，update() 每帧只读布尔，零正则热路径开销。 */
+const R48_LAMP_TONE: boolean =
+  typeof window === 'undefined' || !/(?:^|[#&])r48tone=off/i.test(window.location.hash);
   const HEAD_BASE = 3.2;
   let brakeLevel = TAIL_BASE;
   let brakeTarget = TAIL_BASE;
@@ -5065,9 +5069,17 @@ export function createV800CarAdapter(tier: QualityTier = 'high', paintId: string
       // 头灯随 headLevel（DRL 0.12 待机）。程序化灯材质被 setExteriorHidden 隐藏，
       // 外景态灯组反馈由这两个材质接管（cabin 态外壳隐藏，无可视灯组无影响）。
       const extRear = shellHandle?.lampRearMat;
-      if (extRear) extRear.emissiveIntensity = 0.35 + (brakeLevel + snapGain) * 2.2;
+      if (extRear) {
+        extRear.emissiveIntensity = R48_LAMP_TONE
+          ? 0.30 + (brakeLevel + snapGain * 0.12) * 0.85
+          : 0.35 + (brakeLevel + snapGain) * 2.2; // R47 原状（A/B 回滚）
+      }
       const extFront = shellHandle?.lampFrontMat;
-      if (extFront) extFront.emissiveIntensity = 0.12 + headLevel * 0.9;
+      if (extFront) {
+        extFront.emissiveIntensity = R48_LAMP_TONE
+          ? 0.12 + (headLevel / HEAD_BASE) * 0.78
+          : 0.12 + headLevel * 0.9; // R47 原状
+      }
       // R21-B：手写尾灯（独占材质，刹车联动在旧件链路之外单独走）
       if (tailLampMats) {
         tailLampMats.red.emissiveIntensity =

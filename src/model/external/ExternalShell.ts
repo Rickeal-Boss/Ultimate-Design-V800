@@ -686,6 +686,8 @@ export async function loadExternalShell(
     // lamp-front：DRL 常亮冷白，setHeadlights 联动。
     let lampRearMat: THREE.MeshStandardMaterial | null = null;
     let lampFrontMat: THREE.MeshStandardMaterial | null = null;
+    /** R48：R7 尾灯洞口盖板材质（唯一新增材质实例，dispose 显式释放） */
+    let lampHousingMat: THREE.MeshStandardMaterial | null = null;
     /** R46：前灯最终是否挂了 emissiveMap（供 r44ShellStatus.lampMap 机读） */
     let hasLampMap = false;
     const lampRearMeshes: THREE.Mesh[] = [];
@@ -702,6 +704,59 @@ export async function loadExternalShell(
         metalness: 0.1
       });
       collectNamed(lrGltf, lampRearMeshes, lampRearMat, manifest.scale);
+
+      /* R48：R7 尾灯「空洞」补洞修复（用户口径：白块更深处其实是空洞）。
+       * 定罪链（.qa/r48 + verify/r46/after/r48elim_*）：
+       *  ① 消去法：隐藏 lamp_rear 白块 4,218 px 不变；隐藏 body 白块→376 px、
+       *     红灯像素 6,037→18,883 ⇒ 白块长在 body 上，且 body 一直挡着红灯组。
+       *  ② 离线深度（世界 Z，越大越靠车尾）：body 尾灯带 max 2.4942 m，
+       *     R47 灯组 max 2.4811 m ⇒ 中段被挡 3.4 cm；两侧灯组虽略外但
+       *     body 在洞口位置仍是破面 ⇒ 用户看到的「空材质」实为剔除灯组后
+       *     body 未补齐的洞，深层内容透出，high 档 bloom 下吹成纯白。
+       * 修法（零 GLB 改动）：① 加一块深色灯罩盖板封住 body 洞口；② 灯组外推
+       *   0.06 m 压到盖板之前；③ 贯穿红细带压最外层。
+       *   （只外推 0.025 m 实测 A/B 仅 634 px，洞在灯组旁边，平移盖不住。）
+       *   ⚠ mesh.scale 只缩放几何顶点、不缩放 position（R47 铁律）：
+       *     body 局部 z = −0.025，经 body.rotation.y=π 后世界 +0.025 m。
+       *   再补一条贯穿红细带（R47 灯组中段仅 1,412 tri，中部仍是黑横带）。
+       * 回滚：`#r48hole=off` ⇒ 不外推、不加红带，逐位回到 R47 原状。 */
+      if (car === 'r7' && lampRearMat &&
+          !/(?:^|[#&])r48hole=off/i.test(
+            typeof window === 'undefined' ? '' : window.location.hash
+          )) {
+        const s = manifest.scale;
+        // ① 洞口盖板：世界 Z=2.505 m（body 全带 max 2.4942），深黑饰条遮住空洞
+        lampHousingMat = new THREE.MeshStandardMaterial({
+          color: 0x101014,
+          emissive: new THREE.Color(0x1a0000),
+          emissiveIntensity: 0.2,
+          roughness: 0.5,
+          metalness: 0.1,
+          side: THREE.DoubleSide
+        });
+        const housing = new THREE.Mesh(
+          new THREE.PlaneGeometry(2.02, 0.20), lampHousingMat);
+        housing.name = 'lamp_rear_housing';
+        housing.position.set(0, 0.240 * s, -2.505);
+        housing.rotation.y = Math.PI;
+        housing.castShadow = false;
+        housing.renderOrder = 1;
+        lampRearMeshes.push(housing);
+        // ② 灯组外推 0.06 m（body 局部 −Z，rotY(π) 后世界 +0.06 m）
+        for (const m of lampRearMeshes) {
+          if (m.name === 'lamp_rear') m.position.z = -0.06;
+        }
+        // ③ 贯穿红细带（世界 Z=2.544 m，压最外层）
+        const band = new THREE.Mesh(new THREE.PlaneGeometry(1.86, 0.055), lampRearMat);
+        band.name = 'lamp_rear_band';
+        // 世界 Z = 0.5885×s = 2.544 m，比外推后的灯组（两侧 2.506、中段 2.481）
+        // 更靠车尾 ⇒ 红细带压在灯组之上，形成官图「贯穿式深红细线」。
+        band.position.set(0, 0.240 * s, -0.5885 * s);
+        band.rotation.y = Math.PI;
+        band.castShadow = false;
+        band.renderOrder = 2;
+        lampRearMeshes.push(band);
+      }
     }
     if (lfGltf) {
       lampFrontMat = new THREE.MeshStandardMaterial({
@@ -787,6 +842,7 @@ export async function loadExternalShell(
         glassMat.dispose();
         lampRearMat?.dispose();
         lampFrontMat?.dispose();
+        lampHousingMat?.dispose();
         lampAtlasTex?.dispose();
         material.map?.dispose();
         material.normalMap?.dispose();

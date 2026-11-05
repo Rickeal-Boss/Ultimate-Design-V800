@@ -55,7 +55,7 @@
   "mr": "mr.png"
  },
  "tri": {
-  "body": 992276,
+  "body": 882300,
   "wheel-fl": 130552,
   "wheel-rl": 125189,
   "wheel-fr": 127382,
@@ -86,5 +86,5 @@
    ]
   }
  },
- "bodyTri": 895497
+ "bodyTri": 882300
 }

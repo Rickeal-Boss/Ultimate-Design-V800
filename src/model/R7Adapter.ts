@@ -80,6 +80,10 @@ const BRAKE_BASE_INTENSITY = 0.55;
 const BRAKE_FADE_K = 18;
 const SNAP_GAIN = 9;
 const HEAD_BASE_INTENSITY = 1.9;
+/* R48：灯组过曝修复开关（`#r48tone=off` 逐位回滚 R47 公式）。
+ * 模块顶层求值一次，update() 每帧只读布尔，零正则热路径开销。 */
+const R48_LAMP_TONE: boolean =
+  typeof window === 'undefined' || !/(?:^|[#&])r48tone=off/i.test(window.location.hash);
 const HEAD_DIM_INTENSITY = 0.18;
 const CALIPER_HEAT_HEX = 0x8c1114;
 
@@ -1567,10 +1571,11 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
       // R44-6 外部壳灯组：尾灯跟随统一待机口径、头灯随 headLevel（外景态接管反馈）
       const extRear = shellHandle?.lampRearMat;
       if (extRear) {
-        extRear.emissiveIntensity =
-          (R7_TAIL_STANDBY_EI * (BRAKE_BASE_INTENSITY + brakeLevel)) /
-            (BRAKE_BASE_INTENSITY + R7_TAIL_STANDBY_LEVEL) +
-          snapT * SNAP_GAIN;
+        extRear.emissiveIntensity = R48_LAMP_TONE
+          ? 0.30 + (brakeLevel + snapT * SNAP_GAIN * 0.12) * 0.85
+          : (R7_TAIL_STANDBY_EI * (BRAKE_BASE_INTENSITY + brakeLevel)) /
+              (BRAKE_BASE_INTENSITY + R7_TAIL_STANDBY_LEVEL) +
+              snapT * SNAP_GAIN; // R47 原状（A/B 回滚）
       }
       const extFront = shellHandle?.lampFrontMat;
       if (extFront) extFront.emissiveIntensity = 0.12 + (headLevel / Math.max(headBaseIntensity, 1e-3)) * 0.78;
