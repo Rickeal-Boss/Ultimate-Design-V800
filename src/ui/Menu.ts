@@ -29,6 +29,7 @@ import {
   isShellLoadCancelled,
   setHighDetailEnabled
 } from '../config/highDetail';
+import { isMotionBlurEnabled, setMotionBlurEnabled } from '../config/motionBlur';
 import { byId, blurIfInside, el, setVisible } from './dom';
 
 /** 差异说明：一句话讲清「这辆车为什么玩法不同」（菜单卡片正文） */
@@ -266,6 +267,8 @@ export class Menu {
   /** R46 LOAD-A：停止/恢复高精度车模按钮 + 当前车型（文案按车显示资产总量） */
   private hdButton: HTMLButtonElement;
   private hdVehicle: VehicleId;
+  /** R47：动态模糊开关（默认关；即时生效，不 reload） */
+  private blurButton: HTMLButtonElement;
 
   /**
    * @param onStart 开始挑战
@@ -354,6 +357,14 @@ export class Menu {
     this.hdButton.addEventListener('click', () => this.onHighDetailToggle());
     this.updateHdButton();
     subRow.append(this.hdButton);
+    // R47 动态模糊选项：与「停止下载」同排、复用 .hd-toggle 小字号骨架，
+    // 位于 btnRow 之后 ⇒ 不推高「开始挑战」之前任何内容（R37-P1 矮屏约束）。
+    this.blurButton = el('button', 'btn ghost hd-toggle') as HTMLButtonElement;
+    this.blurButton.type = 'button';
+    this.blurButton.dataset.motionBlur = 'toggle';
+    this.blurButton.addEventListener('click', () => this.onMotionBlurToggle());
+    this.updateBlurButton();
+    subRow.append(this.blurButton);
     panel.append(subRow);
     this.root.append(panel);
 
@@ -444,6 +455,22 @@ export class Menu {
     }
     setHighDetailEnabled(false);
     this.updateHdButton();
+  }
+
+  /** R47：动态模糊开关文案 / a11y（与 buildSwatch、hdButton 同口径） */
+  private updateBlurButton(): void {
+    const on = isMotionBlurEnabled();
+    const label = `动态模糊：${on ? '开' : '关'}`;
+    this.blurButton.textContent = label;
+    this.blurButton.title = label;
+    this.blurButton.setAttribute('aria-label', label);
+    this.blurButton.setAttribute('aria-pressed', on ? 'true' : 'false');
+  }
+
+  /** 点按切换：setMotionBlurEnabled 会刷新 config 的模块级缓存 ⇒ 无需重载 */
+  private onMotionBlurToggle(): void {
+    setMotionBlurEnabled(!isMotionBlurEnabled());
+    this.updateBlurButton();
   }
 
   show(visible: boolean): void {

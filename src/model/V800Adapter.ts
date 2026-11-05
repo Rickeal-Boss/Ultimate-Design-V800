@@ -19,6 +19,7 @@ import {
   wheelOffsetsWorldXZ,
   type ExternalShellHandle
 } from './external/ExternalShell';
+import { loadInteriorSteering } from './external/InteriorSteering';
 import { setFxWheelOffsets } from '../fx';
 import { DEFAULT_VARIANT } from '../config/vehiclePaint';
 import { applyReferenceTextures } from './refTextures';
@@ -4673,6 +4674,10 @@ export function createV800CarAdapter(tier: QualityTier = 'high', paintId: string
   // ---- R44 状态：外部壳句柄 / 程序化外观隐藏标记 / 最近一次内舱态 ----
   // （声明在 setPaintShadow 之前，异步装载回调与既有内舱语义共用）
   let shellHandle: ExternalShellHandle | null = null;
+  /** R47：高精度方向盘（仅 cabin 态可见；外景态零 DC / 不透车外） */
+  let steeringMesh: THREE.Mesh | null = null;
+  /** R47：高精度盘装配成功后要恒隐藏的程序化盘（防双盘重叠 / z-fighting） */
+  const proceduralSteeringMeshes: THREE.Mesh[] = [];
   let proceduralExteriorHidden = false;
   let lastInteriorState = false;
   /** spinWheels 弧长→角度换算半径；外部壳装载成功后取 manifest.wheelRadius */
@@ -4680,9 +4685,32 @@ export function createV800CarAdapter(tier: QualityTier = 'high', paintId: string
 
   const setPaintShadow = (interior: boolean): void => {
     lastInteriorState = interior;
+    /* R47 开关（提到函数顶：setPokeHidden 之后还要给方块内饰 / 方向盘用）。
+     * `#r47cabin=off` ⇒ 逐位回滚 R44/R46 原状（整壳隐藏 + 玻璃 0.55 + 内饰全留）。 */
+    const r47CabinFix = !/(?:^|[#&])r47cabin=off/i.test(
+      typeof window === 'undefined' ? '' : window.location.hash
+    );
     // R44：外部壳 body（含玻璃）随内舱态整体显隐（轮挂 spin 枢轴下，保持旋转）
     if (shellHandle) {
-      shellHandle.bodyMesh.visible = !interior;
+      /* R47：「高精度车内视角外模材质消失」修复 —— 不再整壳隐藏。
+       * 外部壳材质 FrontSide，从车内看车壳外表面被背面剔除 ⇒ 天然不遮挡座舱视线；
+       * 保留可见才能让高精度外模（翼子板 / 引擎盖 / 门板外沿）继续存在。
+       * glass(DoubleSide) / lamp 语义件仍按原语义随 cabin 态隐藏（紧跟其后的循环）。
+       * 回滚：`#r47cabin=off` ⇒ 逐位恢复 R44/R46「整壳隐藏 + 玻璃 0.55」原状。 */
+      shellHandle.bodyMesh.visible = r47CabinFix || !interior;
+      // R47：「普通内饰方块透车外」修复 —— 外景态隐私玻璃完全不透明，直接遮住
+      // 程序化低模方块内饰；只改 opacity（transparent 恒 true）⇒ 零 program 重编译。
+      shellHandle.setGlassOpaque(!interior && r47CabinFix);
+      // R47：cabin 态让高精度外模内壁可见（用户点名「车内视角外模材质消失」）。
+      // FrontSide 从车内会被背面剔除 ⇒ 整壳看似消失、座舱直接透出道路/城堡；
+      // DoubleSide 让车顶 / 门板 / A 柱内壁参与渲染，形成完整座舱包裹。
+      // 只在机位切换时改一次（needsUpdate 触发 program 重编译，非每帧）；
+      // `#r47cabin=off` 逐位回滚 FrontSide。body 与 4 轮共享同一材质实例（不新增实例）。
+      {
+        const bm = shellHandle.bodyMesh.material as THREE.MeshPhysicalMaterial;
+        const wantSide = (interior && r47CabinFix) ? THREE.DoubleSide : THREE.FrontSide;
+        if (bm.side !== wantSide) { bm.side = wantSide; bm.needsUpdate = true; }
+      }
       // R44-6：glass/lamp 语义件与外壳同显隐（cabin 态整壳隐藏，外景态透明玻璃
       // 透出程序化内饰——外景态 model.visible 恢复见下）
       for (const sm of [...shellHandle.glassMeshes, ...shellHandle.lampMeshes]) {
@@ -4697,6 +4725,11 @@ export function createV800CarAdapter(tier: QualityTier = 'high', paintId: string
       if (welcomeMesh) welcomeMesh.visible = !interior;
     }
     setPokeHidden(!interior); // R44：车顶穿透件外景藏、cabin 态恢复
+    // ⚠ 顺序不可倒置：poke 件先登记隐藏，本函数才不会重复登记（见上方长注）
+    setCabinBlocksHidden(!interior && r47CabinFix);
+    if (steeringMesh) steeringMesh.visible = interior;
+    // 高精度盘接管后恒隐藏程序化盘；放在最后，覆盖 setCabinBlocksHidden 的恢复
+    for (const m of proceduralSteeringMeshes) m.visible = false;
     for (const p of paintShadowPairs) {
       if (interior) {
         // 车内：整批隐藏（材质级再兜一层，防合批 mesh 被别的路径重新置可见）
@@ -4764,6 +4797,42 @@ export function createV800CarAdapter(tier: QualityTier = 'high', paintId: string
   const R44_KEEP_MESH_NAMES = new Set<string>([
     'brake-pedal', 'cabin-floor-carpet', 'cabin-roof-carpet', 'welcome-carpet'
   ]);
+  /* R47：外景态隐藏「程序化方块内饰」（用户点名「高精度外膜普通内饰方块
+   * 模型透车外」）。R44 的 setExteriorHidden 白名单刻意保留内饰（透明玻璃时代
+   * 要『透出座舱』），但它们会从轮拱 / 门缝 / 风挡下沿以橙棕网格块穿出外壳
+   * （实拍 verify/r46/after/r47wheel_on_v800-white-wheel.png 轮拱上方橙色块，
+   *  且 r47wheel_on 与 r47wheel_off 两态均在 ⇒ 与轮旋转无关）。
+   * 用独立 Set 管理，与 setExteriorHidden 的 r44HiddenMeshes（只碰 keep=false 的
+   * 外观件）不相交；且**必须在 setPokeHidden 之后调用**：poke 件先被隐藏，
+   * 本函数见 mesh.visible=false 便不会重复登记 ⇒ 两套恢复逻辑零冲突。
+   * cabin 态（interior=true）全部恢复 ⇒ 座舱内饰完整。
+   * 回滚：#r47cabin=off ⇒ 本函数不隐藏，逐位恢复 R44/R46 原状。 */
+  const r47BlockHidden = new Set<THREE.Mesh>();
+  const setCabinBlocksHidden = (hidden: boolean): void => {
+    root.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      if ((mesh.userData as { r44External?: boolean }).r44External === true) return;
+      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      // welcome-carpet 是车外迎宾光毯（由 setPaintShadow 单独管），不是座舱方块
+      const keepByName = R44_KEEP_MESH_NAMES.has(mesh.name) && mesh.name !== 'welcome-carpet';
+      let isBlock = keepByName;
+      for (const mt of mats) {
+        if (!mt) continue;
+        const ud = mt.userData as { sculptMaterial?: { id?: string }; cabinHidable?: boolean };
+        if (ud?.cabinHidable === true) continue; // 座舱遮挡克隆归 Game 的 cabinOccluder 管
+        const id = ud?.sculptMaterial?.id;
+        if (id != null && R44_INTERIOR_MATERIAL_IDS.has(id)) isBlock = true;
+      }
+      if (!isBlock) return;
+      if (hidden) {
+        if (mesh.visible) { mesh.visible = false; r47BlockHidden.add(mesh); }
+      } else if (r47BlockHidden.has(mesh)) {
+        mesh.visible = true;
+        r47BlockHidden.delete(mesh);
+      }
+    });
+  };
   const r44HiddenMaterials = new Set<THREE.Material>();
   const r44HiddenMeshes = new Set<THREE.Mesh>();
   const setExteriorHidden = (hidden: boolean): void => {
@@ -4875,6 +4944,25 @@ export function createV800CarAdapter(tier: QualityTier = 'high', paintId: string
     setPaintShadow(lastInteriorState);
     buildPokeList(shell.manifest.bodyBBox.max[1] * shell.manifest.scale * 0.90);
     setPokeHidden(!lastInteriorState);
+    // R47：高精度方向盘（内饰资产线交付，契约 .qa/r47/STEERING_CONTRACT.md）。
+    // 主理人裁决：契约 §2.3 的 scale=[1,1,1] 不成立 —— body 组无 scale，
+    // 外部壳件都在各自 mesh 上乘 manifest.scale ⇒ 这里同样传 scale（见 InteriorSteering.ts 头注）。
+    void (async () => {
+      const wheel = await loadInteriorSteering('v800', shell.manifest.scale);
+      if (!wheel) return; // 失败：保持程序化方向盘，游戏零感知
+      body.add(wheel);
+      // 程序化方向盘（三辐双色盘 / 气囊盖+盾标 / steering-spokes）整组交给高精度盘，
+      // 组件 id 精确匹配 + 全树正则（R40 铁律）；失败路径不执行 ⇒ 程序化盘保持完整。
+      root.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (!m.isMesh) return;
+        if ((m.userData as { r44External?: boolean }).r44External === true) return;
+        if (/方向盘|steering/i.test(m.name)) proceduralSteeringMeshes.push(m);
+      });
+      steeringMesh = wheel;
+      wheel.visible = lastInteriorState; // 外景态隐藏 ⇒ 不透车外、零 DC
+      for (const m of proceduralSteeringMeshes) m.visible = false;
+    })();
     const hubTags = ['fl', 'fr', 'rl', 'rr'] as const;
     const usedSpin = new Set<THREE.Object3D>();
     // 切割退化（静态轮）：无外部轮 mesh 时整段跳过

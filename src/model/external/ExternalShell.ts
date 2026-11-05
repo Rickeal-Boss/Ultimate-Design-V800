@@ -73,6 +73,13 @@ export interface ExternalShellHandle {
   readonly lampRearMat: THREE.MeshStandardMaterial | null;
   /** 头灯材质（emissive 冷白，setHeadlights 联动）；无语义件时 null */
   readonly lampFrontMat: THREE.MeshStandardMaterial | null;
+  /**
+   * R47：外景态把隐私玻璃调成完全不透明，遮住程序化低模方块内饰
+   * （用户点名「高精度外膜普通内饰方块模型透车外问题」）。
+   * 只改 `opacity`（transparent 恒 true）⇒ 不触发 program 重编译、零 DC 变化。
+   * cabin 态恢复半透；`#r44glass=off|solid` QA 钩子优先，本方法不介入。
+   */
+  setGlassOpaque(opaque: boolean): void;
   /** 当前变体 id */
   readonly variant: string;
   /** 懒加载切换 baseColor（同时只驻留当前变体）；失败返回 false（保旧图） */
@@ -625,6 +632,29 @@ export async function loadExternalShell(
     }
     bodyMesh.scale.setScalar(manifest.scale);
 
+    /* ── R47：外部轮「内外侧装反」修复（用户点名，几何定罪见 .qa/r47/geom_probe_out.txt）──
+     * 定量证据：wheel-l(fl/rl) 内圈(r<0.045)面法线 nx>0.8、重心 x≈+0.025 ⇒ 轮毂正面
+     *   朝 +x；wheel-r(fr/rr) 朝 −x。即 **GLB 几何本身正确**（左右轮毂面都朝各自车外）。
+     * 根因：body 组带 rotY(π)（V800Adapter.ts:1826）⇒ hubWorld.x = −hubModel.x·scale；
+     *   而 mountExternalWheel 的 desired = T(hubWorld)×S(scale) **不含这个刚性旋转**，
+     *   轮几何的 +x 仍是世界 +x，与车身差 180° ⇒ 左右轮毂正面一起翻到车身内侧
+     *   （用户截图 #27/#28：车底视角看到辐条朝车身中心、纯黑胎背朝车外）。
+     * 修法：只把轮几何绕 Y 刚性旋转 π（x,z→−x,−z；法线同步；行列式 +1 ⇒ 绕序不变），
+     *   使其与 body 组同朝向。零资产变更、零挂载矩阵变更、零自转影响 —— 轮 bbox 中心
+     *   ≈(0,0,0)（已 hub 归中），旋转后仍居中；对称轴 X→−X 方向不变，spin 绕世界 X
+     *   自转语义逐位保持；UV / tri / vtx / mesh 名全部不变。
+     * QA 回滚：`#r47wheel=off` ⇒ 保持 R46 原状（A/B 唯一变量）。 */
+    if (!/(?:^|[#&])r47wheel=off/i.test(
+      typeof window === 'undefined' ? '' : window.location.hash
+    )) {
+      const rotated = new Set<THREE.BufferGeometry>();
+      for (const mesh of Object.values(wheelMeshes)) {
+        if (rotated.has(mesh.geometry)) continue;
+        rotated.add(mesh.geometry);
+        mesh.geometry.rotateY(Math.PI);
+      }
+    }
+
     // ── R44-6 语义部件（glass 透明 / lamp emissive）──
     // glass：深 tint 隐私玻璃（外景态程序化内饰恢复可见 = 透过玻璃看到内饰；
     // cabin 态随外壳整体隐藏，维持 R44 终解「整树切换」语义）。DoubleSide 让
@@ -741,6 +771,12 @@ export async function loadExternalShell(
           };
           return false;
         }
+      },
+      setGlassOpaque(opaque: boolean): void {
+        if (glassMode === 'solid' || glassMode === 'off') return; // QA A/B 钩子优先
+        const next = opaque ? 1 : 0.55;
+        if (glassMat.opacity === next) return;
+        glassMat.opacity = next; // transparent 恒 true ⇒ 0.55→1 完全覆盖后方内饰
       },
       dispose(): void {
         bodyMesh.geometry.dispose();

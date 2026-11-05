@@ -40,6 +40,13 @@ const SpeedBlurFlashShader = {
     uniform float flash;
     varying vec2 vUv;
     void main() {
+      /* R47：动态模糊默认关闭 ⇒ strength/flash 恒 0 时直接透传，
+       * 把全屏 pass 从 6 tap（增强版 5 tap × RGB 3 次 = 15 次采样）降到 1 次。
+       * 只加分支不改 program 结构 ⇒ prewarm 仍能编译全部分支，零首帧尖峰。 */
+      if (strength <= 0.0001 && flash <= 0.0001) {
+        gl_FragColor = texture2D(tDiffuse, vUv);
+        return;
+      }
       vec2 dir = vUv - vec2(0.5);
       float dist = length(dir);
       vec4 sum = vec4(0.0);
@@ -69,6 +76,13 @@ const SpeedBlurFlashEnhancedShader = {
     uniform float flash;
     varying vec2 vUv;
     void main() {
+      /* R47：动态模糊默认关闭 ⇒ strength/flash 恒 0 时直接透传，
+       * 把全屏 pass 从 6 tap（增强版 5 tap × RGB 3 次 = 15 次采样）降到 1 次。
+       * 只加分支不改 program 结构 ⇒ prewarm 仍能编译全部分支，零首帧尖峰。 */
+      if (strength <= 0.0001 && flash <= 0.0001) {
+        gl_FragColor = texture2D(tDiffuse, vUv);
+        return;
+      }
       vec2 dir = vUv - vec2(0.5);
       float dist = length(dir);
       vec4 sum = vec4(0.0);

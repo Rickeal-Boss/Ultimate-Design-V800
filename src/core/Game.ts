@@ -7,6 +7,7 @@ import { Sfx, vibrate } from '../audio/Sfx';
 import { BRAKE, CRASH, MS_TO_KMH, REDUNDANCY, VEHICLE } from '../config/physics';
 import { getVehicleProfile, resolveVehicleId, type InteriorViews } from '../config/vehicles';
 import { resolveAssemblyPaintId } from '../config/vehiclePaint';
+import { isMotionBlurEnabled } from '../config/motionBlur';
 import { AdaptiveQuality, type QualitySettings, type QualityTier } from '../config/quality';
 import { World } from '../physics/World';
 import type { VehicleState } from '../physics/Vehicle';
@@ -1193,10 +1194,13 @@ export class Game {
      * R40 P0-C 早已按 `frameDisp = speed·dt` 补偿到 0.12~0.18 ⇒ 路径遗漏。
      * 对齐同一口径；off 分支保留原纯速度映射字符串供一键回滚。 */
     const frameDispFree = absSpeed * dt;
-    const freeBlur = R46_BLUR_V2
+    /* R47 动态模糊用户开关（默认关）：关闭 ⇒ 强度 0 且 dt=0/smooth=false ⇒
+     * Postfx 走「直写」分支，无滞后余晖；#r46blur=off 算法 A/B 仅在开启态生效。 */
+    const motionBlurOnFree = isMotionBlurEnabled();
+    const freeBlur = !motionBlurOnFree ? 0 : R46_BLUR_V2
       ? Math.min(0.18, (frameDispFree / 0.925) * 0.12)
       : Math.min(1, absSpeed / 72) ** 1.6 * 0.07;
-    this.postfx.setSpeedBlur(freeBlur, dt, R46_BLUR_V2);
+    this.postfx.setSpeedBlur(freeBlur, motionBlurOnFree ? dt : 0, motionBlurOnFree && R46_BLUR_V2);
     this.postfx.setFlash(0);
 
     // ---- HUD（只写速度 + 挡位，踏板力/距离统计属挑战语义，不显示）----
@@ -1527,13 +1531,15 @@ export class Game {
      * 但长帧 / `maxFrameTime` 钳制时会低估或高估；`renderDisp` 与画面逐位同源。
      * ⚠ off 分支严格保留 R45 基线公式字符串（tests/r44_frame.test.ts:91-94 钉住，禁删禁改）。 */
     const renderDisp = Math.abs(prevZ - this.car.root.position.z);
+    /* R47：默认不开动态模糊；打开才计算强度并启用一阶滞后。 */
+    const motionBlurOn = isMotionBlurEnabled();
     let speedBlur = 0;
-    if (pedaling && this.sm.phase !== 'countdown') {
+    if (motionBlurOn && pedaling && this.sm.phase !== 'countdown') {
       speedBlur = R46_BLUR_V2
         ? Math.min(0.18, (renderDisp / 0.925) * 0.12)
         : Math.min(0.18, (frameDisp / 0.925) * 0.12);
     }
-    this.postfx.setSpeedBlur(speedBlur, dt, R46_BLUR_V2);
+    this.postfx.setSpeedBlur(speedBlur, motionBlurOn ? dt : 0, motionBlurOn && R46_BLUR_V2);
     this.brakeFlash = Math.max(0, this.brakeFlash - dt * 2.2);
     this.postfx.setFlash(this.brakeFlash);
 
