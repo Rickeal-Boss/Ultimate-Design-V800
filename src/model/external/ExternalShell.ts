@@ -96,6 +96,8 @@ export const R51_GLASSPASS_ON = !r51HookOff('r51glasspass');
 export const R53_LAMP_DETAIL_ON = !r51HookOff('r53lampdetail');
 /** R54：前脸贯穿镀铬饰条（修「缺贯穿镀铬条」）。`#r54trim=off` ⇒ 逐位回 R53（R53 灯上铬条恢复）。 */
 export const R54_CHROME_ON = !r51HookOff('r54trim');
+/** R55：V800 中央红旗盾形徽标（中网细节，银色描边+深红盾面）。`#r55badge=off` 逐位回 R54。 */
+export const R55_BADGE_ON = !r51HookOff('r55badge');
 
 export type ExternalCarId = 'v800' | 'r7';
 
@@ -893,6 +895,71 @@ function r54BuildFrontTrim(
   outGeos.push(g);
 }
 
+/* ══ R55 · V800 中央红旗盾形徽标（中网细节）═══════════════════════════════════
+ * 背景（.qa/r54，NVIDIA Super VL 参考分析 + GLB 几何探针）：
+ *  V800 官图中网中央（镀铬贯穿条下方）有一个**竖长盾形红旗徽标**（红旗品牌标）；
+ *  当前渲染只有暗面板，缺徽标。格栅中央表面探针：x[-0.06,0.06] y[0.08,0.185]
+ *  z≈0.5764~0.5783（近平面）⇒ 徽标用平面盾形即可。
+ *  实现：THREE.Shape 竖盾（尖顶、直边、圆弧底）→ ExtrudeGeometry 薄板，两层：
+ *  外层银色描边（大盾，后） + 内层深红盾面（小盾，前），挂 bodyMesh 下 ⇒
+ *  自动继承 scale(4.75)/body rotY(π)，DC 增量 +2/车。`#r55badge=off` 零新增。 */
+function r55ShieldShape(w: number, h: number): THREE.Shape {
+  const s = new THREE.Shape();
+  // 归一化竖盾：尖顶、外扩肩、圆弧底（坐标 × w/2 × h/2 映射）
+  const pts: ReadonlyArray<readonly [number, number]> = [
+    [0, 0.5], [-0.34, 0.22], [-0.30, -0.20], [-0.20, -0.42],
+    [0, -0.5], [0.20, -0.42], [0.30, -0.20], [0.34, 0.22]
+  ];
+  s.moveTo(pts[0][0] * w / 2, pts[0][1] * h / 2);
+  for (let i = 1; i < pts.length; i++) s.lineTo(pts[i][0] * w / 2, pts[i][1] * h / 2);
+  s.closePath();
+  return s;
+}
+
+function r55BuildHqBadge(
+  bodyMesh: THREE.Mesh,
+  outMats: THREE.Material[],
+  outGeos: THREE.BufferGeometry[]
+): void {
+  if (!R55_BADGE_ON) return;
+  // 位置：格栅中央、镀铬贯穿条（y0.171-0.183）正下方；格栅前表面 z≈0.5783
+  const yC = 0.1325; // 徽标中心高
+  const zBase = 0.5786; // 前表面 + ~0.0003 凸出
+  const silverMat = new THREE.MeshStandardMaterial({
+    color: 0xc3c8cf,
+    metalness: 0.9,
+    roughness: 0.22,
+    envMapIntensity: 1.2,
+    emissive: new THREE.Color(0x17191d),
+    emissiveIntensity: 0.2
+  });
+  const redMat = new THREE.MeshStandardMaterial({
+    color: 0x9c1115,
+    metalness: 0.25,
+    roughness: 0.32,
+    emissive: new THREE.Color(0x7c0d10),
+    emissiveIntensity: 0.35
+  });
+  const mk = (w: number, h: number, z: number, depth: number, mat: THREE.Material, name: string): void => {
+    const shape = r55ShieldShape(w, h);
+    const g = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false });
+    g.translate(0, yC, z);
+    const mesh = new THREE.Mesh(g, mat);
+    mesh.name = name;
+    mesh.castShadow = false;
+    mesh.receiveShadow = false;
+    mesh.renderOrder = 3;
+    mesh.frustumCulled = true;
+    bodyMesh.add(mesh);
+    outMats.push(mat);
+    outGeos.push(g);
+  };
+  // 外盾（银描边）z[zBase, zBase+0.0018]；内盾（红面）z[zBase+0.0023, zBase+0.0035]
+  // ⇒ 红盾前面比银盾前面凸 0.0015（~7mm 世界），免 z-fight，红盾浮于银描边之上。
+  mk(0.030, 0.060, zBase, 0.0018, silverMat, 'hq_badge_silver');
+  mk(0.024, 0.052, zBase + 0.0023, 0.0012, redMat, 'hq_badge_red');
+}
+
 /** R46：当前加载的 AbortController（供取消订阅回调命中；加载结束置 null） */
 let shellAbort: AbortController | null = null;
 
@@ -1222,6 +1289,11 @@ export async function loadExternalShell(
     const r54TrimGeos: THREE.BufferGeometry[] = [];
     // R54：贯穿镀铬条（挂 bodyMesh 下，+1 DC/车；`#r54trim=off` 回滚）
     r54BuildFrontTrim(bodyMesh, car, r54TrimMats, r54TrimGeos);
+    /** R55：红旗盾形徽标新增材质/几何 */
+    const r55BadgeMats: THREE.Material[] = [];
+    const r55BadgeGeos: THREE.BufferGeometry[] = [];
+    // R55：V800 中央红旗盾形徽标（仅 V800；+2 DC/车；`#r55badge=off` 回滚）
+    if (car === 'v800') r55BuildHqBadge(bodyMesh, r55BadgeMats, r55BadgeGeos);
 
     /* ── R52-A2 · 车轮轴心对齐（修「车轮轴心不稳」）───────────────────────────────
      * 定量证据（.qa/r52/wheel_hub.py / wheel_axle.py）：外部轮 GLB 真轴相对世界 X 偏
@@ -1628,6 +1700,9 @@ export async function loadExternalShell(
         // R54：贯穿镀铬条材质/几何
         for (const m of r54TrimMats) m.dispose();
         for (const g of r54TrimGeos) g.dispose();
+        // R55：红旗徽标材质/几何
+        for (const m of r55BadgeMats) m.dispose();
+        for (const g of r55BadgeGeos) g.dispose();
         lampAtlasTex?.dispose();
         material.map?.dispose();
         material.normalMap?.dispose();
