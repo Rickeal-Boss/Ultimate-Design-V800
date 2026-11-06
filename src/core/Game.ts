@@ -9,6 +9,18 @@ import { getVehicleProfile, resolveVehicleId, type InteriorViews } from '../conf
 import { resolveAssemblyPaintId } from '../config/vehiclePaint';
 import { isMotionBlurEnabled } from '../config/motionBlur';
 import { AdaptiveQuality, type QualitySettings, type QualityTier } from '../config/quality';
+import {
+  isR51LoadGateEnabled,
+  isR51MatFreezeEnabled,
+  isR51SideWarmEnabled,
+  isR51ZeroGcEnabled,
+  markShellAssembled,
+  markShellUnavailable,
+  readShellStatus,
+  shellGateTimedOut,
+  waitForShellGate,
+  SHELL_NO_SHELL_STATES
+} from '../config/r51Perf';
 import { World } from '../physics/World';
 import type { VehicleState } from '../physics/Vehicle';
 import { FxSystems, type FxFrameInput } from '../fx';
@@ -32,10 +44,26 @@ import { Result } from '../ui/Result';
 import { Sliders } from '../ui/Sliders';
 import { Loop } from './Loop';
 import { FREE_START, FreeDrive, type FreeDriveEvent } from './FreeDrive';
-import type { GameEvent, RunResult, Sample } from './StateMachine';
+import type { GameEvent, RunResult, Sample, SessionInput } from './StateMachine';
 import { StateMachine } from './StateMachine';
 
 const PHYSICS_HZ = 120;
+
+/**
+ * R51-E · 每帧分配清扫：`#fprobe` 探针的 phase 编码表。
+ * 原写法把 6 键 phase 编码表内联成对象字面量、再按 `this.sm.phase` 取值
+ * （在 `probeFrames.push` 里）⇒ 会在**每个探针帧**新建一个 6 键对象
+ * （R43 §4 实测 GC 29.3ms/轮是唯一真尖峰）。提到模块级后取值逐位等价。
+ * 键与 StateMachine.Phase 枚举一一对应（改枚举必须同步此表，否则探针 phase 记 0）。
+ */
+const PHASE_CODE: Readonly<Record<string, number>> = {
+  menu: 0,
+  countdown: 1,
+  accel: 2,
+  brake: 3,
+  stopped: 4,
+  crashed: 5
+};
 
 /**
  * R46 Phase 2 · FX-A 回滚开关（A/B 唯一变量，主理人授权「默认开启」）。
@@ -346,6 +374,25 @@ export class Game {
     redundancy: false
   };
 
+  /* ══ R51 Phase 2-A · 性能线字段 ═══════════════════════════════════════════
+   * 所有 hash 开关在构造期求值一次 ⇒ 120Hz tick / 60Hz frame 热路径零 hash 判定
+   * （同 config/motionBlur.ts 的 cached 口径）。默认开，`#r51xxx=off` 逐位回 R50。 */
+  private readonly shellGateEnabled = isR51LoadGateEnabled();
+  private readonly matFreezeEnabled = isR51MatFreezeEnabled();
+  private readonly sideWarmEnabled = isR51SideWarmEnabled();
+  /** E：`#r51zerogc=off` ⇒ 回退到每物理步对象字面量 */
+  private readonly zeroGc = isR51ZeroGcEnabled();
+  private shellGateResolved = false;
+  private shellGateTimeoutNoted = false;
+  private onShellGateReady: (() => void) | null = null;
+  /**
+   * E：每物理步 SessionInput 载荷复用。原 `tick()` 每步 new 一个 3 字段对象字面量
+   * （120Hz ⇒ 120 个短命对象/s，R43 §4 GC 29.3ms/轮是唯一实测主线程尖峰）。
+   * StateMachine.step 只同步读、不持有引用 ⇒ 原地改写安全
+   * （与 R44 的 fxInput / hudInput 同判据），**物理契约零触碰**。
+   */
+  private readonly smInput: SessionInput = { throttle: 0, brake: 0, brakePressed: false };
+
   constructor(
     container: HTMLElement,
     quality: QualitySettings,
@@ -573,7 +620,41 @@ export class Game {
     // R39：先把「首见即上传 / 首次编译」的冷启动成本在加载期一次性吃掉（见方法注释），
     // 放在 rAF 之前 —— 本任务内同步执行，第一帧渲染时资源已就绪。
     if (!import.meta.env.DEV || !window.location.hash.includes('noprewarm')) this.prewarmGpu();
-    requestAnimationFrame(() => onFirstFrame());
+    /* ══ R51-A · 加载期 gate（主理人裁决：`markShellAssembled()` 显式标记，不用 +2rAF）══
+     * R50 病根：外部壳（48MB GLB）在 V800Adapter.ts:4926 / R7Adapter.ts:1556 的异步
+     * IIFE 里 resolve 之后才挂树；构造期的 `prewarmGpu()` 只覆盖当时 scene ⇒ 壳的
+     * 1.27M tri buffer 上传 + MeshPhysicalMaterial program 编译 + 3~4 张贴图上传 +
+     * setExteriorHidden 全树遍历 + buildShadowProxies + 4×mountExternalWheel 全压进
+     * **某一个运行时帧**（.qa/r49/PERF_PRESTUDY.md §4「团队清单外，最大」抖动源）。
+     * 更糟的是 R45 事故：首帧 rAF 就 hideLoading ⇒ 用户先看到程序化车模甚至以为高精度
+     * 车模不可见（ExternalShell.ts 的字节进度/就绪/失败状态条修复），**禁止回退该修复**。
+     *
+     * 改法：hideLoading 的放行权交给 config/r51Perf.ts 的 gate，只有两个入口：
+     *   ① `pollShellGate()` 在 `postfx.render()` 之后（= 首帧已渲染）确认
+     *      `readShellStatus()==='ready'` **且** 场景树出现 `userData.r44External` 网格
+     *      （= 外部壳真实装配完成，**不是 fetch 完成**）⇒ `markShellAssembled()`；
+     *   ② 状态为 failed / cancelled ⇒ `markShellUnavailable()`（既有失败分支）。
+     * 8s 软超时**只记诊断标记、不 resolve、不提前 hideLoading()**（用户已授权首建时长
+     * 无限制 ⇒ 48MB 慢网继续等加载屏是预期行为，不是 bug）。
+     * ⇒ 壳首次进入主 pass 的那一帧（含全部上传/编译 hitch）**仍被 #loading 屏覆盖**，
+     *   onFirstFrame 在 gate resolve 后的 rAF 才调用，hitch 落在 loading 屏结束之前。
+     *
+     * ⚠ 不用「装配期遍历 root 瘦身」：R38-P1-5 那套会被异步壳绕过（R49 §2 已定罪）。
+     *   本 gate 是**渲染后运行时轮询 + 只读标记**，不瘦身、不重排场景树。
+     * ⚠ R45 状态条在 ExternalShell.ts（本波白名单禁碰 src/model/**），完全未改动。
+     * ⚠ `#noprewarm` 入口守卫用 `hash.includes('noprewarm')` ⇒ 所有 `#r51*` 键名不得含该子串。 */
+    if (this.matFreezeEnabled) this.freezeStaticMatrices();
+    if (this.shellGateEnabled) {
+      this.onShellGateReady = onFirstFrame;
+      waitForShellGate(() => {
+        // 仍在 loading 屏内：cabin↔外景 `bm.side` 切换的两套 program 变体一并加载期编译
+        if (this.sideWarmEnabled) this.prewarmShellProgramVariants();
+        requestAnimationFrame(() => this.onShellGateReady?.());
+      });
+    } else {
+      // `#r51loadgate=off` ⇒ 逐位回 R50：首帧 rAF 即 hideLoading
+      requestAnimationFrame(() => onFirstFrame());
+    }
 
     this.menu.show(true);
     this.rig.setMode('orbit');
@@ -1318,16 +1399,22 @@ export class Game {
     const autoThrottle = this.autoDrive && phase === 'accel' ? 1 : 0;
     // 0.9：低于断裂阈值，验证成功刹停路径；#snapdrive 时拉满 1.0 验证断裂→冗余路径
     const autoBrake = this.autoDrive && phase === 'brake' ? (this.snapDrive ? 1 : 0.9) : 0;
-    const events = this.sm.step(step, {
-      throttle: Math.max(autoThrottle, this.sliders.throttle),
-      brake: Math.max(autoBrake, this.sliders.brake),
-      brakePressed:
-        this.sliders.brakePressed ||
-        this.forceBrakeTick ||
-        (this.autoDrive && (phase === 'accel' || phase === 'brake'))
-    });
+    /* R51-E：SessionInput 载荷复用（原每物理步对象字面量 ⇒ 120 个短命对象/s）。
+     * 值逐位相同（同一组 autoThrottle / sliders / forceBrakeTick 表达式），只把
+     * 「构造方式」从字面量改成原地改写 ⇒ **物理契约零触碰**（摩擦圆 / 限速 / 断裂
+     * 全在 StateMachine 内，本改动只换传参对象的生命周期）。
+     * `#r51zerogc=off` ⇒ 展开成新对象，逐位回 R50。 */
+    const input = this.smInput;
+    input.throttle = Math.max(autoThrottle, this.sliders.throttle);
+    input.brake = Math.max(autoBrake, this.sliders.brake);
+    input.brakePressed =
+      this.sliders.brakePressed ||
+      this.forceBrakeTick ||
+      (this.autoDrive && (phase === 'accel' || phase === 'brake'));
+    const events = this.sm.step(step, this.zeroGc ? input : { ...input });
     this.forceBrakeTick = false;
-    for (const event of events) this.handleEvent(event);
+    // 索引遍历代替 for...of（不创建数组迭代器；事件派发顺序逐位相同）
+    for (let i = 0; i < events.length; i++) this.handleEvent(events[i]);
   }
 
   private handleEvent(event: GameEvent): void {
@@ -1604,6 +1691,141 @@ export class Game {
     this.renderTail(dt, vehicle, alpha);
   }
 
+  /* ══════════════ R51 Phase 2-A · 加载期 gate + 静态化 + 预热 ══════════════ */
+
+  /**
+   * R51-A：渲染后轮询外部壳装配状态（**唯一** `markShellAssembled()` 调用点）。
+   * 每帧只在 gate 未 resolve 期间工作；resolve 后首行即返回 ⇒ 运行期零成本。
+   */
+  private pollShellGate(): void {
+    if (!this.shellGateEnabled || this.shellGateResolved) return;
+
+    // 8s 软超时：只记一次 DEV 诊断，**不 resolve、不放行**（主理人裁决）
+    if (!this.shellGateTimeoutNoted && shellGateTimedOut()) {
+      this.shellGateTimeoutNoted = true;
+      if (import.meta.env.DEV) {
+        console.info('[R51] 外部壳 8s 未就绪：继续等待加载屏，不提前 hideLoading（首建时长已授权）');
+      }
+    }
+
+    const state = readShellStatus(this.profile.id);
+    if (state === null) return; // 台账尚未建立：继续等，绝不提前放行
+    if (SHELL_NO_SHELL_STATES.includes(state)) {
+      /* 既有失败分支：failed（网络/解析/`#r44ext=off`/Node 测试环境，
+       * ExternalShell.ts:679-683,1135）或 cancelled（用户主动「停止下载」，
+       * ExternalShell.ts:1125-1133，此后不会再有壳到达）。
+       * 两者的失败/取消状态条提示由 ExternalShell 自己显示（R45 修复，本波禁碰
+       * src/model/**），本线只放行走原 hideLoading。 */
+      this.shellGateResolved = true;
+      markShellUnavailable();
+      return;
+    }
+    if (state !== 'ready') return; // idle / loading：继续等
+
+    /* 硬证据：`r44ShellStatus.state='ready'` 是 `loadExternalShell()` 返回**前**
+     * （ExternalShell.ts:1113）置的，属 fetch/parse 完成，**不是装配完成**。
+     * 适配器在 `body.add(shell.bodyMesh)` 之前给壳子树打 `userData.r44External=true`
+     * （V800Adapter.ts:4933-4945，R7Adapter.ts 同构），其后的 setExteriorHidden /
+     * buildPokeList / buildPokeHidden / buildShadowProxies / 4×mountExternalWheel /
+     * setFxWheelOffsets 是**同一 async 函数内无 await 的同步段** ⇒ JS 单线程下，
+     * 能在 rAF 渲染帧观察到该标记时，整条装配链必然已执行完（微任务已清空）。
+     * 且本方法在 `postfx.render()` 之后调用 ⇒ 「首帧已渲染」同时成立。 */
+    if (!this.hasMountedExternalShell()) return;
+
+    this.shellGateResolved = true;
+    markShellAssembled(); // ← 主理人要求的显式标记点（非猜帧数、非 fetch 完成）
+  }
+
+  /** R51-A：外部壳「已挂树」硬证据（只读标记，不瘦身、不重排场景树） */
+  private hasMountedExternalShell(): boolean {
+    const found = { yes: false };
+    this.car.root.traverse((o) => {
+      if (found.yes) return;
+      const m = o as THREE.Mesh;
+      if (m.isMesh && (m.userData as { r44External?: boolean }).r44External === true) found.yes = true;
+    });
+    return found.yes;
+  }
+
+  /**
+   * R51-A2：静态子树矩阵冻结（首建加重换每帧减负）。
+   * three 每帧 `scene.updateMatrixWorld()` 递归全树；对确认静止的节点关掉
+   * `matrixAutoUpdate` + `matrixWorldAutoUpdate`（three Object3D.js:1182/1239），
+   * 省掉每帧的 matrix compose + matrixWorld 乘法。首建期先 `updateWorldMatrix`
+   * 烘一次世界矩阵，之后恒等（画质/面数/DC 逐位不变）。
+   * ⚠ 白名单严格限定为「castle 分区 mesh + scene **直属**的 fx Points/InstancedMesh」：
+   *   · 天空球（Environment 私有，每帧 position.copy）、ContactShadow（每帧对位）、
+   *     Lighting 三盏灯（每帧 texel 对齐）、car.root 整棵子树（每帧移动/旋转）、
+   *     外部壳与阴影代理（异步挂进 car.root）**一律不冻结**；
+   *   · 尤其不能遍历 car.root：程序化车模含 repetitionSystems 的 InstancedMesh，
+   *     冻结会让它们不跟随车身（R12 铁律级穿帮）。这正是「装配期遍历 root 绕过
+   *     外部壳」（R49 §2）的同一时序坑，本方法只读 scene 顶层 children，天然规避。
+   * `#r51matfreeze=off` ⇒ 完全不调用，逐位回 R50。
+   */
+  private freezeStaticMatrices(): void {
+    const frozen: THREE.Object3D[] = [];
+    const zones = (this.castle as unknown as {
+      zoneViews?: { mesh: THREE.Mesh }[];
+    }).zoneViews;
+    if (zones) for (const zv of zones) frozen.push(zv.mesh);
+    for (const child of this.scene.children) {
+      if (child === this.car.root) continue;
+      const c = child as THREE.Object3D & { isPoints?: boolean; isInstancedMesh?: boolean };
+      if (c.isPoints === true || c.isInstancedMesh === true) frozen.push(child);
+    }
+    for (const o of frozen) {
+      o.updateWorldMatrix(true, false);
+      o.matrixAutoUpdate = false;
+      o.matrixWorldAutoUpdate = false;
+    }
+  }
+
+  /**
+   * R51-A3：cabin↔外景双 program 变体加载期预编译。
+   * R49 §4 第二类 hitch：`setPaintShadow` 切机位时把 bodyMesh 材质的 `side`
+   * FrontSide ↔ DoubleSide（V800Adapter.ts:4717），three 的 DOUBLE_SIDED/FLIP_SIDED
+   * defines 不同 ⇒ 换 program，首次切进 cabin 有一帧编译尖峰。
+   * 做法：加载屏内把同一材质切到两个 side 各跑一次 `renderer.compile()`（**零绘制、
+   * 不建 RT、不污染 renderer.info 的整帧 DC/tri 统计**，与 prewarmGpu():803 同路径），
+   * 两套 program 都进缓存；finally 无条件还原原 side（命中缓存，零重编译）。
+   * ⚠ 不 import model/**：沿 car.root 找 `r44External` 且 isMeshPhysicalMaterial 的
+   *   网格（body 与 4 轮共享同一材质实例，R47 注释），只读不改其贴图/uniform。
+   * ⚠ 找不到（壳未装配 / 用户取消 / `#r44ext=off`）⇒ 直接 return，零副作用。
+   */
+  private prewarmShellProgramVariants(): void {
+    const found: { mat: THREE.MeshPhysicalMaterial | null } = { mat: null };
+    this.car.root.traverse((o) => {
+      if (found.mat) return;
+      const m = o as THREE.Mesh;
+      if (!m.isMesh || (m.userData as { r44External?: boolean }).r44External !== true) return;
+      const raw = (Array.isArray(m.material) ? m.material[0] : m.material) as
+        | (THREE.Material & { isMeshPhysicalMaterial?: boolean })
+        | undefined;
+      if (raw && raw.isMeshPhysicalMaterial === true) {
+        found.mat = raw as THREE.MeshPhysicalMaterial;
+      }
+    });
+    const bodyMat = found.mat;
+    if (!bodyMat) return;
+    const originalSide = bodyMat.side;
+    try {
+      for (const side of [THREE.FrontSide, THREE.DoubleSide]) {
+        if (bodyMat.side === side) continue;
+        bodyMat.side = side;
+        bodyMat.needsUpdate = true; // bump version ⇒ compile 按新 defines 取 program
+        this.renderer.compile(this.scene, this.rig.camera);
+      }
+    } catch (e) {
+      // 预热是收益项不是正确性项：失败最坏退回首切 cabin 编译，绝不影响加载屏放行
+      if (import.meta.env.DEV) console.warn('[R51] 双 program 预热失败（已忽略）:', e);
+    } finally {
+      if (bodyMat.side !== originalSide) {
+        bodyMat.side = originalSide;
+        bodyMat.needsUpdate = true; // 命中缓存，零重编译
+      }
+    }
+  }
+
   /**
    * 帧尾（挑战模式与自由探索共用）：后处理渲染 → 自适应画质 → 帧探针。
    * @param vehicle 挑战模式的车辆状态；自由探索传 null（帧探针只在挑战链路有意义）
@@ -1636,6 +1858,11 @@ export class Game {
     // 阴影是否参与本帧：R39 起 `autoUpdate=true` ⇒ **恒定参与**，判据改为「整帧 DC 类别」
     // （离线出表：只有一类且比冻结态多 9 DC = 每帧都画）。这里只记录一个常量供 dump 对齐。
     this.postfx.render();
+    /* R51-A：gate 轮询点必须落在 `postfx.render()` **之后** —— 主理人硬约束「标记须
+     * 在外部壳真实装配完成 + 首帧已渲染之后」。此帧壳已进入主 pass（buffer/program/
+     * 贴图首传 hitch 已发生），而 #loading 屏仍盖着（hideLoading 要等 gate resolve
+     * 后的 rAF）⇒ hitch 落在 loading 屏结束之前，绝不挪到首帧之后。 */
+    this.pollShellGate();
     const drewShadow = true;
 
     // ---- R43-P0C/G 帧日志采样（`#framelog`；gap 用 wall-clock，绕开 Loop 0.1s 钳制）----
@@ -1732,9 +1959,7 @@ export class Game {
         dpr: this.renderer.getPixelRatio(),
         calls: info.render.calls,
         tris: info.render.triangles,
-        phase: { menu: 0, countdown: 1, accel: 2, brake: 3, stopped: 4, crashed: 5 }[
-          this.sm.phase
-        ]
+        phase: PHASE_CODE[this.sm.phase]
       });
       this.probeTicks = 0;
       info.reset();

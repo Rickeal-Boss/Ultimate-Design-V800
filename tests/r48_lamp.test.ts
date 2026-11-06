@@ -20,10 +20,39 @@ describe('R48 · 灯组过曝修复（压回线性可用区间）', () => {
   it('两台适配器都有开关且关闭态逐位回滚 R47 公式', () => {
     for (const f of ['src/model/V800Adapter.ts', 'src/model/R7Adapter.ts']) {
       const s = src(f);
+      /* ── R48 原护栏（逐位保留，禁删/禁放宽）：开关 + 关闭钩子 ── */
       expect(s).toContain('const R48_LAMP_TONE');
       expect(s).toContain('r48tone=off');
-      expect(s).toContain('R48_LAMP_TONE\n          ? 0.30 + (brakeLevel');
+      /* 双形态兼容锚点：B 态 `R48_LAMP_TONE\n ? 0.30 + …`、
+       * A 态 `const raw = R48_LAMP_TONE ? (… : 0.30 + (brakeLevel …) * 0.85) : …`。
+       * 仍要求 R48_LAMP_TONE 与 0.30 公式同一段（非恒真），不许把旧公式删掉。 */
+      expect(s).toMatch(/R48_LAMP_TONE[\s\S]{0,200}0\.30 \+ \(brakeLevel/);
+      expect(s).toContain('* 0.85');
+      /* ── R51-B1-a P0 语义护栏 ─────────────────────────────────────────
+       * 亮灯态过曝必须被 R51_TAIL_EI_MAX 钳住，且 clamp 只在 R51_TAIL_ON
+       * 为真时生效 ⇒ `#r51tail=off` 逐位回 R48/R47。两种落地形态都守：
+       *   B `if (R51_TAIL_ON) { … = Math.min(0.16+…*0.34, MAX) }`
+       *   A `= R51_TAIL_ON ? Math.min(raw, MAX) : raw`
+       * 拦住「只压待机分支、亮灯态从另一分支复发过曝」。 */
+      expect(s).toContain('0.16 + (brakeLevel');
+      expect(s).toContain('* 0.34');
+      expect(s).toContain('R51_TAIL_EI_MAX');
+      expect(s).toMatch(/if \(R51_TAIL_ON\) \{|R51_TAIL_ON \? Math\.min/);
+      expect(s).toMatch(/R51_TAIL_ON[\s\S]{0,240}Math\.min\([\s\S]{0,160}R51_TAIL_EI_MAX/);
+      // clamp 两实参：B「新系数公式 + 上限常量」/ A「Math.min(raw, 上限常量)」
+      expect(s).toMatch(/Math\.min\(\s*0\.16 \+ [\s\S]{0,80}\* 0\.34,\s*R51_TAIL_EI_MAX\s*\)|Math\.min\(raw, R51_TAIL_EI_MAX\)/);
     }
+    // 开关真源 + 上限常量单一真源（Adapter 只 import，不另起）
+    const shell = src('src/model/external/ExternalShell.ts');
+    expect(shell).toContain("export const R51_TAIL_ON = !r51HookOff('r51tail');");
+    expect(shell).toContain('export const R51_TAIL_EI_MAX = 1.15;');
+    /* P0 数值语义复算（不依赖源码字面格式）：关闭态逐位等价 R48 待机
+     * 0.895(R7 b=0.7) / 2.51(V800 b=2.6)；开启态亮灯(8)与爆闪(+10×0.12)
+     * 一律 ≤1.15 ⇒ 亮灯态不得从旧分支复发过曝。 */
+    expect(0.30 + 0.7 * 0.85).toBeCloseTo(0.895, 3);
+    expect(0.30 + 2.6 * 0.85).toBeCloseTo(2.51, 3);
+    expect(Math.min(0.16 + 8 * 0.34, 1.15)).toBe(1.15);
+    expect(Math.min(0.16 + (8 + 10 * 0.12) * 0.34, 1.15)).toBe(1.15);
   });
 
   it('V800 前灯峰值不再乘 headLevel 原值（3.2×0.9=2.88 过曝）', () => {
@@ -47,12 +76,37 @@ describe('R48 · R7 尾灯空洞补面', () => {
     // R49-P2c 几何回退 v1：盖板 z=-(bodyMaxZ+0.010)、宽 2.02（manifest×scale 推导，覆盖面积足）
     expect(s).toContain('const bodyMaxZ = (manifest.bodyBBox?.max?.[2] ?? 0.5828) * s;');
     expect(s).toContain('new THREE.PlaneGeometry(2.02, coverH)');
-    expect(s).toContain('housing.position.set(0, coverY, r49Hole ? -(bodyMaxZ + 0.010) : -2.505);');
+    /* 双形态兼容：B `r49Hole ?` / A `bandActive ?`；两种形态的关闭态都必须
+     * 逐位回 R48 的 -2.505（回滚语义，非恒真）。 */
+    expect(s).toMatch(/housing\.position\.set\(0, coverY, (?:r49Hole|bandActive) \? -\(bodyMaxZ \+ 0\.010\) : -2\.505\)/);
     expect(s).toContain('const coverH = r49Hole ? 0.34 : 0.20;');
     expect(s).toContain('const coverY = r49Hole ? 1.015 : 0.240 * s;');
     expect(s).toContain("if (m.name === 'lamp_rear') m.position.z = -0.06;");
     expect(s).toContain("band.name = 'lamp_rear_band'");
     expect(s).toContain('r48hole=off');
+    /* ── R51-B1-c 语义护栏（双形态兼容）──────────────────────────────
+     * 主理人 R51 收口裁决：B1-b/c 默认下线，仅 `#r51band=on` 实验启用；
+     * 其余四开关默认开、`=off` 逐位回滚。`#r51band=off` 与默认态等价 ⇒
+     * `#r48hole=off` 旧钩子 + `=off` 双回滚逐位回 R48/R50。
+     * 收窄只允许改 mesh.scale.x（tri/UV 逐位不变），且必须包在开关分支内，
+     * 否则回滚态也会被收窄。atlas / 收窄 / r49Hole 并入代码全部保留不删。 */
+    expect(s).toContain('function r51HookOn');
+    expect(s).toContain("r51HookOn('r51band')");
+    expect(s).toContain("export const R51_BAND_ON = r51HookOn('r51band');");
+    expect(s).toContain('r51band=on');
+    // 其余四开关仍是「默认开、=off 逐位回滚」，不许把 B1-b/c 的改动扩散过去
+    for (const k of ['r51tail', 'r51rough', 'r51lamp', 'r51glasspass']) {
+      expect(s).toContain(`!r51HookOff('${k}')`);
+    }
+    expect(s).toMatch(/\|\| R51_BAND_ON;|const bandActive = r49Hole \|\| r51Band/);
+    expect(s).toContain('const r51Band = R51_BAND_ON;');
+    expect(s).toMatch(/if \(r51Band\) \{|if \(bandActive\) \{/);
+    expect(s).toContain('housing.scale.x = Math.min(1.86, Math.max(1.70, 2.02 * 0.90)) / 2.02;');
+    expect(s).toContain('r51band=off');
+    // 精确数值复算：2.02×0.90=1.818 落在 clamp[1.70,1.86] 内，缩放系数恰 0.9
+    const width = Math.min(1.86, Math.max(1.70, 2.02 * 0.90));
+    expect(width).toBeCloseTo(1.818, 3);
+    expect(width / 2.02).toBeCloseTo(0.9, 6);
   });
 
   it('盖板材质有独立 dispose（不泄漏新增材质实例）', () => {

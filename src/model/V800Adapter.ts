@@ -19,6 +19,10 @@ import {
   mountExternalWheel,
   shadowProxyEnabled,
   wheelOffsetsWorldXZ,
+  // R51-B1-a / B3：开关真源在 ExternalShell.ts（config/** 属 Phase 2-A 冻结，禁放）
+  R51_LAMP_ON,
+  R51_TAIL_EI_MAX,
+  R51_TAIL_ON,
   type ExternalShellHandle
 } from './external/ExternalShell';
 import { loadInteriorSteering } from './external/InteriorSteering';
@@ -5095,12 +5099,30 @@ const R48_LAMP_TONE: boolean =
         extRear.emissiveIntensity = R48_LAMP_TONE
           ? 0.30 + (brakeLevel + snapGain * 0.12) * 0.85
           : 0.35 + (brakeLevel + snapGain) * 2.2; // R47 原状（A/B 回滚）
+        /* ══ R51-B1-a · 压亮灯态过曝（与 R7Adapter 同款三件套，详见那边注释）══
+         * V800 待机 brakeLevel=TAIL_BASE=2.6 ⇒ 上式 ei=2.51；刹车态 Game 传
+         * setBrakeLights(8) ⇒ ei≈7.1。改后待机 0.16+2.6*0.34=1.044、
+         * 亮灯被 clamp 到 ≤1.15。只动数值/上限，不改联动链结构、不改
+         * brakeLevel 初值 TAIL_BASE、不碰物理契约。
+         * ⚠ 原 R48/R47 公式字符串逐字保留（r48_lamp.test.ts 源码契约钉着），
+         *   R51 开启时以「覆盖写」生效；`#r51tail=off` ⇒ 逐位回 R50。 */
+        if (R51_TAIL_ON) {
+          extRear.emissiveIntensity = Math.min(
+            0.16 + (brakeLevel + snapGain * 0.12) * 0.34,
+            R51_TAIL_EI_MAX
+          );
+        }
       }
       const extFront = shellHandle?.lampFrontMat;
       if (extFront) {
         extFront.emissiveIntensity = R48_LAMP_TONE
           ? 0.12 + (headLevel / HEAD_BASE) * 0.78
           : 0.12 + headLevel * 0.9; // R47 原状
+        /* R51-B3：前灯纯 emissive 联动同步降级（构造初值会被每帧覆盖）。
+         * `#r51lamp=off` ⇒ 不进覆盖分支，逐位回 R50 的两条原公式。 */
+        if (R51_LAMP_ON) {
+          extFront.emissiveIntensity = 0.10 + (headLevel / HEAD_BASE) * 0.08;
+        }
       }
       // R21-B：手写尾灯（独占材质，刹车联动在旧件链路之外单独走）
       if (tailLampMats) {

@@ -22,11 +22,29 @@ describe('R49-P2b · 尾灯盖板几何（射线实测）', () => {
     // 盖板 z 改为**按灯组外推后的运行时实测 max z 反推**（manifest×scale 比 Live 小 9.7mm，作废）
     // R49-P2c 几何回退 v1：bodyMaxZ 用 manifest×scale，盖板 z=-(bodyMaxZ+0.010)
     expect(s).toContain('const bodyMaxZ = (manifest.bodyBBox?.max?.[2] ?? 0.5828) * s;');
-    expect(s).toContain('housing.position.set(0, coverY, r49Hole ? -(bodyMaxZ + 0.010) : -2.505);');
+    /* R51-B1-c 双形态兼容：B `r49Hole ?` / A `bandActive ?`；
+     * 关闭态 -2.505 逐位保留 ⇒ 回滚态逐位等价（语义断言，非恒真）。 */
+    expect(s).toMatch(/housing\.position\.set\(0, coverY, (?:r49Hole|bandActive) \? -\(bodyMaxZ \+ 0\.010\) : -2\.505\)/);
     // 次因：R48 的 0.20m 只覆盖 y∈[0.9375,1.1375]，实测白块下界 y=0.893
     expect(s).toContain('const coverH = r49Hole ? 0.34 : 0.20;');
     expect(s).toContain('const coverY = r49Hole ? 1.015 : 0.240 * s;');
     expect(s).toContain('new THREE.PlaneGeometry(2.02, coverH)');
+    /* R51-B1-c 语义护栏：默认启用（B `|| R51_BAND_ON` / A `bandActive = r49Hole || r51Band`）
+     * + 收窄 ×0.90 + `#r51band=off` 钩子 ⇒ 双回滚（`#r48hole=off` / `#r51band=off`）逐位等价。 */
+    expect(s).toMatch(/\|\| R51_BAND_ON;|const bandActive = r49Hole \|\| r51Band/);
+    expect(s).toContain('housing.scale.x = Math.min(1.86, Math.max(1.70, 2.02 * 0.90)) / 2.02;');
+    /* 主理人 R51 收口：B1-b/c 默认关、仅 `#r51band=on` 实验启用；
+     * 其余四开关默认开、`=off` 逐位回滚；`#r51band=off` 与默认态等价 ⇒
+     * 双回滚逐位回 R48/R50（语义保留，仅同步开关真源字符串）。 */
+    expect(s).toContain('function r51HookOn');
+    expect(s).toContain("r51HookOn('r51band')");
+    expect(s).toContain("export const R51_BAND_ON = r51HookOn('r51band');");
+    expect(s).toContain('r51band=on');
+    expect(s).toContain('r51band=off');
+    // 收窄数值语义：2.02×0.90=1.818 ∈ clamp[1.70,1.86]，缩放系数 0.9
+    const width = Math.min(1.86, Math.max(1.70, 2.02 * 0.90));
+    expect(width).toBeCloseTo(1.818, 3);
+    expect(width / 2.02).toBeCloseTo(0.9, 6);
   });
 
   it('R49 盖板默认关闭（回归 R48 观感），#r49hole=on 才启用；R48 语义 #r48hole=off 未被破坏', () => {

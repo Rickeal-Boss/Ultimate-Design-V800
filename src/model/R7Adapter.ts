@@ -26,6 +26,10 @@ import {
   mountExternalWheel,
   shadowProxyEnabled,
   wheelOffsetsWorldXZ,
+  // R51-B1-a / B3：开关真源在 ExternalShell.ts（config/** 属 Phase 2-A 冻结，禁放）
+  R51_LAMP_ON,
+  R51_TAIL_EI_MAX,
+  R51_TAIL_ON,
   type ExternalShellHandle
 } from './external/ExternalShell';
 import { loadInteriorSteering } from './external/InteriorSteering';
@@ -1750,9 +1754,33 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
           : (R7_TAIL_STANDBY_EI * (BRAKE_BASE_INTENSITY + brakeLevel)) /
               (BRAKE_BASE_INTENSITY + R7_TAIL_STANDBY_LEVEL) +
               snapT * SNAP_GAIN; // R47 原状（A/B 回滚）
+        /* ══ R51-B1-a · 压亮灯态过曝（`RED_bright 5738` → 门 ≤200）════════════
+         * R48 只压了待机态：亮灯/刹车时 Game 把 `setBrakeLights(8)` 写进
+         * `brakeTarget`，damp 后 `brakeLevel` 升到 8 ⇒ 上式 ei≈7.1，ACES 把
+         * 荧光红 `0xff1e14` 的 G/B 抬进饱和 = 荧光纯红撕裂块。
+         * 本子项**三处都只动数值/上限**：
+         *   ① 待机系数按官图深红反推 0.30+0.85·L → 0.16+0.34·L（R7 待机 0.895→0.398）；
+         *   ② 全局 clamp ≤ R51_TAIL_EI_MAX(1.15)（与 R48 待机口径同源）；
+         *   ③ ExternalShell.ts 把 emissive 从荧光红改深红 0x7a1f1a（同子项）。
+         * **不改联动链结构、不改 brakeLevel 初值 R7_TAIL_STANDBY_LEVEL、不碰物理**。
+         * ⚠ 原 R48/R47 公式字符串逐字保留在上面（r48_lamp.test.ts 源码契约钉着），
+         *   R51 开启时以「覆盖写」生效；`#r51tail=off` ⇒ 不进覆盖分支，逐位回 R50。 */
+        if (R51_TAIL_ON) {
+          extRear.emissiveIntensity = Math.min(
+            0.16 + (brakeLevel + snapT * SNAP_GAIN * 0.12) * 0.34,
+            R51_TAIL_EI_MAX
+          );
+        }
       }
       const extFront = shellHandle?.lampFrontMat;
-      if (extFront) extFront.emissiveIntensity = 0.12 + (headLevel / Math.max(headBaseIntensity, 1e-3)) * 0.78;
+      if (extFront) {
+        extFront.emissiveIntensity = 0.12 + (headLevel / Math.max(headBaseIntensity, 1e-3)) * 0.78;
+        /* R51-B3：前灯纯 emissive 联动同步降级（ExternalShell 构造初值会被每帧覆盖）。
+         * `#r51lamp=off` ⇒ 不进覆盖分支，逐位回 R50 的 0.12+0.78·ratio。 */
+        if (R51_LAMP_ON) {
+          extFront.emissiveIntensity = 0.10 + (headLevel / Math.max(headBaseIntensity, 1e-3)) * 0.08;
+        }
+      }
       // 刹车热：卡钳暗红自发光
       if (caliperMat) caliperMat.emissiveIntensity = heat * 1.1;
       // 方向盘回正

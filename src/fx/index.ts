@@ -8,9 +8,29 @@
  *   用 MultiplyBlending + instanceColor 由深到白渐隐（到白 = 无痕迹），贴齐路面 y≈0.02。
  * - Sparks：brake_snap 瞬间爆发粒子（重力+衰减，AdditiveBlending），
  *   同时由 Game 触发 Postfx Flash 与慢动作（既有逻辑）。
+ *
+ * ══ R51 Phase2-A · 方案 B「FX 空池零递交」════════════════════════════════════
+ * R50 现状（Phase1 台账 §1.1）：非刹车段（占绝大多数帧）三个池全空，但
+ *   · TireSmoke / Sparks 每帧遍历 600 / 96 槽位并恒置 3 个 attribute needsUpdate
+ *     ⇒ 每帧 ≈14KB 全量 GPU 上传 + 2 个恒等 Points draw（frustumCulled=false）；
+ *   · SkidMarks 的 1200 个 `scale(0,0,0)` 隐藏实例**仍整池递交**
+ *     （`mesh.count` 未设、`frustumCulled=false`）⇒ 1 DC / 2,400 tri/帧纯空转。
+ * 改法（**不削可见面、不降画质、不改任何发射/淡出公式**）：
+ *   · 空池 `points.visible = false` / `mesh.visible = false` ⇒ 零 DC（不是「0 实例的
+ *     空 draw」：three 的 `renderInstances(..., count=0)` 仍是一次 GL 调用，故必须靠
+ *     `visible` 才真零 DC；`mesh.count = 0` 只作第二道保险 + tri 口径对齐）；
+ *   · 稳态空池快速返回 ⇒ 零遍历、零 attribute 上传；
+ *   · 最后一个粒子死亡的那一帧仍上传一次把 alpha/instanceMatrix 清零，避免残影。
+ * 回滚：`#r51fxidle=off` ⇒ FX_IDLE_GATE=false ⇒ 逐位回 R50 恒定全量递交。
+ * ⚠ InstancedMesh 口径：tri = geometry tri × `mesh.count`；探针统计整帧 tri 时须
+ *   手工乘 count 或跳过（bbox/顶点未乘 instanceMatrix，主理人铁律）。
  */
 import * as THREE from 'three';
 import type { QualityTier } from '../config/quality';
+import { isR51FxIdleEnabled } from '../config/r51Perf';
+
+/** R51-B：模块加载期读一次 hash（与 config/motionBlur.ts 的 cached 同款），热路径零判定 */
+const FX_IDLE_GATE = isR51FxIdleEnabled();
 
 export interface FxModule {
   update(dt: number): void;
@@ -140,10 +160,13 @@ function disposePool(pool: ParticlePool): void {
 export class TireSmoke implements FxModule {
   private pool: ParticlePool;
   private emitAcc = 0;
+  /** R51-B：true = 池内仍有活粒子或本帧刚 spawn；false = 稳态空池（零遍历/零上传/零 DC） */
+  private active = false;
 
   constructor(poolSize: number) {
     // dusk 暖灰粉烟色
     this.pool = makePool(poolSize, 0xc4a49a, false);
+    if (FX_IDLE_GATE) this.pool.points.visible = false;
   }
 
   get object(): THREE.Object3D {
@@ -175,17 +198,26 @@ export class TireSmoke implements FxModule {
     p.life[i] = 0;
     p.maxLife[i] = 0.9 + Math.random() * 0.8;
     p.baseSize[i] = 1.4 + Math.random() * 1.5;
+    this.active = true;
   }
 
   update(dt: number): void {
     const p = this.pool;
+    /* R51-B：稳态空池直接返回 —— 零循环、零 attribute 上传、零 draw call。
+     * `#r51fxidle=off` ⇒ 本分支恒不成立，逐位回 R50。 */
+    if (FX_IDLE_GATE && !this.active) {
+      if (p.points.visible) p.points.visible = false;
+      return;
+    }
     const n = p.maxLife.length;
+    let live = 0;
     for (let i = 0; i < n; i++) {
       const i3 = i * 3;
       if (p.life[i] >= p.maxLife[i]) {
         p.alphaAttr[i] = 0;
         continue;
       }
+      live++;
       p.life[i] += dt;
       const drag = Math.exp(-dt * 1.6);
       p.vel[i3] *= drag;
@@ -201,6 +233,15 @@ export class TireSmoke implements FxModule {
     p.geo.attributes.position.needsUpdate = true;
     (p.geo.attributes.aSize as THREE.BufferAttribute).needsUpdate = true;
     (p.geo.attributes.aAlpha as THREE.BufferAttribute).needsUpdate = true;
+    if (FX_IDLE_GATE) {
+      // 最后一个粒子死亡：本帧仍上传一次（上面 3 行）把 alpha 清零，之后归零态
+      if (live === 0) {
+        this.active = false;
+        p.points.visible = false;
+      } else if (!p.points.visible) {
+        p.points.visible = true;
+      }
+    }
   }
 
   clear(): void {
@@ -208,6 +249,10 @@ export class TireSmoke implements FxModule {
     p.life.fill(0);
     p.alphaAttr.fill(0);
     (p.geo.attributes.aAlpha as THREE.BufferAttribute).needsUpdate = true;
+    if (FX_IDLE_GATE) {
+      this.active = false;
+      p.points.visible = false;
+    }
   }
 
   dispose(): void {
@@ -258,6 +303,11 @@ export class SkidMarks implements FxModule {
     const hide = new THREE.Matrix4().makeScale(0, 0, 0);
     for (let i = 0; i < poolSize; i++) this.mesh.setMatrixAt(i, hide);
     this.mesh.instanceMatrix.needsUpdate = true;
+    /* R51-B：空池零递交。count=0 ⇒ 0 tri；visible=false ⇒ 真零 DC
+     * （three 对 count=0 的 InstancedMesh 仍会发一次 renderInstances，只有 visible 能跳过）。
+     * 矩阵初始化（上面的 hide 循环）保留：首次 emit 抬高 count 时不会读到未初始化的 GPU 数据。 */
+    this.mesh.count = FX_IDLE_GATE ? 0 : poolSize;
+    if (FX_IDLE_GATE) this.mesh.visible = false;
   }
 
   get object(): THREE.Object3D {
@@ -273,12 +323,18 @@ export class SkidMarks implements FxModule {
     this.m4.compose(this.vPos, this.q, this.scaleOne);
     this.mesh.setMatrixAt(i, this.m4);
     this.ages[i] = 0;
+    // count = 已写过的最高索引 + 1（ring buffer 回绕后恒为池容量，与 R50 全量递交一致）
+    this.mesh.count = Math.min(this.ages.length, Math.max(this.mesh.count, i + 1));
+    if (FX_IDLE_GATE) this.mesh.visible = true;
     this.mesh.instanceMatrix.needsUpdate = true;
   }
 
   update(dt: number): void {
+    // R51-B：空池稳态零遍历（count=0 且 visible=false 时不进循环）
+    if (FX_IDLE_GATE && !this.mesh.visible) return;
     const n = this.ages.length;
     let dirty = false;
+    let alive = 0;
     for (let i = 0; i < n; i++) {
       if (this.ages[i] < 0) continue;
       dirty = true;
@@ -290,6 +346,7 @@ export class SkidMarks implements FxModule {
         this.mesh.setMatrixAt(i, this.m4);
         continue;
       }
+      alive++;
       // 深色 → 白 = 渐隐
       this.color.copy(this.dark).lerp(this.faded, Math.min(1, t * 1.15));
       this.mesh.setColorAt(i, this.color);
@@ -298,6 +355,8 @@ export class SkidMarks implements FxModule {
       this.mesh.instanceMatrix.needsUpdate = true;
       if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
     }
+    // 最后一段痕淡出：本帧仍上传隐藏矩阵（上面 if(dirty)），之后整池归零态
+    if (FX_IDLE_GATE && alive === 0) this.mesh.visible = false;
   }
 
   clear(): void {
@@ -305,6 +364,8 @@ export class SkidMarks implements FxModule {
     const hide = this.m4.makeScale(0, 0, 0);
     for (let i = 0; i < this.ages.length; i++) this.mesh.setMatrixAt(i, hide);
     this.mesh.instanceMatrix.needsUpdate = true;
+    this.mesh.count = FX_IDLE_GATE ? 0 : this.ages.length;
+    if (FX_IDLE_GATE) this.mesh.visible = false;
   }
 
   dispose(): void {
@@ -321,9 +382,12 @@ const UP = new THREE.Vector3(0, 1, 0);
 
 export class Sparks implements FxModule {
   private pool: ParticlePool;
+  /** R51-B：同 TireSmoke */
+  private active = false;
 
   constructor(burstCount: number) {
     this.pool = makePool(burstCount, 0xffb050, true);
+    if (FX_IDLE_GATE) this.pool.points.visible = false;
   }
 
   get object(): THREE.Object3D {
@@ -350,6 +414,7 @@ export class Sparks implements FxModule {
       p.baseSize[i] = 0.28 + Math.random() * 0.3;
       p.sizeAttr[i] = p.baseSize[i];
     }
+    this.active = true;
     p.geo.attributes.position.needsUpdate = true;
     (p.geo.attributes.aSize as THREE.BufferAttribute).needsUpdate = true;
     (p.geo.attributes.aAlpha as THREE.BufferAttribute).needsUpdate = true;
@@ -357,13 +422,20 @@ export class Sparks implements FxModule {
 
   update(dt: number): void {
     const p = this.pool;
+    // R51-B：稳态空池零遍历 / 零上传 / 零 DC
+    if (FX_IDLE_GATE && !this.active) {
+      if (p.points.visible) p.points.visible = false;
+      return;
+    }
     const n = p.maxLife.length;
+    let live = 0;
     for (let i = 0; i < n; i++) {
       const i3 = i * 3;
       if (p.life[i] >= p.maxLife[i]) {
         p.alphaAttr[i] = 0;
         continue;
       }
+      live++;
       p.life[i] += dt;
       p.vel[i3 + 1] -= 12 * dt; // 重力
       p.pos[i3] += p.vel[i3] * dt;
@@ -378,6 +450,14 @@ export class Sparks implements FxModule {
     }
     p.geo.attributes.position.needsUpdate = true;
     (p.geo.attributes.aAlpha as THREE.BufferAttribute).needsUpdate = true;
+    if (FX_IDLE_GATE) {
+      if (live === 0) {
+        this.active = false;
+        p.points.visible = false;
+      } else if (!p.points.visible) {
+        p.points.visible = true;
+      }
+    }
   }
 
   clear(): void {
@@ -385,6 +465,10 @@ export class Sparks implements FxModule {
     p.life.fill(0);
     p.alphaAttr.fill(0);
     (p.geo.attributes.aAlpha as THREE.BufferAttribute).needsUpdate = true;
+    if (FX_IDLE_GATE) {
+      this.active = false;
+      p.points.visible = false;
+    }
   }
 
   dispose(): void {

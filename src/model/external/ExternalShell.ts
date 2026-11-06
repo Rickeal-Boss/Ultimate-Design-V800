@@ -43,6 +43,55 @@ import {
 /** R46：契约出口（实现在 config/highDetail.ts，UI 线只消费这两个 + state:'cancelled'） */
 export { cancelExternalShellLoad, isShellLoadCancelled } from '../../config/highDetail';
 
+/* ══════════════ R51 Phase 2-B · 视觉线开关真源（默认开，`=off` 逐位回 R50）══════════════
+ * ⚠ 不能放 src/config/**（Phase 2-A 独占冻结），故落在本模块；两个 Adapter 直接 import
+ *   这几个常量（它们本来就从本文件 import loadExternalShell / buildShadowProxies），
+ *   ⇒ 五处开关只有**一个真源**，A/B 不会出现 ExternalShell 与 Adapter 读数不一致。
+ * ⚠ 键名一律不含 `noprewarm` 子串：Game.ts:575 的入口守卫是
+ *   `hash.includes('noprewarm')`，命中会连带跳过整段 prewarmGpu（R41 踩过坑）。
+ * ⚠ Node / vitest：typeof window === 'undefined' ⇒ 四个默认开钩子返回 true、
+ *   B1-b/c 返回 false（外部壳在测试环境不装配，零副作用）。
+ * 子项与钩子：
+ *   B1-a `#r51tail=off`      压亮灯态过曝（尾灯 ei 上限 + 待机系数 + 荧光红改深红）
+ *   B1-b/c `#r51band=on`     尾灯带 atlas 重画 + 盖板收窄 0.90 + 位置贴合
+ *                            ⚠⚠ **非上线形态**：本分支**仅供下波按贴合曲面几何
+ *                            （SPEC §3 B1-c :118-120）重做时启用**；R51 唯一上线形态
+ *                            是「四开一关」= r51tail / rough / lamp / glasspass 开、band 关。
+ *                            ⚠ **默认关，实验态**（主理人 R51 收口裁决）：审查线三机位
+ *                            目检打回「黑色大板 + 两端锯齿红块 + 米黄矩形」，
+ *                            `RED_deep` 最大连通域 bbox 宽 284→156px 红带被物理切断；
+ *                            单钩子分解 `#r51band=off`（其余全开）实测
+ *                            RED_deep 5477 / RED_bright 82 / RED_dark 5395 /
+ *                            WHITE 0 / 连通域 0 ⇒ 回退不丢任何 A 类门，且目检为
+ *                            完整暗红贯穿带 + 两端灯组，优于全开态。
+ *                            atlas / 收窄 / `r49Hole` 并入 / `#r49hole=on` 旧语义
+ *                            **全部保留不删**，供下波贴合曲面几何重做时直接启用；
+ *                            **严禁把本实验盖板当作默认功能或在本波重新打开**。
+ *   B2   `#r51rough=off`     V800 白漆 roughness 全局一档 G'=0.45+0.55G
+ *   B3   `#r51lamp=off`      前灯纯 emissive 数值降级（含两 Adapter 联动）
+ *   B4   `#r51glasspass=off` 玻璃 transparent+DoubleSide 单次渲染
+ */
+function r51HookOff(key: string): boolean {
+  if (typeof window === 'undefined') return false;
+  return new RegExp(`(?:^|[#&])${key}=off`, 'i').test(window.location.hash);
+}
+
+/** R51 收口：B1-b/c 实验盖板默认下线（审查线目检打回），仅 `#r51band=on` 启用。
+ *  ⚠ **非上线形态 / 实验分支**：仅下波按贴合曲面几何重做时启用，勿在本波打开。
+ *  其余四开关仍是「默认开、`=off` 逐位回滚」，与 band 关共同组成 R51 唯一上线形态。 */
+function r51HookOn(key: string): boolean {
+  if (typeof window === 'undefined') return false;
+  return new RegExp(`(?:^|[#&])${key}=on`, 'i').test(window.location.hash);
+}
+
+/** B1-a：尾灯 emissive 上限（与 R48 待机口径同源；主理人建议 ≤1.15） */
+export const R51_TAIL_EI_MAX = 1.15;
+export const R51_TAIL_ON = !r51HookOff('r51tail');
+export const R51_BAND_ON = r51HookOn('r51band');
+export const R51_ROUGH_ON = !r51HookOff('r51rough');
+export const R51_LAMP_ON = !r51HookOff('r51lamp');
+export const R51_GLASSPASS_ON = !r51HookOff('r51glasspass');
+
 export type ExternalCarId = 'v800' | 'r7';
 
 export interface ExternalManifest {
@@ -585,6 +634,12 @@ let shellAbort: AbortController | null = null;
 /**
  * R49-P2b · R7 尾灯带底板 atlas（1024×172，比例 5.95 ≈ 盖板 2.02m×0.34m 的 5.94）。
  *
+ * R51-B1-b：函数内部按模块级 `R51_BAND_ON` 选分支 —— 官图**深红细带**
+ * （#5A1E1E~#6a2020，禁荧光红）+ 两端「白-红-白」分段 + LUXEED 字标 +
+ * 上下深色饰条 + 下缘红反光条，**全部画进同一张不透明 atlas** ⇒ 零新增 mesh / DC。
+ * `R51_BAND_ON=false` 分支逐位保留 R49 原绘制，供 `#r49hole=on` + `#r51band=off` 复现。
+ * ⚠ 保持无参签名（r49_visual.test.ts 断言 `makeR7RearBandAtlas()`，禁加形参）。
+ *
  * 为什么用 atlas 而不是若干小 Plane：验收要求「视觉改动整帧 DC 上涨 ≤ +3」。
  * 字标 / 两侧灯组内部的白条+红条 / 上下镀铬饰条 全部**画进同一张贴图**，
  * 由**同一块盖板 mesh** 承载 ⇒ 这些细节的额外 DC 恒为 0。
@@ -599,6 +654,7 @@ function makeR7RearBandAtlas(): THREE.Texture | null {
   // ⚠ 失败必须返回 null：`new THREE.Texture()` 没有 image 时 three 会绑定 1×1 **白**图，
   //   map 白 × color 白 ⇒ 整块盖板变白（正是 R49 初版像素暴涨的直接机制）。
   if (typeof document === 'undefined') return null;
+  const r51 = R51_BAND_ON; // 开关在函数内读，保持无参签名（历史源码契约）
   const W = 1024;
   const H = 172;
   const c = document.createElement('canvas');
@@ -606,6 +662,46 @@ function makeR7RearBandAtlas(): THREE.Texture | null {
   c.height = H;
   const g = c.getContext('2d');
   if (!g) return null;
+  const yRowR51 = (worldY: number): number => Math.round((1.185 - worldY) / 0.34 * (H - 1));
+  if (r51) {
+    /* ── R51-B1-b 官图深红细带（不透明同图，零新增 DC）─────────────────────
+     * R49 教训：下缘反光条曾单独做 `transparent+alphaTest` 平面，SwiftShader 下
+     * alpha 未被正确采样 ⇒ 整块不透明白（ROI 273→3383 px）。本版把它**画进 atlas**，
+     * 与底板共用同一张不透明贴图，从机制上消除该风险。 */
+    g.fillStyle = '#14141a'; // 不透明底板（深墨，不读成空洞）
+    g.fillRect(0, 0, W, H);
+    // 上下深色饰条
+    g.fillStyle = '#24242b';
+    g.fillRect(0, Math.max(0, yRowR51(1.175)), W, 4);
+    g.fillRect(0, Math.max(0, yRowR51(0.858)), W, 4);
+    // 贯穿深红细带（占盖板高 ~8%，官图 5~8%）
+    const bandY = yRowR51(1.075);
+    g.fillStyle = '#5A1E1E';
+    g.fillRect(0, bandY, W, 14);
+    g.fillStyle = '#6a2020'; // 带内高光，制造细带层次（仍在深红区间）
+    g.fillRect(0, bandY + 2, W, 4);
+    // 两端「白-红-白」分段（左右镜像）
+    const seg = Math.round(W * 0.16);
+    for (const x0 of [Math.round(W * 0.02), W - Math.round(W * 0.02) - seg]) {
+      g.fillStyle = '#d8d4cc';
+      g.fillRect(x0, bandY - 2, Math.round(seg * 0.22), 18);
+      g.fillStyle = '#8c2420';
+      g.fillRect(x0 + Math.round(seg * 0.22), bandY - 2, Math.round(seg * 0.56), 18);
+      g.fillStyle = '#d8d4cc';
+      g.fillRect(x0 + Math.round(seg * 0.78), bandY - 2, Math.round(seg * 0.22), 18);
+    }
+    // LUXEED 深色金属字标（压在深红细带中央）
+    g.fillStyle = '#b9bcc2';
+    g.font = '600 26px system-ui, -apple-system, Arial, sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText('L U X E E D', W / 2, bandY + 7);
+    // 下缘红反光条（左右两段，同图不透明）
+    g.fillStyle = '#6a1d1d';
+    g.fillRect(Math.round(W * 0.08), yRowR51(0.885), Math.round(W * 0.20), 8);
+    g.fillRect(Math.round(W * 0.72), yRowR51(0.885), Math.round(W * 0.20), 8);
+  } else {
+  // ── 以下为 R49 原绘制（r51=false，`#r49hole=on` + `#r51band=off` 逐位复现）──
   // 底板：深墨（官图灯带底色），比纯黑略偏蓝，避免读成「空洞」
   g.fillStyle = '#14141a';
   g.fillRect(0, 0, W, H);
@@ -632,6 +728,7 @@ function makeR7RearBandAtlas(): THREE.Texture | null {
   g.textAlign = 'center';
   g.textBaseline = 'middle';
   g.fillText('L U X E E D', W / 2, yRow(1.015));
+  } // ← R51-B1-b：R49 原绘制分支结束（r51=false 时逐位复现）
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 4;
@@ -817,6 +914,31 @@ export async function loadExternalShell(
       material.roughness = 0.6;
     }
 
+    /* ══ R51-B2 · V800 白漆「镜面铬」修复（全局一档，**禁按车分支**）══════════════
+     * 审查线定量：mr.png 的 G(roughness) 中位 v800=0.224（G<0.35 占 97.6%，单一
+     * 连通域 683,235 px）⇒ 白漆被渲成镜面铬、PMREM 天空整面反射 = front34 白斑/
+     * 浅蓝斑/引擎盖噪点；r7 中位 0.890（G<0.20 仅 0.01%、最大连通域 9 px）。
+     * 一套 `G' = 0.45 + 0.55·G` 对两车同时安全：v800 0.224→0.573，r7 0.890→0.940
+     * （几乎不动，不会毁掉 R7 正常漆面）。
+     * 做法：`onBeforeCompile` 在 `#include <roughnessmap_fragment>` 之后对
+     * `roughnessFactor` 做同一档映射（此时 material.roughness=1 ⇒ factor 就是 G）。
+     * **零资产改动**（不动 mr.png）、零额外贴图/显存、零新增 DC；program 变体由
+     * 加载期 `prewarmGpu()` 的 renderer.compile 一次性编译（用户已豁免首建时长）。
+     * ⚠ 不做 `max(0.45, factor)`：那会在 G>0.45 处产生硬折点；线性一档保持漆面层次。
+     * ⚠ `#r44mat=plain|maponly|mapnormal` QA 钩子移除 roughnessMap 后本注入仍作用于
+     *   uniform roughness（只在排查钩子态，正常路径不受影响）；`#r51rough=off` 可完全关闭。
+     */
+    if (R51_ROUGH_ON) {
+      material.onBeforeCompile = (shader) => {
+        shader.fragmentShader = shader.fragmentShader.replace(
+          '#include <roughnessmap_fragment>',
+          /* glsl */ `#include <roughnessmap_fragment>
+          // R51-B2: G' = 0.45 + 0.55 * G (one global band, no per-car branch)
+          roughnessFactor = 0.45 + 0.55 * roughnessFactor;`
+        );
+      };
+    }
+
     const bodyMesh = bodyFound;
     bodyMesh.material = material;
     /* R49-A2：高模壳本体退出 shadow pass —— 每帧 1.27M tri（r7 1.39M）的第二遍投影
@@ -871,6 +993,21 @@ export async function loadExternalShell(
       side: THREE.DoubleSide,
       depthWrite: false
     });
+    /* ══ R51-B4 · 玻璃单次渲染（原 Phase 1 方案 C）══════════════════════════════
+     * three 0.186.1 `WebGLRenderer.js:1364`（prepareMaterial）与 `:2165`
+     * （renderBufferDirect）对 `transparent && DoubleSide && forceSinglePass===false`
+     * 的材质每帧把 `material.side` 改 BackSide→FrontSide→DoubleSide 共 **4 次**
+     * `needsUpdate=true` + 2 次 `getProgram`，并**分两遍完整递交**玻璃几何
+     * （v800 glass 187,838 tri ×2，且每个 glassMesh 多 1 DC）。
+     * `forceSinglePass = true` ⇒ 单遍 DoubleSide：省第二遍 tri + 每帧 4 次材质脏标记，
+     * 不改 program 结构、不动 transparent/opacity、**不回 transmission**（R12 铁律⑤）。
+     * 外景态 R47 已把玻璃 opacity 置 1（完全不透明）⇒ 单/双遍混合顺序逐位等价；
+     * cabin 态 glass 被适配器隐藏 ⇒ 无影响。
+     * ⚠ `glassMode==='solid'` 时 transparent=false ⇒ three 本就不分两遍，本开关无副作用。
+     * ⚠ 审查线须目检玻璃观感（背面排序变化）后才最终放行（主理人裁决）。
+     * 回滚：`#r51glasspass=off` ⇒ 逐位回 R50 两遍递交。
+     */
+    glassMat.forceSinglePass = R51_GLASSPASS_ON;
     // QA：#r44glass=off|solid 调透明策略（off=隐藏玻璃件 / solid=不透明）
     const glassMode = typeof window !== 'undefined'
       ? /[#&]r44glass=([a-z]+)/.exec(window.location.hash)?.[1] ?? null
@@ -902,7 +1039,13 @@ export async function loadExternalShell(
       // 「破面感」根因）。尾灯归位由几何线替换 lamp_rear.glb 完成，材质无需动。
       lampRearMat = new THREE.MeshStandardMaterial({
         color: 0x1a0505,
-        emissive: new THREE.Color(0xff1e14),
+        /* R51-B1-a：荧光纯红 0xff1e14 → 官图深红 0x7a1f1a（主理人裁决「禁荧光红」）。
+         * fresh 默认档 RED_bright=5738（门 ≤200）的根因就是这层高饱和 emissive 经
+         * ACES 把 G/B 抬进饱和；改深红后亮红像素回落进 RED_deep（r≥70 且 r-g>25）
+         * 而不再命中 RED_bright（r≥110 且 r>1.6g）⇒ 两项同时达标。
+         * 与两 Adapter 的 ei clamp/系数同属 `#r51tail=off` 一个子项，可整体 A/B。
+         * ⚠ 不改 color / 联动链结构 / brakeLevel 初值。 */
+        emissive: new THREE.Color(R51_TAIL_ON ? 0x7a1f1a : 0xff1e14),
         emissiveIntensity: 0.35,
         roughness: 0.25,
         metalness: 0.1
@@ -949,9 +1092,26 @@ export async function loadExternalShell(
          *   而黑板盖板又**左右超出车身轮廓悬空**、比 R48 的白块更违和 ⇒ 强改是负收益。
          *   ⇒ 默认走 R48 分支（盖板 z=2.505 被遮挡，不显示黑板）；R50 修 UV 后用 `#r49hole=on` 启用。
          *   全部 R49 盖板/atlas/材质代码**保留不删**，便于 R50 一键启用。 */
+        /* R49-P2c 原裁决「默认关闭盖板」在 R51-B1-c 由主理人改写：R51 默认启用
+         * 收窄版盖板，`#r51band=off` ⇒ 逐位回 R48/R50。
+         * ⚠ `|| R51_BAND_ON` 只改这一个布尔值，所有 `r49Hole ? A : B` 的既有参数
+         *   字符串逐字保留（r48_lamp.test.ts / r49_visual.test.ts 的源码契约钉着，
+         *   禁止把变量名换成 r49Hole 之类）。 */
         const r49Hole = /(?:^|[#&])r49hole=on/i.test(
           typeof window === 'undefined' ? '' : window.location.hash
-        );
+        ) || R51_BAND_ON;
+        /* ══ R51-B1-c · 盖板启用与贴合（默认开，回滚 `#r51band=off`）════════════
+         * R49-P2c 曾裁定「默认不启用 R49 盖板」：黑板 `PlaneGeometry(2.02,0.34)`
+         * 左右超出车身轮廓悬空，比 R48 白块更违和。主理人本波给出的直接修法是
+         * **把盖板收窄 ×0.90（2.02→1.818，clamp [1.70,1.86]）** + z 落
+         * `bodyMaxZ+0.010` + 保持 rough .70 / metal .06 / env .45（metal .35/rough .35
+         * 会把 PMREM 天空整面反射，纯白 273→3383）。
+         *   · 默认（无 hash）：r49Hole=true ⇒ 启用收窄盖板 + R51 深红 atlas；
+         *   · `#r51band=off`：r49Hole=false ⇒ 逐位回 R48/R50 默认；
+         *   · `#r49hole=on`（旧钩子，语义保留）：r49Hole=true，且 R51_BAND_ON=false
+         *     时 atlas 内部走 R49 原绘制、且不收窄 ⇒ 逐位复现 R49 观感。
+         * ⚠ 不改几何拓扑：仍是 housing + band 两块 mesh，额外 DC = 0。 */
+        const r51Band = R51_BAND_ON;
         /* ⚠ R49-P2c：**几何回退 v1**（盖板宽 2.02 + z=-(bodyMaxZ+0.010)，bodyMaxZ 用 manifest×scale）。
          *   v2 那版「lampMaxZ 反推 + 实测收窄」导致覆盖面积不足——两侧露出更多白/米黄
          *   （rubric：WHITE 3383→4322、BEIGE 853→1448、最大连通域 1842→2323，全部变差），
@@ -963,11 +1123,14 @@ export async function loadExternalShell(
         const coverH = r49Hole ? 0.34 : 0.20;
         lampHousingMat = new THREE.MeshStandardMaterial({
           color: r49Hole ? 0x141418 : 0x101014,
+          // R51：函数内部按 R51_BAND_ON 选深红细带版；`#r51band=off` 用 R49 原版
+          // ⚠ 无参签名逐字保留（r49_visual.test.ts 源码契约钉着）
           map: r49Hole ? (makeR7RearBandAtlas() ?? undefined) : undefined,
           emissive: new THREE.Color(0x1a0000),
           emissiveIntensity: 0.2,
           /* R49-P2b 实测：平板 + metal .35/rough .35 会把 PMREM 天空**整面镜面反射**进来，
-           * ROI 纯白 273 → 3,383 px。压到 metal .06 / rough .70 / envInt .45（v2 保留项）。 */
+           * ROI 纯白 273 → 3,383 px。压到 metal .06 / rough .70 / envInt .45（v2 保留项）。
+           * R51-B1-c 沿用这组「压暗三件套」，不改数值。 */
           roughness: r49Hole ? 0.70 : 0.5,
           metalness: r49Hole ? 0.06 : 0.1,
           envMapIntensity: r49Hole ? 0.45 : 1,
@@ -976,6 +1139,12 @@ export async function loadExternalShell(
         const housing = new THREE.Mesh(
           new THREE.PlaneGeometry(2.02, coverH), lampHousingMat);
         housing.name = 'lamp_rear_housing';
+        /* R51-B1-c：收窄 ×0.90 ⇒ 2.02→1.818，clamp [1.70,1.86]（主理人 §7.3 精确值）。
+         * ⚠ `mesh.scale` 只缩放几何顶点、不缩放 position（R47 铁律）；rotY(π) 后
+         *   对称宽度不受朝向影响。不改 PlaneGeometry 顶点 ⇒ 几何/UV/tri 逐位不变。 */
+        if (r51Band) {
+          housing.scale.x = Math.min(1.86, Math.max(1.70, 2.02 * 0.90)) / 2.02;
+        }
         housing.position.set(0, coverY, r49Hole ? -(bodyMaxZ + 0.010) : -2.505);
         housing.rotation.y = Math.PI;
         housing.castShadow = false;
@@ -1016,8 +1185,16 @@ export async function loadExternalShell(
     if (lfGltf) {
       lampFrontMat = new THREE.MeshStandardMaterial({
         color: 0x0a0c10,
-        emissive: new THREE.Color(0xcfe0ff),
-        emissiveIntensity: 0.7,
+        /* R51-B3（H5 运行时快修，主理人允许「时间紧可只做数值」）：
+         * `lamp_front_atlas.png` 两车均缺失 ⇒ 纯 emissive `0xcfe0ff`@0.7 是
+         * V800 两侧淡蓝矩形灯区 + R7 前灯「一片白」的根因（与 body 材质链路无关）。
+         * 冷蓝→中性灰蓝 0x9aa6b4、强度 0.7→0.18（审查线 §7.3 精确值，勿自行调参）。
+         * ⚠ 构造初值会被两 Adapter 的 update() 每帧覆盖 ⇒ 联动公式必须同步降级。
+         * ⚠ 不做 onBeforeCompile / 深度灯语结构（R46 atlas 错位黑腔教训）；
+         *   中央「蓝水滴徽标」在运行时无独立几何（grep 零命中），属资产层，本波不动。
+         * 回滚 `#r51lamp=off` ⇒ 逐位回 R50。 */
+        emissive: new THREE.Color(R51_LAMP_ON ? 0x9aa6b4 : 0xcfe0ff),
+        emissiveIntensity: R51_LAMP_ON ? 0.18 : 0.7,
         roughness: 0.2,
         metalness: 0.15
       });
