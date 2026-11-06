@@ -429,6 +429,120 @@ export function mountExternalWheel(
   spin.add(mesh);
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+ * R49-A2 · 阴影投影代理（shadow proxy）
+ *
+ * 定罪（.qa/r49/PERF_PRESTUDY.md §8①，读码口径）：
+ *   R44 引入的高精度外部壳 `body.glb` 966,484 tri + 4 轮 303,521 tri
+ *   = **1,270,005 tri**（r7 1,389,955 tri）全部 `castShadow=true`（本文件 :627/:631），
+ *   而 R39 起 `Lighting` 的 `sun.shadow.autoUpdate=true` ⇒ **每帧重绘、无节流**，
+ *   于是这 1.27M tri 每帧被**再投一遍**进 shadow pass（主 pass 之外的第二遍全顶点）。
+ *   而 R38-P1-5 的 caster 瘦身（V800Adapter.ts:4764-4782）在**装配期**遍历 `root`，
+ *   外部壳是 `loadExternalShell()` 异步 resolve 之后才挂上树 ⇒ 完全绕过瘦身。
+ *
+ * 修法（A2，零新资产 / 零 bake 管线改动 / 当日可回滚）：
+ *   1. 高模壳本体**退出 shadow pass**（`bodyMesh` + 4 轮 `castShadow = false`）；
+ *   2. 在适配器侧把程序化树里 **R38 保留的 castShadow 大件**（V800 实测 13 件 /
+ *      19,536 tri，其轮廓已被 R38-P1-6 实证「车影可见轮廓全由这些大件决定」）
+ *      各复制一个**只投影、不显影**的代理网格。
+ *
+ * 代理为什么「不显影」：
+ *   - 材质 `MeshBasicMaterial({ colorWrite:false, depthWrite:false })` ⇒ 主 pass 里
+ *     这次 draw **不写颜色、不写深度**，画面上零像素；
+ *   - 进 shadow pass 时 three 走 `WebGLShadowMap.getDepthMaterial()` 现场派生
+ *     `MeshDepthMaterial`（WebGLShadowMap.js:440-516）——它只同步 `visible` /
+ *     `wireframe` / `side` / `alphaMap` / `alphaTest` / `map` / `displacement*` /
+ *     `clippingPlanes`，**不复制 colorWrite / depthWrite**（同处 :479-505），
+ *     所以阴影侧照常写深度，投影行为与原件逐位等价。
+ *
+ * 为什么不能用 layers / visible 隔离：
+ *   three 的 shadow pass 用**主相机**的 layers 判可见性
+ *   （WebGLShadowMap.js:522 `object.layers.test(camera.layers)`）⇒ 给代理单独
+ *   layer 会连阴影一起被剔掉；而 `object.visible===false`（:520）与
+ *   `material.visible===false`（:556）是**双闸门**，任一为假阴影即消失。
+ *   ⇒ 代理必须 `visible=true` 且 `material.visible=true`，只能靠 colorWrite/depthWrite 隐身。
+ *
+ * 几何零增量：代理与原件**共享同一 BufferGeometry**（不 clone、不 dispose）。
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+/** `#r49shadowproxy=off` ⇒ 逐位回 R48：高模壳自己投影、不建任何代理 */
+const SHADOW_PROXY_OFF_RE = /(?:^|[#&])r49shadowproxy=off/i;
+
+/** 当前是否启用阴影投影代理（Node/vitest 下无 window ⇒ false，保持 R48 行为） */
+export function shadowProxyEnabled(): boolean {
+  if (typeof window === 'undefined') return false;
+  return !SHADOW_PROXY_OFF_RE.test(window.location.hash);
+}
+
+/**
+ * 把程序化树里「仍带 `castShadow` 的大件」（= R38-P1-5 瘦身后保留的那批）
+ * 各复制成一个阴影代理，挂到**原件同一个 parent** 下并逐位复制局部变换。
+ *
+ * 为什么挂同 parent 而不是挂 body：世界变换**恒等**（含轮 `spin` 自转、车体
+ * 平移），不需要任何矩阵反解，也不怕后续 `mountExternalWheel` 迁移轮枢轴。
+ * `matrixAutoUpdate` / position / quaternion / scale / matrix 全部照抄。
+ *
+ * 代理打 `userData.r44External=true`：`setExteriorHidden`（V800Adapter.ts:4846）与
+ * `setCabinBlocksHidden`（:4842-4884 同族）见到该标记一律跳过 ⇒ 程序化外观整体
+ * 隐藏时，代理不会被连带藏掉（阴影常驻）。
+ *
+ * @param root 程序化车模树根（`model` 或 `root`，内部会过滤掉 r44External 子树）
+ * @returns 新建的代理网格数组（供装配期记账/日志用）
+ */
+export function buildShadowProxies(root: THREE.Object3D): THREE.Mesh[] {
+  // 按 side 缓存共享材质：MeshBasicMaterial 默认 FrontSide，但原件可能是
+  // BackSide/DoubleSide（合批/翻面件）。shadowSide 由 material.side 派生
+  // （WebGLShadowMap.js:488），故**必须跟随原件的 side**，否则背面剔除方向
+  // 一变，投影轮廓就会与 R38 基线不一致。
+  const matsBySide = new Map<THREE.Side, THREE.MeshBasicMaterial>();
+  const matFor = (side: THREE.Side): THREE.MeshBasicMaterial => {
+    let m = matsBySide.get(side);
+    if (!m) {
+      m = new THREE.MeshBasicMaterial({
+        colorWrite: false,
+        depthWrite: false,
+        fog: false,
+        side
+      });
+      matsBySide.set(side, m);
+    }
+    return m;
+  };
+
+  // 先收集再挂载：遍历过程中改树会打乱 traverse 的游标
+  const sources: THREE.Mesh[] = [];
+  root.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    if (!m.castShadow) return; // 已被 R38 瘦身/占位件逻辑关掉的，不代理
+    if ((m.userData as { r44External?: boolean }).r44External === true) return; // 外部壳本体
+    if (!m.parent) return;
+    sources.push(m);
+  });
+
+  const proxies: THREE.Mesh[] = [];
+  for (const src of sources) {
+    const parent = src.parent;
+    if (!parent) continue; // 理论上不会发生（收集阶段已滤），守住 TS 空安全
+    const srcMat = Array.isArray(src.material) ? src.material[0] : src.material;
+    const proxy = new THREE.Mesh(src.geometry, matFor(srcMat?.side ?? THREE.FrontSide));
+    proxy.name = `r49-shadow-proxy:${src.name || src.uuid}`;
+    proxy.visible = true; // 双闸门 ①（WebGLShadowMap.js:520）
+    proxy.castShadow = true;
+    proxy.receiveShadow = false;
+    proxy.matrixAutoUpdate = src.matrixAutoUpdate;
+    proxy.position.copy(src.position);
+    proxy.quaternion.copy(src.quaternion);
+    proxy.scale.copy(src.scale);
+    proxy.matrix.copy(src.matrix);
+    proxy.matrixWorldNeedsUpdate = true; // 首帧就位（原件可能已 updateMatrixWorld）
+    (proxy.userData as { r44External?: boolean }).r44External = true;
+    parent.add(proxy);
+    proxies.push(proxy);
+  }
+  return proxies;
+}
+
 /** 计算外部壳 root 系（= 世界系 xz）四轮偏移，供 fx WHEEL_LOCAL 同步 */
 export function wheelOffsetsWorldXZ(
   manifest: ExternalManifest
@@ -467,6 +581,87 @@ function collectNamed(
 
 /** R46：当前加载的 AbortController（供取消订阅回调命中；加载结束置 null） */
 let shellAbort: AbortController | null = null;
+
+/**
+ * R49-P2b · R7 尾灯带底板 atlas（1024×172，比例 5.95 ≈ 盖板 2.02m×0.34m 的 5.94）。
+ *
+ * 为什么用 atlas 而不是若干小 Plane：验收要求「视觉改动整帧 DC 上涨 ≤ +3」。
+ * 字标 / 两侧灯组内部的白条+红条 / 上下镀铬饰条 全部**画进同一张贴图**，
+ * 由**同一块盖板 mesh** 承载 ⇒ 这些细节的额外 DC 恒为 0。
+ *
+ * UV 约定：PlaneGeometry 的 uv(0,0)=左下、(1,1)=右上；CanvasTexture 默认 flipY=true
+ * ⇒ canvas 第 0 行 = v=1 = 盖板**顶边**（世界 y = 1.185）。
+ * 世界 y 映射：row = (1.185 − y) / 0.34 × 171。
+ *
+ * Node/vitest 无 document ⇒ 返回 1×1 占位（外部壳在测试环境根本不会装配，这里只防崩溃）。
+ */
+function makeR7RearBandAtlas(): THREE.Texture | null {
+  // ⚠ 失败必须返回 null：`new THREE.Texture()` 没有 image 时 three 会绑定 1×1 **白**图，
+  //   map 白 × color 白 ⇒ 整块盖板变白（正是 R49 初版像素暴涨的直接机制）。
+  if (typeof document === 'undefined') return null;
+  const W = 1024;
+  const H = 172;
+  const c = document.createElement('canvas');
+  c.width = W;
+  c.height = H;
+  const g = c.getContext('2d');
+  if (!g) return null;
+  // 底板：深墨（官图灯带底色），比纯黑略偏蓝，避免读成「空洞」
+  g.fillStyle = '#14141a';
+  g.fillRect(0, 0, W, H);
+  const yRow = (worldY: number): number => Math.round((1.185 - worldY) / 0.34 * (H - 1));
+  // 上下镀铬/深色饰条（2–3 px）
+  g.fillStyle = '#2a2a31';
+  g.fillRect(0, Math.max(0, yRow(1.175)), W, 3);
+  g.fillRect(0, Math.max(0, yRow(0.858)), W, 3);
+  // 两侧灯组内部结构：白细条 + 深红条（左右各一组，镜像对称）
+  const seg = Math.round(W * 0.336); // 左/右段宽度（盖板 3 段视觉分区：0.336 / 0.328 / 0.336）
+  const drawUnit = (x0: number, w: number): void => {
+    g.fillStyle = '#5a6068'; // 白细条压暗成暗灰（避免糊成白噪点块）
+    g.fillRect(x0 + Math.round(w * 0.18), yRow(1.075), Math.round(w * 0.64), 3);
+    g.fillStyle = '#9c2424'; // 深红条（略提亮，黑底上可辨）
+    g.fillRect(x0 + Math.round(w * 0.14), yRow(1.005), Math.round(w * 0.72), 5);
+    g.fillStyle = '#3a1010'; // 红条下阴影，制造分段层次
+    g.fillRect(x0 + Math.round(w * 0.14), yRow(0.995), Math.round(w * 0.72), 3);
+  };
+  drawUnit(0, seg);
+  drawUnit(W - seg, seg);
+  // 中段 LUXEED 字标
+  g.fillStyle = '#c9ccd2';
+  g.font = '600 30px system-ui, -apple-system, Arial, sans-serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText('L U X E E D', W / 2, yRow(1.015));
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/**
+ * R49-P2b · R7 下缘红反光条 atlas（512×32）：透明底 + 左右两段红条。
+ * 用 alphaTest 0.5 而非 transparent 混合排序，避免参与透明队列（R12 铁律同源考虑）。
+ */
+export function makeR7LowerReflectorAtlas(): THREE.Texture | null {
+  if (typeof document === 'undefined') return null;
+  const W = 512;
+  const H = 32;
+  const c = document.createElement('canvas');
+  c.width = W;
+  c.height = H;
+  const g = c.getContext('2d');
+  if (!g) return null;
+  g.clearRect(0, 0, W, H);
+  g.fillStyle = '#6a1d1d';
+  g.fillRect(Math.round(W * 0.08), 8, Math.round(W * 0.20), 16);
+  g.fillRect(Math.round(W * 0.72), 8, Math.round(W * 0.20), 16);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  tex.needsUpdate = true;
+  return tex;
+}
 
 /**
  * 门禁优先级（不可倒置，REPORT_PHASE1B.md §2.6）：
@@ -624,11 +819,15 @@ export async function loadExternalShell(
 
     const bodyMesh = bodyFound;
     bodyMesh.material = material;
-    bodyMesh.castShadow = true;
+    /* R49-A2：高模壳本体退出 shadow pass —— 每帧 1.27M tri（r7 1.39M）的第二遍投影
+     * 改由适配器侧的低模代理承担（见 buildShadowProxies 头注）。
+     * `#r49shadowproxy=off` ⇒ 逐位回 R48：壳自己投影、适配器不建代理。 */
+    const proxyMode = shadowProxyEnabled();
+    bodyMesh.castShadow = !proxyMode;
     bodyMesh.receiveShadow = false;
     for (const mesh of Object.values(wheelMeshes)) {
       mesh.material = material;
-      mesh.castShadow = true;
+      mesh.castShadow = !proxyMode; // R49-A2：同 bodyMesh，四轮也退出 shadow pass
     }
     bodyMesh.scale.setScalar(manifest.scale);
 
@@ -688,6 +887,11 @@ export async function loadExternalShell(
     let lampFrontMat: THREE.MeshStandardMaterial | null = null;
     /** R48：R7 尾灯洞口盖板材质（唯一新增材质实例，dispose 显式释放） */
     let lampHousingMat: THREE.MeshStandardMaterial | null = null;
+    /** R49-P2b：红细带材质（与 lampRearMat 拆开，避免改色连带灯组） */
+    let r49BandMat: THREE.MeshStandardMaterial | null = null;
+    /** R49-P2b：本波新增的材质/贴图账本（dispose 用；只登记 R49 自己新建的） */
+    const r49DecorMats: THREE.Material[] = [];
+    const r49DecorTex: THREE.Texture[] = [];
     /** R46：前灯最终是否挂了 emissiveMap（供 r44ShellStatus.lampMap 机读） */
     let hasLampMap = false;
     const lampRearMeshes: THREE.Mesh[] = [];
@@ -725,37 +929,88 @@ export async function loadExternalShell(
             typeof window === 'undefined' ? '' : window.location.hash
           )) {
         const s = manifest.scale;
-        // ① 洞口盖板：世界 Z=2.505 m（body 全带 max 2.4942），深黑饰条遮住空洞
+        /* ══ R49-P2b：盖板 / 红细带 / 下缘反光条重做（尺寸与 z 全部来自射线实测）══
+         * 定罪见 `.qa/r49/PHASE2B_DIAG.md` §三（探针 `tools/r49_rear_probe.mjs`）：
+         *  ① **主因 = 盖板 z 比 body 最外层还深 14.4 mm ⇒ 被 body 自遮挡**
+         *     r7: bodyBBox.max[2]=0.582810 × scale 4.323 = **2.5194 m**（世界最外层），
+         *     而 R48 盖板在 2.505 m ⇒ 差 −14.4 mm。工单要求的「body 最外层 + 8~12 mm」
+         *     应为 2.527~2.531 ⇒ 取 **bodyMaxZ + 0.010**。
+         *  ② 次因 = 高度不足：R48 `PlaneGeometry(2.02, 0.20)`（中心 y=1.0375）只覆盖
+         *     y∈[0.9375,1.1375]；射线实测白块世界 y∈[**0.893**, 1.089] ⇒ 底边高 44.5 mm
+         *     露白。改为高 **0.34 m**、中心 **1.015**（覆盖 y∈[0.845,1.185]，上下各 ~45 mm 余量）。
+         *     （工单按像素比例估的 0.51 m 偏大：实测白块世界高度 0.197 m。）
+         *  ③ 射线次命中 7/24 = `batch/leather-ivory` ⇒ 洞后是米黄内饰，印证「补洞」方向。
+         * 启用：`#r49hole=on` ⇒ 尺寸/z 逐位为 R49 盖板（0.34 / 1.015 / z=-(bodyMaxZ+0.010)）；**默认关闭**走 R48。
+         * ⚠ 旧口径下盖板命中率仍有 5/24（它确实在最前）——所以不是「完全无效」，
+         *   只是**边缘一圈没盖住**，正是 bloom 最容易吹白的位置。 */
+        /* ⚠ R49-P2c 收口裁决：**默认不启用** R49 盖板（回归 R48 已验收观感）。
+         *   rubric 证实材质/atlas 压暗对白噪点**零效果**（逐位 3383/1842/515/853）——白噪点是 body
+         *   洞/灯组的 **UV 串味灰白**（在盖板之外，运行时改不动），必须回 bake 管线重映射 UV（R50）。
+         *   而黑板盖板又**左右超出车身轮廓悬空**、比 R48 的白块更违和 ⇒ 强改是负收益。
+         *   ⇒ 默认走 R48 分支（盖板 z=2.505 被遮挡，不显示黑板）；R50 修 UV 后用 `#r49hole=on` 启用。
+         *   全部 R49 盖板/atlas/材质代码**保留不删**，便于 R50 一键启用。 */
+        const r49Hole = /(?:^|[#&])r49hole=on/i.test(
+          typeof window === 'undefined' ? '' : window.location.hash
+        );
+        /* ⚠ R49-P2c：**几何回退 v1**（盖板宽 2.02 + z=-(bodyMaxZ+0.010)，bodyMaxZ 用 manifest×scale）。
+         *   v2 那版「lampMaxZ 反推 + 实测收窄」导致覆盖面积不足——两侧露出更多白/米黄
+         *   （rubric：WHITE 3383→4322、BEIGE 853→1448、最大连通域 1842→2323，全部变差），
+         *   按主理人裁决**回退几何覆盖**，**只保留 v2 的 atlas/材质压暗**（那些只会更好）。
+         *   教训：bodyMaxZ 用 manifest×scale=2.5194 时 z 落 2.5294，恰好压住洞区；改用实测反推落 2.535
+         *   反而把盖板整体上移、下沿离开洞区顶部（y≈1.185）而露白。 */
+        const bodyMaxZ = (manifest.bodyBBox?.max?.[2] ?? 0.5828) * s;
+        const coverY = r49Hole ? 1.015 : 0.240 * s;
+        const coverH = r49Hole ? 0.34 : 0.20;
         lampHousingMat = new THREE.MeshStandardMaterial({
-          color: 0x101014,
+          color: r49Hole ? 0x141418 : 0x101014,
+          map: r49Hole ? (makeR7RearBandAtlas() ?? undefined) : undefined,
           emissive: new THREE.Color(0x1a0000),
           emissiveIntensity: 0.2,
-          roughness: 0.5,
-          metalness: 0.1,
+          /* R49-P2b 实测：平板 + metal .35/rough .35 会把 PMREM 天空**整面镜面反射**进来，
+           * ROI 纯白 273 → 3,383 px。压到 metal .06 / rough .70 / envInt .45（v2 保留项）。 */
+          roughness: r49Hole ? 0.70 : 0.5,
+          metalness: r49Hole ? 0.06 : 0.1,
+          envMapIntensity: r49Hole ? 0.45 : 1,
           side: THREE.DoubleSide
         });
         const housing = new THREE.Mesh(
-          new THREE.PlaneGeometry(2.02, 0.20), lampHousingMat);
+          new THREE.PlaneGeometry(2.02, coverH), lampHousingMat);
         housing.name = 'lamp_rear_housing';
-        housing.position.set(0, 0.240 * s, -2.505);
+        housing.position.set(0, coverY, r49Hole ? -(bodyMaxZ + 0.010) : -2.505);
         housing.rotation.y = Math.PI;
         housing.castShadow = false;
         housing.renderOrder = 1;
         lampRearMeshes.push(housing);
-        // ② 灯组外推 0.06 m（body 局部 −Z，rotY(π) 后世界 +0.06 m）
+        // ② 灯组外推 0.06 m（R48 已验收，逻辑不动）
         for (const m of lampRearMeshes) {
           if (m.name === 'lamp_rear') m.position.z = -0.06;
         }
-        // ③ 贯穿红细带（世界 Z=2.544 m，压最外层）
-        const band = new THREE.Mesh(new THREE.PlaneGeometry(1.86, 0.055), lampRearMat);
+        // ③ 贯穿红细带：高 0.018、色 #5A1E1E、emissiveIntensity 0.35，z=-(bodyMaxZ+0.021)（回退 v1）
+        r49BandMat = r49Hole
+          ? new THREE.MeshStandardMaterial({
+              color: 0x1a0505,
+              emissive: new THREE.Color(0x5a1e1e),
+              emissiveIntensity: 0.35,
+              roughness: 0.35,
+              metalness: 0.2,
+              side: THREE.DoubleSide
+            })
+          : lampRearMat;
+        const band = new THREE.Mesh(
+          new THREE.PlaneGeometry(1.86, r49Hole ? 0.018 : 0.055), r49BandMat);
         band.name = 'lamp_rear_band';
-        // 世界 Z = 0.5885×s = 2.544 m，比外推后的灯组（两侧 2.506、中段 2.481）
-        // 更靠车尾 ⇒ 红细带压在灯组之上，形成官图「贯穿式深红细线」。
-        band.position.set(0, 0.240 * s, -0.5885 * s);
+        band.position.set(0, r49Hole ? 1.13 : 0.240 * s, r49Hole ? -(bodyMaxZ + 0.021) : -0.5885 * s);
         band.rotation.y = Math.PI;
         band.castShadow = false;
         band.renderOrder = 2;
         lampRearMeshes.push(band);
+        /* ④ 下缘红反光条 —— **本轮下线**（代码保留在 makeR7LowerReflectorAtlas）。
+         * 原因（.qa/r49/probe_v4/v5.log 实测）：该件是 `transparent+alphaTest` 的
+         * 1.90m×0.055m 平面，实测 ROI 纯白 273 → **3,383 px**，白增量面积≈434×6 px
+         * ≈ 整块反光条平面的投影面积 ⇒ 在 headless/SwiftShader 下这张 canvas 的
+         * **alpha 未被正确采样**，整块平面按不透明白渲染。它比它要遮的东西更糟，
+         * 故本波先移除；待 landing-review 在真实 GPU 上确认 alpha 通道行为后再启用。
+         * 保留 `#r49hole=off` 与下方注释，避免下一位同学重复踩。 */
       }
     }
     if (lfGltf) {
@@ -843,6 +1098,10 @@ export async function loadExternalShell(
         lampRearMat?.dispose();
         lampFrontMat?.dispose();
         lampHousingMat?.dispose();
+        // R49-P2b：本波新增的材质与贴图（避免新增实例泄漏）
+        if (r49BandMat && r49BandMat !== lampRearMat) r49BandMat.dispose();
+        for (const m of r49DecorMats) if (m !== r49BandMat) m.dispose();
+        for (const t of r49DecorTex) t.dispose();
         lampAtlasTex?.dispose();
         material.map?.dispose();
         material.normalMap?.dispose();

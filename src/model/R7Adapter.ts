@@ -21,8 +21,10 @@ import { mountLicensePlate } from './plateTexture';
 // R44 外观 GLB 资产化：外部壳装载 + 程序化外观隐藏 + fx 轮位同步。
 // R37-C 的 5 色落色路径退役：R7 程序化车漆固定工厂墨绿（外部壳失败时的回退基线）。
 import {
+  buildShadowProxies,
   loadExternalShell,
   mountExternalWheel,
+  shadowProxyEnabled,
   wheelOffsetsWorldXZ,
   type ExternalShellHandle
 } from './external/ExternalShell';
@@ -1438,6 +1440,23 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
     setPaintShadow(lastInteriorState);
     buildPokeList(shell.manifest.bodyBBox.max[1] * shell.manifest.scale * 0.90);
     setPokeHidden(!lastInteriorState);
+    /* R49-A2：阴影投影代理 —— R7 高模壳（body 882,300 + 4 轮 507,655 = 1,389,955 tri）
+     * 已退出 shadow pass，改由程序化树里 R29 阴影白名单保留的车体壳 + 4 轮
+     * （`SHADOW_CASTER_MATERIAL_IDS` / wheelKeep，见本文件上方同名块）复制代理承担。
+     * 与 V800 同构，详见 ExternalShell.buildShadowProxies 头注。 */
+    if (shadowProxyEnabled()) {
+      try {
+        const proxies = buildShadowProxies(root);
+        console.info(
+          `[R7Adapter] R49-A2 阴影投影代理：${proxies.length} 件（几何共享，colorWrite/depthWrite=false）`
+        );
+      } catch (err) {
+        // 兜底：代理建不出来就把投影权还给高模壳（宁可多 1.39M tri，也不能丢车影）
+        console.error('[R7Adapter] R49-A2 代理失败，回退高模壳投影：', err);
+        shell.bodyMesh.castShadow = true;
+        for (const wm of Object.values(shell.wheelMeshes)) wm.castShadow = true;
+      }
+    }
     // R47：高精度方向盘（内饰资产线交付，契约 .qa/r47/STEERING_CONTRACT.md）。
     // 主理人裁决：契约 §2.3 的 scale=[1,1,1] 不成立 —— body 组无 scale，
     // 外部壳件都在各自 mesh 上乘 manifest.scale ⇒ 这里同样传 scale（见 InteriorSteering.ts 头注）。

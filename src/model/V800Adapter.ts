@@ -14,8 +14,10 @@ import { mergeSafe } from '../util/geo';
 import { batchMergeStatic, UV_CONTENT_MATERIAL_IDS } from './batchMerge';
 // R44 外观 GLB 资产化：外部壳装载 + 程序化外观隐藏 + fx 轮位同步
 import {
+  buildShadowProxies,
   loadExternalShell,
   mountExternalWheel,
+  shadowProxyEnabled,
   wheelOffsetsWorldXZ,
   type ExternalShellHandle
 } from './external/ExternalShell';
@@ -4948,6 +4950,26 @@ const R48_LAMP_TONE: boolean =
     setPaintShadow(lastInteriorState);
     buildPokeList(shell.manifest.bodyBBox.max[1] * shell.manifest.scale * 0.90);
     setPokeHidden(!lastInteriorState);
+    /* R49-A2：阴影投影代理 —— 高模壳（body 966,484 + 4 轮 303,521 = 1,270,005 tri）
+     * 已在 ExternalShell 里退出 shadow pass（`castShadow=false`，受 `#r49shadowproxy=off`
+     * 门控），这里用程序化树里 R38-P1-5 瘦身后**仍带 castShadow 的大件**（实测 13 件 /
+     * 19,536 tri，R38-P1-6 已证「车影可见轮廓全由这些大件决定」）各复制一个
+     * colorWrite/depthWrite=false 的代理承担投影 ⇒ shadow pass 从 1.27M tri 降到 ~19.5k。
+     * 几何共享（零显存增量）、挂原件同 parent（世界变换恒等，含轮 spin 自转）。
+     * 详见 ExternalShell.buildShadowProxies 头注 + .qa/r49/PERF_PRESTUDY.md §8①。 */
+    if (shadowProxyEnabled()) {
+      try {
+        const proxies = buildShadowProxies(root);
+        console.info(
+          `[V800Adapter] R49-A2 阴影投影代理：${proxies.length} 件（几何共享，colorWrite/depthWrite=false）`
+        );
+      } catch (err) {
+        // 兜底：代理建不出来就把投影权还给高模壳（宁可多 1.27M tri，也不能丢车影）
+        console.error('[V800Adapter] R49-A2 代理失败，回退高模壳投影：', err);
+        shell.bodyMesh.castShadow = true;
+        for (const wm of Object.values(shell.wheelMeshes)) wm.castShadow = true;
+      }
+    }
     // R47：高精度方向盘（内饰资产线交付，契约 .qa/r47/STEERING_CONTRACT.md）。
     // 主理人裁决：契约 §2.3 的 scale=[1,1,1] 不成立 —— body 组无 scale，
     // 外部壳件都在各自 mesh 上乘 manifest.scale ⇒ 这里同样传 scale（见 InteriorSteering.ts 头注）。

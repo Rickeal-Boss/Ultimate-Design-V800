@@ -117,6 +117,11 @@ export class Postfx {
   private height = 1;
   /** R46 ③：一阶滞后后的实际强度（与 uniform 逐位一致；off 分支同步写回，避免切档残留） */
   private blurCurrent = 0;
+  /**
+   * R49-B：是否启用「默认关模糊时跳过整条 blurPass」的动态开关。
+   * `#r49blurpass=off` ⇒ 恒 false ⇒ 逐位回 R48（pass 常驻、每帧照跑）。
+   */
+  private readonly blurAutoToggle: boolean;
 
   constructor(
     renderer: THREE.WebGLRenderer,
@@ -126,6 +131,9 @@ export class Postfx {
   ) {
     this.pixelRatio = quality.pixelRatio;
     this.bloomScale = quality.bloomScale;
+    this.blurAutoToggle = !/(?:^|[#&])r49blurpass=off/i.test(
+      typeof window === 'undefined' ? '' : window.location.hash
+    );
     const size = renderer.getDrawingBufferSize(new THREE.Vector2());
     this.width = window.innerWidth;
     this.height = window.innerHeight;
@@ -152,6 +160,9 @@ export class Postfx {
     );
     this.composer.addPass(this.blurPass);
     this.composer.addPass(new OutputPass());
+    /* 初值对齐：uniform 此刻 0/0 ⇒ 默认关模糊时 pass 一开始就 disabled。
+     * prewarm() 会临时强制 enabled=true 编译 program，之后还原到本状态。 */
+    this.syncBlurEnabled();
   }
 
   /** bloom 走缩放分辨率：每级 mip 面积按 scale² 缩小（0.5 → 1/4 面积） */
@@ -174,15 +185,52 @@ export class Postfx {
     if (!smooth || dt <= 0) {
       this.blurCurrent = strength;
       this.blurPass.uniforms.strength.value = strength;
+      this.syncBlurEnabled();
       return;
     }
     const k = strength > this.blurCurrent ? 20 : 8;
     this.blurCurrent = damp(this.blurCurrent, strength, k, dt);
     this.blurPass.uniforms.strength.value = this.blurCurrent;
+    this.syncBlurEnabled();
+  }
+
+  /**
+   * R49-B：默认关动态模糊时，整条 SpeedBlur 全屏 pass 是**恒等拷贝**
+   * （fragment 在 `strength<=1e-4 && flash<=1e-4` 时直接 `texture2D(tDiffuse, vUv)`，
+   * 见本文件 shader 的 R47 early-out），但 `EffectComposer` 仍会为它做
+   * **一次全屏 quad + 一次 readBuffer→writeBuffer 的 HalfFloat RT 往返 + swapBuffers**
+   * （EffectComposer.js:230-258）——这是一整帧填充率的纯浪费。
+   *
+   * 做法：`blurPass.enabled = false` ⇒ `EffectComposer.js:234 if (pass.enabled === false) continue;`
+   * 直接跳过；`isLastEnabledPass()`（:192-200）会把 `renderToScreen` 正确交给
+   * OutputPass，缓冲链本身合法（RenderPass / UnrealBloomPass 均 `needsSwap=false`，
+   * 见 RenderPass.js:95 / UnrealBloomPass.js:94），输出**逐位不变**。
+   *
+   * ⚠ 判据必须读 **uniform 实际值**（= R46 ③ 一阶滞后后的 `blurCurrent` 与 `flash`），
+   *   不能用 Game 侧算出的目标值：`setSpeedBlur` 升 k=20 / 降 k=8 的滞后在目标归零后
+   *   仍有一段**余晖帧**（`blurCurrent` 从 >0 缓降），用目标值会提前关 pass ⇒ 余晖被
+   *   硬截断，观感变化。brakeFlash（`setFlash`，峰值 0.85 后按 −2.2/s 衰减）同理。
+   *
+   * ⚠ `prewarm()` 期必须强制 `enabled=true`（见该方法），否则 SpeedBlur 的 program
+   *   不会被 `composer.render()` 编译到 ⇒ 首次开模糊那帧冒出一次 program 编译尖峰，
+   *   正好破坏 R42-P1 的「零首帧尖峰」。
+   *
+   * `#r49blurpass=off` ⇒ `blurAutoToggle=false` ⇒ 本方法恒置 enabled=true（逐位回 R48）。
+   */
+  private syncBlurEnabled(): void {
+    if (!this.blurAutoToggle) {
+      this.blurPass.enabled = true;
+      return;
+    }
+    const s = this.blurPass.uniforms.strength.value as number;
+    const f = this.blurPass.uniforms.flash.value as number;
+    // 与 shader early-out 判据逐位同源（<= 1e-4 ⇒ 透传 ⇒ pass 无贡献）
+    this.blurPass.enabled = s > 0.0001 || f > 0.0001;
   }
 
   setFlash(flash: number): void {
     this.blurPass.uniforms.flash.value = flash;
+    this.syncBlurEnabled();
   }
 
   resize(width: number, height: number): void {
@@ -234,7 +282,14 @@ export class Postfx {
   prewarm(): void {
     const w = this.width;
     const h = this.height;
+    /* R49-B：预热期**强制** blurPass 启用来编译它的 program。
+     * 动态开关在「默认关模糊」时会把 blurPass 置 enabled=false（同步逻辑见
+     * syncBlurEnabled），而 disabled 的 pass 在 EffectComposer.js:234 被 continue，
+     * program 根本不会被编译 ⇒ 用户首次打开动态模糊（或首次 brakeFlash）的那一帧
+     * 会付一次着色器编译尖峰，正好破坏 R42-P1 的意图。故此处临时开、finally 还原。 */
+    const prevBlurEnabled = this.blurPass.enabled;
     try {
+      this.blurPass.enabled = true;
       this.composer.setSize(8, 8);
       this.composer.render();
     } catch {
@@ -243,6 +298,11 @@ export class Postfx {
       // 还原真实尺寸（这一步会重建 RT，但同样只发生在加载期；与 resize() 同路径）
       this.composer.setSize(w, h);
       this.applyBloomSize();
+      // 还原动态开关状态：**以 sync 为准**（uniform 此刻是初值 0/0 ⇒ 默认关模糊时
+      // 会落回 disabled；`#r49blurpass=off` 时 sync 恒置 true）。prevBlurEnabled 只作
+      // 异常早退的兜底（catch 分支若在 render 中途抛出，sync 仍能给出正确终态）。
+      this.blurPass.enabled = prevBlurEnabled;
+      this.syncBlurEnabled();
     }
   }
 

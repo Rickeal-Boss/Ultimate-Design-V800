@@ -42,7 +42,14 @@ describe('R48 · R7 尾灯空洞补面', () => {
   it('深色盖板 + 灯组外推 + 贯穿红细带，且留 #r48hole=off 回滚', () => {
     const s = src('src/model/external/ExternalShell.ts');
     expect(s).toContain("housing.name = 'lamp_rear_housing'");
-    expect(s).toContain('housing.position.set(0, 0.240 * s, -2.505)');
+    /* R49-P2b：盖板 z / 高度改为**射线实测**参数（.qa/r49/PHASE2B_DIAG.md §三）：
+     * R48 的 2.505 / 0.20 / 0.240*s 作为 `#r49hole=off` 的回滚分支逐位保留。 */
+    // R49-P2c 几何回退 v1：盖板 z=-(bodyMaxZ+0.010)、宽 2.02（manifest×scale 推导，覆盖面积足）
+    expect(s).toContain('const bodyMaxZ = (manifest.bodyBBox?.max?.[2] ?? 0.5828) * s;');
+    expect(s).toContain('new THREE.PlaneGeometry(2.02, coverH)');
+    expect(s).toContain('housing.position.set(0, coverY, r49Hole ? -(bodyMaxZ + 0.010) : -2.505);');
+    expect(s).toContain('const coverH = r49Hole ? 0.34 : 0.20;');
+    expect(s).toContain('const coverY = r49Hole ? 1.015 : 0.240 * s;');
     expect(s).toContain("if (m.name === 'lamp_rear') m.position.z = -0.06;");
     expect(s).toContain("band.name = 'lamp_rear_band'");
     expect(s).toContain('r48hole=off');
