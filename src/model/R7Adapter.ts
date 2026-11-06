@@ -41,21 +41,92 @@ export type { CarLike, WheelPivot };
 export const R7_BASE_YAW = Math.PI;
 
 /**
+ * R50-B：R27 内饰抬升后 R7 座舱机位眼点校准（`.qa/r49/PHASE2C_SPEC.md`）。
+ *
+ * 病根：R27 把 dash-upper / steering 等 11 件内饰抬升后，`driver.eye.y = 1.285`
+ * 低于 dash-upper 顶面（0.962 + R27_INTERIOR_LIFT）⇒ 从眼点向前看的射线先命中
+ * 仪表台 ⇒ cabinDriver 上半幅「可见车外」像素 2.3%（V800 同机位 17.0%）。
+ *
+ * R50-B 两步修（A/B 定罪见 `.qa/r50/glassab/`）：
+ * ① 眼点 1.285→1.40→**回调 1.29**（A/B 证明眼点非主因：固定 eye1.29 三态里
+ *    隐藏玻璃无效 1.85%、整壳隐藏 23.86% ⇒ 真凶是 R47 DoubleSide 让车顶内壁遮挡）；
+ *    抬升量 LIFT 0.14。eye 1.29 ≥ dash-upper 顶 1.102，安全余量 0.188m（≥0.02）。
+ * ② 车顶内壁剔除（真修，见 R50_ROOF_CLIP_WORLD_Y）：cabin 态把 world y>1.40 的
+ *    车顶区三角从 index 退化化，消除对前向风挡视线的遮挡，同时保住 R47 外模包裹。
+ * passenger 同步对齐（rear 不动：后排无台面遮挡问题）。
+ *
+ * 硬约束：眼点 y ≤ 1.44（顶棚下沿 R7_HEAD_LINER_Y，否则穿顶）。
+ * 回滚：`#r49r7eye=off` ⇒ 逐位回 R49 前（eye 1.285 / target 1.020 / LIFT 0.26）；
+ *       `#r50roof=off` ⇒ 关闭车顶剔除（回 R47 base 态，A/B 用）。
+ */
+/** 顶棚下沿装配 y（spec 实测）；眼点硬上限 */
+export const R7_HEAD_LINER_Y = 1.44;
+/** dash-upper 顶面装配 y（未抬升前的 spec 原值，R49 探针实测 0.962） */
+export const R7_DASH_UPPER_TOP_BASE = 0.962;
+/** 眼点须高于 dash-upper 顶面至少 0.02m（工单护栏） */
+export const R7_EYE_CLEAR_MARGIN = 0.02;
+
+/** R50-B：R7 眼点校准开关（`#r49r7eye=off` 逐位回 R49 前）。 */
+const R49R7EYE_FIX: boolean =
+  typeof window === 'undefined' || !/(?:^|[#&])r49r7eye=off/i.test(window.location.hash);
+
+/** R27 内饰抬升量：R49 前 0.26，R50-B 校准后 0.14（与眼点同源对齐） */
+export const R27_INTERIOR_LIFT = R49R7EYE_FIX ? 0.14 : 0.26;
+
+/**
+ * R50：cabin 态「车顶内壁剔除」阈值（world y）。
+ *
+ * 病根（主理人 A/B 实测 `.qa/r50/glassab/`，eye/target 已固定为扫描最优 c01）：
+ * R47 的 `r47CabinFix` 为治「车内看外模材质消失」把 bodyMesh.material.side 改
+ * DoubleSide，**副作用**是车顶 / A 柱内壁从车内被渲染，车顶横在眼点上方挡死前向
+ * 风挡视线 ⇒ cabinDriver 上半幅可见车外仅 **1.85%**（门 ≥12%）。三态 A/B 定罪：
+ *   base(DoubleSide)         1.85%  FAIL
+ *   #r44glass=off（隐藏玻璃）  1.85%  FAIL  ⇒ 非玻璃
+ *   #r47cabin=off（整壳隐藏） 23.86%  PASS  ⇒ 就是 bodyMesh 内壁
+ *
+ * 修法（方案1，几何精准剔除）：cabin 态 bodyMesh 仍 DoubleSide 保住 R47 的外模包裹
+ * 观感（引擎盖 / 翼子板 / 门板 / A 柱下段仍可见），但把**车顶区三角（顶点最大 world y
+ * > 本阈值）从 index 退化化**（三索引置 0 ⇒ 零面积 ⇒ GPU 不光栅化），消除对前向
+ * 风挡视线的遮挡；外部机位恢复完整 index（逐位不变）。
+ * 阈值来历（tools/r50_roof_probe.mjs 探针 + glassab 四态 A/B 实测，scale=4.323）：
+ *   y>1.40 只剔车顶 ⇒ 10.31%（车顶内壁已清，但**风挡上梁 header 仍在**，图中横一条
+ *   暗带挡住中上幅，见 ab_ab_base.png）；须再压到眼点附近把 header 也剔掉 ⇒
+ *   `#r50roofclip=` 可调阈值供 A/B 扫描，默认 1.30（= 眼点，保住 hood / 仪表台）。
+ * 回滚：`#r50roof=off` ⇒ 不剔除（回 R47 base 态 1.85%，车顶内壁重新遮挡，A/B 对照）。
+ */
+export const R50_ROOF_CLIP_WORLD_Y: number = (() => {
+  if (typeof window === 'undefined') return 1.30;
+  // `#r50roofclip=<y>` 供 A/B 扫描阈值（1.30 默认 / 1.40 只剔车顶 / 1.22 更狠）
+  const m = window.location.hash.match(/(?:^|[#&])r50roofclip=([\d.]+)/i);
+  return m ? Number(m[1]) : 1.30;
+})();
+
+/**
  * 三处内饰机位（装配局部坐标 = spec 坐标：+Z 车头、+Y 上、+X 车侧左）。
  * Game 用它驱动 CameraRig；数值来自实测坐姿：
  *   前排 H 点 (|x|0.36, y0.60, z0.18)，眼点在 H 点上方 0.62m；
  *   后排坐垫面 y0.59、靠背在 z-1.02，眼点取 (0, 1.21, -1.05)。
  * 注意：这里给的是**装配局部**坐标，未含 body.rotation.y=π —— CameraRig 需要
  * 先把机位挂到 body 的局部空间（或用 body.localToWorld）再取世界坐标。
+ *
+ * R50-B：driver/passenger 眼点 +target.y 抬到 R27 抬升后量级；rear 不动。
  */
 export const R7_INTERIOR_VIEWS = {
   driver: {
-    eye: [0.300, 1.285, -0.090] as [number, number, number],
-    target: [0.150, 1.020, 1.950] as [number, number, number],
+    eye: R49R7EYE_FIX
+      ? ([0.300, 1.290, -0.090] as [number, number, number])
+      : ([0.300, 1.285, -0.090] as [number, number, number]),
+    target: R49R7EYE_FIX
+      ? ([0.150, 1.160, 1.950] as [number, number, number])
+      : ([0.150, 1.020, 1.950] as [number, number, number]),
   },
   passenger: {
-    eye: [-0.300, 1.285, -0.090] as [number, number, number],
-    target: [-0.140, 1.020, 1.750] as [number, number, number],
+    eye: R49R7EYE_FIX
+      ? ([-0.300, 1.290, -0.090] as [number, number, number])
+      : ([-0.300, 1.285, -0.090] as [number, number, number]),
+    target: R49R7EYE_FIX
+      ? ([-0.140, 1.160, 1.750] as [number, number, number])
+      : ([-0.140, 1.020, 1.750] as [number, number, number]),
   },
   rear: {
     eye: [0.0, 1.230, -0.700] as [number, number, number],
@@ -134,6 +205,50 @@ const TEXTURE_SLOTS = [
 ] as const;
 
 const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);
+
+/**
+ * R50：按 world-y 阈值把 bodyMesh 的「车顶区」三角形从 index 退化化，用于 cabin 态
+ * 消除车顶内壁对前向风挡视线的遮挡（病根 / 阈值来历见 R50_ROOF_CLIP_WORLD_Y 注）。
+ *
+ * 纯函数（只读 geometry，返回新数组，无副作用）⇒ 可单测。
+ * - 分类判据：三角形三顶点的最大 world y（= local y × scale）> roofWorldY ⇒ 车顶 / 上框。
+ * - `culled`：车顶三角三索引置 0（退化零面积 ⇒ GPU 不光栅化），其余照抄 ⇒ cabin 态用。
+ * - `full`：原 index 逐位副本 ⇒ 外部机位恢复用（外部视角逐位不变）。
+ * - bodyMesh 与 4 轮**各自独立 geometry**（轮不在 bodyMesh.geometry 上）⇒ 剔除不连带轮；
+ *   也不新建材质实例（沿用共享 paint 材质）⇒ 无变体重涂 / 轮耦合风险。
+ * - 非 Uint32 index 或无 index/position ⇒ 返回 null（调用方跳过，等同关闭剔除）。
+ *   body 526,457 顶点 > 65535 ⇒ GLB 必为 Uint32 index（882,300 tri × 3）。
+ */
+export function buildRoofCulledIndex(
+  geometry: THREE.BufferGeometry,
+  scale: number,
+  roofWorldY: number,
+): { full: Uint32Array; culled: Uint32Array; roofTris: number; totalTris: number } | null {
+  const index = geometry.getIndex();
+  if (!index || !(index.array instanceof Uint32Array)) return null;
+  const pos = geometry.getAttribute('position');
+  if (!pos) return null;
+  const src = index.array;
+  const totalTris = Math.floor(src.length / 3);
+  const roofLocal = roofWorldY / scale;
+  const full = new Uint32Array(src); // 副本（外部机位）
+  const culled = new Uint32Array(src); // 副本（cabin 剔除）
+  let roofTris = 0;
+  for (let t = 0; t < totalTris; t++) {
+    const i0 = src[t * 3];
+    const i1 = src[t * 3 + 1];
+    const i2 = src[t * 3 + 2];
+    // BufferAttribute.getY 对普通 / 交错 attribute 都成立
+    const maxY = Math.max(pos.getY(i0), pos.getY(i1), pos.getY(i2));
+    if (maxY > roofLocal) {
+      culled[t * 3] = 0;
+      culled[t * 3 + 1] = 0;
+      culled[t * 3 + 2] = 0;
+      roofTris++;
+    }
+  }
+  return { full, culled, roofTris, totalTris };
+}
 
 /**
  * N-5（R34 实锤修复）：R7 尾灯 **静态**目标发光强度。
@@ -1018,11 +1133,13 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
   // V800 同款壳顶不挡，因其仪表台前伸到腰带前缘之外（dash z1.55..2.01 > 腰线前缘
   // z1.05），而 R7 仪表台整块藏在台面下方（台面前缘 z0.86 > 仪表后缘 z0.716）。
   // 外壳几何禁改（profile 上沿 = 外观侧视腰线，动它侧窗/腰带脱节），故在装配层把
-  // 内饰件抬到台面之上：抬升量 0.26m = 眼点−(台面前缘) 视线余量 ≥6cm（仪表顶
-  // 1.222 > 视线阈值 1.106；方向盘毂心 1.184 > 1.123）。必须在合批前做——合批会把
-  // 世界矩阵烘进几何。steering 是 pivot，子节点 hub/badge 随动，转向旋转不受影响。
+  // 内饰件抬到台面之上：抬升量取自 `R27_INTERIOR_LIFT`（R49 前 0.26、R50-B 校准
+  // 0.14，见文件顶部注释）。必须在合批前做——合批会把世界矩阵烘进几何。steering
+  // 是 pivot，子节点 hub/badge 随动，转向旋转不受影响。
+  // ⚠ R50-B：R27 原值 0.26 抬后 dash-upper 顶 1.222 > driver 眼点 1.285−安全余量
+  //   ⇒ cabinDriver 视线被台面挡死（2.3% vs V800 17.0%）。同批已把 R27_INTERIOR_LIFT
+  //   降到 0.14 并把眼点抬到 1.40，关系护栏见 tests/r50_r7eye.test.ts。
   {
-    const R27_INTERIOR_LIFT = 0.26;
     const LIFT_IDS = [
       'dash-upper',
       'dash-lower',
@@ -1232,6 +1349,24 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
   /** spinWheels 弧长→角度换算半径；外部壳装载成功后取 manifest.wheelRadius */
   let wheelSpinRadius = WHEEL_RADIUS;
 
+  /* ── R50：cabin 车顶内壁剔除（真修 R47 DoubleSide 回归，见 R50_ROOF_CLIP_WORLD_Y 注）── */
+  /** index 双缓冲（load 时一次性建；null ⇒ 未启用 / 回滚 / 不支持） */
+  let roofCull: { full: Uint32Array; culled: Uint32Array } | null = null;
+  /** 当前 bodyMesh index 是否处于「车顶已剔除」态（防重复上传 ~10MB index 到 GPU） */
+  let roofCullActive = false;
+  /** 开关：`#r50roof=off` ⇒ 不剔除（回 R47 base 态，车顶内壁重新遮挡，A/B 对照用） */
+  const R50_ROOF_CULL: boolean =
+    typeof window === 'undefined' || !/(?:^|[#&])r50roof=off/i.test(window.location.hash);
+  /** 把 bodyMesh index 切到「车顶剔除 / 完整」态（幂等，仅在态变化时重传 GPU） */
+  const applyRoofCull = (active: boolean): void => {
+    if (!roofCull || !shellHandle || roofCullActive === active) return;
+    const idx = shellHandle.bodyMesh.geometry.getIndex();
+    if (!idx || !(idx.array instanceof Uint32Array)) return;
+    idx.array.set(active ? roofCull.culled : roofCull.full);
+    idx.needsUpdate = true;
+    roofCullActive = active;
+  };
+
   const setPaintShadow = (interior: boolean): void => {
     lastInteriorState = interior;
     /* R47 开关（提到函数顶：setPokeHidden 之后还要给方块内饰 / 方向盘用）。
@@ -1260,6 +1395,10 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
         const wantSide = (interior && r47CabinFix) ? THREE.DoubleSide : THREE.FrontSide;
         if (bm.side !== wantSide) { bm.side = wantSide; bm.needsUpdate = true; }
       }
+      // R50：cabin 态剔除车顶内壁（world y>R50_ROOF_CLIP_WORLD_Y 的三角退化化），
+      // 消除对前向风挡视线的遮挡；外部机位恢复完整 index（逐位不变）。见 R50 注。
+      // `#r50roof=off` 时 applyRoofCull 直通（roofCull=null）⇒ 回 R47 base 态。
+      applyRoofCull(interior && r47CabinFix);
       // R44-6：glass/lamp 语义件与外壳同显隐
       for (const sm of [...shellHandle.glassMeshes, ...shellHandle.lampMeshes]) {
         sm.visible = !interior;
@@ -1434,6 +1573,22 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
       body.add(sm);
     }
     body.add(shell.bodyMesh);
+    // R50：一次性建 cabin 车顶剔除的 index 双缓冲（纯 CPU，body 882,300 tri 一遍）。
+    // 必须在 setPaintShadow 之前 ⇒ 首次 setPaintShadow 即可按当前内外态切 index。
+    if (R50_ROOF_CULL) {
+      const built = buildRoofCulledIndex(
+        shell.bodyMesh.geometry, shell.manifest.scale, R50_ROOF_CLIP_WORLD_Y,
+      );
+      if (built) {
+        roofCull = { full: built.full, culled: built.culled };
+        console.info(
+          `[R7Adapter] R50 cabin 车顶剔除：${built.roofTris}/${built.totalTris} tri ` +
+            `(world y>${R50_ROOF_CLIP_WORLD_Y})`,
+        );
+      } else {
+        console.warn('[R7Adapter] R50 车顶剔除不可用（index 非 Uint32 / 缺失），跳过');
+      }
+    }
     // 先隐藏程序化外观再挂轮：挂轮环节任何异常都不能把「程序化外观残留」留在画面上
     // （R44 打回项 1：R7 曾因挂轮异常跳过隐藏 ⇒ glass-dark/matte-black 逃逸可见）
     setExteriorHidden(true);
