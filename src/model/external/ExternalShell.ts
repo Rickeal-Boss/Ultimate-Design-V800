@@ -94,6 +94,8 @@ export const R51_LAMP_ON = !r51HookOff('r51lamp');
 export const R51_GLASSPASS_ON = !r51HookOff('r51glasspass');
 /** R53：前灯 DRL+透镜程序化细节（修「前灯空腔黑腔」）。`#r53lampdetail=off` 逐位回滚 R52。 */
 export const R53_LAMP_DETAIL_ON = !r51HookOff('r53lampdetail');
+/** R54：前脸贯穿镀铬饰条（修「缺贯穿镀铬条」）。`#r54trim=off` ⇒ 逐位回 R53（R53 灯上铬条恢复）。 */
+export const R54_CHROME_ON = !r51HookOff('r54trim');
 
 export type ExternalCarId = 'v800' | 'r7';
 
@@ -742,6 +744,8 @@ function r53BuildLampDetail(
     // 右灯镜像 u：外缘（左灯 u=0 / 右灯 u=1）一致
     const mirror = side === right;
     for (const e of elems) {
+      // R54：灯上铬条由 R54 贯穿饰条统一提供（免双重/ z-fight），此处跳过 chrome
+      if (e.m === 'chrome' && R54_CHROME_ON) continue;
       const u0 = mirror ? 1 - e.u1 : e.u0;
       const u1 = mirror ? 1 - e.u0 : e.u1;
       const bucket = e.m === 'chrome' ? chromeGeos : emissiveGeos;
@@ -778,6 +782,115 @@ function r53BuildLampDetail(
   mk(emissiveGeos, drlMat, 'lamp_front_drl');
   mk(chromeGeos, chromeMat, 'lamp_front_chrome');
   outMats.push(drlMat, chromeMat);
+}
+
+/* ══ R54 · 前脸贯穿镀铬饰条（修「缺贯穿镀铬条」）════════════════════════════════
+ * 背景（.qa/r54，NVIDIA Super VL 像素分析 + GLB 几何探针）：
+ *  · V800 官图：中网=实心黑面板，**顶部镀铬贯穿饰条连接两灯**（含 HONGQI 字标），
+ *    中央红徽标；当前渲染只有暗面板+徽标，缺贯穿条 ⇒ 缺陷 c。
+ *  · R7 官图：下保险杠上缘有一条**镀铬贯穿饰条连接两灯组**（中央深色六边形徽标
+ *    在饰条上方）；当前渲染缺此条。
+ *  几何探针（贯穿条高度带）：
+ *  · V800 y[0.170,0.184]：灯前表面仅在 x±0.15~0.19 存在（灯上缘在转角），中央是
+ *    格栅。可见前表面 zMax 剖面：中心 0.5783 → x±0.19 处 0.5172（曲面）。
+ *  · R7 y[0.146,0.162]：band 无灯顶点（饰条在灯**下方**）；格栅剖面中心 0.5744 →
+ *    x±0.22 处 0.4786。饰条跨两灯组内缘（x±0.114），取 x[-0.12,0.12]。
+ *
+ *  实现：程序化 ribbon（沿 (x,z) 剖面挤出的四边形带，带厚度）挂 bodyMesh 下 ⇒
+ *  自动继承 scale(manifest)/body rotY(π)，DC 增量恒 **+1/车**、tri 增量极低。
+ *  ⚠ R54 开启时抑制 R53 灯上铬条（见 r53BuildLampDetail），由本饰条统一提供，
+ *  避免双重铬条与 z-fight；`#r54trim=off` ⇒ R53 铬条恢复 + 本饰条消失 = 逐位回 R53。 */
+const R54_V800_PROF: ReadonlyArray<readonly [number, number]> = [
+  [-0.19, 0.5172], [-0.18, 0.5214], [-0.17, 0.5351], [-0.16, 0.5355], [-0.15, 0.5425],
+  [-0.14, 0.5497], [-0.13, 0.5564], [-0.12, 0.5627], [-0.11, 0.5686], [-0.10, 0.5742],
+  [-0.09, 0.5744], [-0.08, 0.5748], [-0.07, 0.5751], [-0.06, 0.5754], [-0.05, 0.5757],
+  [-0.04, 0.5759], [-0.03, 0.5762], [-0.02, 0.5764], [-0.01, 0.5783], [0.00, 0.5782],
+  [0.01, 0.5782], [0.02, 0.5763], [0.03, 0.5761], [0.04, 0.5759], [0.05, 0.5756],
+  [0.06, 0.5753], [0.07, 0.5750], [0.08, 0.5747], [0.09, 0.5744], [0.10, 0.5722],
+  [0.11, 0.5668], [0.12, 0.5608], [0.13, 0.5540], [0.14, 0.5471], [0.15, 0.5396],
+  [0.16, 0.5353], [0.17, 0.5293], [0.18, 0.5214], [0.19, 0.5172]
+];
+const R54_R7_PROF: ReadonlyArray<readonly [number, number]> = [
+  [-0.12, 0.5601], [-0.10, 0.5659], [-0.08, 0.5693], [-0.06, 0.5718], [-0.04, 0.5731],
+  [-0.02, 0.5742], [0.00, 0.5744], [0.02, 0.5742], [0.04, 0.5731], [0.06, 0.5718],
+  [0.08, 0.5693], [0.10, 0.5659], [0.12, 0.5601]
+];
+
+/**
+ * 沿 (x,z) 剖面挤出的四边形带（带厚度），生成一块闭合 ribbon 几何。
+ * 剖面点 x 必须严格递增；yC=带中心高度，h=高度（y 向），d=深度（z 向，嵌入表面），
+ * off=前表面凸出量。坐标系 = bodyMesh 局部（GLB +Z 车头）。
+ * ⚠ 顶点法线由 computeVertexNormals 按绕向求得（各面已按外向绕序构造）。
+ */
+function r54BuildRibbon(
+  prof: ReadonlyArray<readonly [number, number]>,
+  yC: number,
+  h: number,
+  d: number,
+  off: number
+): THREE.BufferGeometry {
+  const n = prof.length;
+  const pos: number[] = [];
+  const idx: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const [x, z] = prof[i];
+    const yT = yC + h / 2;
+    const yB = yC - h / 2;
+    const zF = z + off;
+    const zB = z + off - d;
+    // 0 FT 1 FB 2 BT 3 BB
+    pos.push(x, yT, zF, x, yB, zF, x, yT, zB, x, yB, zB);
+  }
+  for (let i = 0; i < n - 1; i++) {
+    const a = i * 4;
+    const b = (i + 1) * 4;
+    idx.push(a + 0, a + 1, b + 1, a + 0, b + 1, b + 0); // 前 +Z
+    idx.push(a + 2, b + 2, b + 3, a + 2, b + 3, a + 3); // 背 −Z
+    idx.push(a + 0, b + 0, b + 2, a + 0, b + 2, a + 2); // 顶 +Y
+    idx.push(a + 1, a + 3, b + 3, a + 1, b + 3, b + 1); // 底 −Y
+  }
+  idx.push(1, 0, 2, 1, 2, 3); // 左端帽 −X
+  const last = (n - 1) * 4;
+  idx.push(last + 1, last + 2, last + 0, last + 1, last + 3, last + 2); // 右端帽 +X
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+
+/**
+ * 构建前脸贯穿镀铬饰条：V800 全宽条（头灯上缘 y≈0.177）、R7 中央桥（灯下方 y≈0.154）。
+ * 单 mesh 挂 bodyMesh 下。`#r54trim=off` ⇒ 零新增。
+ */
+function r54BuildFrontTrim(
+  bodyMesh: THREE.Mesh,
+  car: ExternalCarId,
+  outMats: THREE.Material[],
+  outGeos: THREE.BufferGeometry[]
+): void {
+  if (!R54_CHROME_ON) return;
+  const prof = car === 'r7' ? R54_R7_PROF : R54_V800_PROF;
+  const yC = car === 'r7' ? 0.154 : 0.177;
+  const h = car === 'r7' ? 0.009 : 0.012;
+  const g = r54BuildRibbon(prof, yC, h, 0.003, 0.0008);
+  const chromeMat = new THREE.MeshStandardMaterial({
+    color: 0xb9bec7,
+    metalness: 0.9,
+    roughness: 0.25,
+    envMapIntensity: 1.1,
+    emissive: new THREE.Color(0x14161a),
+    emissiveIntensity: 0.25
+  });
+  const mesh = new THREE.Mesh(g, chromeMat);
+  mesh.name = car === 'r7' ? 'front_trim_r7' : 'front_trim_v800';
+  mesh.castShadow = false;
+  mesh.receiveShadow = false;
+  mesh.renderOrder = 3; // 与灯细节同级，绘在车漆之上
+  mesh.frustumCulled = true;
+  bodyMesh.add(mesh);
+  outMats.push(chromeMat);
+  outGeos.push(g);
 }
 
 /** R46：当前加载的 AbortController（供取消订阅回调命中；加载结束置 null） */
@@ -1104,6 +1217,11 @@ export async function loadExternalShell(
       mesh.castShadow = !proxyMode; // R49-A2：同 bodyMesh，四轮也退出 shadow pass
     }
     bodyMesh.scale.setScalar(manifest.scale);
+    /** R54：前脸贯穿镀铬饰条新增材质/几何（dispose 显式释放，防泄漏） */
+    const r54TrimMats: THREE.Material[] = [];
+    const r54TrimGeos: THREE.BufferGeometry[] = [];
+    // R54：贯穿镀铬条（挂 bodyMesh 下，+1 DC/车；`#r54trim=off` 回滚）
+    r54BuildFrontTrim(bodyMesh, car, r54TrimMats, r54TrimGeos);
 
     /* ── R52-A2 · 车轮轴心对齐（修「车轮轴心不稳」）───────────────────────────────
      * 定量证据（.qa/r52/wheel_hub.py / wheel_axle.py）：外部轮 GLB 真轴相对世界 X 偏
@@ -1507,6 +1625,9 @@ export async function loadExternalShell(
         // R53：前灯细节材质/几何（合并 mesh 由 child 自动随 lamp 释放，几何显式释放）
         for (const m of r53DetailMats) m.dispose();
         for (const g of r53DetailGeos) g.dispose();
+        // R54：贯穿镀铬条材质/几何
+        for (const m of r54TrimMats) m.dispose();
+        for (const g of r54TrimGeos) g.dispose();
         lampAtlasTex?.dispose();
         material.map?.dispose();
         material.normalMap?.dispose();
