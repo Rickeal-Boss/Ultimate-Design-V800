@@ -109,6 +109,22 @@ export async function loadInteriorSteering(
     // 若真机 cabin 机位看着太躺/太立，只在 ±0.15 rad 内微调 rotation.x（契约 §7.1）。
     steering.rotation.set(0, 0, 0);
     steering.scale.setScalar(scale);
+    /* ── R52-A1 · 高精度方向盘盘面朝向修正（修「V800 方向盘方向装错」）──────────
+     * 根因同 R47 车轮：body 组带 rotY(π)（V800Adapter.ts:1826），挂在 body 下的挂件
+     *   一并翻转 180°。车轮靠 R47 `geometry.rotateY(π)` 补偿，方向盘**漏做**这一步 ⇒ 盘面
+     *   被翻到朝风挡（+Z）而非驾驶者（−Z）。
+     * 定量（.qa/r52/glb_orient.py）：V800 GLB 盘面法线 local≈[-Y,-Z]，经 body rotY(π) 后
+     *   世界法线≈[-Y,+Z]（朝风挡）错误；程序化方向盘（rotation.x=0.42，同在 body 下）世界
+     *   法线≈[-Y,-Z]（朝驾驶者）正确。补 `geometry.rotateY(π)` 与 body 抵消，恢复 GLB 原生
+     *   「盘面朝驾驶者」朝向，与程序化一致（倾角符号也逐位匹配，仅幅值 45° vs 24° 为源扫描
+     *   固有，契约已接受）。零资产变更、零挂载矩阵变更、零自转影响。
+     * QA 回滚：`#r52steering=off` ⇒ 保持原状（A/B 唯一变量）。R7 同病（local 法线[-Y,-Z]
+     *   翻后朝 +Z），共享本修正一并修复。 */
+    if (!/(?:^|[#&])r52steering=off/i.test(
+      typeof window === 'undefined' ? '' : window.location.hash
+    )) {
+      steering.geometry.rotateY(Math.PI);
+    }
     steering.castShadow = false; // 内饰不投影，省 shadow DC
     steering.receiveShadow = false;
     steering.visible = false; // 由 setPaintShadow(interior) 接管：仅车内机位可见

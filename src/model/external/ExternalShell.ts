@@ -953,6 +953,66 @@ export async function loadExternalShell(
     }
     bodyMesh.scale.setScalar(manifest.scale);
 
+    /* ── R52-A2 · 车轮轴心对齐（修「车轮轴心不稳」）───────────────────────────────
+     * 定量证据（.qa/r52/wheel_hub.py / wheel_axle.py）：外部轮 GLB 真轴相对世界 X 偏
+     *   2–5°（V800 轮毂内圈 PCA 5.5°；外缘锥度张开至 27° 为假象；R7 主轮 0.5–3.6° 干净）。
+     * 游戏 spin 绕世界 X 自转 ⇒ 真轴偏角使轮缘绕 X 公转 → 摆动（V800 轮缘 ~0.42m ×
+     *   sin5.5° ≈ 8cm 峰峰，车速下肉眼可见）。根因：r44_bake 未把轮轴归正到 X。
+     * 修法：几何 3×3 协方差 PCA 取最小特征值方向 = 轮轴，最小旋转把它对齐到 +X；
+     *   R47 rotateY(π) 随后绕 Y 把 +X→−X（仍沿 X 轴，辐条只做 Y 翻转，不打偏）。
+     * 守卫：① 顶点数 <5000 跳过（只处理主轮大几何，跳过小卡钳/螺栓子件）；
+     *   ② |axle.x|<0.95 跳过（不是近似沿 X 的轮几何，防误转独立子件）；
+     *   ③ 特征向量强制 +X 分量，使对齐角 <90°（不绕轴 180° 打偏辐条）；
+     *   ④ 零 bake 变更、零挂载矩阵变更、零自转语义变化。
+     * QA 回滚：`#r52wheel=off` ⇒ 跳过本对齐（与 `#r47wheel=off` 独立 A/B）。 */
+    function alignWheelAxleToX(geometry: THREE.BufferGeometry): void {
+      const pos = geometry.attributes.position as THREE.BufferAttribute | undefined;
+      if (!pos || pos.count < 5000) return; // 只处理主轮大几何
+      const n = pos.count;
+      let cx = 0, cy = 0, cz = 0;
+      for (let i = 0; i < n; i++) { cx += pos.getX(i); cy += pos.getY(i); cz += pos.getZ(i); }
+      cx /= n; cy /= n; cz /= n;
+      let cxx = 0, cyy = 0, czz = 0, cxy = 0, cxz = 0, cyz = 0;
+      for (let i = 0; i < n; i++) {
+        const x = pos.getX(i) - cx, y = pos.getY(i) - cy, z = pos.getZ(i) - cz;
+        cxx += x * x; cyy += y * y; czz += z * z; cxy += x * y; cxz += x * z; cyz += y * z;
+      }
+      cxx /= n; cyy /= n; czz /= n; cxy /= n; cxz /= n; cyz /= n;
+      // 雅可比特征分解（3×3 对称）→ 最小特征值向量 = 轮轴
+      let A: number[][] = [[cxx, cxy, cxz], [cxy, cyy, cyz], [cxz, cyz, czz]];
+      let V: number[][] = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+      for (let iter = 0; iter < 40; iter++) {
+        let p = 0, q = 1, mx = Math.abs(A[0][1]);
+        if (Math.abs(A[0][2]) > mx) { p = 0; q = 2; mx = Math.abs(A[0][2]); }
+        if (Math.abs(A[1][2]) > mx) { p = 1; q = 2; mx = Math.abs(A[1][2]); }
+        if (mx < 1e-12) break;
+        const app = A[p][p], aqq = A[q][q], apq = A[p][q];
+        const phi = 0.5 * Math.atan2(2 * apq, aqq - app);
+        const c = Math.cos(phi), s = Math.sin(phi);
+        for (let i = 0; i < 3; i++) { const ai = A[i][p], bi = A[i][q]; A[i][p] = c * ai - s * bi; A[i][q] = s * ai + c * bi; }
+        for (let i = 0; i < 3; i++) { const ai = A[p][i], bi = A[q][i]; A[p][i] = c * ai - s * bi; A[q][i] = s * ai + c * bi; }
+        for (let i = 0; i < 3; i++) { const vi = V[i][p], bi = V[i][q]; V[i][p] = c * vi - s * bi; V[i][q] = s * vi + c * bi; }
+      }
+      let mi = 0; if (A[1][1] < A[0][0]) mi = 1; if (A[2][2] < A[mi][mi]) mi = 2;
+      let ax = V[0][mi], ay = V[1][mi], az = V[2][mi];
+      const am = Math.hypot(ax, ay, az); ax /= am; ay /= am; az /= am;
+      if (ax < 0) { ax = -ax; ay = -ay; az = -az; }     // 强制 +X 分量
+      if (Math.abs(ax) < 0.95) return;                    // 非近似沿 X 的轮几何，跳过
+      const dot = ax;                                     // ax·(+X)
+      const ang = Math.acos(Math.max(-1, Math.min(1, dot)));
+      if (ang < 1e-4) return;                             // 已对齐
+      // 旋转轴 = ax × X = (0, az, −ay)
+      const ux = 0, uy = az, uz = -ay;
+      const c = Math.cos(ang), s = Math.sin(ang), t = 1 - c;
+      const R = [
+        t * ux * ux + c, t * ux * uy - s * uz, t * ux * uz + s * uy,
+        t * ux * uy + s * uz, t * uy * uy + c, t * uy * uz - s * ux,
+        t * ux * uz - s * uy, t * uy * uz + s * ux, t * uz * uz + c
+      ];
+      geometry.applyMatrix4(new THREE.Matrix4().set(
+        R[0], R[1], R[2], 0, R[3], R[4], R[5], 0, R[6], R[7], R[8], 0, 0, 0, 0, 1));
+    }
+
     /* ── R47：外部轮「内外侧装反」修复（用户点名，几何定罪见 .qa/r47/geom_probe_out.txt）──
      * 定量证据：wheel-l(fl/rl) 内圈(r<0.045)面法线 nx>0.8、重心 x≈+0.025 ⇒ 轮毂正面
      *   朝 +x；wheel-r(fr/rr) 朝 −x。即 **GLB 几何本身正确**（左右轮毂面都朝各自车外）。
@@ -969,9 +1029,15 @@ export async function loadExternalShell(
       typeof window === 'undefined' ? '' : window.location.hash
     )) {
       const rotated = new Set<THREE.BufferGeometry>();
+      const r52WheelAxleOff = /(?:^|[#&])r52wheel=off/i.test(
+        typeof window === 'undefined' ? '' : window.location.hash
+      );
       for (const mesh of Object.values(wheelMeshes)) {
         if (rotated.has(mesh.geometry)) continue;
         rotated.add(mesh.geometry);
+        // R52-A2 车轮轴心对齐（修「车轮轴心不稳」）：须先于 rotateY(π)，否则
+        // 轴已被翻成 −X，最小旋转会绕轴转 180° 打偏辐条。
+        if (!r52WheelAxleOff) alignWheelAxleToX(mesh.geometry);
         mesh.geometry.rotateY(Math.PI);
       }
     }
