@@ -32,6 +32,7 @@
  */
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { mergeSafe } from '../../util/geo';
 import {
   SHELL_TOTAL_MB,
   isHighDetailEnabled,
@@ -91,6 +92,8 @@ export const R51_BAND_ON = r51HookOn('r51band');
 export const R51_ROUGH_ON = !r51HookOff('r51rough');
 export const R51_LAMP_ON = !r51HookOff('r51lamp');
 export const R51_GLASSPASS_ON = !r51HookOff('r51glasspass');
+/** R53：前灯 DRL+透镜程序化细节（修「前灯空腔黑腔」）。`#r53lampdetail=off` 逐位回滚 R52。 */
+export const R53_LAMP_DETAIL_ON = !r51HookOff('r53lampdetail');
 
 export type ExternalCarId = 'v800' | 'r7';
 
@@ -628,6 +631,155 @@ function collectNamed(
   });
 }
 
+/* ══ R53 · 前灯 DRL+透镜程序化细节（修「前灯空腔黑腔」）════════════════════════
+ * 背景（.qa/r53，NVIDIA Super VL 双模像素分析 + GLB 几何探针）：
+ *  `lamp_front_atlas.png` 两车均缺失 ⇒ R51-B3 纯 emissive `0x9aa6b4@0.18` 是
+ *  V800 两侧暗腔 + R7「一片白」的根因；R46 atlas 路线被堵死（v800 灯区 UV 采样
+ *  命中率仅 2.0%，UV 满图散落）。用户授权「面数可抬」⇒ 选**程序化 emissive 细节**
+ *  路线：零资产改动、零新外部文件、免疫散落 UV。
+ *
+ *  设计（官图归一化：u 0→1 = 灯框左→右，v 0→1 = 顶→底）：
+ *   · V800：顶部镀铬贯穿饰条（v 0.20-0.28）→ 横向 DRL 亮条（v 0.28-0.33）
+ *     → 下方 4 条竖向透镜格（v 0.35-0.74，靠外缘）。官图是竖条灯 + 横 DRL。
+ *   · R7：鱼尾 DRL（v 0.16-0.28，外端上钩 0.04-0.16）→ 3 个透镜模块
+ *     （v 0.36-0.56）→ 下缘镀铬条（v 0.64-0.72）。
+ *
+ *  实现：lamp_front.glb 是**单 mesh 含左右灯**（node 无位移/旋转，几何即灯框
+ *  局部空间）；按顶点 x 正负拆左右灯 bbox，把两灯全部细节合并成 **2 个 mesh**
+ *  （emissive 全部 + chrome 全部）挂到该 lamp mesh 下 ⇒ DC 增量恒 **+2/车**。
+ *  ⚠ 细节 mesh 是 lamp mesh 的 child ⇒ 自动继承 scale(manifest)/body rotY(π)，
+ *    无需在世界系换算；`renderOrder=3` 保证绘在 lamp 面之上。
+ *  回滚：`#r53lampdetail=off` ⇒ 零新增，逐位回 R52。 */
+interface R53LampBox {
+  min: THREE.Vector3;
+  max: THREE.Vector3;
+}
+
+/** 顶点 x 正负拆左右灯 bbox（几何局部空间；lamp_front.glb 单 mesh 双灯） */
+function r53SplitLampBoxes(geo: THREE.BufferGeometry): { left: R53LampBox; right: R53LampBox } {
+  const pos = geo.getAttribute('position');
+  const mk = (): R53LampBox => ({
+    min: new THREE.Vector3(Infinity, Infinity, Infinity),
+    max: new THREE.Vector3(-Infinity, -Infinity, -Infinity)
+  });
+  const left = mk();
+  const right = mk();
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const y = pos.getY(i);
+    const z = pos.getZ(i);
+    const b = x < 0 ? left : right;
+    b.min.x = Math.min(b.min.x, x);
+    b.max.x = Math.max(b.max.x, x);
+    b.min.y = Math.min(b.min.y, y);
+    b.max.y = Math.max(b.max.y, y);
+    b.min.z = Math.min(b.min.z, z);
+    b.max.z = Math.max(b.max.z, z);
+  }
+  return { left, right };
+}
+
+/** 在灯框 bbox 内加一块细节盒（u/v 归一化，v 从顶起；z 落灯面前 +1mm，厚 4mm 嵌入 1mm） */
+function r53AddBox(
+  geos: THREE.BufferGeometry[],
+  bb: R53LampBox,
+  u0: number,
+  u1: number,
+  v0: number,
+  v1: number
+): void {
+  const x0 = bb.min.x + u0 * (bb.max.x - bb.min.x);
+  const x1 = bb.min.x + u1 * (bb.max.x - bb.min.x);
+  const yTop = bb.max.y - v0 * (bb.max.y - bb.min.y);
+  const yBot = bb.max.y - v1 * (bb.max.y - bb.min.y);
+  const g = new THREE.BoxGeometry(Math.max(x1 - x0, 1e-5), Math.max(yTop - yBot, 1e-5), 0.004);
+  g.translate((x0 + x1) / 2, (yTop + yBot) / 2, bb.max.z + 0.001);
+  geos.push(g);
+}
+
+interface R53LampElem {
+  m: 'emissive' | 'chrome';
+  u0: number;
+  u1: number;
+  v0: number;
+  v1: number;
+}
+
+/** 每车元素表（左灯 u 自左缘起；右灯调用方镜像 u'=1−u） */
+const R53_V800_ELEMS: R53LampElem[] = [
+  { m: 'chrome', u0: 0.16, u1: 0.84, v0: 0.20, v1: 0.28 }, // 顶部镀铬贯穿饰条
+  { m: 'emissive', u0: 0.20, u1: 0.80, v0: 0.28, v1: 0.33 }, // 横向 DRL 亮条
+  { m: 'emissive', u0: 0.195, u1: 0.225, v0: 0.35, v1: 0.74 }, // 4 竖透镜格
+  { m: 'emissive', u0: 0.235, u1: 0.265, v0: 0.35, v1: 0.74 },
+  { m: 'emissive', u0: 0.275, u1: 0.305, v0: 0.35, v1: 0.74 },
+  { m: 'emissive', u0: 0.315, u1: 0.345, v0: 0.35, v1: 0.74 }
+];
+const R53_R7_ELEMS: R53LampElem[] = [
+  { m: 'emissive', u0: 0.05, u1: 0.95, v0: 0.16, v1: 0.28 }, // 鱼尾 DRL 主条
+  { m: 'emissive', u0: 0.02, u1: 0.08, v0: 0.04, v1: 0.16 }, // 外端上钩
+  { m: 'emissive', u0: 0.25, u1: 0.35, v0: 0.36, v1: 0.56 }, // 3 透镜模块
+  { m: 'emissive', u0: 0.45, u1: 0.55, v0: 0.36, v1: 0.56 },
+  { m: 'emissive', u0: 0.65, u1: 0.75, v0: 0.36, v1: 0.56 },
+  { m: 'chrome', u0: 0.08, u1: 0.92, v0: 0.64, v1: 0.72 } // 下缘镀铬条
+];
+
+/**
+ * 构建前灯细节：两灯全部 emissive 合并 1 mesh、全部 chrome 合并 1 mesh，
+ * 挂到 lamp mesh 下。返回新增材质（供 dispose）。
+ */
+function r53BuildLampDetail(
+  lampMesh: THREE.Mesh,
+  car: ExternalCarId,
+  outMats: THREE.Material[],
+  outGeos: THREE.BufferGeometry[]
+): void {
+  if (!R53_LAMP_DETAIL_ON) return;
+  const { left, right } = r53SplitLampBoxes(lampMesh.geometry);
+  const elems = car === 'r7' ? R53_R7_ELEMS : R53_V800_ELEMS;
+  const emissiveGeos: THREE.BufferGeometry[] = [];
+  const chromeGeos: THREE.BufferGeometry[] = [];
+  for (const side of [left, right] as R53LampBox[]) {
+    // 右灯镜像 u：外缘（左灯 u=0 / 右灯 u=1）一致
+    const mirror = side === right;
+    for (const e of elems) {
+      const u0 = mirror ? 1 - e.u1 : e.u0;
+      const u1 = mirror ? 1 - e.u0 : e.u1;
+      const bucket = e.m === 'chrome' ? chromeGeos : emissiveGeos;
+      r53AddBox(bucket, side, u0, u1, e.v0, e.v1);
+    }
+  }
+  // ⚠ 材质在 Node/vitest 无 document 环境下照常构造（三 geometry 纯顶点，无 canvas 依赖）
+  const drlMat = new THREE.MeshStandardMaterial({
+    color: 0x0a0c10,
+    emissive: new THREE.Color(0xe9f1ff),
+    emissiveIntensity: 1.8,
+    roughness: 0.35,
+    metalness: 0.05
+  });
+  const chromeMat = new THREE.MeshStandardMaterial({
+    color: 0xb9bec7,
+    metalness: 0.9,
+    roughness: 0.25,
+    envMapIntensity: 1.1,
+    emissive: new THREE.Color(0x14161a),
+    emissiveIntensity: 0.25
+  });
+  const mk = (geos: THREE.BufferGeometry[], mat: THREE.Material, name: string): void => {
+    if (geos.length === 0) return;
+    const merged = mergeSafe(geos);
+    const mesh = new THREE.Mesh(merged, mat);
+    mesh.name = name;
+    mesh.castShadow = false;
+    mesh.renderOrder = 3; // 绘在 lamp 面之上（lamp renderOrder=2）
+    mesh.frustumCulled = true;
+    lampMesh.add(mesh);
+    outGeos.push(merged);
+  };
+  mk(emissiveGeos, drlMat, 'lamp_front_drl');
+  mk(chromeGeos, chromeMat, 'lamp_front_chrome');
+  outMats.push(drlMat, chromeMat);
+}
+
 /** R46：当前加载的 AbortController（供取消订阅回调命中；加载结束置 null） */
 let shellAbort: AbortController | null = null;
 
@@ -1097,6 +1249,9 @@ export async function loadExternalShell(
     const r49DecorTex: THREE.Texture[] = [];
     /** R46：前灯最终是否挂了 emissiveMap（供 r44ShellStatus.lampMap 机读） */
     let hasLampMap = false;
+    /** R53：前灯细节新增材质/几何（dispose 显式释放，防泄漏） */
+    const r53DetailMats: THREE.Material[] = [];
+    const r53DetailGeos: THREE.BufferGeometry[] = [];
     const lampRearMeshes: THREE.Mesh[] = [];
     const lampFrontMeshes: THREE.Mesh[] = [];
     if (lrGltf) {
@@ -1285,6 +1440,10 @@ export async function loadExternalShell(
         lampFrontMat.needsUpdate = true;
       }
       collectNamed(lfGltf, lampFrontMeshes, lampFrontMat, manifest.scale);
+      // R53：前灯 DRL+透镜程序化细节（挂 lamp mesh 下，+2 DC/车；`#r53lampdetail=off` 回滚）
+      if (lampFrontMeshes.length > 0) {
+        r53BuildLampDetail(lampFrontMeshes[0], car, r53DetailMats, r53DetailGeos);
+      }
     }
 
     let currentVariant = variant;
@@ -1345,6 +1504,9 @@ export async function loadExternalShell(
         if (r49BandMat && r49BandMat !== lampRearMat) r49BandMat.dispose();
         for (const m of r49DecorMats) if (m !== r49BandMat) m.dispose();
         for (const t of r49DecorTex) t.dispose();
+        // R53：前灯细节材质/几何（合并 mesh 由 child 自动随 lamp 释放，几何显式释放）
+        for (const m of r53DetailMats) m.dispose();
+        for (const g of r53DetailGeos) g.dispose();
         lampAtlasTex?.dispose();
         material.map?.dispose();
         material.normalMap?.dispose();
