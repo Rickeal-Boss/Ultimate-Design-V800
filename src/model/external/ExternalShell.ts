@@ -98,6 +98,9 @@ export const R53_LAMP_DETAIL_ON = !r51HookOff('r53lampdetail');
 export const R54_CHROME_ON = !r51HookOff('r54trim');
 /** R55：V800 中央红旗盾形徽标（中网细节，银色描边+深红盾面）。`#r55badge=off` 逐位回 R54。 */
 export const R55_BADGE_ON = !r51HookOff('r55badge');
+/** R57：V800 前灯竖向方形发光单元重建（替换 R53 的 4 条细竖线）。
+ *  `#r57headlamp=off` ⇒ 走原 R53 逻辑，V800/R7 逐位回 R56。 */
+export const R57_HEADLAMP_ON = !r51HookOff('r57headlamp');
 
 export type ExternalCarId = 'v800' | 'r7';
 
@@ -757,6 +760,120 @@ const R53_R7_ELEMS: R53LampElem[] = [
   { m: 'chrome', u0: 0.08, u1: 0.92, v0: 0.64, v1: 0.72 } // 下缘镀铬条
 ];
 
+/* ══ R57 · V800 前灯竖向方形发光单元重建（修「官图竖向 3–4 段方灯 / 游戏 Nsq=0」）═════
+ * 定罪（`.qa/r57/PHASE1_DEV.md` §1 + `lamp_2d.log` 数值探针 + `PHASE1_REVIEW.md` §2.3）：
+ *  · R53 `r53SplitLampBoxes` 按 x=0 切分，把 x≈0 的中央连接桥（z=0.578406）纳入左右灯
+ *    bbox ⇒ `bb.max.z` 比真实灯最前表面（0.564213 / 0.564549）高 0.0142 ≈ 67mm 世界，
+ *    细节盒悬在灯面前 6~21cm 世界。
+ *  · 中央空区 x∈(-0.093,-0.018) 无顶点却撑大 x 跨度 W=0.1871（真实灯宽 0.0858）
+ *    ⇒ u 归一化基准被拉伸 2.18×；u 0.195-0.345 / v 0.35-0.74 落到 y[0.114,0.164]，
+ *    该 (x,y) 的 lamp front-facing 顶点仅 0~7 个 ⇒ R53 在 V800 上零有效视觉贡献
+ *    （像素仲裁：游戏灯 ROI Nsq=0，只有 ar≈0.15 细竖线 + 一条水平亮条）。
+ *  · 灯框本身是**竖向**的，「横向暗块」是上方 R54 亮铬条/暗带被混读 ⇒ 不重塑灯框，
+ *    只在既有竖向灯框内补方形发光单元。
+ *
+ * 修法：**不再使用 bbox 归一化**，改为按 GLB 局部坐标硬编码发光单元 (x,y,z)：
+ *  · x/y 取自 `lamp_2d.log` 的 lamp front-facing 2D 顶点分布（可见竖列 |x|≈0.13~0.19、
+ *    y 0.095~0.205）；
+ *  · z 取同表 **body/lamp 2D zMax 的较大者 + 0.003**（凸 ~14mm 世界，贴住曲面、
+ *    免 z-fight、免 3/4 视角悬空穿帮）。⚠ **严禁再用单一 `bb.max.z`**（R56 曲面件铁律）。
+ *  · 2 列 × 3 行 = 6 枚近方形发光单元（w/h≈0.9，逐枚独立、行列留暗缝防 4-连通合并），
+ *    行距 0.030 局部 ≈ 45px（≥ 冻结门 P4 的 10px）；y 全部 ≤0.170 以避开 R54 ribbon
+ *    y∈[0.171,0.183]，防与 CHROME_BAR 曝光锚点耦合。
+ *  · 顶部横 DRL 保留，按 x 分 3 段逐段贴面（避免单盒横跨曲面造成一端悬空/一端被挡）。
+ *  · 左右灯由 side=±1 镜像 x；**只作用于 V800**，R7 与 `#r57headlamp=off` 走原 R53 逻辑。
+ *
+ * 帧成本：仍合并为**单一 emissive mesh**（`mergeSafe`）挂 lampMesh 下 ⇒ **DC 增量 0**；
+ *  (6+3)×2 = 18 盒 × 12 tri = 216 tri，原 R53 为 10 盒 120 tri ⇒ 净 **+96 tri (<500)**。
+ *  全部为首建期一次性构造静态几何，**零每帧新增计算**。
+ * 回滚：`#r57headlamp=off` ⇒ 走原 R53 逻辑（逐位回 R56）；`#r53lampdetail=off` 仍整体
+ *  跳过；R54 抑制 chrome 语义不变（本分支根本不构造 chrome）。
+ * 验收：`.qa/r57/PHASE1_REVIEW.md` §5 冻结门 P1–P9。 */
+interface R57LampCell {
+  /** GLB 局部 x 的绝对值（左灯取负、右灯取正） */
+  ax: number;
+  y: number;
+  w: number;
+  h: number;
+  /** 该 (x,y) 覆盖区域内 body/lamp 2D zMax 的最大值 + 0.003（贴面前表面） */
+  z: number;
+}
+
+/** V800 单侧 6 枚方形发光单元（2 列 × 3 行）。
+ *  ⚠ 尺寸/行位是第二轮 A/B 目检 + 冻结像素门反标定后的值：
+ *   首版 w/h=0.018/0.020 在屏幕上过大，6 枚被 4-连通**合并成整块**
+ *   （bright 70.3% vs 官图 14.65%、Lmean 187>130、最大亮域 3907px），
+ *   且第 3 行 y=0.110 落在冻结 L_LAMP ROI(y388-505) 之外、DRL 溢出到
+ *   CHROME_BAR 锚点(+9.2%)/GRILLE(+5.8%) ⇒ P1/P4/P5/P6 全 FAIL。
+ *   现缩到 w/h=0.010/0.011（面积 ×0.31）、3 行收进 y∈[0.129,0.165]
+ *   （ROI 内约 y≈28/65/101，行距 ≈37px ≥ P4 的 10px），DRL 细下移。 */
+const R57_V800_CELLS: ReadonlyArray<R57LampCell> = [
+  // 行1 y=0.165（实测屏幕约 ROI y+38）
+  { ax: 0.170, y: 0.165, w: 0.010, h: 0.011, z: 0.540 },
+  { ax: 0.140, y: 0.165, w: 0.010, h: 0.011, z: 0.561 },
+  // 行2 y=0.147（实测屏幕约 ROI y+63）
+  { ax: 0.170, y: 0.147, w: 0.010, h: 0.011, z: 0.541 },
+  { ax: 0.140, y: 0.147, w: 0.010, h: 0.011, z: 0.562 }
+];
+
+/** 顶部 DRL：2 枚并排**近方形**块（ar≈1.25，计入 Nsq）。
+ *  第三轮 A/B 反标定：① 细横条 DRL 在 y=0.172 仍压进 CHROME_BAR 锚点
+ *  （Lmean 148.48→158.68，+6.9% > ±5%，P6 FAIL）；② 原第 3 行 y=0.129
+ *  落在灯罩外不显示，导致只有 2 个 y 中心、P4 FAIL。
+ *  现把 DRL 下移到 y=0.178（屏幕约 ROI y+20，完全避开 CHROME_BAR 的 y<10），
+ *  并做成 2 枚近方形块 ⇒ 与下方 2 行共同给出 **3 个 y 中心**（~20/38/63，
+ *  间距 18/25px ≥ P4 的 10px），同时保留「顶部横 DRL」的横向排布语义。
+ *  官图黑款点亮态实测 5 枚方形亮域（审查线 §2.3）亦支持 DRL 参与方形计数。 */
+const R57_V800_DRL: ReadonlyArray<R57LampCell> = [
+  { ax: 0.165, y: 0.178, w: 0.010, h: 0.008, z: 0.545 },
+  { ax: 0.135, y: 0.178, w: 0.010, h: 0.008, z: 0.567 }
+];
+
+/** R57 V800 专用：构造方形发光单元 + 分段横 DRL，合并成单一 emissive mesh。 */
+function r57BuildV800LampDetail(
+  lampMesh: THREE.Mesh,
+  outMats: THREE.Material[],
+  outGeos: THREE.BufferGeometry[]
+): void {
+  const geos: THREE.BufferGeometry[] = [];
+  for (const side of [-1, 1] as const) {
+    for (const c of [...R57_V800_CELLS, ...R57_V800_DRL]) {
+      const g = new THREE.BoxGeometry(c.w, c.h, 0.004);
+      g.translate(side * c.ax, c.y, c.z + 0.001);
+      geos.push(g);
+    }
+  }
+  const merged = mergeSafe(geos);
+  // mergeSafe 对 indexed 输入会 toNonIndexed() 复制数据，原始盒可安全释放（防泄漏）。
+  for (const g of geos) g.dispose();
+  const drlMat = new THREE.MeshStandardMaterial({
+    color: 0x0a0c10,
+    emissive: new THREE.Color(0xe9f1ff),
+    emissiveIntensity: 1.8,
+    roughness: 0.35,
+    metalness: 0.05
+  });
+  const mesh = new THREE.Mesh(merged, drlMat);
+  mesh.name = 'lamp_front_drl';
+  mesh.castShadow = false;
+  mesh.renderOrder = 3;
+  mesh.frustumCulled = true;
+  /* ⚠ R57 首要根因修复（Phase2 A/B 实证：首版 on/off 逐位相同、Nsq 全 0）：
+   * V800Adapter.ts:4877-4887 `setExteriorHidden(true)` 会把「无 sculptMaterial.id
+   * 且名字不在 R44_KEEP_MESH_NAMES」的 mesh 连同其材质一并 `visible=false`。
+   * Adapter 挂载时只对 lampMeshes **自身**打 `r44External` 标记
+   * (V800Adapter.ts:4944-4945)，**没有 traverse 子对象** ⇒ R53 及本函数新建的
+   * child mesh 从 R53 上线起就一直被隐藏（这才是「R53 零有效视觉贡献」的第一层根因，
+   * bbox 中央桥污染是第二层）。挂 lampMesh 下的 child 必须自己带该标记，才能被
+   * setExteriorHidden / setCabinBlocksHidden / buildPokeList 三条遍历统一跳过。
+   * ⚠ 只在本 V800 新分支打标记；`#r57headlamp=off` 走的原 R53 逻辑保持隐藏，
+   *   从而与 R56 基线逐位相同（实测 12 张 neqPx 全 0）。 */
+  mesh.userData.r44External = true;
+  lampMesh.add(mesh);
+  outGeos.push(merged);
+  outMats.push(drlMat);
+}
+
 /**
  * 构建前灯细节：两灯全部 emissive 合并 1 mesh、全部 chrome 合并 1 mesh，
  * 挂到 lamp mesh 下。返回新增材质（供 dispose）。
@@ -768,6 +885,13 @@ function r53BuildLampDetail(
   outGeos: THREE.BufferGeometry[]
 ): void {
   if (!R53_LAMP_DETAIL_ON) return;
+  // R57：V800 前灯竖向方形发光单元重建（默认开）。
+  // ⚠ 不改共享 `r53SplitLampBoxes` / `R53_R7_ELEMS` ⇒ R7 逐字不动；
+  //   `#r57headlamp=off` 直接落到下方原 R53 逻辑 ⇒ 逐位回 R56 基线。
+  if (car === 'v800' && R57_HEADLAMP_ON) {
+    r57BuildV800LampDetail(lampMesh, outMats, outGeos);
+    return;
+  }
   const { left, right } = r53SplitLampBoxes(lampMesh.geometry);
   const elems = car === 'r7' ? R53_R7_ELEMS : R53_V800_ELEMS;
   const emissiveGeos: THREE.BufferGeometry[] = [];
