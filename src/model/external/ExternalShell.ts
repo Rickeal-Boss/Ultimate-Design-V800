@@ -617,6 +617,36 @@ function materialOverride(): string | null {
   return /[#&]r44mat=([a-z]+)/.exec(window.location.hash)?.[1] ?? null;
 }
 
+/**
+ * R56 · 车身漆面「喷溅噪点」——诊断收口 + 运行时可调旋钮（**默认不改变观感**）。
+ *
+ * R56 诊断结论（swap-matrix + 离线去噪 + 双车 A/B，全部数值留档 `.qa/r56/`）：
+ *  - 真源 ≠ basecolor（背景填平 −97% 游戏内纹丝不动、岛内去噪仅 −1~3%）、≠ mr（压平反 +18%）；
+ *    = **normal.png 车身岛内高频 per-texel 抖动**（整张换平 → v800_side −23.6% / front34 −9.1%），
+ *      再被 clearcoat + envMapIntensity 放大（与 R44-6 在码注释同源）。
+ *  - **R7 车身噪点非贴图源**（全 swap case <5%）——属几何/环境/AA，与 V800 不同源。
+ *  - **两个候选修复均未取得净收益**：① normal 岛内保边去噪（离线岛内抖动 −60%、边缘留 90%）
+ *    游戏内仅 front34 +6.8% / front +3.0%，rear34/rear 反 −7%，目检无改善；② 降 clearcoat
+ *    0.15→0.06 / env 0.7→0.55，front34/rear34 ~平，side 反 −18.7%（削平高光梯度反被高频判据
+ *    记作更多纹理）且**付出漆面光泽**。⇒ speckle 是多源（法线抖动 + 几何硬边 + 清漆/环境 +
+ *    SwiftShader AA），bake 被阻断下运行时无单点净胜方案。
+ *
+ * 因此本波**默认逐位不改变观感**（= R55 的 clearcoat 0.15 / env 0.7），仅保留运行时旋钮供
+ * 真机目检调优：`#r56clearcoat=<0..1>` 覆盖 clearcoat、`#r56env=<0..2>` 覆盖 envMapIntensity
+ * （免重建扫参）。要试「压噪点换光泽」：`#r56clearcoat=0.06&r56env=0.55`；回 R55 观感不传即可。
+ */
+function r56HashNum(key: string): number | null {
+  if (typeof window === 'undefined') return null;
+  const m = new RegExp(`(?:^|[#&])${key}=([0-9.]+)`, 'i').exec(window.location.hash);
+  if (!m) return null;
+  const v = Number.parseFloat(m[1]);
+  return Number.isFinite(v) ? v : null;
+}
+/** 车身漆面 clearcoat（默认 = R55 的 0.15，观感不变；可用 `#r56clearcoat=` 调优） */
+export const R56_PAINT_CLEARCOAT = r56HashNum('r56clearcoat') ?? 0.15;
+/** 车身漆面 envMapIntensity（默认 = R55 的 0.7，观感不变；可用 `#r56env=` 调优） */
+export const R56_PAINT_ENV = r56HashNum('r56env') ?? 0.7;
+
 /** 语义部件收集：gltf.scene 下全部 mesh 赋材质+缩放；mat=null 时只清空不产出 */
 function collectNamed(
   gltf: { scene: THREE.Object3D } | null,
@@ -1214,9 +1244,12 @@ export async function loadExternalShell(
       // R44-6：clearcoat 0.4→0.15 —— QA front34 实测 0.4 时涂层高光把 AI 法线图
       // 的微噪声放大成引擎盖「锈斑状白噪点」（侧视弱、逆光掠射严重）；0.15 保留
       // 漆面湿润感的同时压掉高光破碎。envMapIntensity 0.9→0.7 同向。
-      clearcoat: 0.15,
+      // R56：swap-matrix 证噪声本体在 normal 图（换平 side −23.6%）；但「保边去噪 normal」
+      // 与「再降 clearcoat/env」两路游戏内均无净收益（详见 R56_PAINT_* 注释），故默认维持
+      // R44-6 的 0.15/0.7 观感不变，仅经 R56_PAINT_CLEARCOAT/ENV 暴露运行时调优旋钮。
+      clearcoat: R56_PAINT_CLEARCOAT,
       clearcoatRoughness: 0.35,
-      envMapIntensity: 0.7,
+      envMapIntensity: R56_PAINT_ENV,
       // FrontSide + 烘焙期对拱内壁三角翻绕序（r44_uv_fix 橙三角清单 → bake 翻面）：
       // 内壁面朝外渲染为黑漆（UV 已黑化）。DoubleSide 方案实测会让内衬与外皮
       // z-fighting 出白噪点（QA closeup8），故弃用。
