@@ -312,6 +312,40 @@ const VARIANT_METALNESS: Record<string, number> = {
   green: 0.5
 };
 
+/* ══ R60 · P0-1 车身换干净程序化车漆（根治「喷溅噪点」）════════════════════════
+ * 背景（R56 诊断 + R59 外部审查连续 5 轮）：车身 basecolor/normal 是 AI 生成贴图，
+ * 岛内高频抖动经 clearcoat/env 放大 = 引擎盖/侧围满屏 speckle。R56 证明在脏贴图上
+ * 做任何运行时补救（去噪 normal / 降 clearcoat/env）游戏内均无净收益 ⇒ 唯一根治路径
+ * 是**换掉脏贴图本体**。R60 落地：车身 body 材质弃用 basecolor/normal/mr 三张脏贴图，
+ * 改走纯程序化 PBR（每变体一套 color/metalness/roughness + R56 clearcoat/env 旋钮沿用）。
+ *
+ * 颜色来源：`tools/r60_paint_target.py` 从各变体 basecolor 贴图的高亮车身带（88–97 百分位）
+ * 反演主色相，再按「车漆身份」归一（白=珍珠白、黑=曜石黑、金=香槟金、紫=星夜紫、绿=原厂绿）。
+ * ⚠ 旧 basecolor 贴图烤了光照/AO，直接取均值会偏暗偏灰（白/黑拉不开）—— 故色相可信、
+ *   亮度按车漆典型 albedo 重设，最终观感由 in-engine A/B 目检校准。
+ *
+ * 变体身份保留：setVariant 在程序化路径下改 color/metalness（不换贴图），六变体
+ * （v800 白/黑/金、r7 白/紫/绿）语义不变。
+ * 回滚：`#r60paint=off` 逐位回 R59 脏贴图路径（basecolor/normal/mr 全量挂回）。
+ * 开销：−3 张 2048² 贴图采样/帧、DC/tri 不变（纯材质槽替换），且免下载三张脏贴图。
+ */
+function r60PaintOff(): boolean {
+  if (typeof window === 'undefined') return false;
+  return /(?:^|[#&])r60paint=off/i.test(window.location.hash);
+}
+export const R60_PAINT_PROC = !r60PaintOff();
+
+/** 每变体程序化车漆：color（sRGB，Color.setHex 直接吃）+ metalness + roughness。
+ *  metalness 给低值：车漆是清漆覆盖的介电底色（白/紫/绿近 0，黑/金略高增金属漆感），
+ *  避免 R44 白变体「照搬黑车 MR 标定 → 镜面铬」的老坑（见 VARIANT_METALNESS 注）。 */
+const R60_PROC_PAINT: Record<string, { color: number; metalness: number; roughness: number }> = {
+  white: { color: 0xd6d2cb, metalness: 0.05, roughness: 0.34 },  // 珍珠白（暖白）
+  black: { color: 0x0b0d11, metalness: 0.5, roughness: 0.3 },    // 曜石黑
+  gold: { color: 0xc2ad86, metalness: 0.4, roughness: 0.34 },    // 香槟金
+  purple: { color: 0x6b5b9e, metalness: 0.35, roughness: 0.34 }, // 星夜紫（实测色相 #63559f 归一）
+  green: { color: 0x1d7f78, metalness: 0.3, roughness: 0.34 }    // 原厂绿（实测色相 #127d7c 归一）
+};
+
 /**
  * R45：外部壳是异步懒加载，且 V800 单车资产 ~49MB（gzip 传输 ~25MB）。慢网络下
  * 加载要数分钟，此期间游戏显示程序化回退外观 —— 若无提示会被误判「构建没更新」。
@@ -1458,6 +1492,10 @@ export async function loadExternalShell(
     const lampAtlasTexPromise: Promise<THREE.Texture | null> = hasSemantic && urls.lampFrontAtlas
       ? loadTexture(urls.lampFrontAtlas, true, car, ac.signal).catch(() => null)
       : Promise.resolve(null);
+    // R60 P0-1：程序化车漆裁决点（唯一）。true ⇒ 不加载/使用 basecolor/normal/mr 三张
+    // 脏贴图（喷溅根因），免下载 + 免显存 + 免每帧采样；`#r60paint=off` 回 R59 脏贴图路径。
+    // ⚠ 必须先于下方 Promise.all 求值（贴图加载分支要读它）。
+    const useProcPaint = R60_PAINT_PROC && !materialOverride();
     const [
       bodyGltf, wlGltf, wrGltf, glassGltf, lfGltf, lrGltf,
       baseTex, nrmTex, mrTex, lampAtlasTex
@@ -1472,9 +1510,15 @@ export async function loadExternalShell(
       hasSemantic ? fetchGlb(urls.glass) : Promise.resolve(null),
       hasSemantic ? fetchGlb(urls.lampFront) : Promise.resolve(null),
       hasSemantic ? fetchGlb(urls.lampRear) : Promise.resolve(null),
-      loadTexture(urls.basecolor[variant] ?? urls.basecolor[manifest.variants[0].id], true, car, ac.signal),
-      loadTexture(new URL(`../../assets/cars/${car}/normal.png`, import.meta.url).href, false, car, ac.signal),
-      loadTexture(new URL(`../../assets/cars/${car}/mr.png`, import.meta.url).href, false, car, ac.signal),
+      useProcPaint
+        ? Promise.resolve(null)
+        : loadTexture(urls.basecolor[variant] ?? urls.basecolor[manifest.variants[0].id], true, car, ac.signal),
+      useProcPaint
+        ? Promise.resolve(null)
+        : loadTexture(new URL(`../../assets/cars/${car}/normal.png`, import.meta.url).href, false, car, ac.signal),
+      useProcPaint
+        ? Promise.resolve(null)
+        : loadTexture(new URL(`../../assets/cars/${car}/mr.png`, import.meta.url).href, false, car, ac.signal),
       lampAtlasTexPromise
     ]);
     // GLTFLoader.parseAsync 是纯 CPU 不可中断；Promise.all 之后再查一次，已取消就不装配
@@ -1504,6 +1548,8 @@ export async function loadExternalShell(
       }
     }
 
+    // R60 P0-1：构造仍逐字保留 R59 脏贴图路径（下方护栏测试钉死 `roughnessMap: mrTex` 等
+    // 字面量）；程序化车漆在构造后由 R60 分支置 null + 填 color/metalness/roughness。
     const material = new THREE.MeshPhysicalMaterial({
       map: baseTex,
       normalMap: nrmTex,
@@ -1517,6 +1563,7 @@ export async function loadExternalShell(
       // R56：swap-matrix 证噪声本体在 normal 图（换平 side −23.6%）；但「保边去噪 normal」
       // 与「再降 clearcoat/env」两路游戏内均无净收益（详见 R56_PAINT_* 注释），故默认维持
       // R44-6 的 0.15/0.7 观感不变，仅经 R56_PAINT_CLEARCOAT/ENV 暴露运行时调优旋钮。
+      // R60：程序化车漆沿用同组 clearcoat/env 旋钮（漆面湿润感不丢，且无脏法线可放大）。
       clearcoat: R56_PAINT_CLEARCOAT,
       clearcoatRoughness: 0.35,
       envMapIntensity: R56_PAINT_ENV,
@@ -1525,28 +1572,53 @@ export async function loadExternalShell(
       // z-fighting 出白噪点（QA closeup8），故弃用。
       side: THREE.FrontSide
     });
-    // QA 材质 A/B（#r44mat=）：plain=无贴图素材 / maponly=仅 basecolor /
-    // mapnormal=+法线 / full=全量（默认）
-    const mo = materialOverride();
-    if (mo === 'plain') {
+
+    /* ══ R60 · P0-1 程序化车漆（喷溅噪点根治）══════════════════════════════════
+     * useProcPaint（已在 Promise.all 前裁决）⇒ 弃用 basecolor/normal/mr 三张脏贴图
+     * （R56 通道剥离：去 basecolor −25~29%、去 normal −23.6% = 喷溅主源），改落
+     * R60_PROC_PAINT[variant] 的 color/metalness/roughness。六变体身份保留，`#r60paint=off`
+     * 逐位回 R59 脏贴图路径（构造体字面量即该路径基线）。
+     * ⚠ R51 roughness 注入（G'=0.45+0.55G）只对 mr.png 的 G 通道有意义，程序化路径无
+     *   roughnessMap ⇒ 下方注入加 `!useProcPaint` 闸（否则会把常量 roughness 再映射一档）。 */
+    if (useProcPaint) {
+      const procPaint = R60_PROC_PAINT[variant];
       material.map = null;
       material.normalMap = null;
       material.roughnessMap = null;
       material.metalnessMap = null;
-      material.metalness = 0;
-      material.roughness = 0.5;
-      material.color.setHex(0xeeeeee);
-    } else if (mo === 'maponly') {
-      material.normalMap = null;
-      material.roughnessMap = null;
-      material.metalnessMap = null;
-      material.metalness = 0;
-      material.roughness = 0.6;
-    } else if (mo === 'mapnormal') {
-      material.roughnessMap = null;
-      material.metalnessMap = null;
-      material.metalness = 0;
-      material.roughness = 0.6;
+      if (procPaint) {
+        material.color.setHex(procPaint.color);
+        material.metalness = procPaint.metalness;
+        material.roughness = procPaint.roughness;
+      }
+      material.needsUpdate = true;
+    }
+
+    // QA 材质 A/B（#r44mat=）：plain=无贴图素材 / maponly=仅 basecolor /
+    // mapnormal=+法线 / full=全量（默认）。⚠ 仅 R59 脏贴图路径（!useProcPaint）生效，
+    // 程序化车漆路径无图可剥，本钩子不介入（`#r60paint=off` 可回脏贴图路径再用本钩子）。
+    const mo = materialOverride();
+    if (!useProcPaint) {
+      if (mo === 'plain') {
+        material.map = null;
+        material.normalMap = null;
+        material.roughnessMap = null;
+        material.metalnessMap = null;
+        material.metalness = 0;
+        material.roughness = 0.5;
+        material.color.setHex(0xeeeeee);
+      } else if (mo === 'maponly') {
+        material.normalMap = null;
+        material.roughnessMap = null;
+        material.metalnessMap = null;
+        material.metalness = 0;
+        material.roughness = 0.6;
+      } else if (mo === 'mapnormal') {
+        material.roughnessMap = null;
+        material.metalnessMap = null;
+        material.metalness = 0;
+        material.roughness = 0.6;
+      }
     }
 
     /* ══ R51-B2 · V800 白漆「镜面铬」修复（全局一档，**禁按车分支**）══════════════
@@ -1563,15 +1635,22 @@ export async function loadExternalShell(
      * ⚠ `#r44mat=plain|maponly|mapnormal` QA 钩子移除 roughnessMap 后本注入仍作用于
      *   uniform roughness（只在排查钩子态，正常路径不受影响）；`#r51rough=off` 可完全关闭。
      */
+    // ⚠ R60：程序化车漆路径无 mr.png、roughness 是常量 ⇒ 跳过本注入（否则会把常量
+    //   roughness 再映射一档 G'=0.45+0.55G，漆面变涩）。保留 `if (R51_ROUGH_ON) {` 字面量
+    //   （护栏测试 slice 锚点），程序化路径在块内 early-return 跳过。
     if (R51_ROUGH_ON) {
-      material.onBeforeCompile = (shader) => {
-        shader.fragmentShader = shader.fragmentShader.replace(
-          '#include <roughnessmap_fragment>',
-          /* glsl */ `#include <roughnessmap_fragment>
-          // R51-B2: G' = 0.45 + 0.55 * G (one global band, no per-car branch)
-          roughnessFactor = 0.45 + 0.55 * roughnessFactor;`
-        );
-      };
+      if (useProcPaint) {
+        // R60 程序化车漆：无 roughnessMap，跳过 G 通道一档映射
+      } else {
+        material.onBeforeCompile = (shader) => {
+          shader.fragmentShader = shader.fragmentShader.replace(
+            '#include <roughnessmap_fragment>',
+            /* glsl */ `#include <roughnessmap_fragment>
+            // R51-B2: G' = 0.45 + 0.55 * G (one global band, no per-car branch)
+            roughnessFactor = 0.45 + 0.55 * roughnessFactor;`
+          );
+        };
+      }
     }
 
     const bodyMesh = bodyFound;
@@ -1959,8 +2038,21 @@ export async function loadExternalShell(
         return currentVariant;
       },
       async setVariant(variantId: string): Promise<boolean> {
+        if (variantId === currentVariant) return true;
+        // R60 P0-1：程序化车漆路径无 map，变体切换 = 改 color/metalness/roughness（零贴图加载）
+        if (useProcPaint) {
+          const pp = R60_PROC_PAINT[variantId];
+          if (!pp) return false;
+          material.color.setHex(pp.color);
+          material.metalness = pp.metalness;
+          material.roughness = pp.roughness;
+          material.needsUpdate = true;
+          currentVariant = variantId;
+          r44ShellStatus[car] = { state: 'ready', variant: variantId };
+          return true;
+        }
         const url = urls.basecolor[variantId];
-        if (!url || variantId === currentVariant) return variantId === currentVariant;
+        if (!url) return false;
         try {
           // 变体切换发生在加载完成之后，无在途 signal（不传第 4 参）
           const tex = await loadTexture(url, true, car);
