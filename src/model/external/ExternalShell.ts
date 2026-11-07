@@ -101,6 +101,9 @@ export const R55_BADGE_ON = !r51HookOff('r55badge');
 /** R57：V800 前灯竖向方形发光单元重建（替换 R53 的 4 条细竖线）。
  *  `#r57headlamp=off` ⇒ 走原 R53 逻辑，V800/R7 逐位回 R56。 */
 export const R57_HEADLAMP_ON = !r51HookOff('r57headlamp');
+/** R58：V800 车尾 MAEXTRO 镀铬带+字标（后风挡下沿，补 R54 前脸饰条的车尾同构特征）。
+ *  `#r58rearbadge=off` ⇒ 零新增，逐位回 R57。 */
+export const R58_REAR_BADGE_ON = !r51HookOff('r58rearbadge');
 
 export type ExternalCarId = 'v800' | 'r7';
 
@@ -1114,9 +1117,142 @@ function r55BuildHqBadge(
   mk(0.024, 0.052, zBase + 0.0023, 0.0012, redMat, 'hq_badge_red');
 }
 
+/* ══ R58 · V800 车尾 MAEXTRO 镀铬带+字标（后风挡下沿）═════════════════════════
+ * 背景（.qa/r58，NVIDIA Super VL 像素分析 + GLB 几何探针）：
+ *  · V800 官图车尾正后：后挡风玻璃下沿有一条**亮银色镀铬横向饰条**，中央镶嵌
+ *    **深色凸起 MAEXTRO 字母**（字母比带暗，明暗对比明显）；饰条横跨车宽 60–70%，
+ *    介于左右竖向尾灯**内侧**、未被尾灯打断；高度约占车尾总高 3–5%。
+ *  · 当前渲染（24 帧环绕 az0）：车尾只有红色贯穿尾灯带 + 下方护板，**缺 MAEXTRO 镀铬带
+ *    +字标** ⇒ 尾部最显著识别特征缺失。
+ *  几何探针（glb_maextro_surface.py，车尾 zMin 逐格，禁用单一 bb.max.z —— R53 铁律）：
+ *  · 带 yC=0.353（后风挡下沿正下方凸面），x∈[-0.135,0.135]（横跨 ~64%，介于竖尾灯内侧，
+ *    x≈±0.145 起即跳到竖尾灯斜面 z≈-0.508）。
+ *  · 车尾表面 zMin（最靠后）：中心 x0 z≈-0.535 → x±0.12 z≈-0.545 → x±0.135 z≈-0.538。
+ *  实现：程序化 ribbon（沿 (x,z) 车尾剖面挤出的四边形带，朝 −Z 凸出）挂 bodyMesh 下 ⇒
+ *  自动继承 scale/rotY(π)。字母用 CanvasTexture（深色 MAEXTRO on 银渐变）作 map，
+ *  metalness 0.6 保镀铬反射。DC 增量恒 **+1（仅 V800）**、tri 增量极低。
+ *  `#r58rearbadge=off` ⇒ 零新增，逐位回 R57。
+ *  ⚠ 不打 r44External：bodyMesh 子树随外部壳整体显隐（cabin 隐藏、外景/countdown 显示），
+ *    与 R54 前脸饰条 / R55 徽标语义一致；setExteriorHidden traverse 会因外部壳本体
+ *    r44External 提前 return 而不触及 bodyMesh 子树，无需额外标记。 */
+/** 车尾 MAEXTRO 带剖面（GLB bodyMesh 局部，x 严格递增，z=车尾表面 zMin）。 */
+const R58_V800_REAR_PROF: ReadonlyArray<readonly [number, number]> = [
+  [-0.135, -0.5380], [-0.120, -0.5450], [-0.105, -0.5460], [-0.090, -0.5470],
+  [-0.075, -0.5478], [-0.060, -0.5484], [-0.045, -0.5488], [-0.030, -0.5480],
+  [-0.015, -0.5478], [0.000, -0.5478], [0.015, -0.5478], [0.030, -0.5480],
+  [0.045, -0.5488], [0.060, -0.5484], [0.075, -0.5478], [0.090, -0.5470],
+  [0.105, -0.5460], [0.120, -0.5450], [0.135, -0.5380]
+];
+
+/** 生成 MAEXTRO 字母贴图（深色字母 on 银色渐变带）。无 document 返回 null（防崩）。 */
+function r58MakeMaextroTexture(): THREE.Texture | null {
+  if (typeof document === 'undefined') return null;
+  const W = 1024, H = 96;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const g = c.getContext('2d');
+  if (!g) return null;
+  // 银色镀铬渐变（上下亮、中部略暗，模拟凸面反光）
+  const grad = g.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, '#eceef2');
+  grad.addColorStop(0.45, '#d2d5db');
+  grad.addColorStop(0.55, '#c6c9cf');
+  grad.addColorStop(1, '#e6e8ec');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, W, H);
+  // 深色 MAEXTRO 字母，字间距拉开，居中（高对比，提升远距可读性）
+  g.fillStyle = '#1e2024';
+  g.font = 'bold 64px Arial, sans-serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  const word = 'MAEXTRO';
+  const spacing = 24; // 字间距（px）
+  // 逐字母绘制以控制字间距（canvas 无原生 letterSpacing 全兼容）
+  const widths = [...word].map((ch) => g.measureText(ch).width);
+  const total = widths.reduce((a, b) => a + b, 0) + spacing * (word.length - 1);
+  let x = W / 2 - total / 2;
+  g.textAlign = 'left';
+  for (let i = 0; i < word.length; i++) {
+    g.fillText(word[i], x, H / 2 + 2);
+    x += widths[i] + spacing;
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
+  return tex;
+}
+
+/**
+ * 构建车尾 MAEXTRO 镀铬带+字标（仅 V800）。单 mesh 挂 bodyMesh 下，朝 −Z 凸出。
+ * `#r58rearbadge=off` ⇒ 零新增。
+ */
+function r58BuildRearBadge(
+  bodyMesh: THREE.Mesh,
+  outMats: THREE.Material[],
+  outGeos: THREE.BufferGeometry[]
+): void {
+  if (!R58_REAR_BADGE_ON) return;
+  const prof = R58_V800_REAR_PROF;
+  const yC = 0.353;   // 带中心高（后风挡下沿正下方）
+  const h = 0.014;    // 带高（y 向）≈ 车尾总高 3.7%
+  const d = 0.003;    // 深度（嵌入表面）
+  const off = 0.0012; // 前表面凸出量（朝 −Z）
+  const n = prof.length;
+  const pos: number[] = [];
+  const uv: number[] = [];
+  const idx: number[] = [];
+  const yT = yC + h / 2;
+  const yB = yC - h / 2;
+  for (let i = 0; i < n; i++) {
+    const [x, z] = prof[i];
+    const zF = z - off;        // 前表面（朝 −Z，更靠后）
+    const zBk = z - off + d;   // 背面（嵌入表面）
+    // 0 FT 1 FB 2 BT 3 BB
+    pos.push(x, yT, zF, x, yB, zF, x, yT, zBk, x, yB, zBk);
+    const u = 1 - i / (n - 1); // 车尾朝 −Z，从车尾看 x 递增在屏幕上向左 ⇒ u 取反免字母镜像
+    uv.push(u, 1, u, 0, u, 1, u, 0);
+  }
+  for (let i = 0; i < n - 1; i++) {
+    const a = i * 4;
+    const b = (i + 1) * 4;
+    // 前面朝 −Z（绕向与 R54 的 +Z 前面相反）
+    idx.push(a + 0, b + 1, a + 1, a + 0, b + 0, b + 1);
+    // 背面朝 +Z
+    idx.push(a + 2, a + 3, b + 3, a + 2, b + 3, b + 2);
+    // 顶 +Y
+    idx.push(a + 0, a + 2, b + 2, a + 0, b + 2, b + 0);
+    // 底 −Y
+    idx.push(a + 1, b + 3, a + 3, a + 1, b + 1, b + 3);
+  }
+  idx.push(1, 2, 0, 1, 3, 2); // 左端帽 −X
+  const last = (n - 1) * 4;
+  idx.push(last + 0, last + 2, last + 3, last + 0, last + 3, last + 1); // 右端帽 +X
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  geo.setIndex(idx);
+  geo.computeVertexNormals();
+  const tex = r58MakeMaextroTexture();
+  const mat = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    map: tex ?? undefined,
+    metalness: 0.55,
+    roughness: 0.3,
+    envMapIntensity: 1.1
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.name = 'rear_badge_v800';
+  mesh.castShadow = false;
+  mesh.receiveShadow = false;
+  mesh.renderOrder = 3;
+  mesh.frustumCulled = true;
+  bodyMesh.add(mesh);
+  outMats.push(mat);
+  outGeos.push(geo);
+}
+
 /** R46：当前加载的 AbortController（供取消订阅回调命中；加载结束置 null） */
 let shellAbort: AbortController | null = null;
-
 /**
  * R49-P2b · R7 尾灯带底板 atlas（1024×172，比例 5.95 ≈ 盖板 2.02m×0.34m 的 5.94）。
  *
@@ -1451,6 +1587,11 @@ export async function loadExternalShell(
     const r55BadgeGeos: THREE.BufferGeometry[] = [];
     // R55：V800 中央红旗盾形徽标（仅 V800；+2 DC/车；`#r55badge=off` 回滚）
     if (car === 'v800') r55BuildHqBadge(bodyMesh, r55BadgeMats, r55BadgeGeos);
+    /** R58：车尾 MAEXTRO 镀铬带+字标新增材质/几何 */
+    const r58RearMats: THREE.Material[] = [];
+    const r58RearGeos: THREE.BufferGeometry[] = [];
+    // R58：V800 车尾 MAEXTRO 镀铬带+字标（仅 V800；+1 DC/车；`#r58rearbadge=off` 回滚）
+    if (car === 'v800') r58BuildRearBadge(bodyMesh, r58RearMats, r58RearGeos);
 
     /* ── R52-A2 · 车轮轴心对齐（修「车轮轴心不稳」）───────────────────────────────
      * 定量证据（.qa/r52/wheel_hub.py / wheel_axle.py）：外部轮 GLB 真轴相对世界 X 偏
@@ -1860,6 +2001,9 @@ export async function loadExternalShell(
         // R55：红旗徽标材质/几何
         for (const m of r55BadgeMats) m.dispose();
         for (const g of r55BadgeGeos) g.dispose();
+        // R58：车尾 MAEXTRO 镀铬带+字标材质/几何（含 CanvasTexture，随 map 释放）
+        for (const m of r58RearMats) m.dispose();
+        for (const g of r58RearGeos) g.dispose();
         lampAtlasTex?.dispose();
         material.map?.dispose();
         material.normalMap?.dispose();
