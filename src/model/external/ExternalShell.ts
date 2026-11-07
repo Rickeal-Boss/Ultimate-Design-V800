@@ -1132,9 +1132,13 @@ function r55BuildHqBadge(
  *  自动继承 scale/rotY(π)。字母用 CanvasTexture（深色 MAEXTRO on 银渐变）作 map，
  *  metalness 0.6 保镀铬反射。DC 增量恒 **+1（仅 V800）**、tri 增量极低。
  *  `#r58rearbadge=off` ⇒ 零新增，逐位回 R57。
- *  ⚠ 不打 r44External：bodyMesh 子树随外部壳整体显隐（cabin 隐藏、外景/countdown 显示），
- *    与 R54 前脸饰条 / R55 徽标语义一致；setExteriorHidden traverse 会因外部壳本体
- *    r44External 提前 return 而不触及 bodyMesh 子树，无需额外标记。 */
+ *  ⚠ r44External 显式标记（R59 修正）：setExteriorHidden 走 root.traverse，three.js 的
+ *    Object3D.traverse 是「回调(this) → 无条件递归所有 children」，回调里的 return **不会
+ *    阻止遍历子树**。本 ribbon 现能正常显隐，是因为 V800Adapter 对 bodyMesh 整树 traverse
+ *    打了 r44External（V800Adapter.ts buildExternal 路径）—— 结论侥幸正确、原注释的推理
+ *    前提（traverse 会因外部壳本体跳过 bodyMesh 子树）是错的。显式补标记作防御：无论挂点
+ *    /装配顺序怎么变都不会退化（R57 同源 bug：child 挂 lampMesh 下、Adapter 只逐个自身打标
+ *    ⇒ 从上线起一直被隐藏）。护栏见 tests/r59_external_mark.test.ts。 */
 /** 车尾 MAEXTRO 带剖面（GLB bodyMesh 局部，x 严格递增，z=车尾表面 zMin）。 */
 const R58_V800_REAR_PROF: ReadonlyArray<readonly [number, number]> = [
   [-0.135, -0.5380], [-0.120, -0.5450], [-0.105, -0.5460], [-0.090, -0.5470],
@@ -1152,21 +1156,23 @@ function r58MakeMaextroTexture(): THREE.Texture | null {
   c.width = W; c.height = H;
   const g = c.getContext('2d');
   if (!g) return null;
-  // 银色镀铬渐变（上下亮、中部略暗，模拟凸面反光）
+  // 银色镀铬渐变（R59 压暗一档：实测原 #eceef2 系在 SRGB+metalness0.6+环境光下被推到
+  //   近纯白 mean228，像贴白胶带；压到 #b8bcc4 系保镀铬反光层次、与深色字母对比更强）
   const grad = g.createLinearGradient(0, 0, 0, H);
-  grad.addColorStop(0, '#eceef2');
-  grad.addColorStop(0.45, '#d2d5db');
-  grad.addColorStop(0.55, '#c6c9cf');
-  grad.addColorStop(1, '#e6e8ec');
+  grad.addColorStop(0, '#c2c6cd');
+  grad.addColorStop(0.45, '#a4a9b1');
+  grad.addColorStop(0.55, '#9aa0a8');
+  grad.addColorStop(1, '#bcc0c7');
   g.fillStyle = grad;
   g.fillRect(0, 0, W, H);
-  // 深色 MAEXTRO 字母，字间距拉开，居中（高对比，提升远距可读性）
-  g.fillStyle = '#1e2024';
-  g.font = 'bold 64px Arial, sans-serif';
+  // 深色 MAEXTRO 字母，字间距拉开，居中（R59 加粗加大 + 降到 #0a0c10，提远距可读性：
+  //   实测原 64px/2.1% 面积远距不可读，带高仅 ~18px 有效字高 ~12px）
+  g.fillStyle = '#0a0c10';
+  g.font = 'bold 72px Arial, sans-serif';
   g.textAlign = 'center';
   g.textBaseline = 'middle';
   const word = 'MAEXTRO';
-  const spacing = 24; // 字间距（px）
+  const spacing = 20; // 字间距（px）—— 字母加大后略收间距，避免溢出带宽
   // 逐字母绘制以控制字间距（canvas 无原生 letterSpacing 全兼容）
   const widths = [...word].map((ch) => g.measureText(ch).width);
   const total = widths.reduce((a, b) => a + b, 0) + spacing * (word.length - 1);
@@ -1242,6 +1248,10 @@ function r58BuildRearBadge(
   });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.name = 'rear_badge_v800';
+  // R59 防御性显式标记：setExteriorHidden 必须跳过（否则 cabin 态被 id-less 材质规则连藏）。
+  // 正常路径 V800Adapter 已对 bodyMesh 整树 traverse 打标，此处显式补一份，挂点/装配顺序
+  // 变化时也不退化（R57 同源 bug 铁律）。详见本文件 R58 头注 R59 修正段。
+  (mesh.userData as { r44External?: boolean }).r44External = true;
   mesh.castShadow = false;
   mesh.receiveShadow = false;
   mesh.renderOrder = 3;
