@@ -104,6 +104,11 @@ export const R57_HEADLAMP_ON = !r51HookOff('r57headlamp');
 /** R58：V800 车尾 MAEXTRO 镀铬带+字标（后风挡下沿，补 R54 前脸饰条的车尾同构特征）。
  *  `#r58rearbadge=off` ⇒ 零新增，逐位回 R57。 */
 export const R58_REAR_BADGE_ON = !r51HookOff('r58rearbadge');
+/** R61：车身侧面贯穿镀铬条（窗台线 beltline + 下裙线 rocker），复刻 R54 程序化 ribbon 模式。
+ *  官图（V800 064 / R7 侧视）侧面均有一条横贯车长的亮银饰条，当前渲染缺失。
+ *  几何剖面由 GLB 探针（tools/r61_glb_probe.mjs）量化 body 侧面 x(z)，ribbon 贴合车身轮廓。
+ *  双侧（左/右）+ 双线（belt/skirt）合并为单 mesh，DC 增量恒 +1/车。`#r61side=off` 逐位回滚。 */
+export const R61_SIDE_ON = !r51HookOff('r61side');
 
 export type ExternalCarId = 'v800' | 'r7';
 
@@ -1086,6 +1091,132 @@ function r54BuildFrontTrim(
   outGeos.push(g);
 }
 
+/* ══ R61 · 车身侧面贯穿镀铬条（窗台线 beltline + 下裙线 rocker）══════════════════
+ * 背景（.qa/r61 视觉主理 + tools/r61_glb_probe.mjs 量化 body 侧面 x(z)）：
+ *  · V800 官图 064 / R7 侧视：车身侧面各有一条横贯车长的亮银镀铬饰条（窗台线），
+ *    部分车型下裙还有第二条；当前渲染两侧均缺 ⇒ 侧面层次单薄、缺失豪华 MPV 标志特征。
+ *  · 几何：程序化 ribbon 沿 (z,x) 剖面挤出（双线 × 双侧合并为单 mesh，DC +1/车），
+ *    剖面 x(z) 由 GLB 探针取 body 侧面轮廓，ribbon 紧贴车身不外浮；挂 bodyMesh 下自动
+ *    继承 scale(manifest)/body rotY(π)。`#r61side=off` ⇒ 零新增。`#r61side=off` 逐位回滚。 */
+
+/** 侧面轮廓剖面：GLB 探针取 body 侧面 x(z)（精确窗台线高度），[z, x]（z 升序）。
+ *  前翼子板尖刺已钳平、极端端部已裁，ribbon 紧贴车身侧面不外浮。 */
+const R61_V800_BELT: ReadonlyArray<readonly [number, number]> = [
+  [-0.515, 0.1913], [-0.491, 0.1960], [-0.467, 0.2003], [-0.443, 0.2036],
+  [-0.419, 0.2066], [-0.395, 0.2089], [-0.370, 0.2109], [-0.346, 0.2121],
+  [-0.322, 0.2128], [-0.298, 0.2133], [-0.274, 0.2136], [-0.250, 0.2139],
+  [-0.226, 0.2139], [-0.202, 0.2137], [-0.178, 0.2136], [-0.154, 0.2134],
+  [-0.130, 0.2132], [-0.105, 0.2130], [-0.081, 0.2128], [-0.057, 0.2125],
+  [-0.033, 0.2123], [-0.009, 0.2121], [+0.015, 0.2161], [+0.039, 0.2187],
+  [+0.063, 0.2187], [+0.087, 0.2175], [+0.112, 0.2105], [+0.136, 0.2102],
+  [+0.160, 0.2098], [+0.184, 0.2095], [+0.208, 0.2200], [+0.232, 0.2200],
+  [+0.256, 0.2200], [+0.280, 0.2136], [+0.304, 0.2133], [+0.329, 0.2060],
+  [+0.353, 0.2049], [+0.377, 0.2042], [+0.401, 0.2022], [+0.425, 0.1992]
+];
+const R61_R7_BELT: ReadonlyArray<readonly [number, number]> = [
+  [-0.524, 0.2084], [-0.500, 0.2182], [-0.476, 0.2248], [-0.451, 0.2295],
+  [-0.427, 0.2340], [-0.403, 0.2377], [-0.378, 0.2430], [-0.354, 0.2433],
+  [-0.330, 0.2434], [-0.305, 0.2434], [-0.281, 0.2385], [-0.257, 0.2341],
+  [-0.232, 0.2317], [-0.208, 0.2299], [-0.184, 0.2287], [-0.159, 0.2280],
+  [-0.135, 0.2276], [-0.111, 0.2271], [-0.086, 0.2269], [-0.062, 0.2268],
+  [-0.038, 0.2266], [-0.013, 0.2265], [+0.011, 0.2266], [+0.035, 0.2265],
+  [+0.060, 0.2265], [+0.084, 0.2264], [+0.108, 0.2263], [+0.133, 0.2440],
+  [+0.157, 0.2440], [+0.181, 0.2386], [+0.206, 0.2269], [+0.230, 0.2277],
+  [+0.254, 0.2292], [+0.279, 0.2332], [+0.303, 0.2400], [+0.327, 0.2401],
+  [+0.352, 0.2402], [+0.376, 0.2385], [+0.400, 0.2333], [+0.425, 0.2261],
+  [+0.449, 0.2193], [+0.473, 0.2022], [+0.498, 0.1735]
+];
+
+/**
+ * 沿 (z,x) 剖面挤出的四边形带（带厚度），生成一块闭合 ribbon 几何（侧面腰线专用）。
+ * 剖面点 z 必须严格递增；yC=带中心高度，h=高度（y 向），dx=厚度（x 向，向车外 +x），
+ * off=前表面相对 body 侧面 x 的外凸量。坐标系 = bodyMesh 局部（GLB +Z 车头）。
+ * ⚠ 顶点法线由 computeVertexNormals 按绕向求得（各面已按外向绕序构造）；材质用
+ *   DoubleSide 兜底，避免绕向误差导致整条不可见。
+ */
+function r61BuildSideRibbon(
+  prof: ReadonlyArray<readonly [number, number]>,
+  yC: number,
+  h: number,
+  dx: number,
+  off: number
+): THREE.BufferGeometry {
+  const n = prof.length;
+  const pos: number[] = [];
+  const idx: number[] = [];
+  for (let i = 0; i < n; i += 1) {
+    const [z, x] = prof[i];
+    const yT = yC + h / 2;
+    const yB = yC - h / 2;
+    const xF = x + off;        // 外表面（+x 朝车外）
+    const xB = x + off - dx;   // 内表面
+    // 0 XF-YT 1 XF-YB 2 XB-YT 3 XB-YB
+    pos.push(xF, yT, z, xF, yB, z, xB, yT, z, xB, yB, z);
+  }
+  for (let i = 0; i < n - 1; i += 1) {
+    const a = i * 4;
+    const b = (i + 1) * 4;
+    idx.push(a + 0, a + 1, b + 1, a + 0, b + 1, b + 0); // 外 +X
+    idx.push(a + 2, b + 2, b + 3, a + 2, b + 3, a + 3); // 内 −X
+    idx.push(a + 0, b + 0, b + 2, a + 0, b + 2, a + 2); // 顶 +Y
+    idx.push(a + 1, a + 3, b + 3, a + 1, b + 3, b + 1); // 底 −Y
+  }
+  idx.push(1, 0, 2, 1, 2, 3); // 后端帽 −Z（z 最小）
+  const last = (n - 1) * 4;
+  idx.push(last + 1, last + 2, last + 0, last + 1, last + 3, last + 2); // 前端帽 +Z
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+
+/**
+ * 构建车身侧面贯穿镀铬条（窗台线 beltline），左右双侧。
+ * 两段 ribbon（右+左）合并为单 mesh（1 个 chrome 材质）挂 bodyMesh 下 ⇒ DC +1/车。
+ * 下裙线（skirt）因轮拱穿插风险列为后续候选，本波不实现。
+ * `#r61side=off` ⇒ 零新增。
+ */
+function r61BuildSideTrim(
+  bodyMesh: THREE.Mesh,
+  car: ExternalCarId,
+  outMats: THREE.Material[],
+  outGeos: THREE.BufferGeometry[]
+): void {
+  if (!R61_SIDE_ON) return;
+  const beltProf = car === 'r7' ? R61_R7_BELT : R61_V800_BELT;
+  const BELT_Y = 0.235; // 剖面已在精确窗台线高度采样，ribbon 紧贴车身
+  const H = 0.026;
+  const DX = 0.012;
+  const OFF = 0.003;
+  const geos: THREE.BufferGeometry[] = [];
+  const flip = (p: ReadonlyArray<number>): [number, number] => [p[0], -p[1]]; // 左侧 = x 取反
+  geos.push(r61BuildSideRibbon(beltProf, BELT_Y, H, DX, OFF));            // 右
+  geos.push(r61BuildSideRibbon(beltProf.map(flip), BELT_Y, H, DX, OFF));  // 左
+  const merged = mergeSafe(geos);
+  // 亮银饰条：中银色 + 适度金属度 + 微 emissive 兜底（SwiftShader 弱反射下也读作亮银，
+  // 真机核显反光更佳）。避免纯金属在近白车漆上因暗环境反射发黑、对比度丢失。
+  const chromeMat = new THREE.MeshStandardMaterial({
+    color: 0xccd1d8,
+    metalness: 0.55,
+    roughness: 0.28,
+    envMapIntensity: 1.3,
+    emissive: new THREE.Color(0x3a3d44),
+    emissiveIntensity: 0.22,
+    side: THREE.DoubleSide
+  });
+  const mesh = new THREE.Mesh(merged, chromeMat);
+  mesh.name = car === 'r7' ? 'side_chrome_r7' : 'side_chrome_v800';
+  mesh.castShadow = false;
+  mesh.receiveShadow = false;
+  mesh.renderOrder = 3;
+  mesh.frustumCulled = true;
+  bodyMesh.add(mesh);
+  outMats.push(chromeMat);
+  outGeos.push(merged);
+  for (const g of geos) g.dispose();
+}
+
 /* ══ R55 · V800 中央红旗盾形徽标（中网细节）═══════════════════════════════════
  * 背景（.qa/r54，NVIDIA Super VL 参考分析 + GLB 几何探针）：
  *  V800 官图中网中央（镀铬贯穿条下方）有一个**竖长盾形红旗徽标**（红旗品牌标）；
@@ -1681,6 +1812,11 @@ export async function loadExternalShell(
     const r58RearGeos: THREE.BufferGeometry[] = [];
     // R58：V800 车尾 MAEXTRO 镀铬带+字标（仅 V800；+1 DC/车；`#r58rearbadge=off` 回滚）
     if (car === 'v800') r58BuildRearBadge(bodyMesh, r58RearMats, r58RearGeos);
+    /** R61：车身侧面贯穿镀铬条（窗台线 + 下裙线，双侧）新增材质/几何 */
+    const r61SideMats: THREE.Material[] = [];
+    const r61SideGeos: THREE.BufferGeometry[] = [];
+    // R61：侧面贯穿镀铬条（挂 bodyMesh 下，双线×双侧合并为单 mesh，+1 DC/车；`#r61side=off` 回滚）
+    r61BuildSideTrim(bodyMesh, car, r61SideMats, r61SideGeos);
 
     /* ── R52-A2 · 车轮轴心对齐（修「车轮轴心不稳」）───────────────────────────────
      * 定量证据（.qa/r52/wheel_hub.py / wheel_axle.py）：外部轮 GLB 真轴相对世界 X 偏
@@ -2106,6 +2242,9 @@ export async function loadExternalShell(
         // R58：车尾 MAEXTRO 镀铬带+字标材质/几何（含 CanvasTexture，随 map 释放）
         for (const m of r58RearMats) m.dispose();
         for (const g of r58RearGeos) g.dispose();
+        // R61：车身侧面贯穿镀铬条材质/几何
+        for (const m of r61SideMats) m.dispose();
+        for (const g of r61SideGeos) g.dispose();
         lampAtlasTex?.dispose();
         material.map?.dispose();
         material.normalMap?.dispose();
