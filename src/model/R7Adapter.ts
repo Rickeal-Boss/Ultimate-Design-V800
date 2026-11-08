@@ -24,6 +24,7 @@ import {
   buildShadowProxies,
   loadExternalShell,
   mountExternalWheel,
+  mountExternalBrake,
   shadowProxyEnabled,
   wheelOffsetsWorldXZ,
   // R51-B1-a / B3：开关真源在 ExternalShell.ts（config/** 属 Phase 2-A 冻结，禁放）
@@ -1655,6 +1656,9 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
         if (!best) break;
         usedSpin.add(best.spin);
         mountExternalWheel(shell.bodyMesh, hubModel, best.spin, shell.wheelMeshes[tag], shell.manifest.scale);
+        // R62-P0-1：挂刹车盘（随 spin 自转）+ 卡钳（挂 spin 的非自转父，静止）
+        const brake = shell.brakes[tag];
+        if (brake) mountExternalBrake(hubModel, best.spin, brake, shell.manifest.scale);
       } catch (err) {
         console.error(`[R44] 外部轮 ${tag} 挂载失败（该轮回退程序化轮位）:`, err);
       }

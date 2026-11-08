@@ -109,6 +109,15 @@ export const R58_REAR_BADGE_ON = !r51HookOff('r58rearbadge');
  *  几何剖面由 GLB 探针（tools/r61_glb_probe.mjs）量化 body 侧面 x(z)，ribbon 贴合车身轮廓。
  *  双侧（左/右）+ 双线（belt/skirt）合并为单 mesh，DC 增量恒 +1/车。`#r61side=off` 逐位回滚。 */
 export const R61_SIDE_ON = !r51HookOff('r61side');
+/** R62-P0-1：轮毂/制动系统独立（修「整轮=车身同色，无黑胎/刹车盘/红卡钳」）。
+ *  根因：本文件原 :1795 把车漆 material 赋给四轮外部 GLB mesh，轮 GLB 是一体 lathe
+ *  无内置材质 ⇒ 整块轮读作车身色。R62 改赋专用 wheel-alloy 材质 + 每轮新增打孔刹车盘
+ *  （随轮自转）+ 卡钳（挂非自转父，静止）。`#r62wheel=off` ⇒ 逐位回 R61：四轮重新赋车漆
+ *  material、不建盘/卡钳几何。 */
+export const R62_WHEEL_ON = !r51HookOff('r62wheel');
+/** R62-P0-2：程序化车漆金属化（清漆层 + 色度/金属度上调贴近官图 metallic flake）。
+ *  `#r62paint=off` ⇒ 逐位回 R60（clearcoat 回 R55 的 0.15/0.35、色度/金属度回原表）。 */
+export const R62_PAINT_ON = !r51HookOff('r62paint');
 
 export type ExternalCarId = 'v800' | 'r7';
 
@@ -131,6 +140,9 @@ export interface ExternalShellHandle {
   readonly bodyMesh: THREE.Mesh;
   /** hub 居中的外部轮，key = fl/fr/rl/rr（模型单位原点 = 轮毂中心） */
   readonly wheelMeshes: Readonly<Record<string, THREE.Mesh>>;
+  /** R62-P0-1：单轮制动件（盘+卡钳），key = fl/fr/rl/rr；适配器 mountExternalBrake 挂到 spin/其父。
+   *  `#r62wheel=off` 时为空对象（回滚到 R61 无制动件）。 */
+  readonly brakes: Readonly<Record<string, WheelBrakeSet>>;
   readonly wheelRadius: number;
   /** R44-6 语义部件：透明玻璃（与 bodyMesh 同级挂 body 组；cabin 态随外壳隐藏） */
   readonly glassMeshes: readonly THREE.Mesh[];
@@ -351,6 +363,27 @@ const R60_PROC_PAINT: Record<string, { color: number; metalness: number; roughne
   green: { color: 0x1d7f78, metalness: 0.3, roughness: 0.34 }    // 原厂绿（实测色相 #127d7c 归一）
 };
 
+/* ══ R62-P0-2 · 程序化车漆金属化（metallic flake + clearcoat 贴近官图）═════════
+ * R60 平涂无金属闪：metalness 偏低 + clearcoat 走 R55 的 0.15（当年为压脏 normal 噪点，
+ * 程序化路径无脏法线可放大 ⇒ 可安全拉高）。官图是清漆覆盖的金属漆（clearcoat 高光 +
+ * 色度更饱和）。R62 在 useProcPaint 分支落 R60 参数**之后**叠加本表：
+ *  - clearcoat 抬到 0.7 / clearcoatRoughness 0.12（湿润清漆高光）；
+ *  - 色度按 chroma 乘子向纯色推（不换色相，只加饱和；white 例外保持暖白）；
+ *  - 金属度按 metal 乘子上调（black/gold 明显、purple/green 适度、white 不动）。
+ * SwiftShader 色彩偏弱 ⇒ 参数保守起步，`#r62paint=off` 逐位回 R60（不叠加本表）。
+ * ⚠ 仅程序化路径（useProcPaint）生效；R59 脏贴图路径不动（脏法线会放大 clearcoat 噪点）。 */
+const R62_PROC_PAINT_TWEAK: Record<string, { chroma: number; metal: number }> = {
+  white: { chroma: 1.0, metal: 1.0 },   // 珍珠白：保持暖白，仅靠 clearcoat 出光泽
+  black: { chroma: 1.15, metal: 1.3 },  // 曜石黑：金属漆感
+  gold: { chroma: 1.12, metal: 1.3 },   // 香槟金：金属漆感
+  purple: { chroma: 1.18, metal: 1.35 },// 星夜紫：加饱和 + 金属
+  green: { chroma: 1.18, metal: 1.35 }  // 原厂绿：加饱和 + 金属
+};
+/** 程序化车漆清漆层强度（默认 0.7；`#r62clearcoat=` 可扫参） */
+export const R62_PAINT_CLEARCOAT = r56HashNum('r62clearcoat') ?? 0.7;
+/** 程序化车漆清漆层粗糙度（默认 0.12；`#r62clearcoatrough=` 可扫参） */
+export const R62_PAINT_CLEARCOAT_ROUGH = r56HashNum('r62clearcoatrough') ?? 0.12;
+
 /**
  * R45：外部壳是异步懒加载，且 V800 单车资产 ~49MB（gzip 传输 ~25MB）。慢网络下
  * 加载要数分钟，此期间游戏显示程序化回退外观 —— 若无提示会被误判「构建没更新」。
@@ -530,6 +563,124 @@ export function mountExternalWheel(
   spin.add(mesh);
 }
 
+/** R62-P0-1 · 单轮制动件（盘 + 卡钳）。盘随轮自转（挂 spin），卡钳静止（挂 spin 的父）。 */
+export interface WheelBrakeSet {
+  /** 打孔刹车盘（银灰金属，挂 spin ⇒ 随轮自转） */
+  readonly disc: THREE.Mesh;
+  /** 卡钳（R7 红 / V800 暗灰；挂 spin 的非自转父 ⇒ 静止） */
+  readonly caliper: THREE.Mesh;
+}
+
+/**
+ * R62-P0-1 · 构建单轮制动件几何（盘 + 卡钳），按材质分桶 `mergeSafe`。
+ * 几何在**轮毂局部系**（原点=轮毂中心，X=车轴/自转轴，Y=上，Z=车前后）：
+ *  - 盘：薄圆柱沿 X 轴（rotateZ(π/2) 把默认 Y 轴柱转到 X），半径 ~0.66 轮径、厚 ~0.05 轮径；
+ *  - 卡钳：盘缘外的小盒，位于 +Z（车前）侧、盘外半径处，径向夹住盘缘。
+ * 形状是程序化近似（无外部资产），真实观感由审查线目检。`#r62wheel=off` 时本函数不被调用。
+ */
+export function r62BuildBrakeSet(
+  car: ExternalCarId,
+  wheelRadius: number,
+  outMats: THREE.Material[],
+  outGeos: THREE.BufferGeometry[]
+): WheelBrakeSet {
+  const R = wheelRadius;
+  // ── 盘（disc）：银灰金属薄盘，沿 X 轴
+  const discR = R * 0.66;
+  const discT = R * 0.05;
+  const discGeo = new THREE.CylinderGeometry(discR, discR, discT, 40, 1, false);
+  discGeo.rotateZ(Math.PI / 2); // 柱轴 Y → X（车轴）
+  // 打孔盘语义：盘面加一圈小暗孔（用同一几何合并，避免多 DC；孔=凹陷观感靠暗色顶点）
+  const holeGeo = new THREE.CylinderGeometry(R * 0.035, R * 0.035, discT * 1.02, 10, 1, false);
+  holeGeo.rotateZ(Math.PI / 2);
+  const discGeos: THREE.BufferGeometry[] = [discGeo];
+  const HOLE_R = discR * 0.72;
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2;
+    const g = holeGeo.clone();
+    g.translate(0, Math.cos(a) * HOLE_R, Math.sin(a) * HOLE_R); // YZ 平面圆周布孔
+    discGeos.push(g);
+  }
+  holeGeo.dispose();
+  const discMerged = mergeSafe(discGeos);
+  for (const g of discGeos) g.dispose();
+  const discMat = new THREE.MeshStandardMaterial({
+    color: R62_BRAKE_DISC.color,
+    metalness: R62_BRAKE_DISC.metalness,
+    roughness: R62_BRAKE_DISC.roughness,
+    side: THREE.DoubleSide
+  });
+  const disc = new THREE.Mesh(discMerged, discMat);
+  disc.name = `r62-brake-disc-${car}`;
+  disc.castShadow = false;
+  disc.receiveShadow = false;
+
+  // ── 卡钳（caliper）：盘缘外小盒，+Z（车前）侧
+  const calW = R * 0.16;  // 径向（YZ 内的径向）厚度
+  const calH = R * 0.30;  // 轴向（X）跨度
+  const calD = R * 0.09;  // 切向跨度
+  const calR = discR + calW * 0.4; // 卡钳中心落在盘缘略外
+  const calGeo = new THREE.BoxGeometry(calH, calW, calD);
+  calGeo.translate(0, 0, calR); // 推到 +Z 盘缘
+  const calMat = new THREE.MeshStandardMaterial({
+    color: R62_CALIPER[car],
+    metalness: 0.35,
+    roughness: 0.42,
+    side: THREE.DoubleSide
+  });
+  const caliper = new THREE.Mesh(calGeo, calMat);
+  caliper.name = `r62-caliper-${car}`;
+  caliper.castShadow = false;
+  caliper.receiveShadow = false;
+
+  outMats.push(discMat, calMat);
+  outGeos.push(discMerged, calGeo);
+  return { disc, caliper };
+}
+
+/**
+ * R62-P0-1 · 挂载单轮制动件（与 mountExternalWheel 同帧调用）。
+ *  - 盘挂 `spin`（轮自转枢轴）⇒ 用与轮 mesh 完全相同的 local 矩阵 ⇒ 随轮自转、 hub 居中；
+ *  - 卡钳挂 `spin.parent`（**非自转**父）⇒ local = spinParentWorld⁻¹ × spinWorld × hubLocal
+ *    ⇒ 静止在盘缘 +Z（车前）侧，不随轮转。
+ * 前置：调用方刚 updateWorldMatrix(true,false) 过 spin 与其父（mountExternalWheel 已做 spin；
+ * 父链在 spin.updateWorldMatrix(true,false) 时一并刷新），此处再显式刷一次父，稳妥。
+ */
+export function mountExternalBrake(
+  hubModel: readonly [number, number, number],
+  spin: THREE.Object3D,
+  brake: WheelBrakeSet,
+  scaleFactor: number
+): void {
+  const hubLocal = new THREE.Matrix4().makeTranslation(hubModel[0], hubModel[1], hubModel[2])
+    .multiply(new THREE.Matrix4().makeScale(scaleFactor, scaleFactor, scaleFactor));
+  // 盘 → spin（自转）
+  spin.updateWorldMatrix(true, false);
+  const spinWorld = new THREE.Matrix4().copy(spin.matrixWorld);
+  const discLocal = new THREE.Matrix4().copy(spinWorld).invert().multiply(hubLocal);
+  brake.disc.matrixAutoUpdate = false;
+  brake.disc.matrix.copy(discLocal);
+  brake.disc.matrixWorldNeedsUpdate = true;
+  spin.add(brake.disc);
+  // 卡钳 → spin 的父（非自转）
+  const parent = spin.parent;
+  if (parent) {
+    parent.updateWorldMatrix(true, false);
+    const parentWorld = new THREE.Matrix4().copy(parent.matrixWorld);
+    const calLocal = new THREE.Matrix4().copy(parentWorld).invert().multiply(spinWorld).multiply(hubLocal);
+    brake.caliper.matrixAutoUpdate = false;
+    brake.caliper.matrix.copy(calLocal);
+    brake.caliper.matrixWorldNeedsUpdate = true;
+    parent.add(brake.caliper);
+  } else {
+    // 兜底：无父则退化为挂 spin（会随轮转，仅极端树形下触发；正常树 spin 必有父）
+    brake.caliper.matrixAutoUpdate = false;
+    brake.caliper.matrix.copy(discLocal);
+    brake.caliper.matrixWorldNeedsUpdate = true;
+    spin.add(brake.caliper);
+  }
+}
+
 /* ══════════════════════════════════════════════════════════════════════════
  * R49-A2 · 阴影投影代理（shadow proxy）
  *
@@ -691,6 +842,22 @@ function r56HashNum(key: string): number | null {
 export const R56_PAINT_CLEARCOAT = r56HashNum('r56clearcoat') ?? 0.15;
 /** 车身漆面 envMapIntensity（默认 = R55 的 0.7，观感不变；可用 `#r56env=` 调优） */
 export const R56_PAINT_ENV = r56HashNum('r56env') ?? 0.7;
+
+/* ══ R62-P0-1 · 轮毂 / 制动系统材质预设 ════════════════════════════════════
+ * 轮外部 GLB 是一体 lathe（胎面橡胶 + 盘面金属无内置材质分组），原把车漆赋整轮
+ * ⇒ 黑胎/银毂/红卡钳全部读作车身色。R62 起四轮 GLB 改赋专用 wheel-alloy 金属材质
+ * （盘面即「轮毂」，跟车身色解耦），并按 car 分支：R7 深色运动毂 / V800 银色涡轮盘面。
+ * 几何可分性（tools/r62_glb_inventory.mjs 实测）：轮 GLB 单 mesh、无 tire/rim 材质分组
+ * ⇒ 胎面与盘面**几何不可分**，本波不重切 GLB，只做盘面独立色（胎暂同 alloy 色，如实报告）。
+ */
+const R62_WHEEL_ALLOY: Record<ExternalCarId, { color: number; metalness: number; roughness: number }> = {
+  r7: { color: 0x23262b, metalness: 0.6, roughness: 0.45 },   // R7 近黑运动毂
+  v800: { color: 0xb8bec6, metalness: 0.85, roughness: 0.3 }  // V800 银色涡轮盘面
+};
+/** 刹车盘：银灰金属（打孔盘面） */
+const R62_BRAKE_DISC = { color: 0x9aa0a8, metalness: 0.9, roughness: 0.32 };
+/** 卡钳：R7 红（语义 caliper-red #B0202A）；V800 被盘面遮挡，给暗灰低调不外露 */
+const R62_CALIPER: Record<ExternalCarId, number> = { r7: 0xb0202a, v800: 0x2a2d33 };
 
 /** 语义部件收集：gltf.scene 下全部 mesh 赋材质+缩放；mat=null 时只清空不产出 */
 function collectNamed(
@@ -1721,6 +1888,23 @@ export async function loadExternalShell(
         material.color.setHex(procPaint.color);
         material.metalness = procPaint.metalness;
         material.roughness = procPaint.roughness;
+        /* R62-P0-2：程序化车漆金属化 —— 叠加 clearcoat 清漆层 + 色度/金属度上调（贴官图 metallic flake）。
+         * material.color 已由 setHex 转到线性工作空间，故直接按线性比例缩放 = 视觉近似 sRGB 色度提升。
+         * clamp 防裁剪；white 乘子=1（保持暖白，仅靠 clearcoat 出光泽）。`#r62paint=off` 跳过本块 = 逐位回 R60。 */
+        if (R62_PAINT_ON) {
+          const tw = R62_PROC_PAINT_TWEAK[variant];
+          if (tw) {
+            const c = material.color;
+            c.setRGB(
+              Math.min(1, c.r * tw.chroma),
+              Math.min(1, c.g * tw.chroma),
+              Math.min(1, c.b * tw.chroma)
+            );
+            material.metalness = Math.min(1, procPaint.metalness * tw.metal);
+          }
+          material.clearcoat = R62_PAINT_CLEARCOAT;
+          material.clearcoatRoughness = R62_PAINT_CLEARCOAT_ROUGH;
+        }
       }
       material.needsUpdate = true;
     }
@@ -1792,9 +1976,37 @@ export async function loadExternalShell(
     const proxyMode = shadowProxyEnabled();
     bodyMesh.castShadow = !proxyMode;
     bodyMesh.receiveShadow = false;
+    /** R62-P0-1：wheel-alloy + 刹车盘/卡钳 材质/几何账本（dispose 显式释放，防泄漏） */
+    const r62BrakeMats: THREE.Material[] = [];
+    const r62BrakeGeos: THREE.BufferGeometry[] = [];
+    /* R62-P0-1：四轮外部 GLB 改赋专用 wheel-alloy 金属材质，与车身漆解耦（修「整轮=车身同色」）。
+     * `#r62wheel=off` ⇒ 逐位回 R61：四轮重新赋车漆 material（下方 if/else 两分支字面量即回滚基线）。 */
+    let wheelAlloyMat: THREE.MeshPhysicalMaterial | null = null;
+    if (R62_WHEEL_ON) {
+      const alloy = R62_WHEEL_ALLOY[car];
+      wheelAlloyMat = new THREE.MeshPhysicalMaterial({
+        color: alloy.color,
+        metalness: alloy.metalness,
+        roughness: alloy.roughness,
+        clearcoat: 0.4,
+        clearcoatRoughness: 0.2,
+        envMapIntensity: 1.0,
+        side: THREE.FrontSide
+      });
+      r62BrakeMats.push(wheelAlloyMat); // dispose 账本（轮辐/盘面同族金属材质）
+    }
     for (const mesh of Object.values(wheelMeshes)) {
-      mesh.material = material;
+      mesh.material = (R62_WHEEL_ON && wheelAlloyMat) ? wheelAlloyMat : material;
       mesh.castShadow = !proxyMode; // R49-A2：同 bodyMesh，四轮也退出 shadow pass
+    }
+    /* R62-P0-1：每轮构建打孔刹车盘 + 卡钳几何（盘随轮自转、卡钳静止，由适配器
+     * mountExternalBrake 挂到 spin / spin 的非自转父）。`#r62wheel=off` ⇒ 不建几何，
+     * brakes 留空 = 逐位回 R61 无制动件。 */
+    const brakes: Record<string, WheelBrakeSet> = {};
+    if (R62_WHEEL_ON && hasWheelSplit) {
+      for (const tag of Object.keys(wheelMeshes)) {
+        brakes[tag] = r62BuildBrakeSet(car, manifest.wheelRadius, r62BrakeMats, r62BrakeGeos);
+      }
     }
     bodyMesh.scale.setScalar(manifest.scale);
     /** R54：前脸贯穿镀铬饰条新增材质/几何（dispose 显式释放，防泄漏） */
@@ -2165,6 +2377,7 @@ export async function loadExternalShell(
       manifest,
       bodyMesh,
       wheelMeshes,
+      brakes,
       wheelRadius: manifest.wheelRadius,
       glassMeshes,
       lampMeshes: [...lampRearMeshes, ...lampFrontMeshes],
@@ -2245,6 +2458,9 @@ export async function loadExternalShell(
         // R61：车身侧面贯穿镀铬条材质/几何
         for (const m of r61SideMats) m.dispose();
         for (const g of r61SideGeos) g.dispose();
+        // R62-P0-1：wheel-alloy + 刹车盘/卡钳材质（几何挂进 spin 子树，随轮 mesh 一并释放）
+        for (const m of r62BrakeMats) m.dispose();
+        for (const g of r62BrakeGeos) g.dispose();
         lampAtlasTex?.dispose();
         material.map?.dispose();
         material.normalMap?.dispose();
