@@ -89,7 +89,10 @@ describe('R62-P0-1 · 刹车盘 + 卡钳新增几何', () => {
     // 卡钳 → spin.parent（非自转）
     expect(fn).toContain('const parent = spin.parent');
     expect(fn).toContain('parent.add(brake.caliper)');
-    expect(fn).toMatch(/const calLocal = new THREE\.Matrix4\(\)\.copy\(parentWorld\)\.invert\(\)\.multiply\(spinWorld\)\.multiply\(hubLocal\)/);
+    // R63-P1-A 修正：原断言钉的是 `parentWorld⁻¹ × spinWorld × hubLocal`，该式把 hub 平移
+    // 多乘一次 spinWorld ⇒ 卡钳漂到 `hubWorld + R_spin·hubWorld`（=「红块悬空在后轮旁」根因）。
+    // 正确式为 `parentWorld⁻¹ × T(hubWorld)`（卡钳静止于轮心）。本护栏随之更正。
+    expect(fn).toMatch(/const calLocal = new THREE\.Matrix4\(\)\.copy\(parentWorld\)\.invert\(\)\.multiply\(hubLocal\)/);
   });
 
   it('handle 暴露 brakes，构建按 R62_WHEEL_ON 门控（off ⇒ brakes 留空 = 回 R61）', () => {

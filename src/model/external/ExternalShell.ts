@@ -118,6 +118,18 @@ export const R62_WHEEL_ON = !r51HookOff('r62wheel');
 /** R62-P0-2：程序化车漆金属化（清漆层 + 色度/金属度上调贴近官图 metallic flake）。
  *  `#r62paint=off` ⇒ 逐位回 R60（clearcoat 回 R55 的 0.15/0.35、色度/金属度回原表）。 */
 export const R62_PAINT_ON = !r51HookOff('r62paint');
+/** R63-P1-A：R7 红卡钳醒目化（环抱盘缘弧壳，替换 R62 的 BoxGeometry 实心块）。
+ *  ⚠ **默认下线（实验分支，非上线形态）**——主理人裁决（2026-11-09 落地审查）：
+ *  R7 轮 GLB 是**实心桶、无刹车腔**（`rim-fl` 闭合 lathe + 胎闭合环），r<1.0R 的盘/卡钳
+ *  一律埋在轮内、无法透辐条窗见 ⇒ 唯一可见路径 = 卡钳外径 >1.0R 露到胎外。落地审查目检
+ *  证该「胎外红弧」读作「卡在胎后缘的红片」、非官图「透辐条间隙的盘缘卡钳」⇒ 打回。
+ *  本开关沿用 R51 B1-b/c 实验盖板先例：默认 off、仅 `#r63caliper=on` 启用扫参；
+ *  待下波放开白名单改轮 GLB 开刹车腔（透辐条的根治路径）后再默认启用。
+ *  注意：**挂载单位修复（mountExternalBrake 去 scaleFactor + 去 double-translation）独立于
+ *  本开关、恒生效**——它是 R62 真 bug（巨盘错位/红块悬空），修后 V800/R7 盘卡钳均归位轮心。
+ *  `#r63caliper=on` ⇒ R7 弧壳 + 盘 0.72R；默认/off ⇒ 逐位回 R62（小盒 + 盘 0.66R）。
+ *  V800 卡钳恒走 R62 暗灰 box（官图设计，不醒目化）。 */
+export const R63_CALIPER_ON = r51HookOn('r63caliper');
 
 export type ExternalCarId = 'v800' | 'r7';
 
@@ -571,12 +583,24 @@ export interface WheelBrakeSet {
   readonly caliper: THREE.Mesh;
 }
 
+/* R63-P1-A · R7 环抱弧壳卡钳可调参（URL hash `#r63<key>=<num>` 扫参，落地审查用）。
+ * 口径：半径以**轮半径 R** 为单位（世界米），角以 deg（0=轮毂 +Y 顶，朝 +Z 车前）。
+ * ⚠ 该轮 GLB 是**实心盘**（轮圈桶实心到心 r0.267 + 胎闭合环 r0.267–0.383），盘/卡钳在
+ *   r<1.0R 一律埋在实心轮内、无法从辐条窗透出 ⇒ 卡钳外半径需 **>1.0R** 才露到胎外可见。 */
+export const R63_CAL_DISC_R = r56HashNum('r63discr') ?? 0.72;  // R7 盘半径 / R
+export const R63_CAL_OUTER = r56HashNum('r63calro') ?? 1.12;   // 卡钳外半径 / R（>1.0 露出胎外）
+export const R63_CAL_INNER = r56HashNum('r63calri') ?? 0.94;   // 卡钳内半径 / R
+export const R63_CAL_ANG = r56HashNum('r63calang') ?? 80;      // 卡钳中心角 deg（顶=0 朝车前；~83° 正对相机）
+export const R63_CAL_SPAN = r56HashNum('r63calspan') ?? 20;    // 半跨角 deg
+export const R63_CAL_AXIAL = r56HashNum('r63calax') ?? 0.20;   // 轴向厚 / R
+
 /**
  * R62-P0-1 · 构建单轮制动件几何（盘 + 卡钳），按材质分桶 `mergeSafe`。
  * 几何在**轮毂局部系**（原点=轮毂中心，X=车轴/自转轴，Y=上，Z=车前后）：
  *  - 盘：薄圆柱沿 X 轴（rotateZ(π/2) 把默认 Y 轴柱转到 X），半径 ~0.66 轮径、厚 ~0.05 轮径；
  *  - 卡钳：盘缘外的小盒，位于 +Z（车前）侧、盘外半径处，径向夹住盘缘。
  * 形状是程序化近似（无外部资产），真实观感由审查线目检。`#r62wheel=off` 时本函数不被调用。
+ * R63-P1-A：R7 + `R63_CALIPER_ON` 时卡钳改**环抱盘缘的弧形壳**（部分圆环挤出），消实心块感。
  */
 export function r62BuildBrakeSet(
   car: ExternalCarId,
@@ -585,8 +609,10 @@ export function r62BuildBrakeSet(
   outGeos: THREE.BufferGeometry[]
 ): WheelBrakeSet {
   const R = wheelRadius;
+  // R63-P1-A：R7 + `R63_CALIPER_ON` 走醒目化（盘略加大 + 弧壳卡钳）；否则逐位走 R62 原值。
+  const r63On = car === 'r7' && R63_CALIPER_ON;
   // ── 盘（disc）：银灰金属薄盘，沿 X 轴
-  const discR = R * 0.66;
+  const discR = R * (r63On ? R63_CAL_DISC_R : 0.66);
   const discT = R * 0.05;
   const discGeo = new THREE.CylinderGeometry(discR, discR, discT, 40, 1, false);
   discGeo.rotateZ(Math.PI / 2); // 柱轴 Y → X（车轴）
@@ -615,19 +641,60 @@ export function r62BuildBrakeSet(
   disc.castShadow = false;
   disc.receiveShadow = false;
 
-  // ── 卡钳（caliper）：盘缘外小盒，+Z（车前）侧
-  const calW = R * 0.16;  // 径向（YZ 内的径向）厚度
-  const calH = R * 0.30;  // 轴向（X）跨度
-  const calD = R * 0.09;  // 切向跨度
-  const calR = discR + calW * 0.4; // 卡钳中心落在盘缘略外
-  const calGeo = new THREE.BoxGeometry(calH, calW, calD);
-  calGeo.translate(0, 0, calR); // 推到 +Z 盘缘
+  // ── 卡钳（caliper）：材质按 car 分支色（R7 红 / V800 暗灰），几何分 R63 弧壳 / R62 小盒
   const calMat = new THREE.MeshStandardMaterial({
     color: R62_CALIPER[car],
     metalness: 0.35,
     roughness: 0.42,
     side: THREE.DoubleSide
   });
+  let calGeo: THREE.BufferGeometry;
+  if (r63On) {
+    // R63-P1-A：环抱盘缘的**弧形壳**（部分圆环挤出），替换 R62 的 BoxGeometry 实心矩形。
+    // 该轮 GLB 是实心盘（轮圈桶实心到心 + 胎闭合环），卡钳外半径做到 >1.0R 才露到胎外可见，
+    // 径向从近盘缘跨到胎外成一段红弧（非实心方块 ⇒ fill(bbox) 低，过像素门）。
+    const ri = R * R63_CAL_INNER;
+    const ro = R * R63_CAL_OUTER;
+    const ac = (R63_CAL_ANG * Math.PI) / 180;   // 中心角：0=顶(+Y) 朝 +Z(车前)
+    const span = (R63_CAL_SPAN * Math.PI) / 180; // 半跨角
+    const shape = new THREE.Shape();
+    const SEG = 16;
+    for (let i = 0; i <= SEG; i++) {
+      const a = ac - span + (2 * span * i) / SEG;
+      const x = Math.cos(a) * ro, y = Math.sin(a) * ro;
+      if (i === 0) shape.moveTo(x, y); else shape.lineTo(x, y);
+    }
+    for (let i = SEG; i >= 0; i--) {
+      const a = ac - span + (2 * span * i) / SEG;
+      shape.lineTo(Math.cos(a) * ri, Math.sin(a) * ri);
+    }
+    shape.closePath();
+    const depth = R * R63_CAL_AXIAL;
+    const g = new THREE.ExtrudeGeometry(shape, {
+      depth,
+      bevelEnabled: true,
+      bevelThickness: depth * 0.12,
+      bevelSize: depth * 0.10,
+      bevelSegments: 1,
+      curveSegments: 2
+    });
+    // shape(X,Y)→hub(Y,Z)、挤出 Z→hub X（车轴）：basis 列 = shape 基向量的 hub 像（正交右手）
+    g.applyMatrix4(new THREE.Matrix4().makeBasis(
+      new THREE.Vector3(0, 1, 0),
+      new THREE.Vector3(0, 0, 1),
+      new THREE.Vector3(1, 0, 0)
+    ));
+    g.translate(-depth / 2, 0, 0); // 轴向居中（挤出原在 0→depth）
+    calGeo = g;
+  } else {
+    // R62 原路径（V800 恒走此；R7 `#r63caliper=off` 回滚到此）：盘缘外小盒，+Z（车前）侧
+    const calW = R * 0.16;  // 径向（YZ 内的径向）厚度
+    const calH = R * 0.30;  // 轴向（X）跨度
+    const calD = R * 0.09;  // 切向跨度
+    const calR = discR + calW * 0.4; // 卡钳中心落在盘缘略外
+    calGeo = new THREE.BoxGeometry(calH, calW, calD);
+    calGeo.translate(0, 0, calR); // 推到 +Z 盘缘
+  }
   const caliper = new THREE.Mesh(calGeo, calMat);
   caliper.name = `r62-caliper-${car}`;
   caliper.castShadow = false;
@@ -640,34 +707,45 @@ export function r62BuildBrakeSet(
 
 /**
  * R62-P0-1 · 挂载单轮制动件（与 mountExternalWheel 同帧调用）。
- *  - 盘挂 `spin`（轮自转枢轴）⇒ 用与轮 mesh 完全相同的 local 矩阵 ⇒ 随轮自转、 hub 居中；
- *  - 卡钳挂 `spin.parent`（**非自转**父）⇒ local = spinParentWorld⁻¹ × spinWorld × hubLocal
- *    ⇒ 静止在盘缘 +Z（车前）侧，不随轮转。
- * 前置：调用方刚 updateWorldMatrix(true,false) 过 spin 与其父（mountExternalWheel 已做 spin；
- * 父链在 spin.updateWorldMatrix(true,false) 时一并刷新），此处再显式刷一次父，稳妥。
+ *  - 盘挂 `spin`（轮自转枢轴）⇒ local = spinWorld⁻¹ × T(hubWorld) ⇒ 随轮自转、 hub 居中；
+ *  - 卡钳挂 `spin.parent`（**非自转**父）⇒ local = spinParentWorld⁻¹ × spinWorld × T(hubWorld)
+ *    ⇒ 静止在盘缘，不随轮转。
+ * R63-P1-A · 单位修复（巨盘错位根因）：`r62BuildBrakeSet` 用 `wheelRadius`（**世界米**）构建
+ *  制动件几何，而轮毂 GLB 是**模型单位**（×manifest.scale 才到世界）。旧路径
+ *  `hubLocal = T(hubModel)·S(scaleFactor)` 把世界米几何**再放大 ~4.3×**（R7 scale=4.323）并
+ *  错位到 1/4.3 处（盘世界 bbox 实测 2.17m、卡钳漂出轮心 ~1.5m）⇒ 巨型银盘填满轮拱 = 挡住
+ *  红卡钳的真因（视觉预研误判为「轮拱内衬」）。修法：`mountExternalWheel` 已把 spin 原点迁到
+ *  **世界 hub**，此处直接取 `spin.getWorldPosition()` = 世界 hub，且**不再乘 scaleFactor**
+ *  （几何已是世界米）。两 Adapter 同享此修复；V800 暗灰卡钳仍低调（非醒目化，仅纠正尺寸/位）。
+ * 前置：调用方（mountExternalWheel）刚把 spin 原点迁到世界 hub 并 updateWorldMatrix 过。
  */
 export function mountExternalBrake(
-  hubModel: readonly [number, number, number],
+  _hubModel: readonly [number, number, number],
   spin: THREE.Object3D,
   brake: WheelBrakeSet,
-  scaleFactor: number
+  _scaleFactor: number
 ): void {
-  const hubLocal = new THREE.Matrix4().makeTranslation(hubModel[0], hubModel[1], hubModel[2])
-    .multiply(new THREE.Matrix4().makeScale(scaleFactor, scaleFactor, scaleFactor));
-  // 盘 → spin（自转）
+  // R63-P1-A：世界 hub = spin 世界位（mountExternalWheel 已迁）；S(1)，几何世界米
   spin.updateWorldMatrix(true, false);
+  const hubWorld = spin.getWorldPosition(new THREE.Vector3());
+  const hubLocal = new THREE.Matrix4().makeTranslation(hubWorld.x, hubWorld.y, hubWorld.z);
+  // 盘 → spin（自转）
   const spinWorld = new THREE.Matrix4().copy(spin.matrixWorld);
   const discLocal = new THREE.Matrix4().copy(spinWorld).invert().multiply(hubLocal);
   brake.disc.matrixAutoUpdate = false;
   brake.disc.matrix.copy(discLocal);
   brake.disc.matrixWorldNeedsUpdate = true;
   spin.add(brake.disc);
-  // 卡钳 → spin 的父（非自转）
+  // 卡钳 → spin 的父（非自转）。R63-P1-A 修 double-translation：卡钳目标世界位 = T(hubWorld)
+  // （静止于轮心），故 calLocal = parentWorld⁻¹ × T(hubWorld)。R62 旧式
+  // `parentWorld⁻¹ × spinWorld × T(hubWorld)` 会多乘一次 spinWorld ⇒ 卡钳漂到
+  // `hubWorld + R_spin·hubWorld`（= R62「红块悬空在后轮旁」的真因）。盘式仍为
+  // spinWorld⁻¹ × T(hubWorld)（随 spin 自转、hub 居中），不变。
   const parent = spin.parent;
   if (parent) {
     parent.updateWorldMatrix(true, false);
     const parentWorld = new THREE.Matrix4().copy(parent.matrixWorld);
-    const calLocal = new THREE.Matrix4().copy(parentWorld).invert().multiply(spinWorld).multiply(hubLocal);
+    const calLocal = new THREE.Matrix4().copy(parentWorld).invert().multiply(hubLocal);
     brake.caliper.matrixAutoUpdate = false;
     brake.caliper.matrix.copy(calLocal);
     brake.caliper.matrixWorldNeedsUpdate = true;
