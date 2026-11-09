@@ -31,6 +31,8 @@ import {
   R51_LAMP_ON,
   R51_TAIL_EI_MAX,
   R51_TAIL_ON,
+  // R64：4 个 setter 幂等 early-return（开关真源同在 ExternalShell.ts）
+  R64_LAMP_DIRTY_ON,
   type ExternalShellHandle
 } from './external/ExternalShell';
 import { loadInteriorSteering } from './external/InteriorSteering';
@@ -1701,7 +1703,10 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
     },
 
     setBrakeLights(intensity: number): void {
-      brakeTarget = clamp01(intensity);
+      /* R64：Game 每帧调用，值未变时跳过标量写；`#r64lampdirty=off` ⇒ 逐位回 R63。 */
+      const next = clamp01(intensity);
+      if (R64_LAMP_DIRTY_ON && brakeTarget === next) return;
+      brakeTarget = next;
     },
 
     flashBrakeSnap(): void {
@@ -1709,7 +1714,9 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
     },
 
     setHeadlights(on: boolean): void {
-      headTarget = on ? headBaseIntensity : HEAD_DIM_INTENSITY;
+      const next = on ? headBaseIntensity : HEAD_DIM_INTENSITY;
+      if (R64_LAMP_DIRTY_ON && headTarget === next) return;
+      headTarget = next;
     },
 
     setBrakeHeat(t: number): void {

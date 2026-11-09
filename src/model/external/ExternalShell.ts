@@ -2048,6 +2048,8 @@ export async function loadExternalShell(
 
     const bodyMesh = bodyFound;
     bodyMesh.material = material;
+    /* R64-P0-1：双色车身顶点色统一在 :2183-2198（R47/R52 几何变换）之后写入，
+     * 此处不注入 shader、不设 customProgramCacheKey（R64-DECISION-4）。 */
     /* R49-A2：高模壳本体退出 shadow pass —— 每帧 1.27M tri（r7 1.39M）的第二遍投影
      * 改由适配器侧的低模代理承担（见 buildShadowProxies 头注）。
      * `#r49shadowproxy=off` ⇒ 逐位回 R48：壳自己投影、适配器不建代理。 */
@@ -2084,6 +2086,53 @@ export async function loadExternalShell(
     if (R62_WHEEL_ON && hasWheelSplit) {
       for (const tag of Object.keys(wheelMeshes)) {
         brakes[tag] = r62BuildBrakeSet(car, manifest.wheelRadius, r62BrakeMats, r62BrakeGeos);
+      }
+    }
+    /* ══ R64-P0-3 · 制动件 FrontSide + 2 份共享材质/几何（**DC 不变**）═══════════
+     * 主理人裁决：否决 InstancedMesh（8 mesh 是 `matrixAutoUpdate=false` 静态矩阵、
+     * 零每帧成本；R63 挂载单位/double-translation 刚修好；改造风险 >> 6 DC 收益）。
+     * 本块**只改材质/几何引用与 side**：`r62BuildBrakeSet` / `mountExternalBrake`
+     * 函数体与 R63 挂载矩阵语义一字不动（r62/r63 护栏 slice 锚点全在原函数内）。
+     * 收益：DoubleSide→FrontSide 省一半背面光栅化；材质/几何实例 8→2。
+     * ⚠ 账本去重时**必须保留 wheelAlloyMat**（:2074 也在 r62BrakeMats 里），
+     *   否则轮毂材质会被误 dispose ⇒ 四轮渲染崩坏。
+     * `#r64brake=off` ⇒ 不进本块，逐位回 R63（8×DoubleSide / 8 材质 / 8 几何）。 */
+    if (R64_BRAKE_ON && R62_WHEEL_ON && hasWheelSplit) {
+      const firstSet = brakes.fl;
+      if (firstSet) {
+        const sharedMats: THREE.Material[] = [
+          firstSet.disc.material as THREE.Material,
+          firstSet.caliper.material as THREE.Material
+        ];
+        const sharedGeos: THREE.BufferGeometry[] = [firstSet.disc.geometry, firstSet.caliper.geometry];
+        for (const m of sharedMats) m.side = THREE.FrontSide;
+        for (const tag of Object.keys(brakes)) {
+          if (tag === 'fl') continue;
+          const b = brakes[tag];
+          b.disc.material = sharedMats[0];
+          b.disc.geometry = sharedGeos[0];
+          b.caliper.material = sharedMats[1];
+          b.caliper.geometry = sharedGeos[1];
+        }
+        // 账本去重后 **length = 2/车**（盘 1 / 卡钳 1）——审查线 A4 最干净抓手。
+        // ⚠ wheelAlloyMat 也被 :2074 推进了 r62BrakeMats（原式，护栏钉死），
+        //   但它不是制动件材质 ⇒ 从账本移出、改由 dispose() 末尾单独释放，
+        //   **绝不 dispose 它**（四轮仍引用，误释放会崩坏渲染）。
+        // ⚠ 共享实例在本次 loadExternalShell(car,...) 闭包内新建 ⇒ 天然按 car
+        //   分键缓存，两车会话/切换不串色（calMat.color = R62_CALIPER[car]）。
+        const keepM = new Set<THREE.Material>(sharedMats);
+        const keepG = new Set<THREE.BufferGeometry>(sharedGeos);
+        for (let i = r62BrakeMats.length - 1; i >= 0; i -= 1) {
+          const m = r62BrakeMats[i];
+          if (!keepM.has(m)) {
+            if (m !== wheelAlloyMat) m.dispose();
+            r62BrakeMats.splice(i, 1);
+          }
+        }
+        for (let i = r62BrakeGeos.length - 1; i >= 0; i -= 1) {
+          const g = r62BrakeGeos[i];
+          if (!keepG.has(g)) { g.dispose(); r62BrakeGeos.splice(i, 1); }
+        }
       }
     }
     bodyMesh.scale.setScalar(manifest.scale);
@@ -2195,6 +2244,30 @@ export async function loadExternalShell(
         if (!r52WheelAxleOff) alignWheelAxleToX(mesh.geometry);
         mesh.geometry.rotateY(Math.PI);
       }
+    }
+    /* ══ R64 · 顶点色写入（**必须在 R47 rotateY(π) / R52 alignWheelAxleToX
+     * :2183-2198 之后**：几何已被原地变换，局部 position 才是最终真值；
+     * 写在之前会有 ~3.6% 分区偏移）。坐标空间 = **几何局部系**首建一次算好，
+     * 不依赖运行时世界矩阵（body 组 rotY(π) / 轮 spin 每帧绕世界 X 自转）。
+     * Uint8BufferAttribute(arr,3,true) ⇒ normalized=true；**只追加 color attribute，
+     * 未修改 uv / 未改 positionCount / 未改其余 attribute 键集 / 不写回 GLB**。
+     * ── P0-1 双色：仅 V800 + useProcPaint + R64_PAINT_ON（R7 单色、#r60paint=off
+     *    脏贴图自带分色、#r64paint=off 回滚 ⇒ 不写 color、不设 vertexColors）。
+     * ── P0-2 黑胎：rmax 逐顶点重算每车归一，4 个 wheel geometry **全部一致**
+     *    加 color，共享单一 wheelAlloyMat ⇒ attributeSignature 不拆桶。 */
+    if (R64_PAINT_ON && useProcPaint && car === 'v800') {
+      r64WriteTwoTone(bodyMesh.geometry);
+      material.vertexColors = true;
+      material.needsUpdate = true;   // USE_COLOR 变体（加载期预热见 Game.ts）
+    }
+    if (R64_TIRE_ON && R62_WHEEL_ON && wheelAlloyMat && hasWheelSplit) {
+      const r64Rmax = r64WheelRmax(wheelMeshes);
+      for (const mesh of Object.values(wheelMeshes)) {
+        r64WriteTireBands(mesh.geometry, r64Rmax);
+      }
+      wheelAlloyMat.vertexColors = true;
+      wheelAlloyMat.needsUpdate = true;
+      (wheelAlloyMat.userData as { r64Rmax?: number }).r64Rmax = r64Rmax; // QA 探针机读
     }
 
     // ── R44-6 语义部件（glass 透明 / lamp emissive）──
@@ -2474,6 +2547,23 @@ export async function loadExternalShell(
           material.metalness = pp.metalness;
           material.roughness = pp.roughness;
           material.needsUpdate = true;
+          /* ══ R64-P0-4 · 原式三行逐字保留为回滚基线，随后「覆盖写」统一口径 ══
+           * 构造分支 :1959-1988 叠加 R62 tweak（chroma 线性 RGB 缩放 / metal 乘子 /
+           * clearcoat 旋钮）；原式 setVariant 只落裸 R60 表 ⇒ 同一变体「初始构造」
+           * 与「切走再切回」分叉（black metalness 0.65 vs 0.5）。
+           * applyProcPaintTweaks 完整复刻构造分支数值且**幂等**（每次从 R60 表
+           * 重算，不在当前 color 上再乘一次 chroma）⇒ 覆盖写后逐位同值。
+           * ⚠ helper **不得被构造分支调用**（主理人裁决）；防再次分叉交给
+           *   tests/r64_variant_consistency.test.ts 的数值断言。
+           * ⚠ helper **不得重置 material.vertexColors**（顶点色是乘子，随变体
+           *   主色自动相乘 ⇒ 无需任何 uniform 同步）。
+           * ⚠ `#r64variant=off` ⇒ **不调用 helper**，逐位回 R63 裸表（A19：
+           *   off 态材质数值 ≡ R63 baseline 且 helper 未被调用）。
+           * ⚠ `#r60paint=off` 走下方脏贴图分支，helper 不介入；`#r62paint=off`
+           *   由 helper 内部判定 ⇒ 回 R60 口径。 */
+          if (R64_VARIANT_ON) {
+            applyProcPaintTweaks(material, variantId);
+          }
           currentVariant = variantId;
           r44ShellStatus[car] = { state: 'ready', variant: variantId };
           return true;
@@ -2540,6 +2630,8 @@ export async function loadExternalShell(
         for (const m of r62BrakeMats) m.dispose();
         for (const g of r62BrakeGeos) g.dispose();
         lampAtlasTex?.dispose();
+        // R64：wheelAlloyMat 已从 r62BrakeMats 移出（A4 账本 length=2），单独释放
+        wheelAlloyMat?.dispose();
         material.map?.dispose();
         material.normalMap?.dispose();
         material.roughnessMap?.dispose();
@@ -2578,4 +2670,201 @@ export async function loadExternalShell(
     if (shellAbort === ac) shellAbort = null;
     unsubscribe();
   }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+ * R64 · 四项 P0 修复 —— **运行时顶点色**（R64-DECISION-4 最终裁决）
+ * ─────────────────────────────────────────────────────────────────────────────
+ * 裁决：采纳顶点色 attribute，否决 onBeforeCompile shader 注入。
+ *   · 零 GLSL / 零 customProgramCacheKey / 零 uniform 同步 / 零合批后 modelMatrix
+ *     语义风险；顶点色是**线性乘子**，与变体主色相乘 ⇒ setVariant 换色时双色
+ *     与黑胎自动跟随，无需任何 uniform 同步。
+ *   · Uint8BufferAttribute(arr,3,true)（normalized=true）⇒ 显存增量极小
+ *     （v800 body 580,459 + 4 轮 189,098 顶点 ×3B ≈ 2.31MB；r7 ≈ 2.49MB），
+ *     用户已豁免首建时长与面数。
+ *   · body 只有 1 个 mesh、4 个 wheel geometry **全部一致**加 color 且共享单一
+ *     wheelAlloyMat ⇒ attributeSignature 不拆桶，DC/tri/材质实例 0 变化。
+ * ⚠ 全部新声明后置到文件末尾（避开既有护栏 slice/indexOf 锚点）：既有 4 个
+ *   护栏用 readFileSync + slice(from,to) 做源码字符串断言，在 :1987 之前写入
+ *   "material.needsUpdate = true;" / "if (R62_PAINT_ON) {" 等锚点会改变 slice
+ *   边界 ⇒ 整片红。function 声明提升 + loadExternalShell 异步 ⇒ 无 TDZ。
+ * ⚠ 坐标空间：**几何局部系**首建一次算好（body 局部 y、轮局部 hypot(y,z)），
+ *   不依赖运行时世界矩阵 —— body 组带 rotY(π)、轮挂 spin 每帧绕世界 X 自转，
+ *   用世界 x/z 会翻符号致分界前后颠倒，用世界坐标算半径会整圈乱染。
+ * ⚠ 顶点色必须在 :2183-2198（R47 rotateY(π) / R52 alignWheelAxleToX）**之后**
+ *   写，否则小角旋转把 x 混入 y/z ⇒ ~3.6% 分区偏移。
+ * ⚠ 五个开关是模块加载期求值 export const ⇒ 纯改 location.hash 不 reload 是
+ *   no-op；Phase 3 A/B 必须 before/after 各自 reload 且走逐字相同序列。
+ * ⚠ 键名不含 noprewarm 子串（Game.ts:622 入口守卫）。
+ * 回滚钩子（默认 ON，=off 逐位回 R63；A13 / A19 保活）：
+ *   `#r64paint=off` / `#r64tire=off` / `#r64brake=off` /
+ *   `#r64variant=off` / `#r64lampdirty=off`
+ * ══════════════════════════════════════════════════════════════════════════════ */
+
+/** 五个回滚钩子（默认 ON，=off 逐位回 R63 行为）。 */
+export const R64_PAINT_ON = !r51HookOff('r64paint');          // P0-1 双色车身顶点色
+export const R64_TIRE_ON = !r51HookOff('r64tire');            // P0-2 黑胎半径分区顶点色
+export const R64_BRAKE_ON = !r51HookOff('r64brake');          // P0-3 FrontSide + 2 共享材质
+export const R64_VARIANT_ON = !r51HookOff('r64variant');      // P0-4 setVariant 覆盖写
+export const R64_LAMP_DIRTY_ON = !r51HookOff('r64lampdirty'); // 4 个 setter 幂等 early-return
+
+if (typeof window !== 'undefined') {
+  (window as unknown as { __r64Flags?: unknown }).__r64Flags = {
+    paint: R64_PAINT_ON,
+    tire: R64_TIRE_ON,
+    brake: R64_BRAKE_ON,
+    variant: R64_VARIANT_ON,
+    lampDirty: R64_LAMP_DIRTY_ON,
+    evaluatedAt: 'module-load',
+    branch: 'vertex-color',
+    note: 'load-time const; Phase 3 A/B requires reload (no runtime setter this wave)'
+  };
+}
+
+/* ── P0-4 · applyProcPaintTweaks（**只作 setVariant 覆盖写块的内部实现**）──────
+ * 主理人裁决：构造分支 :1959-1988 一字不动，本 helper **不得被构造分支调用**；
+ * 防「再次分叉」由 tests/r64_variant_consistency.test.ts 的数值断言承担。
+ * 本函数完整复刻构造分支数值口径：R60 基准表 → R62 tweak（chroma 线性 RGB
+ * 缩放 / metal 乘子 / clearcoat 旋钮）→ 六变体（white 的 chroma=1/metal=1 例外）。
+ * ⚠ 幂等：每次从 R60 表重算，不读 material 当前值 ⇒ 连续调用两次逐位不变，
+ *   绝不会「在当前 color 上再乘一次 tw.chroma」。
+ * ⚠ **不得重置 material.vertexColors**（顶点色是乘子，与变体主色自动相乘）。
+ * ⚠ new THREE.Color().setHex() 与 material.color.setHex() 走同一个 ColorManagement
+ *   sRGB→Linear 转换 ⇒ 线性分量逐位相同；setRGB 默认 LinearSRGB 工作空间。 */
+export interface R64ProcPaint {
+  readonly color: readonly [number, number, number]; // 线性 RGB
+  readonly metalness: number;
+  readonly roughness: number;
+  readonly clearcoat: number;
+  readonly clearcoatRoughness: number;
+}
+
+/** 纯数据源（护栏可独立复算；不接触任何材质实例）。 */
+export function resolveProcPaint(variantId: string): R64ProcPaint | null {
+  const pp = R60_PROC_PAINT[variantId];
+  if (!pp) return null;
+  const base = new THREE.Color().setHex(pp.color);
+  let r = base.r, g = base.g, b = base.b;
+  let metalness = pp.metalness;
+  let clearcoat = R56_PAINT_CLEARCOAT;   // 构造体 :1943 默认
+  let clearcoatRoughness = 0.35;         // 构造体 :1944 默认
+  const r62On = R62_PAINT_ON;            // 不写 "if (R62_PAINT_ON) {" 锚点字面量
+  if (r62On) {
+    const tw = R62_PROC_PAINT_TWEAK[variantId];
+    if (tw) {
+      r = Math.min(1, r * tw.chroma);
+      g = Math.min(1, g * tw.chroma);
+      b = Math.min(1, b * tw.chroma);
+      metalness = Math.min(1, pp.metalness * tw.metal);
+    }
+    clearcoat = R62_PAINT_CLEARCOAT;
+    clearcoatRoughness = R62_PAINT_CLEARCOAT_ROUGH;
+  }
+  return { color: [r, g, b], metalness, roughness: pp.roughness, clearcoat, clearcoatRoughness };
+}
+
+/** 覆盖写：把材质数值一次性收敛到构造分支口径。幂等；不碰 vertexColors。 */
+export function applyProcPaintTweaks(
+  material: THREE.MeshPhysicalMaterial,
+  variantId: string
+): boolean {
+  const p = resolveProcPaint(variantId);
+  if (!p) return false;
+  material.color.setRGB(p.color[0], p.color[1], p.color[2]);
+  material.metalness = p.metalness;
+  material.roughness = p.roughness;
+  material.clearcoat = p.clearcoat;
+  material.clearcoatRoughness = p.clearcoatRoughness;
+  // ⚠ 刻意不写 material.vertexColors / material.needsUpdate：
+  //   vertexColors 是 P0-1 顶点色契约，setVariant 不得重置；
+  //   needsUpdate 已由原式 :2476 处理。
+  return true;
+}
+
+/* ── P0-1 · 双色车身顶点色（仅 V800，几何局部系首建一次）─────────────────────
+ * 官图上浅下深：上部乘子 1.0 / 下部默认 0.09（线性）；分色线 y0=0.222
+ * （R61 ribbon 下沿 BELT_Y=0.235 / H=0.026）、过渡带 0.018、smoothstep 软过渡。
+ * ⚠ normal(|ny|<0.65) 联合门控：纯 Y 判据会把法线朝上的引擎盖/前脸一起
+ *   染成下带色 ⇒ 正前 3/4 机位误染。只染竖直侧面（|ny| 小）。
+ * ⚠ 不写死棕色：下色 = 变体主色 × 乘子，黑/金变体同样成立；
+ *   setVariant 改 material.color 后上下色自动跟随（零 uniform 同步）。
+ * Uint8BufferAttribute(arr,3,true) ⇒ normalized=true，shader 里 vColor=k 线性乘子。 */
+const R64_SPLIT_Y = r56HashNum('r64split') ?? 0.222;
+const R64_SPLIT_BAND = r56HashNum('r64band') ?? 0.018;
+const R64_LOWER_MUL = r56HashNum('r64lower') ?? 0.09;
+const R64_GATE = r56HashNum('r64gate') ?? 1;      // 0 ⇒ 关闭 normal 门控（A/B 对照）
+
+export function r64WriteTwoTone(
+  geo: THREE.BufferGeometry,
+  lowerMul: number = R64_LOWER_MUL
+): void {
+  const pos = geo.getAttribute('position');
+  const nrm = geo.getAttribute('normal');
+  if (!pos) return;
+  const arr = new Uint8Array(pos.count * 3);
+  const y0 = R64_SPLIT_Y;
+  const w = R64_SPLIT_BAND;
+  for (let i = 0; i < pos.count; i += 1) {
+    // 局部 y（GLB 模型单位，v800 y∈[0.01197,0.38520]）；不受 body rotY(π) 影响
+    const t = Math.min(1, Math.max(0, (pos.getY(i) - (y0 - w)) / (2 * w)));
+    const s = t * t * (3 - 2 * t);                 // smoothstep：上部→1
+    let gate = 1;
+    if (R64_GATE > 0 && nrm) {
+      const ny = Math.abs(nrm.getY(i));
+      gate = Math.min(1, Math.max(0, (0.65 - ny) / 0.35));
+    }
+    const k = 1 - (1 - lowerMul) * (1 - s) * gate; // 上/朝上面=1，下部竖直面=lowerMul
+    const q = Math.round(Math.min(1, Math.max(0, k)) * 255);
+    arr[i * 3] = q; arr[i * 3 + 1] = q; arr[i * 3 + 2] = q;
+  }
+  geo.setAttribute('color', new THREE.Uint8BufferAttribute(arr, 3, true));
+}
+
+/* ── P0-2 · 黑胎半径分区顶点色（逐顶点每车 rmax 归一）────────────────────────
+ * r = hypot(y,z) / rmax ∈ [0,1]（**几何局部系**，不依赖运行时世界矩阵）；
+ * 阈值 0.85（官图黑胎占 15–22% 像素面积）、软过渡 0.02 防锯齿；
+ * 外圈乘子 0.03 / 内圈 1.0（V800 银基色、R7 近黑基色天然吻合官图深灰盘，
+ * 无需提亮）。4 个 wheel geometry **全部一致**加 color，共享 1 个材质。
+ * ⚠ rmax **逐顶点重算**，禁用 GLB POSITION accessor.min/max（测试线 v3：
+ *   v800 四轮元数据陈旧 +4.85%~9.82%，真实 r/R 达 1.107~1.118；r7 1.005~1.006），
+ *   禁用把 r7 的 rOverR_bins_0p1 套到 v800。
+ * ⚠ Uint8BufferAttribute(arr,3,true) ⇒ normalized=true。 */
+const R64_TIRE_CUT = r56HashNum('r64tire') ?? 0.85;
+const R64_TIRE_BAND = r56HashNum('r64tireband') ?? 0.02;
+const R64_TIRE_OUTER = r56HashNum('r64tireouter') ?? 0.03;
+
+/** 逐顶点重算 4 轮几何的 max(hypot(y,z))；不使用 GLB accessor.min/max。 */
+export function r64WheelRmax(wheelMeshes: Readonly<Record<string, THREE.Mesh>>): number {
+  let rmax = 0;
+  for (const mesh of Object.values(wheelMeshes)) {
+    const pos = mesh.geometry.getAttribute('position');
+    if (!pos) continue;
+    for (let i = 0; i < pos.count; i += 1) {
+      const r = Math.hypot(pos.getY(i), pos.getZ(i));
+      if (r > rmax) rmax = r;
+    }
+  }
+  return rmax;
+}
+
+export function r64WriteTireBands(
+  geo: THREE.BufferGeometry,
+  rmax: number,
+  outerMul: number = R64_TIRE_OUTER
+): void {
+  const pos = geo.getAttribute('position');
+  if (!pos) return;
+  const arr = new Uint8Array(pos.count * 3);
+  const R = Math.max(rmax, 1e-5);
+  const c0 = R64_TIRE_CUT - R64_TIRE_BAND;
+  const c1 = R64_TIRE_CUT + R64_TIRE_BAND;
+  for (let i = 0; i < pos.count; i += 1) {
+    const r = Math.min(1, Math.max(0, Math.hypot(pos.getY(i), pos.getZ(i)) / R));
+    const t = Math.min(1, Math.max(0, (r - c0) / (c1 - c0)));
+    const s = t * t * (3 - 2 * t);                 // smoothstep：内圈→0，外圈→1
+    const k = 1 - (1 - outerMul) * s;             // 内圈 1.0 / 外圈 outerMul
+    const q = Math.round(Math.min(1, Math.max(0, k)) * 255);
+    arr[i * 3] = q; arr[i * 3 + 1] = q; arr[i * 3 + 2] = q;
+  }
+  geo.setAttribute('color', new THREE.Uint8BufferAttribute(arr, 3, true));
 }

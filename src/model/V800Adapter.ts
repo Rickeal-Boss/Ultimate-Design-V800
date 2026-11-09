@@ -24,6 +24,8 @@ import {
   R51_LAMP_ON,
   R51_TAIL_EI_MAX,
   R51_TAIL_ON,
+  // R64：4 个 setter 幂等 early-return（开关真源同在 ExternalShell.ts）
+  R64_LAMP_DIRTY_ON,
   type ExternalShellHandle
 } from './external/ExternalShell';
 import { loadInteriorSteering } from './external/InteriorSteering';
@@ -5052,13 +5054,20 @@ const R48_LAMP_TONE: boolean =
       }
     },
     setBrakeLights(intensity: number): void {
-      brakeTarget = intensity;
+      /* R64：Game 每帧调用（Game.ts:1549/1556），值未变时跳过标量写。
+       * 不改变 damp/headTarget 联动语义，`#r64lampdirty=off` ⇒ 逐位回 R63。
+       * ⚠ 收益 ≈ 0（three 每帧无条件上传 emissive uniform），不宣称帧时优化。 */
+      const next = intensity;
+      if (R64_LAMP_DIRTY_ON && brakeTarget === next) return;
+      brakeTarget = next;
     },
     flashBrakeSnap(): void {
       snapT = 1;
     },
     setHeadlights(on: boolean): void {
-      headTarget = on ? HEAD_BASE : 0.15;
+      const next = on ? HEAD_BASE : 0.15;
+      if (R64_LAMP_DIRTY_ON && headTarget === next) return;
+      headTarget = next;
     },
     setBrakeHeat(t: number): void {
       heat = t;

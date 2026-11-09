@@ -1809,6 +1809,28 @@ export class Game {
     if (!bodyMat) return;
     const originalSide = bodyMat.side;
     try {
+      /* ══ R64 · USE_COLOR 新 program 变体预热（A10 / R15）════════════════════
+       * prewarmGpu()(:875) 跑在外部壳异步装配**之前**，覆盖不到外部壳材质；
+       * 原 prewarmShellProgramVariants 只取**第一个** r44External &&
+       * isMeshPhysicalMaterial 材质，且过滤掉 MeshStandardMaterial 制动件。
+       * 这里按**材质实例**遍历全部 r44External 网格（body / 4 轮 wheelAlloyMat /
+       * 玻璃 / 灯组），并做一次全场景 renderer.compile ⇒ body 与 4 轮的
+       * USE_COLOR 变体（vertexColors=true）以及制动件共享 MeshStandardMaterial
+       * 的 FrontSide 变体全部落在 loading 屏内编译，稳态无编译尖峰。
+       * ⚠ 不改 hash.includes('noprewarm') 入口守卫（Game.ts:622）语义。 */
+      const r64ShellMats = new Set<THREE.Material>();
+      this.car.root.traverse((o) => {
+        const mm = o as THREE.Mesh;
+        if (!mm.isMesh) return;
+        if ((mm.userData as { r44External?: boolean }).r44External !== true) return;
+        const list = (Array.isArray(mm.material) ? mm.material : [mm.material]) as THREE.Material[];
+        for (const mat of list) if (mat) r64ShellMats.add(mat);
+      });
+      if (r64ShellMats.size > 0) {
+        // renderer.compile 是全场景遍历（不只 r64ShellMats），未打标的制动件
+        // mesh 也在 scene 内，其 FrontSide program 一并编译。
+        this.renderer.compile(this.scene, this.rig.camera);
+      }
       for (const side of [THREE.FrontSide, THREE.DoubleSide]) {
         if (bodyMat.side === side) continue;
         bodyMat.side = side;
