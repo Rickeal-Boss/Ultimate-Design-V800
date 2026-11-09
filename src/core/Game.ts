@@ -479,7 +479,17 @@ export class Game {
     // ---- UI ----
     this.hud = new Hud({
       onSelectView: (mode) => this.selectView(mode),
-      onExitFree: () => this.exitFreeExplore()
+      onExitFree: () => this.exitFreeExplore(),
+      // R65 · 照片模式：控相机不控车——切换 FreeDrive.photoMode（step() 短路驾驶输入）。
+      // 相机链路（CameraRig / wireFreeLook / 视角按钮）不受影响 ⇒ 可自由环视构图。
+      // 单一真源：photoMode 只存于 freeDrive，HUD 按钮无自有状态，切换后由这里回写视觉，
+      //   根治「退出照片模式后车仍冻结」（HUD visual 与 freeDrive 标志漂移）。
+      onTogglePhoto: () => {
+        if (!this.freeDrive) return;
+        this.freeDrive.photoMode = !this.freeDrive.photoMode;
+        this.hud.setPhotoActive(this.freeDrive.photoMode);
+        this.sfx.uiClick();
+      }
     });
     this.menu = new Menu(
       () => this.startRun(),
@@ -695,6 +705,12 @@ export class Game {
         exit: (): void => this.exitFreeExplore(),
         state: (): unknown => this.freeDrive?.snapshot() ?? null,
         press: (code: string, down: boolean): void => this.freeDrive?.press(code, down),
+        /** R65 · 照片模式 QA：读写 photoMode，供 headless 探针判定冻结/恢复 */
+        photo: (on?: boolean): boolean => {
+          if (!this.freeDrive) return false;
+          if (on !== undefined) this.freeDrive.photoMode = on;
+          return this.freeDrive.photoMode;
+        },
         teleport: (x: number, z: number, heading: number): void =>
           this.freeDrive?.teleport(x, z, heading),
         /** 直接弹结算面板（合成一局成功刹停），供结算页截图 */
@@ -1141,6 +1157,11 @@ export class Game {
    */
   private exitFreeExplore(): void {
     if (!this.freeDrive) return;
+    // R65：退出前若在照片模式，先退出（复位驾驶 + HUD 按钮态），避免下次进入继承冻结态。
+    if (this.freeDrive.photoMode) {
+      this.freeDrive.photoMode = false;
+      this.hud.setPhotoActive(false);
+    }
     this.freeDrive.detach();
     this.freeDrive = null;
     this.hud.setFreeMode(false);

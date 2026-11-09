@@ -333,6 +333,16 @@ export class FreeDrive {
   /** 事件出口（Game 统一处理 toast / 音效 / 震屏） */
   onEvent: ((e: FreeDriveEvent) => void) | null = null;
 
+  /* ── R65 · 照片模式（控相机不控车）──────────────────────────────
+   * 用户需求：自由探索加「照片模式」——控场景相机自由移动，而不是控制车辆。
+   * 实现：photoMode=true 时 step() 把驾驶输入（油门/刹车/转向/手刹）全部短路归零，
+   *   车辆从当前速度经阻力+「跨零急停」在一个物理步内停死并保持静止；相机链路
+   *   （CameraRig / wireFreeLook / HUD 视角按钮）完全不受影响 ⇒ 相机可自由环视。
+   * 这是最小侵入接入点：不碰挑战链路、不碰相机、不碰运动学积分公式，
+   *   关掉 photoMode 立刻恢复完整驾驶（逐位回 R64 路径）。
+   * 键盘监听保持 attach（Esc 结束 / H 帮助 / R 复位仍可用），仅驾驶键被 step 忽略。 */
+  photoMode = false;
+
   private readonly maxSpeedMs: number;
   private readonly start: { x: number; z: number; heading: number };
   private readonly keys = new Set<string>();
@@ -486,6 +496,22 @@ export class FreeDrive {
    */
   step(dt: number): void {
     const s = this.state;
+    // R65 照片模式：驾驶输入全部短路（车急停静止），相机链路不受影响。
+    // 置 speed=0 而非仅清输入 ⇒ 一个物理步内停死（不靠阻力滑行），构图期间车纹丝不动。
+    // steer/handbrake/throttle/brake 全清 ⇒ HUD 踏板/挡位/转向读数同步归零，观感一致。
+    if (this.photoMode) {
+      s.throttle = 0;
+      s.brake = 0;
+      s.handbrake = false;
+      s.steer = 0;
+      s.accel = 0;
+      s.speed = 0;
+      s.yawRate = 0;
+      this.yawDyn = 0;
+      this.vy = 0;
+      s.beta = 0;
+      return;
+    }
     const throttle = this.has('KeyW', 'ArrowUp') ? 1 : 0;
     const brakeIn = this.has('KeyS', 'ArrowDown') ? 1 : 0;
     const handbrake = this.has('Space');

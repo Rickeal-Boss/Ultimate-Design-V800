@@ -662,6 +662,29 @@ body {
   border: 1px solid rgba(48, 200, 255, 0.5);
 }
 
+/* R65 · 照片模式按钮（控相机不控车）：常态似次要按钮，激活态高亮金色 */
+.free-photo-btn {
+  padding: 7px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.45);
+  color: var(--cream);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.free-photo-btn:hover {
+  color: #fff;
+  border-color: var(--blue);
+}
+
+.free-photo-btn.active {
+  color: #1a1400;
+  background: rgba(240, 200, 90, 0.92);
+  border-color: #f0c85a;
+  font-weight: 600;
+}
+
 .free-exit-btn {
   padding: 7px 14px;
   border-radius: 8px;

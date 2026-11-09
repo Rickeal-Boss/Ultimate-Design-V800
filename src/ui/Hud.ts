@@ -35,6 +35,8 @@ export interface HudCallbacks {
   onSelectView?: (mode: CameraMode) => void;
   /** 自由探索模式：点「结束探索」（R29） */
   onExitFree?: () => void;
+  /** 自由探索模式：点「照片模式」（R65）——控相机不控车，切换 FreeDrive.photoMode */
+  onTogglePhoto?: () => void;
 }
 
 /** 自由探索操作说明卡（纯数据，便于与 FreeDrive 的按键表对账） */
@@ -166,8 +168,10 @@ export class Hud {
   private score: HTMLElement;
   /** 挑战模式中段数值组（自由探索时整组隐藏） */
   private mid: HTMLElement;
-  /** 自由探索顶栏：「自由探索」标签 + 「结束探索」按钮 */
+  /** 自由探索顶栏：「自由探索」标签 + 「照片模式」按钮 + 「结束探索」按钮 */
   private freeBar: HTMLElement;
+  /** R65 · 照片模式按钮（控相机不控车）；视觉态由 Game 经 setPhotoActive 回写，无自有状态 */
+  private photoButton: HTMLButtonElement;
   /** 自由探索操作说明卡（3s 后自动淡出，H 键可召回） */
   private freeHelp: HTMLElement;
   private freeHelpTimer = 0;
@@ -246,11 +250,20 @@ export class Hud {
     // 只留速度 + 挡位（hud-left）与视角按钮组 —— 踏板力/距离统计属挑战玩法语义，不通用。
     this.freeBar = el('div', 'free-bar hidden');
     const freeTag = el('div', 'free-tag', '自由探索');
+    // R65 · 照片模式按钮：控相机不控车（切换 FreeDrive.photoMode）。
+    // 开启时加 .active 高亮 + 文案变「照片中」，再点退出回驾驶。样式见 ensureFreeBarPhotoStyle。
+    this.photoButton = el('button', 'free-photo-btn') as HTMLButtonElement;
+    this.photoButton.type = 'button';
+    this.photoButton.textContent = '照片模式';
+    // R65：按钮无自有状态——点击只发信号，真实 photoMode 单一真源在 FreeDrive，
+    // 由 Game.onTogglePhoto 切换后回调 setPhotoActive 反映视觉。避免双状态漂移
+    // （曾致「退出照片模式后车仍冻结」：HUD visual 已切回但 freeDrive.photoMode 未同步）。
+    this.photoButton.addEventListener('click', () => callbacks.onTogglePhoto?.());
     const exitButton = el('button', 'free-exit-btn') as HTMLButtonElement;
     exitButton.type = 'button';
     exitButton.textContent = '结束探索';
     exitButton.addEventListener('click', () => callbacks.onExitFree?.());
-    this.freeBar.append(freeTag, exitButton);
+    this.freeBar.append(freeTag, this.photoButton, exitButton);
 
     this.freeHelp = el('div', 'free-help hidden');
     const helpTitle = el('div', 'fh-title', '操作说明');
@@ -359,6 +372,13 @@ export class Hud {
     window.clearTimeout(this.freeHelpTimer);
     this.freeHelpTimer = 0;
     this.freeHelp.classList.add('fade');
+  }
+
+  /** R65 · 照片模式按钮视觉态（高亮 + 文案切换）。真实状态单一真源在 FreeDrive.photoMode，
+   *  由 Game 切换后回调本方法回写视觉；按钮点击不自带状态（根治退出后仍冻结的漂移）。 */
+  setPhotoActive(active: boolean): void {
+    this.photoButton.classList.toggle('active', active);
+    this.photoButton.textContent = active ? '照片中' : '照片模式';
   }
 
   /** H 键：淡出态召回 / 显示态隐藏 */
