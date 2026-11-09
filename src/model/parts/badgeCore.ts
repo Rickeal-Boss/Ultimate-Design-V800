@@ -75,6 +75,106 @@ const SHIELD_PROFILE: readonly (readonly [number, number])[] = [
 ];
 
 /* ================================================================
+ * R65 · 曜日纹菱格 + MAEXTRO 发光横带（官图 G2 车标）
+ * ================================================================
+ * 用户 R65：前部车标应贴官图 G2「曜日纹菱形 + MAEXTRO 横带」，而非纯白盾/红旗盾。
+ * 官图造型：竖向六边形（尖顶底）面板，内部上下各一半「放射状三角菱格」（曜日纹），
+ *   正中一条发光横带写 MAEXTRO。整体银白发光、纹线为暗色细线。
+ * 实现：程序化 Canvas 贴图（零外部图片，铁律），同时作 map + emissiveMap
+ *   ⇒ 横带/菱格自发光、暗线不发光。贴图只作用于**内芯正面**（挤出体前面 UV 即
+ *   profile 单位坐标，需归一到 [0,1]；侧面 UV 会被 ClampToEdge 采样到边缘色，可接受）。
+ */
+
+/** 归一几何 UV 到 [0,1]（按 position bbox），使贴图铺满正面（侧面采样边缘色）。
+ * R65 实测（近距 __v800Capture）：徽标簇安装**未**绕 Y 转 π（外法线与 local+Z 同向），
+ * 直接归一 UV 文字即正读；若此处翻 u 反而镜像（MAEXTRO→ORTEXAEM）。故保持正向归一。 */
+function remapBadgeUV(geo: THREE.BufferGeometry): void {
+  geo.computeBoundingBox();
+  const bb = geo.boundingBox;
+  if (!bb) return;
+  const pos = geo.getAttribute('position');
+  const uv = geo.getAttribute('uv');
+  if (!pos || !uv) return;
+  const sx = bb.max.x - bb.min.x || 1;
+  const sy = bb.max.y - bb.min.y || 1;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i);
+    uv.setXY(i, (x - bb.min.x) / sx, (y - bb.min.y) / sy);
+  }
+  uv.needsUpdate = true;
+}
+
+/** 画曜日纹菱格 + MAEXTRO 横带。无 DOM（Node/vitest）返回 null，调用方回退纯色。 */
+function makeMaextroBadgeTexture(): THREE.CanvasTexture | null {
+  if (typeof document === 'undefined') return null;
+  const W = 256, H = 512;
+  const cv = document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  const ctx = cv.getContext('2d')!;
+  // 底：暗银灰（菱格之间的缝隙色）
+  ctx.fillStyle = '#3a3d44';
+  ctx.fillRect(0, 0, W, H);
+  // 发光底色（横带区更亮）
+  const bandY0 = H * 0.44, bandY1 = H * 0.56;
+  // 曜日纹菱格：从中心带向上下放射的三角网格
+  ctx.strokeStyle = '#e8ecf2';
+  ctx.lineWidth = 2;
+  const cx = W / 2;
+  const rows = 9; // 上下各 9 条横线
+  const cols = 7;  // 每行 7 格宽
+  const cellH = (H * 0.44) / rows; // 半幅（中心带到顶/底）分 9 行
+  const cellW = W / cols;
+  // 上下两半放射菱格：以中心带为基准向顶/底交错
+  for (let half = 0; half < 2; half++) {
+    const dir = half === 0 ? -1 : 1; // -1 向上、+1 向下
+    const originY = half === 0 ? bandY0 : bandY1;
+    for (let r = 0; r <= rows; r++) {
+      const y = originY + dir * r * cellH;
+      // 交错横线（菱格上下顶点）
+      ctx.beginPath();
+      const inset = r * (W * 0.02); // 向顶/底略收（贴合六边收尖）
+      ctx.moveTo(inset, y);
+      ctx.lineTo(W - inset, y);
+      ctx.stroke();
+      // 斜线（菱格左右边，隔行交错）
+      if (r < rows) {
+        const yN = originY + dir * (r + 1) * cellH;
+        for (let c = 0; c <= cols; c++) {
+          const x = c * cellW;
+          const xShift = (r % 2 === 0) ? cellW / 2 : 0;
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          ctx.lineTo(Math.min(W, Math.max(0, x - cellW / 2 + xShift)), yN);
+          ctx.stroke();
+        }
+      }
+    }
+  }
+  // 中央发光横带（MAEXTRO）
+  const grad = ctx.createLinearGradient(0, bandY0, 0, bandY1);
+  grad.addColorStop(0, '#c9ced8');
+  grad.addColorStop(0.5, '#ffffff');
+  grad.addColorStop(1, '#c9ced8');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, bandY0, W, bandY1 - bandY0);
+  // MAEXTRO 字样（暗色，居中）
+  ctx.fillStyle = '#1a1c22';
+  ctx.font = 'bold 44px Arial, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('MAEXTRO', cx, (bandY0 + bandY1) / 2 + 2);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.generateMipmaps = true;
+  tex.anisotropy = 8;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/* ================================================================
  * 1. 对外类型
  * ================================================================ */
 
@@ -145,6 +245,8 @@ function buildBadgeCoreGeometry(w: number, h: number, d: number): THREE.BufferGe
   const inner = extrudeCentered(shieldShape(w, h, INNER_SCALE), innerDepth);
   inner.translate(0, 0, RAISE / 2); // 背面与外盾板背面齐平，正面外凸 RAISE
   const merged = mergeSafe([outer, inner]);
+  // R65：UV 归一到 [0,1] ⇒ 曜日纹贴图铺满正面（侧面 ClampToEdge 采样边缘色）
+  remapBadgeUV(merged);
   merged.computeBoundingBox();
   return merged;
 }
@@ -154,12 +256,16 @@ function buildBadgeCoreGeometry(w: number, h: number, d: number): THREE.BufferGe
  * ================================================================ */
 
 export function createBadgeCoreMaterials(): BadgeCoreMaterials {
+  // R65：曜日纹菱格 + MAEXTRO 横带贴图，同时作 map（固有色）与 emissiveMap（自发光）
+  // ⇒ 菱格亮线与横带发光、缝隙暗色不发光，复现官图 G2 银白发光车标。
+  // 无 DOM（Node/vitest）⇒ badgeTex=null，回退纯白发光（与 R64 前观感一致）。
+  const badgeTex = makeMaextroBadgeTexture();
   const core = new THREE.MeshStandardMaterial({
-    // 白亮内芯：银白底 + 纯白 emissive；强度对齐集成层字标基准 MARK_BASE_INTENSITY(2.2)，
-    // 使内芯与 shield-emblem-panel（lamp-white，参与字标呼吸）在基准态同亮。
-    color: 0xf2f4f8,
+    color: 0xffffff,
+    map: badgeTex ?? undefined,
     emissive: 0xffffff,
-    emissiveIntensity: 2.2,
+    emissiveMap: badgeTex ?? undefined,
+    emissiveIntensity: badgeTex ? 1.6 : 2.2,
     metalness: 0.1,
     roughness: 0.35,
     side: THREE.FrontSide // 实心挤出体不翻 BackSide（铁律12）

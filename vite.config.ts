@@ -79,6 +79,18 @@ export default defineConfig({
     target: 'es2022',
     chunkSizeWarningLimit: 1600,
     rollupOptions: {
+      /**
+       * R65：显式多页入口。此前只打包 index.html ⇒ dist/preview.html 从不生成，
+       * preview server 把 /preview.html SPA-fallback 到 index.html ⇒ 车模 QA 用的
+       * `__v800Capture`（可指定 azimuth/dist 近距拍部件）在构建产物上从未可用，
+       * 车标/灯组等小件近距验证只能靠主游戏远距 orbit（3cm 级细节不可辨）。
+       * 加 preview.html 入口 ⇒ dist/preview.html 真实存在，QA 探针恢复近距拍摄能力。
+       * 对游戏 bundle 零影响：preview.ts 仅由 preview.html 引用，index.html 主包不变。
+       */
+      input: {
+        main: 'index.html',
+        preview: 'preview.html'
+      },
       output: {
         /**
          * N13（R32 C-3）：manualChunks 语义命名。

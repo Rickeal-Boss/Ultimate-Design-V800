@@ -28,7 +28,7 @@ const PROFILE = `${ROOT}/.img2threejs/renders/.edge-r43`;
 const URL = `http://127.0.0.1:${PORT}/preview.html#${HASH}${VEHICLE === 'r7' ? '&vehicle=r7' : ''}`;
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
-const edge = spawn(EDGE, ['--headless=new', '--disable-gpu', '--enable-unsafe-swiftshader',
+const edge = (process.env.R43_ATTACH === '1') ? null : spawn(EDGE, ['--headless=new', '--disable-gpu', '--enable-unsafe-swiftshader',
   `--remote-debugging-port=${DPORT}`, `--user-data-dir=${PROFILE}`, '--no-first-run',
   '--no-proxy-server', '--proxy-bypass-list=<-loopback>', '--window-size=1400,900', 'about:blank'],
 { stdio: 'ignore' });
