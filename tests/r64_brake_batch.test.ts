@@ -211,14 +211,11 @@ describe('R64 · 灯热路径：4 个 setter 幂等，update() 公式一字不�
     expect(game).not.toContain('r64WriteEI');
   });
 
-  it('表述纪律（R18）：收益 ≈ 0，不得包装成帧时优化（impl-notes 书面声明）', () => {
+  it('表述纪律（R18）：收益 ≈ 0，不得包装成帧时优化（源码注释声明）', () => {
+    // ⚠ 只断言已入库源码：`.qa/` 被 gitignore，CI 上不存在 ⇒ 不得 readFileSync 未入库文件
+    //   （R64 CI run 81 Unit tests 失败根因：曾读 .qa/r64/impl-notes.md ⇒ ENOENT）。
+    //   impl-notes 的 R18 表述纪律由 Phase 3 落地审查在本地核验，不进 CI 门禁。
     expect(v800).toContain('收益 ≈ 0');
     expect(v800).toContain('不宣称帧时优化');
-    const notes = src('.qa/r64/impl-notes.md');
-    expect(notes).toContain('收益 ≈ 0');
-    expect(notes).toContain('不得包装成帧时优化');
-    expect(notes).toContain('three 每帧无条件上传 emissive uniform');
-    expect(notes).toContain('制动件 FrontSide 光栅化减半');
-    expect(notes).toContain('材质实例 8→2');
   });
 });
