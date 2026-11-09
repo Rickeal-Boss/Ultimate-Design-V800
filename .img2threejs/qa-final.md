@@ -89,7 +89,7 @@
 ## 五、白名单与改动声明
 
 - **preview.ts 改动 1 处（白名单内，一行级）**：`cabinEye('front')` 前排锚点原为 `front.max.z + 0.3` ≈ z 1.474，实测落进 dash 几何内部（dash-lower z 1.25..1.55）导致钩子 POV 被仪表台剖切（P0 修复后暴露的次生问题）；改为座椅中心 `center.z + 0.15` ≈ 1.07。C3 三排复拍有效。预览页 dev-only（vite build 不含此入口），不影响游戏产物。
-- 其余全部为**只读捕获**：git 零写操作；新增文件仅 `.img2threejs/renders/qa-final/*`、`.img2threejs/qa-final.md`（本文件）与仓库外 `C:/Users/16896/.workbuddy/binaries/node/workspace/qa-final*.mjs`。
+- 其余全部为**只读捕获**：git 零写操作；新增文件仅 `.img2threejs/renders/qa-final/*`、`.img2threejs/qa-final.md`（本文件）与仓库外 `<WORKBUDDY_HOME>/binaries/node/workspace/qa-final*.mjs`。
 
 ## 六、结论：**打回（定向返工，不需整体回滚）**
 

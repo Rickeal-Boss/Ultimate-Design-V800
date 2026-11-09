@@ -7,9 +7,9 @@ import { createRequire } from 'node:module';
 import { createServer } from 'vite';
 
 const require = createRequire(import.meta.url);
-const puppeteer = require('C:/Users/16896/.workbuddy/binaries/node/workspace/node_modules/puppeteer-core');
+const puppeteer = require('puppeteer-core');
 
-const ROOT = 'C:/Users/16896/WorkBuddy/2026-10-14-13-25-01/brake-v800';
+const ROOT = '<REPO_ROOT>';
 const EDGE = 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
 const PORT = Number(process.env.CDPPORT || 9380);
 const PROFILE = '/tmp/r13edge_' + process.pid;

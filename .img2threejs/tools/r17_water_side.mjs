@@ -1,8 +1,8 @@
 // R17 水面侧视复现：开到桥（z≈-450）后切「侧跟」机位截帧
-import puppeteer from 'file:///C:/Users/16896/.workbuddy/binaries/node/workspace/node_modules/puppeteer-core/lib/puppeteer/puppeteer-core.js';
+import puppeteer from 'puppeteer-core';
 import fs from 'node:fs';
 
-const OUT = 'C:/Users/16896/WorkBuddy/2026-10-14-13-25-01/brake-v800/verify/r17/water';
+const OUT = '<REPO_ROOT>/verify/r17/water';
 fs.mkdirSync(OUT, { recursive: true });
 const URL = process.env.URL || 'http://[::1]:4317/index.html';
 const CDP = Number(process.env.CDP || 9465);

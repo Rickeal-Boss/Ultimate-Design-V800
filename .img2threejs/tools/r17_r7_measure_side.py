@@ -3,8 +3,8 @@ from PIL import Image
 import json
 import os
 
-SRC = "C:/Users/16896/.workbuddy/clipboard-images/clipboard-2026-10-19T04-46-20-099Z-ed6b05ea.jpg"
-OUT = "C:/Users/16896/WorkBuddy/2026-10-14-13-25-01/brake-v800/.img2threejs/tools/r17_r7_crops"
+SRC = "<clipboard>/clipboard-2026-10-19T04-46-20-099Z-ed6b05ea.jpg"
+OUT = "<REPO_ROOT>/.img2threejs/tools/r17_r7_crops"
 os.makedirs(OUT, exist_ok=True)
 
 im = Image.open(SRC).convert("RGB")

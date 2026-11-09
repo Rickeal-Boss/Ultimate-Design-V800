@@ -1,6 +1,6 @@
 # WIP · R14 场景/物理（scene-r14）
 
-工程根：`C:/Users/16896/WorkBuddy/2026-10-14-13-25-01/brake-v800`
+工程根：`<REPO_ROOT>`
 白名单：`src/render/scene/Waterway.ts`、`waterTexture.ts`、`Road.ts`、`Terrain.ts`、`src/physics/World.ts`、`docs/wip-scene-r14.md`、`verify/r14/scene/*`
 
 ## 1. 根因复核（读码结论）

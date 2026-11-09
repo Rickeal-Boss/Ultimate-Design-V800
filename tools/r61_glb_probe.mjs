@@ -6,7 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-const ROOT = 'C:/Users/16896/WorkBuddy/2026-10-14-13-25-01/brake-v800';
+const ROOT = '<REPO_ROOT>';
 const OUT = path.join(ROOT, '.qa/r61');
 
 function parseGLB(buf) {

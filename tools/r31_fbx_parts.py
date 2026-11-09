@@ -25,7 +25,7 @@ env_measure.py 回答「这个包里有什么、多大」；本脚本回答「**
   写进工程 —— 产出的是**参数表**，由 castleDetail.ts 程序化重画。
 
 用法：
-  C:/Users/16896/.workbuddy/binaries/python/versions/3.13.12/python.exe \
+  <WORKBUDDY_HOME>/binaries/python/versions/3.13.12/python.exe \
       tools/r31_fbx_parts.py --out .qa/r31_fbx
 """
 import argparse

@@ -2,13 +2,13 @@
 import esbuild from 'esbuild';
 
 await esbuild.build({
-  entryPoints: ['C:/Users/16896/WorkBuddy/2026-10-14-13-25-01/brake-v800/.img2threejs/tools/r17_rev_probe_entry.mjs'],
+  entryPoints: ['<REPO_ROOT>/.img2threejs/tools/r17_rev_probe_entry.mjs'],
   bundle: true,
   format: 'esm',
   platform: 'node',
   target: 'node18',
-  outfile: 'C:/Users/16896/WorkBuddy/2026-10-14-13-25-01/brake-v800/verify/r17a/r17_rev_probe_bundle.mjs',
+  outfile: '<REPO_ROOT>/verify/r17a/r17_rev_probe_bundle.mjs',
   logLevel: 'info',
-  absWorkingDir: 'C:/Users/16896/WorkBuddy/2026-10-14-13-25-01/brake-v800',
+  absWorkingDir: '<REPO_ROOT>',
 });
 console.log('BUILD OK');

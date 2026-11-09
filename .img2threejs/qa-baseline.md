@@ -83,4 +83,4 @@
 
 - **未做 Phase 2**；未改任何白名单外文件；git 零写操作。
 - 遗留裁定项：① preview.ts near-plane 一行级修复由谁执行；② 整帧 DC 313 的环境差异解释需 Phase 2 同环境复测；③ 尾灯 3+3/金色点阵需特写机位复核。
-- 复现脚本（仓库外，`C:/Users/16896/.workbuddy/binaries/node/workspace/`）：`qa-baseline.mjs`、`qa-cabin-standalone.mjs`、`qa-debug2~6.mjs`（诊断链）。注意：**node 直spawn msedge 在本机当前被拒（EACCES），Edge 必须经 PowerShell `Start-Process` 拉起**——与 MEMORY 记录的 spawn 方式已不兼容，主理人知悉为盼。
+- 复现脚本（仓库外，`<WORKBUDDY_HOME>/binaries/node/workspace/`）：`qa-baseline.mjs`、`qa-cabin-standalone.mjs`、`qa-debug2~6.mjs`（诊断链）。注意：**node 直spawn msedge 在本机当前被拒（EACCES），Edge 必须经 PowerShell `Start-Process` 拉起**——与 MEMORY 记录的 spawn 方式已不兼容，主理人知悉为盼。

@@ -41,13 +41,13 @@ import r44_bake as B  # noqa: E402
 
 QA = os.path.join(ROOT, '.qa', 'r46')
 CARS_DIR = os.path.join(ROOT, 'src', 'assets', 'cars')
-CLIP = 'C:/Users/16896/.workbuddy/clipboard-images'
+CLIP = '<clipboard>'
 REPORT = os.path.join(QA, 'REPORT_GEO.md')
 STATS = os.path.join(QA, 'r46_geo_stats.json')
 
 PART_PATH = {
-    'v800': 'C:/Users/WB/Desktop/R7/拆/V8.glb',
-    'r7': 'C:/Users/WB/Desktop/R7/拆/R7.glb',
+    'v800': '<DESKTOP>/R7/拆/V8.glb',
+    'r7': '<DESKTOP>/R7/拆/R7.glb',
 }
 # R44 旧索引（仅用于复现/对照；lamp_rear 已被 R46 判废）
 PART_SRC = {

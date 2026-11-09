@@ -288,7 +288,7 @@ function writeLabelPNG(res, W, H, file) {
 }
 
 /* ───────────────────────── 用户截图暗区 mask ───────────────────────── */
-const SHOT = 'C:/Users/16896/.workbuddy/clipboard-images/clipboard-2026-11-01T04-16-43-742Z-d236ed26.png';
+const SHOT = '<clipboard>/clipboard-2026-11-01T04-16-43-742Z-d236ed26.png';
 function shotDarkMask(TH = 90) {
   if (shotDarkMask.cache) return shotDarkMask.cache;
   const { width, height, rgba } = decodePNG(fs.readFileSync(SHOT));

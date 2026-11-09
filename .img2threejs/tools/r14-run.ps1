@@ -42,7 +42,7 @@ if ($HideMat) { $env:HIDEMAT = $HideMat }
 if ($HideComp) { $env:HIDECOMP = $HideComp }
 if ($ProbeIds) { $env:PROBE_IDS = $ProbeIds }
 
-Set-Location "C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800"
+Set-Location "<REPO_ROOT>"
 & node ".img2threejs\tools\$Script" 2>&1
 $rc = $LASTEXITCODE
 Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue

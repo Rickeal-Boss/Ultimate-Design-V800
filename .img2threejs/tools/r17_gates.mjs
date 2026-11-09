@@ -1,8 +1,8 @@
 // R17 闸口数字：#uvassert + #batchmerge 控制台输出采集（双车）
-import puppeteer from 'file:///C:/Users/16896/.workbuddy/binaries/node/workspace/node_modules/puppeteer-core/lib/puppeteer/puppeteer-core.js';
+import puppeteer from 'puppeteer-core';
 import fs from 'node:fs';
 
-const OUT = 'C:/Users/16896/WorkBuddy/2026-10-14-13-25-01/brake-v800/verify/r17/gates.log';
+const OUT = '<REPO_ROOT>/verify/r17/gates.log';
 const URLB = process.env.URL || 'http://[::1]:4317/';
 const CDP = Number(process.env.CDP || 9471);
 const browser = await puppeteer.connect({ browserURL: `http://127.0.0.1:${CDP}`, defaultViewport: null });

@@ -2,7 +2,7 @@
 """R12 T1+T2 spec 手术：尾部直立化 + 矩阵大灯归位。幂等：以 bak-r12 为基线读取。"""
 import json, shutil, sys
 
-SPEC = r"C:/Users/16896/WorkBuddy/2026-10-14-13-25-01/brake-v800/.img2threejs/object-sculpt-spec.json"
+SPEC = r"<REPO_ROOT>/.img2threejs/object-sculpt-spec.json"
 BASE = SPEC + ".bak-r12"
 
 spec = json.load(open(BASE, encoding="utf-8"))

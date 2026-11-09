@@ -1,7 +1,7 @@
 // R17 调试：preview #assembled 装配态 parts 列表 + 菱格材质 mesh 世界坐标
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const puppeteer = require('C:/Users/16896/.workbuddy/binaries/node/workspace/node_modules/puppeteer-core');
+const puppeteer = require('puppeteer-core');
 const CDP = Number(process.env.CDP || 9466);
 const URLBASE = process.env.URL || 'http://[::1]:4317/';
 const VEH = process.env.VEH || 'v800';

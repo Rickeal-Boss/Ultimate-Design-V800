@@ -4,9 +4,9 @@
 R31 Phase 3 前置 · 参考图像素量测（秦核源 landing-review，只读参考图，产物入 .qa/r31_review/）
 
 输入：
-  REF_MAIN  = C:/Users/16896/.workbuddy/clipboard-images/clipboard-2026-10-24T15-28-00-169Z-6211d46b.jpg
+  REF_MAIN  = <clipboard>/clipboard-2026-10-24T15-28-00-169Z-6211d46b.jpg
               （全景正立面：白城堡群 + 御桥 + 逆光暴云，1080x607）
-  REF_KIT   = C:/Users/16896/.workbuddy/clipboard-images/clipboard-2026-10-24T15-28-00-168Z-ef9ac9a5.jpg
+  REF_KIT   = <clipboard>/clipboard-2026-10-24T15-28-00-168Z-ef9ac9a5.jpg
               （构件库四视图：高塔/矮墙/门楼/窄塔，1080x607，紫底棚拍）
 
 量测：
@@ -30,8 +30,8 @@ from PIL import Image
 
 OUT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".qa", "r31_review")
 os.makedirs(OUT_DIR, exist_ok=True)
-REF_MAIN = r"C:/Users/16896/.workbuddy/clipboard-images/clipboard-2026-10-24T15-28-00-169Z-6211d46b.jpg"
-REF_KIT = r"C:/Users/16896/.workbuddy/clipboard-images/clipboard-2026-10-24T15-28-00-168Z-ef9ac9a5.jpg"
+REF_MAIN = r"<clipboard>/clipboard-2026-10-24T15-28-00-169Z-6211d46b.jpg"
+REF_KIT = r"<clipboard>/clipboard-2026-10-24T15-28-00-168Z-ef9ac9a5.jpg"
 
 main = np.asarray(Image.open(REF_MAIN).convert("RGB"), dtype=np.float32) / 255.0
 kit = np.asarray(Image.open(REF_KIT).convert("RGB"), dtype=np.float32) / 255.0

@@ -1,6 +1,6 @@
 import json, subprocess, sys
 
-REPO = r'C:/Users/16896/WorkBuddy/2026-10-14-13-25-01/brake-v800'
+REPO = r'<REPO_ROOT>'
 old_raw = subprocess.run(
     ['git', '-C', REPO, 'show', 'HEAD:.img2threejs/object-sculpt-spec.json'],
     capture_output=True, text=True, encoding='utf-8'

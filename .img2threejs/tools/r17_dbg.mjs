@@ -1,7 +1,7 @@
 // R17 调试：抓 R7 组件索引键 + 遮挡诊断（一次性探针）
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const puppeteer = require('C:/Users/16896/.workbuddy/binaries/node/workspace/node_modules/puppeteer-core');
+const puppeteer = require('puppeteer-core');
 
 const CDP = Number(process.env.CDP || 9463);
 const URLBASE = process.env.URL || 'http://[::1]:4317/';

@@ -106,8 +106,8 @@ def raster_views(pos, indices, views, w=1100):
 def main():
     # ---- 1. 提取染色版贴图 + 像素比对 ----
     cars = {
-        'R7': [('white', None), ('purple', r'C:/Users/WB/Desktop/R7/紫.glb'), ('green', r'C:/Users/WB/Desktop/R7/绿.glb')],
-        'V800': [('white', None), ('black', r'C:/Users/WB/Desktop/R7/V黑浅.glb'), ('gold', r'C:/Users/WB/Desktop/R7/V浅.glb')],
+        'R7': [('white', None), ('purple', r'<DESKTOP>/R7/紫.glb'), ('green', r'<DESKTOP>/R7/绿.glb')],
+        'V800': [('white', None), ('black', r'<DESKTOP>/R7/V黑浅.glb'), ('gold', r'<DESKTOP>/R7/V浅.glb')],
     }
     pixhash = {}
     for car, variants in cars.items():
@@ -132,7 +132,7 @@ def main():
         print(f"  {car} {slot}: {len(vals)} 种像素 ({m})")
 
     # ---- 2. 白模光栅 ----
-    for car, wp in [('R7', r'C:/Users/WB/Desktop/R7/R7白.glb'), ('V800', r'C:/Users/WB/Desktop/R7/V800白.glb')]:
+    for car, wp in [('R7', r'<DESKTOP>/R7/R7白.glb'), ('V800', r'<DESKTOP>/R7/V800白.glb')]:
         g, b = parse_glb(wp)
         prim = g['meshes'][0]['primitives'][0]
         pos = read_accessor(g, b, prim['attributes']['POSITION'])

@@ -3,7 +3,7 @@ Usage: r17_apply.py
 """
 import json, copy, sys
 
-BASE = r'C:/Users/16896/WorkBuddy/2026-10-14-13-25-01/brake-v800/.img2threejs'
+BASE = r'<REPO_ROOT>/.img2threejs'
 SPEC = f'{BASE}/object-sculpt-spec.json'
 
 spec = json.load(open(SPEC, encoding='utf-8'))

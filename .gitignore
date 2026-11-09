@@ -26,3 +26,15 @@ nul/
 
 # R29：esbuild 打出的探针 bundle（779KB，可由 .mjs 构建脚本再生，不入库）
 tools/r29_probe_bundle.mjs
+
+# 凭据与密钥防呆（隐私整改 P2：阻断 .env / 私钥 / npmrc 等误入库）
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+*.npmrc
+.netrc

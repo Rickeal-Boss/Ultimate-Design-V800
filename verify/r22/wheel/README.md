@@ -1,7 +1,7 @@
 # R22-B 涡轮盘式轮毂手写几何 —— 验证报告
 
 交付物：`src/model/parts/wheelHub.ts`（新建，纯程序化几何 + 零外部图片）
-参考：`C:/Users/WB/Desktop/bilibili.mp4_000030.100.jpg`（尊界 V800 轮毂特写）
+参考：`<DESKTOP>/bilibili.mp4_000030.100.jpg`（尊界 V800 轮毂特写）
 外部视觉分析：`vision_wheel2.json`（其「10 窗」结论与像素实测不符，见 §2）
 
 ---
@@ -124,11 +124,11 @@ for (const c of Object.values(WHEEL_HUB_CENTERS)) { // fl/fr/rl/rr
 
 ```bash
 cd .img2threejs/tools/r22_wheel
-NODE="C:/Users/16896/.workbuddy/binaries/node/versions/22.12.0/node.exe"
-NODE_PATH="C:/Users/16896/.workbuddy/binaries/node/workspace/node_modules"
+NODE="<WORKBUDDY_HOME>/binaries/node/versions/22.12.0/node.exe"
+NODE_PATH="<WORKBUDDY_HOME>/binaries/node/workspace/node_modules"
 
 # 像素测量（参考图 -> 18 窗/椭圆参数）
-C:/Users/16896/.workbuddy/binaries/python/versions/3.13.12/python.exe \
+<WORKBUDDY_HOME>/binaries/python/versions/3.13.12/python.exe \
   ../../../.img2threejs/tools/r22_wheel/measure_ellipse.py
 
 # 几何 QA（tri/bbox/窗循环/材质/绕序/退化/覆盖率）

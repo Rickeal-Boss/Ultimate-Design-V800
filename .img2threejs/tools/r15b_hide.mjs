@@ -5,11 +5,11 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const puppeteer = require('C:/Users/16896/.workbuddy/binaries/node/workspace/node_modules/puppeteer-core');
+const puppeteer = require('puppeteer-core');
 
 const CDP = Number(process.env.CDP || 9472);
 const URLB = process.env.URL || 'http://[::1]:4317/';
-const OUT = process.env.OUT || 'C:/Users/16896/WorkBuddy/2026-10-14-13-25-01/brake-v800/verify/r15b';
+const OUT = process.env.OUT || '<REPO_ROOT>/verify/r15b';
 fs.mkdirSync(OUT, { recursive: true });
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const log = (s) => console.log(s);

@@ -1,11 +1,11 @@
 // R17 P0-4 诊断：preview 复刻 hood 机位，材质消去法定位顶带表面
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const puppeteer = require('C:/Users/16896/.workbuddy/binaries/node/workspace/node_modules/puppeteer-core');
+const puppeteer = require('puppeteer-core');
 import fs from 'node:fs';
 const CDP = Number(process.env.CDP || 9471);
 const URLBASE = process.env.URL || 'http://[::1]:4317/';
-const OUT = 'C:/Users/16896/WorkBuddy/2026-10-14-13-25-01/brake-v800/verify/r17';
+const OUT = '<REPO_ROOT>/verify/r17';
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const browser = await puppeteer.connect({ browserURL: `http://127.0.0.1:${CDP}`, defaultViewport: null });
 const page = await browser.newPage();

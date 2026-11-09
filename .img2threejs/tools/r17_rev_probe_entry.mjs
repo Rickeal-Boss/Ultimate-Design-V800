@@ -6,7 +6,7 @@ import { createZunjieV800LuxuryMPVModel } from '../../src/model/createV800Model'
 import { createLuxeedR7Model } from '../../src/model/createR7Model';
 import fs from 'node:fs';
 
-const OUT = 'C:/Users/16896/WorkBuddy/2026-10-14-13-25-01/brake-v800/verify/r17a';
+const OUT = '<REPO_ROOT>/verify/r17a';
 const which = process.env.WHICH || 'both';
 
 function probe(name, root) {

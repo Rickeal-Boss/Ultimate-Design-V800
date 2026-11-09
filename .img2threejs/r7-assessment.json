@@ -1,6 +1,6 @@
 {
   "targetName": "Luxeed R7 SUV",
-  "sourceImage": "C:/Users/16896/.workbuddy/clipboard-images/clipboard-2026-10-18T16-36-37-110Z-ed6b05ea.jpg",
+  "sourceImage": "<clipboard>/clipboard-2026-10-18T16-36-37-110Z-ed6b05ea.jpg",
   "preSpecAssessment": {
     "objectClass": {
       "primaryType": "unassessed",
@@ -79,7 +79,7 @@
       "confidence": 0.0,
       "note": "Only meaningful when objectClass.primaryDomain is character or hybrid. Set applies=true and fill from forge/stage1_intake/extract_landmarks.py. See grimoire/character/reconstruction.md and grimoire/character/likeness_maximization.md."
     },
-    "sourceImage": "C:/Users/16896/.workbuddy/clipboard-images/clipboard-2026-10-18T16-36-37-110Z-ed6b05ea.jpg"
+    "sourceImage": "<clipboard>/clipboard-2026-10-18T16-36-37-110Z-ed6b05ea.jpg"
   },
   "qualityContract": {
     "qualityBar": "complex",

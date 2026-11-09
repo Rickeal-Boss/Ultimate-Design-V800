@@ -5,12 +5,12 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const puppeteer = require('C:/Users/16896/.workbuddy/binaries/node/workspace/node_modules/puppeteer-core');
+const puppeteer = require('puppeteer-core');
 
 const CDP = Number(process.env.CDP || 9444);
 const URL = process.env.URL || 'http://127.0.0.1:5194/';
 const HASH = process.env.HASH || '';
-const OUT = process.env.OUT || 'C:/Users/16896/WorkBuddy/2026-10-14-13-25-01/brake-v800/verify/r14/game';
+const OUT = process.env.OUT || '<REPO_ROOT>/verify/r14/game';
 const NAME = process.env.NAME || 'shot';
 const KEYS = process.env.KEYS || '';
 const WAIT = Number(process.env.WAIT || 1500);

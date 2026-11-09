@@ -9,7 +9,7 @@
 from PIL import Image, ImageFilter, ImageChops, ImageOps, ImageEnhance
 import sys
 
-SRC = r'C:/Users/16896/WorkBuddy/2026-10-14-13-25-01/brake-v800/src/assets/ref/seat-quilt.jpg'
+SRC = r'<REPO_ROOT>/src/assets/ref/seat-quilt.jpg'
 DST = sys.argv[1] if len(sys.argv) > 1 else SRC
 
 im = Image.open(SRC).convert('RGB')

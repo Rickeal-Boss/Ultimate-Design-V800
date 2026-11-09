@@ -48,7 +48,7 @@
  *   r22-hub-cap     黑亮圆盖（MeshPhysical clearcoat，平顶 + 收边）
  *   r22-hub-emblem  菱形徽标 canvas 贴图圆面（程序化绘制，零外部图片）
  *
- * 设计口径（参考图 C:/Users/WB/Desktop/bilibili.mp4_000030.100.jpg 实测：
+ * 设计口径（参考图 <DESKTOP>/bilibili.mp4_000030.100.jpg 实测：
  *   椭圆拟合 cx=851.4 cy=538.4 a=582 b=525.7 θ=−20.97° + 极坐标归一化，
  *   见 verify/r22/wheel/README.md 与 .img2threejs/tools/r22_wheel/measure_ellipse.py）：
  *   18 窗 / 角距 20°（上半周实测 20.1°，下半周 21.8°）

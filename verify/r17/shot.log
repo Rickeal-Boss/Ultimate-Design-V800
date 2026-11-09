@@ -1,5 +1,5 @@
-SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\v800_hood.png btn=true
-SHOT C:\Users\16896\WorkBuddy\2026-10-14-13-25-01\brake-v800\verify\r17\v800_cabin.png btn=true
+SHOT <REPO_ROOT>\verify\r17\v800_hood.png btn=true
+SHOT <REPO_ROOT>\verify\r17\v800_cabin.png btn=true
   LOG info: [V800Adapter] 参考图贴图挂载材质： lamp-red, leather-dark, leather-ivory, leather-warm, screen-ui
   LOG info: [V800Adapter] cabin occluder 座椅材质克隆 → 10 个 mesh
   LOG info: [V800Adapter] cabin occluder 中控材质克隆 → 2 个 mesh

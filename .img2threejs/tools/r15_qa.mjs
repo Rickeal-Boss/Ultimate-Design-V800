@@ -7,11 +7,11 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const puppeteer = require('C:/Users/16896/.workbuddy/binaries/node/workspace/node_modules/puppeteer-core');
+const puppeteer = require('puppeteer-core');
 
 const CDP = Number(process.env.CDP || 9455);
 const URLBASE = process.env.URL || 'http://localhost:4317/';
-const ROOT = 'C:/Users/16896/WorkBuddy/2026-10-14-13-25-01/brake-v800';
+const ROOT = '<REPO_ROOT>';
 const OUT = process.env.OUT || ROOT + '/verify/r15';
 fs.mkdirSync(OUT, { recursive: true });
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));

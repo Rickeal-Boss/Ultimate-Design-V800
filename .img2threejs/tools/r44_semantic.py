@@ -9,13 +9,13 @@ import importlib
 B = importlib.import_module('r44_bake')
 
 PART_SRC = {
-    'v800': ('C:/Users/WB/Desktop/R7/拆/V8.glb', {
+    'v800': ('<DESKTOP>/R7/拆/V8.glb', {
         'glass': [9, 5, 10],
         'lamp_rear': [6],
         'lamp_front': [14],
         'wheel': [3, 4, 7, 8],
     }),
-    'r7': ('C:/Users/WB/Desktop/R7/拆/R7.glb', {
+    'r7': ('<DESKTOP>/R7/拆/R7.glb', {
         'glass': [3, 4, 6],
         'lamp_rear': [18],
         'lamp_front': [14],

@@ -28,7 +28,7 @@ def read_pos(gltf, binc, ai):
     return np.frombuffer(binc, dtype=np.float32, count=acc['count']*3, offset=off).reshape(-1,3).astype(np.float64)
 
 def detect_v800_wheels():
-    g, b = parse_glb(r'C:/Users/WB/Desktop/R7/V800白.glb')
+    g, b = parse_glb(r'<DESKTOP>/R7/V800白.glb')
     prim = g['meshes'][0]['primitives'][0]
     pos = read_pos(g, b, prim['attributes']['POSITION'])
     # 用染色版同几何的 UV？不需要。轮子: y低 + 四角

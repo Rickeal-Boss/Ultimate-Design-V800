@@ -1,7 +1,7 @@
 // R17 定向截图：单车辆 + 指定机位列表（快速迭代用）
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const puppeteer = require('C:/Users/16896/.workbuddy/binaries/node/workspace/node_modules/puppeteer-core');
+const puppeteer = require('puppeteer-core');
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -9,7 +9,7 @@ const CDP = Number(process.env.CDP || 9470);
 const URLBASE = process.env.URL || 'http://[::1]:4317/';
 const VEH = process.env.VEH || 'v800';
 const VIEWS = (process.env.VIEWS || 'hood').split(',');
-const OUT = process.env.OUT || 'C:/Users/16896/WorkBuddy/2026-10-14-13-25-01/brake-v800/verify/r17';
+const OUT = process.env.OUT || '<REPO_ROOT>/verify/r17';
 fs.mkdirSync(OUT, { recursive: true });
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const logf = path.join(OUT, 'shot.log');

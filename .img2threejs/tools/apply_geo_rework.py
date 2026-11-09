@@ -2,7 +2,7 @@
 """V800 spec 几何改造：六项改造一次落地。只改 object-sculpt-spec.json。"""
 import json, math, shutil
 
-SPEC = r"C:/Users/16896/WorkBuddy/2026-10-14-13-25-01/brake-v800/.img2threejs/object-sculpt-spec.json"
+SPEC = r"<REPO_ROOT>/.img2threejs/object-sculpt-spec.json"
 BACKUP = SPEC + ".bak-geo"
 shutil.copyfile(SPEC, BACKUP)
 

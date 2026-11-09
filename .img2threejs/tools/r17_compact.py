@@ -3,7 +3,7 @@ Usage: r17_compact.py <keyword> [--all]
 """
 import json, sys
 
-BASE = r'C:/Users/16896/WorkBuddy/2026-10-14-13-25-01/brake-v800/.img2threejs'
+BASE = r'<REPO_ROOT>/.img2threejs'
 SPEC = f'{BASE}/object-sculpt-spec.json'
 
 def fmt_pts(pts):

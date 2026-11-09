@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """R44: 车模外观 GLB 资产化烘焙管线（一次性，产物进仓库 src/assets/cars/{r7|v800}/）
 
-输入（只读）：C:/Users/WB/Desktop/R7/*.glb（染色版：POSITION+NORMAL+TEXCOORD_0+indices，1 prim 1 材质）
+输入（只读）：<DESKTOP>/R7/*.glb（染色版：POSITION+NORMAL+TEXCOORD_0+indices，1 prim 1 材质）
 输出：
   body.glb                       仅 POSITION/NORMAL/TEXCOORD_0+indices（已烘 node rotX90°，+Z 车头，轮底 y=0）
   wheel-l.glb / wheel-r.glb      顶点平移到轮毂原点（每文件 2 个 mesh：fl+rl / fr+rr）
@@ -25,7 +25,7 @@ import io
 import numpy as np
 from PIL import Image, ImageFilter
 
-SRC = 'C:/Users/WB/Desktop/R7'
+SRC = '<DESKTOP>/R7'
 OUT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'src', 'assets', 'cars'))
 
 # ── 车辆定义（hub 坐标 = 模型单位·rotX90 后世界系：y 上 / z 前（车头 +Z），来源 BRIEF §一 ──

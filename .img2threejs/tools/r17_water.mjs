@@ -1,8 +1,8 @@
 // R17 水温复现：按住 W 开到跨河桥（z≈-450，距障 700~930m 区间）截帧
 // 前置：vite dev server（IPv6 [::1] 监听）+ Edge headless CDP
-import puppeteer from 'file:///C:/Users/16896/.workbuddy/binaries/node/workspace/node_modules/puppeteer-core/lib/puppeteer/puppeteer-core.js';
+import puppeteer from 'puppeteer-core';
 
-const OUT = 'C:/Users/16896/WorkBuddy/2026-10-14-13-25-01/brake-v800/verify/r17/water';
+const OUT = '<REPO_ROOT>/verify/r17/water';
 const URL = process.env.URL || 'http://[::1]:4317/index.html#perfhud';
 const fs = await import('node:fs');
 fs.mkdirSync(OUT, { recursive: true });

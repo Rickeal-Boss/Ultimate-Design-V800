@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """修复 body-lower 拱口：正确 227.5° 弧段（a1=203.76° 递减到 a2=-23.76°）。"""
 import json, math
-SPEC = r"C:/Users/16896/WorkBuddy/2026-10-14-13-25-01/brake-v800/.img2threejs/object-sculpt-spec.json"
+SPEC = r"<REPO_ROOT>/.img2threejs/object-sculpt-spec.json"
 raw = open(SPEC, encoding='utf-8', newline='').read()
 spec = json.loads(raw)
 bl = next(c for c in spec['componentTree'] if c['id'] == 'body-lower')

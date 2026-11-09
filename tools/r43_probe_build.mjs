@@ -1,7 +1,7 @@
 /** R43 探针打包（esbuild JS API —— 本机 CLI exit 2 无输出，沿用 r29/r38 做法） */
 import { build } from '../node_modules/esbuild/lib/main.js';
 
-const root = 'C:/Users/16896/WorkBuddy/2026-10-14-13-25-01/brake-v800';
+const root = '<REPO_ROOT>';
 try {
   await build({
     entryPoints: [root + '/tools/r43_probe_entry.ts'],

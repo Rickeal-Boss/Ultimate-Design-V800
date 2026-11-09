@@ -14,8 +14,8 @@ import http from 'node:http';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const puppeteer = require('C:/Users/16896/.workbuddy/binaries/node/workspace/node_modules/puppeteer-core');
-const ROOT = 'C:/Users/16896/WorkBuddy/2026-10-14-13-25-01/brake-v800';
+const puppeteer = require('puppeteer-core');
+const ROOT = '<REPO_ROOT>';
 const OUT = ROOT + '/.qa/r44_car';
 fs.mkdirSync(OUT, { recursive: true });
 const PORT = 5200;        // vite dev server

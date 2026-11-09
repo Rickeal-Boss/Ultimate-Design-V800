@@ -2,7 +2,7 @@
 """R12 T3 spec 手术：刹车踏板新增 + 方向盘成形 + 座椅截面精化。基线读 bak-r12（叠加 T1/T2 已在 spec 内）。"""
 import json, math
 
-SPEC = r"C:/Users/16896/WorkBuddy/2026-10-14-13-25-01/brake-v800/.img2threejs/object-sculpt-spec.json"
+SPEC = r"<REPO_ROOT>/.img2threejs/object-sculpt-spec.json"
 spec = json.load(open(SPEC, encoding="utf-8"))
 tree = spec["componentTree"]
 ct = {c["id"]: c for c in tree}

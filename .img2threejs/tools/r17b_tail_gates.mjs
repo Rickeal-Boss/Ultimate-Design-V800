@@ -3,10 +3,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const puppeteer = require('C:/Users/16896/.workbuddy/binaries/node/workspace/node_modules/puppeteer-core');
+const puppeteer = require('puppeteer-core');
 const CDP = Number(process.env.CDP || 9479);
 const URLBASE = process.env.URL || 'http://[::1]:4317/';
-const OUT = 'C:/Users/16896/WorkBuddy/2026-10-14-13-25-01/brake-v800/verify/r17b';
+const OUT = '<REPO_ROOT>/verify/r17b';
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const browser = await puppeteer.connect({ browserURL: `http://127.0.0.1:${CDP}`, defaultViewport: null });
 

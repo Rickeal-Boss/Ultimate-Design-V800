@@ -1,6 +1,6 @@
 import json, sys
 
-BASE = r'C:/Users/16896/WorkBuddy/2026-10-14-13-25-01/brake-v800/.img2threejs'
+BASE = r'<REPO_ROOT>/.img2threejs'
 
 def load(name):
     return json.load(open(f'{BASE}/{name}', encoding='utf-8'))

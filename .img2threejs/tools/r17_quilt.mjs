@@ -1,12 +1,12 @@
 // R17 P0-3：座椅菱格特写（preview #assembled，相机贴近菱格批次 bbox 前上角）
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const puppeteer = require('C:/Users/16896/.workbuddy/binaries/node/workspace/node_modules/puppeteer-core');
+const puppeteer = require('puppeteer-core');
 import fs from 'node:fs';
 const CDP = Number(process.env.CDP || 9468);
 const URLBASE = process.env.URL || 'http://[::1]:4317/';
 const VEH = process.env.VEH || 'v800';
-const OUT = process.env.OUT || 'C:/Users/16896/WorkBuddy/2026-10-14-13-25-01/brake-v800/verify/r17';
+const OUT = process.env.OUT || '<REPO_ROOT>/verify/r17';
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const browser = await puppeteer.connect({ browserURL: `http://127.0.0.1:${CDP}`, defaultViewport: null });
 const page = await browser.newPage();

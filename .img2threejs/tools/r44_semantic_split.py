@@ -19,12 +19,12 @@ import r44_bake as B
 #   body/glass/lamp_front/lamp_rear 四个 GLB。
 #   以下 lamp_rear 值改为废弃哨兵：本脚本若被重跑会直接报错，杜绝静默产出错误尾灯。
 PART_SRC = {
-    'v800': ('C:/Users/WB/Desktop/R7/拆/V8.glb', {
+    'v800': ('<DESKTOP>/R7/拆/V8.glb', {
         'glass': [9, 5, 10],
         'lamp_rear': 'GEOM:r46_rebuild.lamp_rear_mask',
         'lamp_front': [14],
     }),
-    'r7': ('C:/Users/WB/Desktop/R7/拆/R7.glb', {
+    'r7': ('<DESKTOP>/R7/拆/R7.glb', {
         'glass': [3, 4, 6],
         'lamp_rear': 'GEOM:r46_rebuild.lamp_rear_mask',
         'lamp_front': [14],
