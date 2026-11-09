@@ -221,6 +221,49 @@ function at(g: THREE.BufferGeometry, x: number, y: number, z: number): THREE.Buf
 }
 
 /* ================================================================
+ * R65 · 弧形 DRL 灯带（用户：前灯应弧形贴图）
+ * ================================================================
+ * 平直 DRL 条 → 沿抛物线的弧形灯带。灯带沿 X 展开（宽 DRL_ARC.w），中线在两端
+ * 落 ARC_Y0、居中上拱 ARC_BOW（抛物线 y = ARC_Y0 + ARC_BOW·(1-(2x/w)²)），
+ * 上下各偏 ARC_T/2 围成闭合 profile，再 extrude(DRL_ARC.depth)。纯几何、零贴图、
+ * 同 drl 材质 ⇒ DC/材质实例不变。`#r65drlarc=off` 回平直条（A/B 对照）。
+ */
+const DRL_ARC = {
+  w: 0.125,     // 灯带展开宽（同原平直条）
+  y0: 0.168,    // 两端中线 y
+  bow: 0.022,   // 居中上拱量（弧顶 y = y0+bow ≈ 0.19 < 罩顶 0.2，不穿顶）
+  t: 0.018,     // 灯带厚（上下各 t/2）
+  depth: 0.008  // 挤出厚（同原条）
+} as const;
+
+/** `#r65drlarc=off` ⇒ 逐位回平直 DRL 条（A/B 对照）。 */
+const R65_DRL_ARC_ON: boolean =
+  typeof window === 'undefined' || !/(?:^|[#&])r65drlarc=off/i.test(window.location.hash);
+
+/** 弧形灯带 profile：外弧(x,-t/2→+t/2 上拱) + 内弧回程，闭合 CCW。 */
+function arcBandShape(a: typeof DRL_ARC): THREE.BufferGeometry {
+  const shape = new THREE.Shape();
+  const N = 16;
+  const halfW = a.w / 2;
+  const cy = (x: number): number => a.y0 + a.bow * (1 - Math.pow(2 * x / a.w, 2));
+  // 外弧（上缘）左→右
+  for (let i = 0; i <= N; i += 1) {
+    const x = -halfW + (i / N) * a.w;
+    const y = cy(x) + a.t / 2;
+    if (i === 0) shape.moveTo(x, y); else shape.lineTo(x, y);
+  }
+  // 内弧（下缘）右→左
+  for (let i = N; i >= 0; i -= 1) {
+    const x = -halfW + (i / N) * a.w;
+    shape.lineTo(x, cy(x) - a.t / 2);
+  }
+  shape.closePath();
+  const g = extrude(shape, a.depth, 0.001);
+  g.computeBoundingBox();
+  return g;
+}
+
+/* ================================================================
  * 3. 独占材质工厂（零外部图片；id 全 r21-head-lamp-*）
  * ================================================================ */
 
@@ -273,11 +316,16 @@ export function createHeadLamp(options: HeadLampOptions = {}): HeadLampResult {
   );
   const housingGeo = mergeSafe(housingParts);
 
-  // ---- 4.2 顶部横向 DRL 白光刃（贯穿罩宽 ~83%，微圆角）----
-  const drlGeo = at(
+  // ---- 4.2 顶部 DRL 白光刃 —— R65 改弧形灯带（用户：前灯应弧形贴图）──────
+  // 原：平直横条 roundedRectShape(0.125,0.020) @y0.178（读作"平直非弧形"）。
+  // 现：沿抛物线的弧形灯带（外/内两条弧线围成闭合 profile，挤 0.008），
+  //     弧顶居中上拱 ARC_BOW，两端落 ARC_Y0，整体仍居罩内(y≤0.2 不穿顶)。
+  //     同一 drl 发光材质 ⇒ DC/材质数不变；`#r65drlarc=off` 逐位回平直条(A/B)。
+  const drlGeo = R65_DRL_ARC_ON ? arcBandShape(DRL_ARC) : at(
     extrude(roundedRectShape(0.125, 0.020, 0.006, 3), 0.008, 0),
     0, 0.178, FRONT_Z - 0.004
   );
+  if (R65_DRL_ARC_ON) drlGeo.translate(0, 0, FRONT_Z - 0.004);
 
   // ---- 4.3 4 颗方形投影透镜（chrome 边圈 + 深色玻璃芯 + 中心微凸亮点）----
   const yCenters = [0.105, 0.02, -0.065, -0.15];
