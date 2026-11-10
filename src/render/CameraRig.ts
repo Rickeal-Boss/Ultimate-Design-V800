@@ -276,6 +276,8 @@ export class CameraRig {
   private offset = new THREE.Vector3(6, 1.6, 6);
   private lookOffset = new THREE.Vector3(0, 0.85, 0);
   private anchor = new THREE.Vector3();
+  /** R65 · 照片模式方向键平移偏移（世界系）。加到相机位与注视点 ⇒ 平移不旋转视线。 */
+  private panOffset = new THREE.Vector3();
   private tmpOffset = new THREE.Vector3();
   private tmpLook = new THREE.Vector3();
   /** 自由视角：用户拖拽产生的偏航/俯仰偏移与缩放（双击或切机位复位） */
@@ -351,6 +353,25 @@ export class CameraRig {
     this.dragging = false;
   }
 
+  /** R65 · 照片模式方向键平移：按相机右向/前向(水平投影)/上向平移 panOffset。
+   *  strafe 左右沿右向、fwd 前后沿视线水平投影、up 升降。世界系累计，逐帧调小步长。
+   *  平移相机+注视点 ⇒ 场景自由移动而非控制车辆（车由 FreeDrive.photoMode 冻结）。 */
+  pan(strafe: number, fwd: number, up: number, dt: number): void {
+    const speed = 6; // m/s
+    const step = speed * dt;
+    const cam = this.camera;
+    // 右向 = 视线 × 上，水平投影归一
+    const fwdV = this.tmpLook.copy(cam.getWorldDirection(this.tmpRight)).setY(0).normalize();
+    const rightV = this.tmpRight.crossVectors(fwdV, UP).normalize();
+    this.panOffset.addScaledVector(rightV, strafe * step);
+    this.panOffset.addScaledVector(fwdV, fwd * step);
+    this.panOffset.y = Math.max(0.2, this.panOffset.y + up * step); // 防钻地
+  }
+
+  resetPan(): void {
+    this.panOffset.set(0, 0, 0);
+  }
+
   get isDragging(): boolean {
     return this.dragging;
   }
@@ -406,6 +427,12 @@ export class CameraRig {
     this.offset.lerp(off, s);
     this.lookOffset.lerp(look, Math.min(1, s * 1.5));
     cam.position.copy(this.anchor).add(this.offset);
+    // R65 · 照片模式方向键平移：把相机与其注视点一起平移 panOffset ⇒ 场景自由移动
+    //   （控相机不控车，车由 FreeDrive.photoMode 冻结）。加在 anchor+offset 之后、
+    //   lookAt 之前 ⇒ 平移不旋转视线；free 机位边界钳位在其后仍生效（pan 后再钳）。
+    if (this.panOffset.x !== 0 || this.panOffset.y !== 0 || this.panOffset.z !== 0) {
+      cam.position.add(this.panOffset);
+    }
     this.shake = Math.max(0, this.shake - dt * 1.4);
     if (this.shake > 0) {
       const t = this.time;
@@ -423,9 +450,9 @@ export class CameraRig {
       p.x = clamp(p.x, -halfW, halfW);
     }
     cam.lookAt(
-      this.anchor.x + this.lookOffset.x,
-      this.anchor.y + this.lookOffset.y,
-      this.anchor.z + this.lookOffset.z
+      this.anchor.x + this.lookOffset.x + this.panOffset.x,
+      this.anchor.y + this.lookOffset.y + this.panOffset.y,
+      this.anchor.z + this.lookOffset.z + this.panOffset.z
     );
     // cabin 需要 near≈0.05 防内饰裁剪；其余模式维持 0.1
     if (cam.near !== pose.near) {

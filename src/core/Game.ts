@@ -488,6 +488,8 @@ export class Game {
         if (!this.freeDrive) return;
         this.freeDrive.photoMode = !this.freeDrive.photoMode;
         this.hud.setPhotoActive(this.freeDrive.photoMode);
+        // 退出照片模式时复位方向键平移，避免下次进入继承上次的相机偏移
+        if (!this.freeDrive.photoMode) this.rig.resetPan();
         this.sfx.uiClick();
       }
     });
@@ -513,6 +515,7 @@ export class Game {
     window.addEventListener('resize', this.onResize);
     window.addEventListener('orientationchange', this.onOrientation);
     this.wireFreeLook();
+    this.wirePhotoPan();
 
     this.loop = new Loop(
       {
@@ -710,6 +713,11 @@ export class Game {
           if (!this.freeDrive) return false;
           if (on !== undefined) this.freeDrive.photoMode = on;
           return this.freeDrive.photoMode;
+        },
+        /** R65 · 照片平移 QA：读相机世界位姿，供 headless 探针量化方向键平移量 */
+        cam: (): { x: number; y: number; z: number } => {
+          const p = this.rig.camera.position;
+          return { x: +p.x.toFixed(2), y: +p.y.toFixed(2), z: +p.z.toFixed(2) };
         },
         teleport: (x: number, z: number, heading: number): void =>
           this.freeDrive?.teleport(x, z, heading),
@@ -1161,7 +1169,11 @@ export class Game {
     if (this.freeDrive.photoMode) {
       this.freeDrive.photoMode = false;
       this.hud.setPhotoActive(false);
+      this.rig.resetPan(); // 复位方向键平移偏移
+      this.photoPanKeys.clear();
     }
+    // 照片模式方向键监听不解绑：exit 回菜单而 Game 存活，下次 enterFreeExplore 复用
+    // 同一批监听（handler 内 photoMode 守卫，非照片模式方向键照常开车）。
     this.freeDrive.detach();
     this.freeDrive = null;
     this.hud.setFreeMode(false);
@@ -1288,6 +1300,8 @@ export class Game {
 
     // ---- 相机 + 后处理 ----
     this.rig.update(dt, focus, absSpeed, this.car.root.quaternion);
+    // R65 · 照片模式方向键平移场景（车已冻结，控相机不控车）
+    this.applyPhotoPan(dt);
     this.syncInteriorOcclusion();
     // R31 运行时治理②：城堡分区按观看距离显隐（内部 20m 滞回，零遍历开销）
     this.castle.updateViewerZ(this.rig.camera.position.z);
@@ -1377,6 +1391,53 @@ export class Game {
       { signal: ac.signal, passive: false }
     );
     canvas.addEventListener('contextmenu', (e) => e.preventDefault(), opts);
+  }
+
+  /* ── R65 · 照片模式方向键平移场景 ───────────────────────────────
+   * 用户：照片模式应加方向键自由移动场景。photoMode 时方向键不再开车（车已冻结），
+   * 改为平移相机（rig.pan）。用独立 keys 集合跟踪方向键按下态，frameFree 每帧消费。
+   * 用 capture 捕获 + stopImmediatePropagation 拦在 FreeDrive.onKeyDown 之前，
+   * 防方向键同时喂进车辆输入（photoMode 下 step() 本就忽略，双保险）。
+   * Esc/R/H 仍放行给 FreeDrive（结束/复位/帮助）。仅 photoMode 拦截，正常驾驶零影响。 */
+  private readonly photoPanKeys = new Set<string>();
+
+  private wirePhotoPan(): void {
+    // 一次性绑定（构造期调用一次）。photoMode 守卫在 handler 内判定 ⇒ 非照片模式
+    // 方向键照常喂 FreeDrive 开车，零影响；退出自由探索无需解绑（回菜单 Game 存活，
+    // 下次进入复用同一批监听）。
+    const ac = new AbortController();
+    const opts = { signal: ac.signal, capture: true } as const;
+    const DRIVE_CODES = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
+    window.addEventListener(
+      'keydown',
+      (e) => {
+        if (!this.freeDrive?.photoMode || !DRIVE_CODES.has(e.code)) return;
+        this.photoPanKeys.add(e.code);
+        e.stopImmediatePropagation(); // 拦在 FreeDrive 之前，防喂车辆输入
+      },
+      opts
+    );
+    window.addEventListener(
+      'keyup',
+      (e) => {
+        if (!DRIVE_CODES.has(e.code)) return;
+        this.photoPanKeys.delete(e.code);
+        if (this.freeDrive?.photoMode) e.stopImmediatePropagation();
+      },
+      opts
+    );
+  }
+
+  /** frameFree 每帧调用：photoMode 下按方向键平移相机（WASD 不占用，避免与驾驶肌肉记忆冲突）。 */
+  private applyPhotoPan(dt: number): void {
+    if (!this.freeDrive?.photoMode) {
+      if (this.photoPanKeys.size > 0) this.photoPanKeys.clear();
+      return;
+    }
+    const k = this.photoPanKeys;
+    const strafe = (k.has('ArrowRight') ? 1 : 0) - (k.has('ArrowLeft') ? 1 : 0);
+    const fwd = (k.has('ArrowUp') ? 1 : 0) - (k.has('ArrowDown') ? 1 : 0);
+    if (strafe !== 0 || fwd !== 0) this.rig.pan(strafe, fwd, 0, dt);
   }
 
   /** V 键：ACCEL/BRAKE 段按车型循环（V800 5 档 / R7 7 档）；自由探索段不受 phase 门禁 */
