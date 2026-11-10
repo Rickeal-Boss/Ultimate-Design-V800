@@ -80,13 +80,13 @@ describe('R65 R7 轮拱内衬接线', () => {
   });
 });
 
-/** 机盖机位 R65 前移到机盖正上方（车头 +Z）。护栏钉常量。 */
-describe('R65 机盖机位（hood）前移', () => {
-  it('CameraRig hood 默认 offset 贴机盖面+前移到前缘（y1.15/z2.0，机盖铺满下半）', () => {
+/** 机盖机位 R65-G8 回退到最初已知正确态（1.45/-1.45）。护栏钉常量。 */
+describe('R65 机盖机位（hood）回退', () => {
+  it('CameraRig hood 默认 offset 回最初正确机盖态（y1.45/z-1.45）', () => {
     const src = readSrc('render/CameraRig.ts');
-    expect(src).toMatch(/HOOD_Y = HOOD_POSE_OVERRIDE\?\.y \?\? 1\.15/);
-    expect(src).toMatch(/HOOD_Z = HOOD_POSE_OVERRIDE\?\.z \?\? 2\.0/);
-    // R65-F 机位（1.55/1.4）保留为 #hoodcam=off 回滚态
+    expect(src).toMatch(/HOOD_Y = HOOD_POSE_OVERRIDE\?\.y \?\? 1\.45/);
+    expect(src).toMatch(/HOOD_Z = HOOD_POSE_OVERRIDE\?\.z \?\? -1\.45/);
+    // #hoodcam=off 回滚态（R65-F 值）保留
     expect(src).toContain('hoodcam=off');
     expect(src).toContain('1.55, z: 1.4');
   });
