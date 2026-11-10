@@ -131,19 +131,22 @@ const CABIN_TARGET_OVERRIDE: readonly [number, number, number] | null = (() => {
  * **前移到机盖正上方**（local z 转正 ~+1.4 = 机盖中段、y 抬到 1.55 过风挡）并俯视前方 ⇒
  * 相机已在风挡/座舱之前，车顶整体落到相机背后，几何上无法入画；机盖面在画面下半铺开。
  *
- * `#hoodcam=y,z,ly` 供真机 A/B 扫参；`#hoodcam=off` 逐位回旧机位 (0,1.45,-1.45)→look(0,0.95,-16)。
+ * `#hoodcam=y,z,ly` 供真机 A/B 扫参；`#hoodcam=off` 逐位回 R65-F 机位 (0,1.55,1.4)→look(0,0.9,-16)。
  */
 const HOOD_POSE_OVERRIDE: { y: number; z: number; lookY: number } | null = (() => {
   if (typeof window === 'undefined') return null;
-  if (/(?:^|[#&])hoodcam=off/i.test(window.location.hash)) return { y: 1.45, z: -1.45, lookY: 0.95 };
+  if (/(?:^|[#&])hoodcam=off/i.test(window.location.hash)) return { y: 1.55, z: 1.4, lookY: 0.9 };
   const m = /[#&]hoodcam=(-?[\d.]+),(-?[\d.]+)(?:,(-?[\d.]+))?/.exec(window.location.hash);
   if (!m) return null;
   return { y: Number(m[1]), z: Number(m[2]), lookY: m[3] !== undefined ? Number(m[3]) : 0.9 };
 })();
-/** 默认机盖机位：offset y/z + look y（look z 固定 -16 朝车头远方）。z+1.4=机盖中段（车头 +Z）。 */
-const HOOD_Y = HOOD_POSE_OVERRIDE?.y ?? 1.55;
-const HOOD_Z = HOOD_POSE_OVERRIDE?.z ?? 1.4;
-const HOOD_LOOK_Y = HOOD_POSE_OVERRIDE?.lookY ?? 0.9;
+/** 默认机盖机位：offset y/z + look y（look z 固定 -16 朝车头远方）。
+ * R65-G 用户真机反馈「机盖模式退太后了」：y1.55 高出机盖面 ~0.5m ⇒ 机盖缩成画面顶一条。
+ * 改到 y1.15（贴机盖面 ~0.1m）+ z2.0（近机盖前缘，车头 +Z）⇒ 机盖面铺满画面下半（真机盖读法），
+ * 仍过风挡（z2.0 > 风挡底 ~0.3）⇒ 车顶落在相机背后不入画（保住缺陷3 的修复）。 */
+const HOOD_Y = HOOD_POSE_OVERRIDE?.y ?? 1.15;
+const HOOD_Z = HOOD_POSE_OVERRIDE?.z ?? 2.0;
+const HOOD_LOOK_Y = HOOD_POSE_OVERRIDE?.lookY ?? 0.5;
 
 const MODES: Record<CameraMode, (speed: number, portrait: boolean, time: number) => void> = {
   orbit: (_speed, portrait, time) => {

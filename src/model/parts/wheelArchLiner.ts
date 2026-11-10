@@ -23,18 +23,22 @@ export const ARCH_LINER = {
   rIn: 0.415,
   rOut: 0.437,
   /**
-   * 拱顶弧段（度，绕轮轴，0°=车外侧水平、90°=拱顶）。
+   * 拱顶弧段（度，绕轮轴，90°=拱顶）。
    * R65：100→**180**——用户 11-10 截图「轮辐条间隙看穿到舱内 cognac 皮革」。
    * 旧 100° 只盖拱顶 ±50°，衬板两端（≈40°/140°）以下到拱口脚点（y0.18）留空，
-   * 从侧向辐条间隙可斜视穿到舱内座椅/门板。180° 铺满上半圆（两端落到轮心高度
-   * y0.382，仍在拱内、不外凸、不碰轮胎 0.382 内缘外的可视带）⇒ 封死看穿路径。
+   * 从侧向辐条间隙可斜视穿到舱内座椅/门板。180° 铺满上半圆 ⇒ 封死正上方看穿。
+   * R65-G：用户真机截图仍见**拱口前/后象限**（近地两侧）透橙 ⇒ 180° 对称两端只落到
+   * 轮心高度、斜下方仍开。改 **210° + 中心偏后(centerDeg 90→95)**：多盖斜下前后象限，
+   * 端点落到轮心下 ~0.21（仍在拱腔暗处、藏胎后，不外凸、不碰胎 r0.382 内缘外的可视带）。
    * 内凹封（衬板半径 < 拱 0.452，藏在拱腔里），非 R18 删除的外凸围边。
    */
-  spanDeg: 180,
+  spanDeg: 210,
+  /** 弧段中心角（度，90=拱顶对称；>90 中心偏后，多盖后侧斜下象限） */
+  centerDeg: 95,
   /** 轴向宽度（只铺可视近侧，= 轮胎宽 0.255 + 两侧各 4cm） */
   width: 0.335,
-  /** 弧段数（180° 用 9 段，每段 20°，曲面平滑且 tri 仍低） */
-  segs: 9
+  /** 弧段数（210° 用 10 段，每段 21°，曲面平滑且 tri 仍低） */
+  segs: 10
 } as const;
 
 /**
@@ -42,9 +46,10 @@ export const ARCH_LINER = {
  * `side` 决定轴向铺向（+1 → x ∈ [0.04, width−0.04] 铺向车外）。
  */
 export function createWheelArchLiner(side: 1 | -1 = 1): THREE.BufferGeometry {
-  const { rIn, rOut, spanDeg, width, segs } = ARCH_LINER;
-  const a0 = (Math.PI / 2 - (spanDeg * Math.PI) / 180 / 2);
-  const a1 = (Math.PI / 2 + (spanDeg * Math.PI) / 180 / 2);
+  const { rIn, rOut, spanDeg, centerDeg, width, segs } = ARCH_LINER;
+  const center = (centerDeg * Math.PI) / 180;
+  const a0 = center - (spanDeg * Math.PI) / 180 / 2;
+  const a1 = center + (spanDeg * Math.PI) / 180 / 2;
   const x0 = side > 0 ? 0.04 : -width + 0.04;
   const x1 = side > 0 ? width - 0.04 : -0.04;
   const pos: number[] = [];
