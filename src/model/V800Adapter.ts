@@ -3842,12 +3842,13 @@ const R48_LAMP_TONE: boolean =
       model.traverse((o) => {
         const mesh = o as THREE.Mesh;
         const nm: string = (o.userData?.sculptComponent?.name as string) ?? '';
-        if (/横杠|红带|宫灯/.test(nm) && mesh.isMesh) {
+        // R65-G6：补隐旧「尾灯红色灯带场」(housing-dark + 尾灯红带 atlas，jagged 全宽红带真身)
+        if (/横杠|红带|宫灯|灯带场|灯笼|lantern/i.test(nm) && mesh.isMesh) {
           mesh.visible = false;
           hidLegacy += 1;
         }
       });
-      console.info(`[V800Adapter] R21-B 隐旧宫灯横杠/红带散件 ${hidLegacy} 个（治全宽红带）`);
+      console.info(`[V800Adapter] R21-B 隐旧宫灯横杠/红带/灯带场散件 ${hidLegacy} 个（治全宽红带）`);
     }
 
     // —— C：前大灯（顶部横 DRL + 4 透镜堆叠 + 星点，E1/E2 口径）——
