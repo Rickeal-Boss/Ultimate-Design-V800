@@ -158,12 +158,19 @@ function makeMaterials(): R7FrontDetailMaterials {
       envMapIntensity: 1.35
     }),
     lens: mkPhys(R7_FRONT_DETAIL_MATERIAL_IDS.lens, {
+      // R65-G2：旧镜片全不透明（color 0x10171a + clearcoat1）⇒ 把前方 z Z_DETAIL 的
+      // 4 投影透镜 + 8 段 DRL 全糊在下面，灯组读成一块平面黑斑（用户「大灯没贴图」）。
+      // 改透明烟熏玻璃：opacity 0.32 + depthWrite false，透出内部透镜/DRL 结构（官图读法），
+      // 同时保留 clearcoat 反光质感。projector/drl 是不透明 emissive，在镜片前 ⇒ 深度排序正常。
       color: 0x10171a,
-      metalness: 0.42,
+      metalness: 0.2,
       roughness: 0.08,
       clearcoat: 1,
       clearcoatRoughness: 0.03,
-      envMapIntensity: 1.55
+      envMapIntensity: 1.1,
+      transparent: true,
+      opacity: 0.32,
+      depthWrite: false
     }),
     projector: mkStd(R7_FRONT_DETAIL_MATERIAL_IDS.projector, {
       color: 0xe8eef0,
