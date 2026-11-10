@@ -120,6 +120,31 @@ const CABIN_TARGET_OVERRIDE: readonly [number, number, number] | null = (() => {
   return [Number(m[4]), Number(m[5]), Number(m[6])];
 })();
 
+/**
+ * R65 · 机盖机位（hood）标定。
+ *
+ * 病根（用户 11-10 截图「机盖视角不在机盖上 + 顶部棕穿孔棚」）：旧 hood offset(0,1.45,-1.45)
+ * 的 **local z 符号反了**——装配局部系（= spec 系，车头 +Z，见 R7_INTERIOR_VIEWS：后座眼点
+ * z-0.70 / 驾驶员 z-0.09 ⇒ 座舱在负 z、机盖在正 z）里 z-1.45 把相机放到了**座舱/车顶下方**
+ * （y1.45 < 车顶 ~1.6），而 `isInteriorMode()` 排除 hood ⇒ 车顶内壁不剔除 ⇒ V800
+ * `headliner-suede` / R7 `suede-ivory` 顶棚悬挂进画面上沿。修法（纯几何、双车通用）：把机位
+ * **前移到机盖正上方**（local z 转正 ~+1.4 = 机盖中段、y 抬到 1.55 过风挡）并俯视前方 ⇒
+ * 相机已在风挡/座舱之前，车顶整体落到相机背后，几何上无法入画；机盖面在画面下半铺开。
+ *
+ * `#hoodcam=y,z,ly` 供真机 A/B 扫参；`#hoodcam=off` 逐位回旧机位 (0,1.45,-1.45)→look(0,0.95,-16)。
+ */
+const HOOD_POSE_OVERRIDE: { y: number; z: number; lookY: number } | null = (() => {
+  if (typeof window === 'undefined') return null;
+  if (/(?:^|[#&])hoodcam=off/i.test(window.location.hash)) return { y: 1.45, z: -1.45, lookY: 0.95 };
+  const m = /[#&]hoodcam=(-?[\d.]+),(-?[\d.]+)(?:,(-?[\d.]+))?/.exec(window.location.hash);
+  if (!m) return null;
+  return { y: Number(m[1]), z: Number(m[2]), lookY: m[3] !== undefined ? Number(m[3]) : 0.9 };
+})();
+/** 默认机盖机位：offset y/z + look y（look z 固定 -16 朝车头远方）。z+1.4=机盖中段（车头 +Z）。 */
+const HOOD_Y = HOOD_POSE_OVERRIDE?.y ?? 1.55;
+const HOOD_Z = HOOD_POSE_OVERRIDE?.z ?? 1.4;
+const HOOD_LOOK_Y = HOOD_POSE_OVERRIDE?.lookY ?? 0.9;
+
 const MODES: Record<CameraMode, (speed: number, portrait: boolean, time: number) => void> = {
   orbit: (_speed, portrait, time) => {
     // 相位 3π/4：t=0 机位落在右前 45°（游戏里车头朝 -Z，无相位时 t=0 正对车尾，
@@ -148,9 +173,11 @@ const MODES: Record<CameraMode, (speed: number, portrait: boolean, time: number)
     POSE.local = false;
   },
   hood: () => {
-    // 引擎盖正上方（风挡玻璃之外），向前略俯视路面
-    POSE.offset.set(0, 1.45, -1.45);
-    POSE.look.set(0, 0.95, -16);
+    // 引擎盖正上方（R65：前移到机盖中段、抬过车顶 ~1.6 ⇒ 车顶内壁几何上落到相机背后，
+    // V800 headliner-suede / R7 suede-ivory 顶棚不再悬挂入画；机盖面在画面下半铺开）。
+    // `#hoodcam=y,z,ly` 扫参 / `#hoodcam=off` 回旧机位 (0,1.45,-1.45)→look(0,0.95,-16)。
+    POSE.offset.set(0, HOOD_Y, HOOD_Z);
+    POSE.look.set(0, HOOD_LOOK_Y, -16);
     POSE.fov = 66;
     POSE.k = 4;
     POSE.near = 0.1;

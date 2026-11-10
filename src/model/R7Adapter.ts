@@ -39,6 +39,9 @@ import { loadInteriorSteering } from './external/InteriorSteering';
 import { setFxWheelOffsets } from '../fx';
 import { DEFAULT_VARIANT } from '../config/vehiclePaint';
 import { createR7FrontDetails } from './parts/r7FrontDetails';
+// R65：R7 轮拱内衬（此前 R7 无衬板，舱内座椅从轮辐条间隙看穿）。共享 V800 的衬板件。
+import { createWheelArchLiner, WHEEL_ARCH_LINER_MATERIAL_ID } from './parts/wheelArchLiner';
+import { WHEEL_HUB_CENTERS } from './parts/wheelHub';
 import { carTextureSizeFor, type QualityTier } from '../config/quality';
 import { damp } from '../util/math';
 
@@ -1667,6 +1670,33 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
     }
     wheelSpinRadius = shell.wheelRadius;
     setFxWheelOffsets(wheelOffsetsWorldXZ(shell.manifest));
+    // —— R65：R7 轮拱内衬（此前 R7 无衬板）——
+    // 病灶（用户 11-10 截图）：R7 轮辐条间隙可斜视穿到舱内座椅（cabin occluder 座椅
+    // seat-driver-cushion 等，line 916-925）。修法同 V800 R36-C1：拱腔内顶补哑光黑衬板，
+    // 180° 弧段封死看穿路径（几何见 parts/wheelArchLiner.ts 头注；内凹封、不外凸）。
+    // 落在轮胎(0.383)与拱(0.452)之间余量带，不碰轮/拱几何本体；body-local 挂 body（随 rotY π）。
+    {
+      const linerMat = new THREE.MeshStandardMaterial({
+        color: 0x101114,
+        metalness: 0.05,
+        roughness: 0.85,
+        side: THREE.DoubleSide // 掠射/腔内双面可见，防背面剔除漏色
+      });
+      linerMat.userData.sculptMaterial = { id: WHEEL_ARCH_LINER_MATERIAL_ID };
+      linerMat.name = WHEEL_ARCH_LINER_MATERIAL_ID;
+      let linerCount = 0;
+      for (const corner of ['fl', 'fr', 'rl', 'rr'] as const) {
+        const c = WHEEL_HUB_CENTERS[corner];
+        const mesh = new THREE.Mesh(createWheelArchLiner(c.side), linerMat);
+        mesh.name = `r22-arch-liner-${corner}`;
+        mesh.position.set(c.x, c.y, c.z);
+        mesh.castShadow = false;
+        mesh.receiveShadow = true;
+        body.add(mesh);
+        linerCount += 1;
+      }
+      console.info(`[R7Adapter] R65 轮拱内衬接线完成（${linerCount} 角 ×哑光黑 180°）`);
+    }
     console.info(
       `[R7Adapter] R44 外部壳就绪：body ${shell.manifest.tri.body} tri + 4 轮，` +
         `scale=${shell.manifest.scale} wheelR=${shell.wheelRadius} variant=${shell.variant}`

@@ -316,14 +316,17 @@ export function createR7FrontDetails(): R7FrontDetailResult {
     }
   }
 
-  /* ── ② 贯穿镀铬刃（灯腔下缘略上，全宽） ───────────────────────── */
+  /* ── ② 贯穿镀铬刃（贴灯腔下缘，全宽） ───────────────────────── */
+  // R65：旧 y0.733 比灯腔下缘(0.758)低 ~2.5cm ⇒ 读作「悬浮在机盖上方的独立横条」
+  // （与官图 R7 刃贴灯组下缘不符）。抬到 y0.752 与 housing 下缘(0.758)咬合 ⇒ 刃成为
+  // 灯组下沿的亮边（官图读法），不再悬浮。下方暗缝同步上移保持相对位。
   {
     const g = new THREE.BoxGeometry(1.76, 0.011, 0.007);
-    g.translate(0, 0.733, Z_FACE + 0.007);
+    g.translate(0, 0.752, Z_FACE + 0.007);
     push(materials.chrome, g);
     // 刃下方一条极细暗缝，避免镀铬与车漆糊在一起
     const seam = new THREE.BoxGeometry(1.7, 0.006, 0.004);
-    seam.translate(0, 0.723, Z_FACE + 0.004);
+    seam.translate(0, 0.742, Z_FACE + 0.004);
     push(materials.intake, seam);
   }
 
