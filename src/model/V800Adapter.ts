@@ -5048,6 +5048,15 @@ const R48_LAMP_TONE: boolean =
     })();
     const hubTags = ['fl', 'fr', 'rl', 'rr'] as const;
     const usedSpin = new Set<THREE.Object3D>();
+    // R66-D：外部轮挂载成功计数——**原子性兜底**。曾经：setExteriorHidden(true) 先隐掉
+    //   全部程序化外观（轮胎/轮毂/车漆），再逐轮挂外部轮（每轮 try/catch 吞错继续）。
+    //   若 body GLB 在、但某个外部轮挂载失败（切割退化 / hub manifest 缺 / 矩阵反解异常），
+    //   该轮就「程序化轮被隐、外部轮没挂上」= 轮拱空荡、车底看穿（用户 11-10 低精度截图）。
+    //   修：数成功挂载数，<4 ⇒ 回滚 setExteriorHidden(false) 还原整套程序化外观（车漆+轮胎
+    //   +轮毂全回来），宁可退回程序化整车也不留「有身无轮」。setExteriorHidden(false) 只恢复
+    //   r44HiddenMaterials/r44HiddenMeshes（程序化件），body 标了 r44External=true 会被跳过
+    //   ⇒ 已挂的 body 仍走它自己的可见性（下一行显式隐藏它）。
+    let mountedWheels = 0;
     // 切割退化（静态轮）：无外部轮 mesh 时整段跳过
     for (const tag of Object.keys(shell.wheelMeshes).length > 0 ? hubTags : []) {
       try {
@@ -5066,12 +5075,24 @@ const R48_LAMP_TONE: boolean =
         if (!best) break;
         usedSpin.add(best.spin);
         mountExternalWheel(shell.bodyMesh, hubModel, best.spin, shell.wheelMeshes[tag], shell.manifest.scale);
+        mountedWheels += 1;
         // R62-P0-1：挂刹车盘（随 spin 自转）+ 卡钳（挂 spin 的非自转父，静止）
         const brake = shell.brakes[tag];
         if (brake) mountExternalBrake(hubModel, best.spin, brake, shell.manifest.scale);
       } catch (err) {
         console.error(`[R44] 外部轮 ${tag} 挂载失败（该轮回退程序化轮位）:`, err);
       }
+    }
+    // R66-D：外部轮没全挂上 ⇒ 回滚整套程序化外观（body + 4 轮 + 车漆），不留「有身无轮」。
+    //   body 是 r44External ⇒ setExteriorHidden(false) 跳过它，需显式摘掉 + 摘语义件。
+    if (mountedWheels < hubTags.length) {
+      console.error(
+        `[V800Adapter] R66-D 外部轮只挂上 ${mountedWheels}/${hubTags.length}，回滚程序化外观兜底`
+      );
+      shell.bodyMesh.visible = false;
+      for (const sm of [...shell.glassMeshes, ...shell.lampMeshes]) sm.visible = false;
+      setExteriorHidden(false);
+      shellHandle = null; // 本壳残缺，交还程序化外观全权（阴影代理等后续不再依赖它）
     }
     wheelSpinRadius = shell.wheelRadius;
     setFxWheelOffsets(wheelOffsetsWorldXZ(shell.manifest));
