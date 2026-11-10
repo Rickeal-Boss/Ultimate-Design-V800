@@ -236,9 +236,12 @@ const DRL_ARC = {
   depth: 0.008  // 挤出厚（同原条）
 } as const;
 
-/** `#r65drlarc=off` ⇒ 逐位回平直 DRL 条（A/B 对照）。 */
+/** R65：弧形 DRL 灯带**默认关闭**（回 R64 平直条）。实测（真机 3/4 视图）弧形带位于
+ *  灯罩顶部(y≈0.17–0.19，罩顶 0.23)，3/4 视角读作"悬浮机盖上方的白刃"、且灯透镜内
+ *  无光签名(暗块) ⇒ 观感倒退。弧形须做进透镜玻璃内的光签名贴图(非顶部几何条)才对，
+ *  本环境无法可靠目检校准 ⇒ 默认回平直条，实验保留给 `#r65drlarc=on` 显式启用。 */
 const R65_DRL_ARC_ON: boolean =
-  typeof window === 'undefined' || !/(?:^|[#&])r65drlarc=off/i.test(window.location.hash);
+  typeof window !== 'undefined' && /(?:^|[#&])r65drlarc=on/i.test(window.location.hash);
 
 /** 弧形灯带 profile：外弧(x,-t/2→+t/2 上拱) + 内弧回程，闭合 CCW。 */
 function arcBandShape(a: typeof DRL_ARC): THREE.BufferGeometry {
@@ -316,11 +319,8 @@ export function createHeadLamp(options: HeadLampOptions = {}): HeadLampResult {
   );
   const housingGeo = mergeSafe(housingParts);
 
-  // ---- 4.2 顶部 DRL 白光刃 —— R65 改弧形灯带（用户：前灯应弧形贴图）──────
-  // 原：平直横条 roundedRectShape(0.125,0.020) @y0.178（读作"平直非弧形"）。
-  // 现：沿抛物线的弧形灯带（外/内两条弧线围成闭合 profile，挤 0.008），
-  //     弧顶居中上拱 ARC_BOW，两端落 ARC_Y0，整体仍居罩内(y≤0.2 不穿顶)。
-  //     同一 drl 发光材质 ⇒ DC/材质数不变；`#r65drlarc=off` 逐位回平直条(A/B)。
+  // ---- 4.2 顶部 DRL 白光刃 —— R65 弧形灯带**默认关**(回平直条)，见 DRL_ARC/R65_DRL_ARC_ON 注 ──
+  // 原：平直横条 roundedRectShape(0.125,0.020) @y0.178。弧形带默认关原因见 R65_DRL_ARC_ON。
   const drlGeo = R65_DRL_ARC_ON ? arcBandShape(DRL_ARC) : at(
     extrude(roundedRectShape(0.125, 0.020, 0.006, 3), 0.008, 0),
     0, 0.178, FRONT_Z - 0.004
