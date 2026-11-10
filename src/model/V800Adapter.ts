@@ -3894,10 +3894,20 @@ const R48_LAMP_TONE: boolean =
         console.warn(`[V800Adapter] R22-B 找不到轮系 ${tags[i]}，保持旧件`);
         continue;
       }
-      // 隐旧：rim-* / wheel-cap-*（pivot + mesh 两节点，按 sculptComponent.id 精确匹配）
+      // 隐旧：rim-* / rim-spokes-* / wheel-cap-*（R65-G5 探针定罪：工厂 rim 有**两个** mesh ——
+      //   「大饼轮圈 rim-{corner}」r0.105-0.320 与「rim-spokes-{corner}」r0.000-0.707 z±0.5。
+      //   旧代码只隐 rim-{corner}+wheel-cap-{corner}，**漏掉 rim-spokes-{corner}** ⇒ 旧辐条
+      //   overlay 盖在手写涡轮 hub 之上，读成「光滑穹顶带扇孔、没填满轮框」（用户截图）。
+      //   ⚠️ rim-spokes-* 是 repetitionSystem radial InstancedMesh（count 12），**无
+      //   sculptComponent.id、只有 cluster.name**（铁律6）⇒ 必须按 node.name 兜底命中。）
       spin.traverse((o) => {
         const id = (o.userData as { sculptComponent?: { id?: string } }).sculptComponent?.id;
-        if (id === `rim-${corner}` || id === `wheel-cap-${corner}`) o.visible = false;
+        const nm: string = o.name ?? '';
+        const hit = id === `wheel-cap-${corner}`
+          || (id && id.startsWith('rim-'))
+          || nm.startsWith('rim-spokes-')
+          || nm === `rim-${corner}`;
+        if (hit) o.visible = false;
       });
       const side: WheelHubSide = corner === 'fl' || corner === 'rl' ? 1 : -1;
       const hub = createWheelHub(side, hubMats);
