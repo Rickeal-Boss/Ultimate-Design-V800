@@ -73,8 +73,18 @@ import { mergeSafe } from '../../util/geo';
  * 0. 局部系常量（改这里就够了）
  * ================================================================ */
 
-/** 轮面外半径（= 旧 rim lathe 半径 0.300） */
-export const R_FACE = 0.3;
+/**
+ * 轮面外半径。
+ * R66：原 0.300（= 旧 rim lathe 半径）**比轮胎 0.382 小 8cm** ⇒ 侧视「中心银盘 + 外圈
+ * 黑空腔」，轮毂读成没填满轮框（用户 11-10 截图）。以用户提供的高精度轮毂 GLB 实测外径
+ * ≈0.399（几乎贴到胎唇）为参考，按 k=1.145 等比放大到 **0.343**——受限约束：
+ *   - 轮毂面必须仍落在轮胎深度内（外端面局部 z ≈ +0.1275），z 全程 ≤ 胎外端面不外凸；
+ *   - 0.343 填到胎唇 0.382 只余 0.039（原 0.082）⇒ 黑圈收窄一半以上，配合涡轮开窗填满读感。
+ * （不再用 0.300：那是「旧 rim 半径」口径，非「填满轮框」口径。）
+ */
+export const R_FACE = 0.343;
+/** R66 等比放大因子（0.300→0.343），所有径向派生尺寸同步乘 k，z 深度保持不外凸 */
+const K = R_FACE / 0.3;
 /** 回转体周向段数：28 段 ⇒ 矢高 1.9mm（屏幕 <0.6px）；窗带边界圆同点数保证无缝 */
 const NSEG = 28;
 /** 小件（黑盖/徽标）周向段数 */
@@ -86,12 +96,13 @@ const WIN_PITCH = (Math.PI * 2) / N_WINDOWS;
  * 窗角半宽（弧度）。
  * R33：参考图轮面开口是**大面积梯形通风窗**，不是 6° 细缝。原 6.1°×0.030R
  * 在整车侧视 8m 机位只剩一条黑线，盘面读成实心圆碟。放大到 7.6°×0.034R
- * （开口面积 +34%）；含 7.5° 涡轮倾角后的外接半径 0.2819 < 窗带外缘 0.283，
+ * （开口面积 +34%）；含 7.5° 涡轮倾角后的外接半径 < 窗带外缘，
  * 仍严格落在窗带内，不破 band 边界/倒角环。
+ * R66：径向半高随 K 放大（切向由 R_WIN_MID 派生自动跟随）。
  */
 const WIN_HALF_ANG = (7.6 * Math.PI) / 180;
 /** 窗径向半高 / 圆角 / 涡轮倾角 */
-const WIN_HALF_R = 0.034;
+const WIN_HALF_R = 0.034 * K;
 const WIN_CORNER = 0.009;
 const WIN_TILT = (7.5 * Math.PI) / 180;
 /** 窗轮廓每角弧段点数（3 点/角 = 12 边形圆角矩形） */
@@ -99,23 +110,26 @@ const WIN_ARC_PTS = 3;
 /** 窗框倒角宽度 + 抬起高度 */
 const BEZEL_W = 0.0035;
 const BEZEL_LIFT = 0.0072;
-/** 窗带环形带内外半径 / 锥面 z */
-const BAND_R_IN = 0.203;
-const BAND_R_OUT = 0.283;
-const Z_BAND_IN = 0.1468;
-const Z_BAND_OUT = 0.15;
+/** 窗带环形带内外半径（径向随 K 放大）/ 锥面 z（轴向随 KZ 压进轮胎深度内） */
+const BAND_R_IN = 0.203 * K;
+const BAND_R_OUT = 0.283 * K;
+/** 轴向压缩因子：轮胎局部深只到 z≈0.1275（胎宽 0.255 半宽），原 hub 面 z0.13-0.16 外凸
+ *  出胎侧壁 ~3cm ⇒ 压 0.8× 让唇顶 0.16→0.1275 **齐胎外端面**（不外凸、填满读感）。 */
+const KZ = 0.8;
+const Z_BAND_IN = 0.1468 * KZ;
+const Z_BAND_OUT = 0.15 * KZ;
 /** 窗中线半径（= 窗带中径） */
 const R_WIN_MID = (BAND_R_IN + BAND_R_OUT) / 2;
-/** 外壁底（埋进轮胎）/ 唇顶 */
-const Z_WALL_BOT = 0.13;
-const Z_LIP_TOP = 0.16;
+/** 外壁底（埋进轮胎）/ 唇顶（= 胎外端面 z0.1275，hub 与胎外端面齐平、不外凸出胎） */
+const Z_WALL_BOT = 0.13 * KZ;
+const Z_LIP_TOP = 0.1275;
 /** 暗腔底面 z（做成内深外浅的锥面，透窗读出腔深渐变） */
-const Z_CAVITY_IN = 0.1358;
-const Z_CAVITY_OUT = 0.1455;
+const Z_CAVITY_IN = 0.1358 * KZ;
+const Z_CAVITY_OUT = 0.1455 * KZ;
 /** 黑盖 / 徽标半径与顶面 z */
 const CAP_R = 0.025;
 const CAP_FLAT_R = 0.019;
-const CAP_TOP_Z = 0.1496;
+const CAP_TOP_Z = 0.1496 * KZ;
 export const EMBLEM_R = 0.0165;
 /** 材质 id（独占，铁律 8） */
 export const WHEEL_HUB_MATERIAL_IDS = {
@@ -472,9 +486,11 @@ function buildCavity(): THREE.BufferGeometry {
  * 盘半径 0.235 < 外唇 0.30 ⇒ 盘体落在窗带 0.203–0.283 区间内，透窗必见。
  */
 function buildBrakeDisc(): THREE.BufferGeometry {
-  const cyl = new THREE.CylinderGeometry(0.235, 0.235, 0.014, 12, 1, false);
+  // 盘半径 = 窗带中径（0.262）：落在暗腔 0.232-0.324 内，透每个窗都见盘体（R34 黑洞假开口）
+  const discR = (BAND_R_IN + BAND_R_OUT) / 2;
+  const cyl = new THREE.CylinderGeometry(discR, discR, 0.014, 12, 1, false);
   cyl.rotateX(Math.PI / 2); // 轴 Y→Z（盘平面平行车外侧）
-  cyl.translate(0, 0, 0.11);
+  cyl.translate(0, 0, 0.11 * KZ); // 盘置于暗腔后（暗腔 z≈KZ·0.1358-0.1455），透窗读真盘
   cyl.computeVertexNormals();
   cyl.computeBoundingBox();
   return cyl;
@@ -486,7 +502,7 @@ function buildBrakeDisc(): THREE.BufferGeometry {
  */
 function buildCaliper(): THREE.BufferGeometry {
   const g = new THREE.BoxGeometry(0.07, 0.05, 0.05);
-  g.translate(0, 0.2, 0.12); // 盘缘顶部（局部 +Y），落在窗带/暗腔之后的盘前缘
+  g.translate(0, 0.2, 0.12 * KZ); // 盘缘顶部（局部 +Y），落在窗带/暗腔之后的盘前缘
   g.computeVertexNormals();
   g.computeBoundingBox();
   return g;
@@ -674,27 +690,28 @@ export function createWheelHub(side: WheelHubSide = 1, materials?: WheelHubMater
   // 局部 +Z（车外侧）→ 世界 +X（side=+1）/ −X（side=−1）
   group.rotation.y = (side * Math.PI) / 2;
 
-  /* ---- 5.1 抛光银：外唇环（母线由外下 → 内上）---- */
+  /* ---- 5.1 抛光银：外唇环（母线由外下 → 内上）----
+   * R66：径向 r 随 K、轴向 z 随 KZ 等比缩放（外倒角 r 保持 < R_FACE、唇顶 < BAND_R_OUT）。 */
   const lipProfile: ProfilePoint[] = [
     [R_FACE, Z_WALL_BOT], // 外壁底（埋进轮胎）
-    [R_FACE, 0.142], // 外壁顶
-    [0.2965, 0.1525], // 外倒角
-    [0.2885, Z_LIP_TOP], // 唇顶（最亮机加工环，宽 0.06R ≈ 参考实测）
+    [R_FACE, 0.142 * KZ], // 外壁顶
+    [0.2965 * K, 0.1525 * KZ], // 外倒角
+    [0.2885 * K, Z_LIP_TOP], // 唇顶（最亮机加工环，宽 0.06R ≈ 参考实测）
     [BAND_R_OUT, Z_BAND_OUT] // 45° 落回窗带外缘
   ];
 
   /* ---- 5.2 抛光银：主盘穹顶 + 中心凸台 + 镀铬环 + 中心碟窝 ----
-   * z 口径：窗带内缘 0.1468 → 中心峰值 0.1588（+12mm，与主理人方案一致），
-   * 全程 ≤ 唇顶 0.1600 = 旧 rim 盘面，不外扩出旧包络。 */
+   * z 口径：窗带内缘 → 中心峰值（+12mm，与主理人方案一致），全程 ≤ 唇顶，
+   * 不外扩出轮胎深度（唇顶 = 胎外端面 z0.1275）。R66 全程乘 KZ 压进胎深。 */
   const discProfile: ProfilePoint[] = [
     [BAND_R_IN, Z_BAND_IN], // 窗带内缘（= bandZ(BAND_R_IN)）
-    [0.17, 0.15], // 穹顶起坡
-    [0.135, 0.1538],
-    [0.099, 0.157], // 凸台外缘（0.33R）
-    [0.078, 0.1586], // 凸台台面 / 穹顶峰值
-    [0.052, 0.1548], // 落进中心碟窝
-    [0.038, 0.1508], // 镀铬环面
-    [CAP_R, 0.147] // 黑盖外缘（垂直收口）
+    [0.17 * K, 0.15 * KZ], // 穹顶起坡
+    [0.135 * K, 0.1538 * KZ],
+    [0.099 * K, 0.157 * KZ], // 凸台外缘（0.33R）
+    [0.078 * K, 0.1586 * KZ], // 凸台台面 / 穹顶峰值
+    [0.052 * K, 0.1548 * KZ], // 落进中心碟窝
+    [0.038 * K, 0.1508 * KZ], // 镀铬环面
+    [CAP_R, 0.147 * KZ] // 黑盖外缘（垂直收口）
   ];
 
   const brightGeo = mergeSafe([
@@ -713,8 +730,8 @@ export function createWheelHub(side: WheelHubSide = 1, materials?: WheelHubMater
   const capProfile: ProfilePoint[] = [
     [0, CAP_TOP_Z],
     [CAP_FLAT_R, CAP_TOP_Z],
-    [0.023, 0.1489],
-    [CAP_R, 0.1466] // 略低于碟窝收口 (0.1470)，嵌入不留缝
+    [0.023, 0.1489 * KZ],
+    [CAP_R, 0.1466 * KZ] // 略低于碟窝收口，嵌入不留缝
   ];
   const capGeo = revolve(capProfile, NSEG_SMALL);
 

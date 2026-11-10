@@ -76,12 +76,12 @@ describe('R33 R7 前脸手作件', () => {
 });
 
 describe('R33 V800 轮毂开口', () => {
-  it('18 窗放大后外接半径仍 < 窗带外缘 0.283（不切穿外唇）', () => {
+  it('18 窗放大后外接半径仍 < 窗带外缘（R66 缩放后 0.324，不切穿外唇）', () => {
     const rows = listWheelWindows();
     expect(rows).toHaveLength(N_WINDOWS);
     for (const w of rows) {
-      expect(w.rOut).toBeLessThan(0.283);
-      expect(w.rIn).toBeGreaterThan(0.203);
+      expect(w.rOut).toBeLessThan(0.324);
+      expect(w.rIn).toBeGreaterThan(0.232);
       expect(w.halfAngleDeg).toBeGreaterThan(7);
     }
   });
@@ -108,7 +108,8 @@ describe('R33 V800 轮毂开口', () => {
     });
     expect(names.has('r22-hub-steel')).toBe(true);
     const box = new THREE.Box3().setFromObject(hub.group);
-    expect(box.max.y - box.min.y).toBeLessThanOrEqual(0.601);
+    // R66：R_FACE 0.300→0.343（填满轮框）⇒ 轮面直径 0.686（原 0.601）
+    expect(box.max.y - box.min.y).toBeLessThanOrEqual(0.69);
     expect(hub.triangleCount).toBeGreaterThan(1_200);
     hub.group.traverse((o) => {
       const m = o as THREE.Mesh;
