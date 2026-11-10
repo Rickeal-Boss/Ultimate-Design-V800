@@ -1496,6 +1496,8 @@ function createTireAtlasTexture(size: number): SurfaceMapSet {
  */
 const REFLECTOR_PATTERN_REGION = Object.freeze([0.004, 0.496, 0.004, 0.996]);
 const REFLECTOR_EMISSIVE_INTENSITY = 0.55;
+// R66-B：曾试归零反光条 emissive 治「全宽红带」⇒ 渲染 byte-identical（373948）⇒ 反光条非
+// 红带真身，已回退。红带根治仍待定（尾门宽面 mesh 采样 atlas 红带区 = 贴图/UV 伪影）。
 
 function createReflectorAtlasTexture(): THREE.CanvasTexture {
   const S = 256;
@@ -2721,6 +2723,9 @@ export function createV800CarAdapter(tier: QualityTier = 'high', paintId: string
     reflectorMat.emissiveMap = tex;
     // 反光条不是刹车灯：静态弱发光（不接 brakeLevel；0.55 × #E03040 ≈ 0.20 亮度，
     // 低于 UnrealBloom 阈值 0.72，怠速/满刹都不起爆）
+    // R66-B：曾试归零 reflectorMat emissive 治「全宽红带」⇒ 车尾渲染 byte-identical
+    //   （373948）⇒ 反光条**不是**可见红带来源，改它无效果且动非刹车反光条有回归风险
+    //   ⇒ 已回退。红带真身仍待定（见波次记忆 G7/R66-B）。
     reflectorMat.emissiveIntensity = REFLECTOR_EMISSIVE_INTENSITY;
     reflectorMat.needsUpdate = true;
     // ⚠️ R4 修订（#uvassert 实测 232/304 串味，本波最严重一组）：四件在搭景
