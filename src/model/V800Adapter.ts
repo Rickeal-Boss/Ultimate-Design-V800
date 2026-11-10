@@ -3829,6 +3829,27 @@ const R48_LAMP_TONE: boolean =
       lampPivots.push(pivot);
     }
 
+    // —— B-补：隐旧「宫灯横杠/红带」散件（R65-G4 定罪，探针 .qa/r65j_tailband.json）——
+    // 病根：尾灯上/下横杠、第二道红带（l/r 各 3，共 6）**不是** taillamp-l/r pivot 的
+    // 直接子件（位置 x±0.920 但属独立 componentTree 节点）⇒ 上面的 pivot.children 隐藏
+    // 漏掉它们。它们共享 lamp-red 材质 ⇒ batchMergeStatic 按材质实例并进一个 batch mesh
+    // （实测 x 宽 1.780 ≈ 全车宽）⇒ 渲染成**贯穿全车尾的横向红带**（用户「横向红条」），
+    // 而官图 C2 红光只在两侧竖灯内、中部是镀铬 MAEXTRO 带。
+    // 修：按 sculptComponent.name 显式隐藏这些旧红散件（新件 r21-tail-lamp-* 不含这些名
+    // ⇒ 不误伤）。放 batchMergeStatic 之前 ⇒ visible=false 子树不进批次，红带消失。
+    {
+      let hidLegacy = 0;
+      model.traverse((o) => {
+        const mesh = o as THREE.Mesh;
+        const nm: string = (o.userData?.sculptComponent?.name as string) ?? '';
+        if (/横杠|红带|宫灯/.test(nm) && mesh.isMesh) {
+          mesh.visible = false;
+          hidLegacy += 1;
+        }
+      });
+      console.info(`[V800Adapter] R21-B 隐旧宫灯横杠/红带散件 ${hidLegacy} 个（治全宽红带）`);
+    }
+
     // —— C：前大灯（顶部横 DRL + 4 透镜堆叠 + 星点，E1/E2 口径）——
     headLampMats = createHeadLampMaterials();
     for (const side of ['left', 'right'] as const) {
