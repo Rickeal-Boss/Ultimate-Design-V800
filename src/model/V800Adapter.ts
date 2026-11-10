@@ -4247,6 +4247,19 @@ const R48_LAMP_TONE: boolean =
   if (batchStats.problems.length > 0) {
     console.error('[V800Adapter] 静态合批自校验失败：', batchStats.problems);
   }
+  // —— R65-G7：车尾「全宽 jagged 红带」——诊断结论：UV/贴图伪影，非几何，本波不动 ——
+  // 探针链（r65p_wide / r65x_red / r65z_batchvis / r65q_meshhide）定罪历程：
+  //   · batch/lamp-red（xw1.78 cy0.40 cz-2.88）是唯一宽红自发光体，UV 落 reflector atlas
+  //     红图案区 u0.004-0.496 ⇒ 疑似红带真身；
+  //   · 但 hide material（__v800HideMat）+ hide mesh（visible=false）+ remapUVToRegion 黑区
+  //     三种手段，车尾渲染**全部 byte-identical** ⇒ 该 batch mesh 非可见红带宿主（或 capture
+  //     路径未反映改动）；
+  //   · 颜色扫描（r65x_red）全车仅 6 个红自发光体，宽者唯 batch/lamp-red；host 扫描
+  //     （r65w_host）车尾带区无其它宽红面 ⇒ 红带真身仍未定罪。
+  // 裁决：jagged 边 = 512px/256px atlas texel 拉伸 ⇒ 红带本质是**贴图/UV 伪影**，根治需
+  //   定位尾门宽面 mesh 的 material/UV（换纯材质 / remapUVToRegion 归一 / 专用无红带贴图）。
+  //   headless 盲改 UV 高风险（铁律5 串味）+ 本环境无法可靠目检 ⇒ **留用户裁决/真机目检**，
+  //   本波不动几何/UV/材质（避免回归）。诊断探针已入库供下波复用。
   wireBatchPaintShadow(batchStats);
   byId = indexComponents(model);
   if (typeof window !== 'undefined' && window.location.hash.includes('batchmerge')) {
