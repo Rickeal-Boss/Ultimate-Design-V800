@@ -33,6 +33,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { mergeSafe } from '../../util/geo';
+import { buildTailLampC2, resolveC2StripCounts } from '../parts/tailLampC2';
 import {
   SHELL_TOTAL_MB,
   isHighDetailEnabled,
@@ -2323,6 +2324,10 @@ export async function loadExternalShell(
     /** R49-P2b：本波新增的材质/贴图账本（dispose 用；只登记 R49 自己新建的） */
     const r49DecorMats: THREE.Material[] = [];
     const r49DecorTex: THREE.Texture[] = [];
+    /** R67 C2 尾灯：本波新建的材质 / 程序化贴图（dispose 显式释放；几何随
+     *  lampRearMeshes 在 dispose() 里统一释放，无需另立几何账本）。 */
+    const r67TailMats: THREE.Material[] = [];
+    const r67TailTex: THREE.Texture[] = [];
     /** R46：前灯最终是否挂了 emissiveMap（供 r44ShellStatus.lampMap 机读） */
     let hasLampMap = false;
     /** R53：前灯细节新增材质/几何（dispose 显式释放，防泄漏） */
@@ -2348,6 +2353,48 @@ export async function loadExternalShell(
         metalness: 0.1
       });
       collectNamed(lrGltf, lampRearMeshes, lampRearMat, manifest.scale);
+
+      /* ══ R67 · V800 C2 尾灯重排（默认外部壳 on 路径专用；R7 分支一字不动）══════
+       * 定罪（审查线运行时逐 mesh 消去法 A/B，Phase1-B）：全宽 jagged 红带 = 本 GLB 的
+       * 单 mesh `lamp_rear`（17,485 tri，局部 y[0.220,0.260] 的横向破面壳）被
+       * lampRearMat 整块刷纯色深红 emissive；GLB materials/images/textures 全 0，
+       * TEXCOORD_0 存在但无贴图消费 ⇒ 锯齿来自几何三角化，非 atlas texel 拉伸
+       * （R65-G7 旧定性已证伪）。中央白色梯形 = body 白车漆透过 lamp_rear 中央缺口；
+       * hide lamp_rear 后尾门露出一条横向深色开口 ⇒ 不能只隐藏了事。
+       * 三段式（主理人综合规格 §二）：① 隐藏横带（visible=false 双保险 +
+       *   lampMeshes 出口过滤，见下方 :2578 注释：Adapter setPaintShadow 会把
+       *   全部 lampMeshes 的 visible 重置回 true，故不能在出口里留它）；
+       *   仍留在 lampRearMeshes 内部数组，几何/材质/dispose 账本逐位保留；
+       *   ② 全宽深色不透明尾门盖板补洞
+       * （离线 GLB 探针定标：比 body 尾门最外层再外 10mm 世界、宽度 clamp 在车身
+       * 轮廓内 ⇒ 规避 R49 的「左右超出轮廓悬空」「z 比 body 深被自遮挡」两条教训）；
+       * ③ 两侧 C2 竖灯（黑烟熏底 + 厚镀铬包边 + 上下两簇细红条 + 金色点阵凤凰）。
+       * 红条 mesh 复用 lampRearMat 同一实例 ⇒ V800Adapter.ts:5181-5199 每帧按
+       * brakeLevel 写 emissiveIntensity 自动覆盖，Adapter 零改动、不扩 Handle；
+       * 盖板 / 底 / 框 / 凤凰用独立静态材质（凤凰弱发光、不随刹车变亮，D-4）。
+       * 全部新件打 r44External（R57/R59 铁律）、castShadow=false、追加进
+       * lampRearMeshes ⇒ V800Adapter.ts:4996-5001 自动挂 body 组，默认路径可见
+       * 且不会被 setExteriorHidden 误藏。几何写 GLB 局部系，scale 由 manifest
+       * 读入（当前 4.75，禁写死）；竖灯首版标定值须经三机位目检微调。
+       * 贴图零外部图片资产；共享贴图 UV 按 mesh 自身 bbox 归一（禁线性 remap）。
+       * 回滚：`#r67tail=off` ⇒ 不隐藏、不建任何资源、不追加数组，逐位回横带态。 */
+      if (R67_TAIL_C2_ON && car === 'v800' && lampRearMat) {
+        for (const m of lampRearMeshes) {
+          if (m.name === 'lamp_rear') m.visible = false;
+        }
+        const strip = resolveC2StripCounts(
+          typeof window === 'undefined' ? '' : window.location.hash
+        );
+        const c2 = buildTailLampC2({
+          scale: manifest.scale,
+          lampRearMat,
+          stripTop: strip.top,
+          stripBottom: strip.bottom
+        });
+        for (const mesh of c2.meshes) lampRearMeshes.push(mesh);
+        for (const mat of c2.mats) r67TailMats.push(mat);
+        for (const t of c2.tex) r67TailTex.push(t);
+      }
 
       /* R48：R7 尾灯「空洞」补洞修复（用户口径：白块更深处其实是空洞）。
        * 定罪链（.qa/r48 + verify/r46/after/r48elim_*）：
@@ -2531,7 +2578,20 @@ export async function loadExternalShell(
       brakes,
       wheelRadius: manifest.wheelRadius,
       glassMeshes,
-      lampMeshes: [...lampRearMeshes, ...lampFrontMeshes],
+      /* R67：V800 C2 重排时把旧横带 `lamp_rear` 排除出**出口数组**（仍留在
+       * lampRearMeshes 内部数组里，几何/材质/dispose 账本原样保留，D-5）。
+       * 为什么不能只靠 mesh.visible=false：V800Adapter.ts:4779-4781 的
+       * setPaintShadow 会对**全部 shell.lampMeshes** 执行 `sm.visible = !interior`，
+       * 外景态把它重置回 true ⇒ 壳侧设的隐藏被覆盖、17,485 tri 又递交。
+       * 不进出口 ⇒ Adapter 的 :4997 不把它挂进 scene、:4779 也遍历不到它，
+       * 在「V800Adapter.ts 全文件零改动」约束下等价于永久隐藏且不被复位。
+       * `#r67tail=off` ⇒ 不过滤，出口与 R66-D 逐位相同（横带态）。 */
+      lampMeshes: [
+        ...(R67_TAIL_C2_ON && car === 'v800'
+          ? lampRearMeshes.filter((m) => m.name !== 'lamp_rear')
+          : lampRearMeshes),
+        ...lampFrontMeshes
+      ],
       lampRearMat,
       lampFrontMat,
       get variant() {
@@ -2630,6 +2690,10 @@ export async function loadExternalShell(
         for (const m of r62BrakeMats) m.dispose();
         for (const g of r62BrakeGeos) g.dispose();
         lampAtlasTex?.dispose();
+        // R67 C2 尾灯：本波新建的材质 / 程序化贴图（几何随 lampRearMeshes 一并释放）。
+        // 放在 lampAtlasTex 之后 ⇒ 不进 r64_brake_batch 的 r62 dispose slice。
+        for (const m of r67TailMats) m.dispose();
+        for (const t of r67TailTex) t.dispose();
         // R64：wheelAlloyMat 已从 r62BrakeMats 移出（A4 账本 length=2），单独释放
         wheelAlloyMat?.dispose();
         material.map?.dispose();
@@ -2868,3 +2932,14 @@ export function r64WriteTireBands(
   }
   geo.setAttribute('color', new THREE.Uint8BufferAttribute(arr, 3, true));
 }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+ * R67 · C2 尾灯重排开关（默认 ON，`#r67tail=off` 逐位回当前横带态）
+ * ⚠ 声明后置到文件末尾：既有护栏用源码字符串锚点切片本文件，在 :1987 之前
+ *   写入新声明会重复锚点字面量 ⇒ 整片红（R64 注释 :2687-2690 同源纪律）。
+ *   模块顶层求值 + 使用点在异步 loadExternalShell 函数体内 ⇒ 无 TDZ。
+ * ⚠ 键名不含 noprewarm 子串（Game.ts 入口守卫）。
+ * ⚠ 加载期求值 ⇒ A/B 必须 before/after 各自 reload 且走逐字相同序列，
+ *   不能同页改 hash（R64 五开关同源纪律）。
+ * ══════════════════════════════════════════════════════════════════════════════ */
+export const R67_TAIL_C2_ON = !r51HookOff('r67tail');

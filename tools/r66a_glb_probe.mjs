@@ -44,7 +44,7 @@ for (const m of json.meshes ?? []) {
     const accIdx = p.attributes?.POSITION;
     if (accIdx !== undefined) {
       const acc = json.accessors[accIdx];
-      const tri = (acc.count / 3) | 0;
+      const tri = ((p.indices != null ? json.accessors[p.indices].count : acc.count) / 3) | 0;
       mTri += tri;
       if (!bbox) bbox = accessorCenter(acc);
     }
