@@ -8,8 +8,9 @@
  *
  * ⚠ **只读 git tracked**：`src/**` 源码、`src/assets/cars/v800/manifest.json`、
  *   `src/assets/cars/v800/lamp_rear.glb`（JSON chunk，Buffer 解析）、
- *   `tools/r49_pixel_rubric.mjs` 谓词。**绝不读 `.qa/` / dist / 本机绝对路径**
- *   （R64-fix 在 CI ubuntu 上 ENOENT 的教训）。
+ *   `tools/r66a_glb_probe.mjs`。**绝不读 `.qa/` / dist / 本机绝对路径 / 任何未入 git 的文件**
+ *   （R64-fix 与 R67 首轮 CI 都在 ubuntu 干净 checkout 上 ENOENT 的教训：读文件前先
+ *   `git ls-files` 确认入库）。
  *
  * ⚠ **禁止断言 `TEXCOORD_0` 不存在**：`lamp_rear.glb` 确有 TEXCOORD_0 accessor
  *   （10664 / VEC2 / FLOAT），只是 `materials/images/textures/samplers` 全 0、
@@ -51,7 +52,8 @@ const shell = src('src/model/external/ExternalShell.ts');
 const c2src = src('src/model/parts/tailLampC2.ts');
 const adapter = src('src/model/V800Adapter.ts');
 const probe = src('tools/r66a_glb_probe.mjs');
-const rubric = src('tools/r49_pixel_rubric.mjs');
+// ⚠ 不读 `tools/r49_pixel_rubric.mjs`：该文件未入 git（`git ls-files` 无此项），
+//   CI ubuntu 干净 checkout 会 ENOENT（R64-fix 同款教训）⇒ 谓词改在下方内联定义。
 
 /** GLB JSON chunk 解析（零依赖：header 12B + chunk length 4B + type 4B + JSON）。 */
 function glbJson(rel: string): {
@@ -454,12 +456,10 @@ describe('R67 · 三段式装配与预算（实测，不沿用旧估算）', () 
   });
 });
 
-/* ═════════════════ 6. 像素判据谓词同源（r49 rubric） ═════════════════ */
+/* ═════════════════ 6. 像素判据谓词语义（内联定义，不依赖任何未入库工具） ═════════════════ */
 
 describe('R67 · 审查线像素判据口径同源', () => {
-  it('r49_pixel_rubric.mjs 的 isRedDeep / isRedBright 谓词仍在且语义可复算', () => {
-    expect(rubric).toContain('const isRedDeep = (r, g, b) => r >= 70 && r > g * 1.35');
-    expect(rubric).toContain('const isRedBright = (r, g, b) => r >= 110 && r > g * 1.6');
+  it('isRedDeep / isRedBright 谓词语义可复算（内联，CI 可跑）', () => {
     const isRedDeep = (r: number, g: number, b: number): boolean =>
       r >= 70 && r > g * 1.35 && r > b * 1.35 && r - g > 25;
     const isRedBright = (r: number, g: number, b: number): boolean =>
