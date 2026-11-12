@@ -179,6 +179,18 @@ function r69HookOff(key: string): boolean {
 
 /** R69 C2 竖灯缩小 + 侧贴完整纹理开关（默认 ON，`#r69c2lamp=off` 回 R68 基线）。 */
 export const R69_C2_LAMP_ON = !r69HookOff('r69c2lamp');
+
+/* ── R70 · 盖板横杠缩短至与竖灯对齐 ──
+ * 用户反馈：车尾正面深色横杠（盖板）明显比两侧竖灯宽，需缩短至与灯对齐。
+ * 竖灯外缘 = lampCenterX(0.155) + lampHalfW×0.40(0.015) = 0.170 local；
+ * 盖板 coverHalfW 0.19428 × 0.875 = 0.170 ⇒ 两端与竖灯外缘平齐。
+ * ⚠ 上波 R69 曾试缩到 0.097（比灯窄）露出 body 残留红带而撤销；本次缩到 0.170
+ *   （与灯平齐）竖灯遮住边缘、仅两灯之间中央区可能露红带 ⇒ 需目检，露则迭代。
+ * `#r70c2align=off` ⇒ coverHalfW 回 R68 全宽 0.19428。 */
+/** R70 盖板宽度缩放：coverHalfW × 0.875 ⇒ 0.19428→0.170（与竖灯外缘平齐）。 */
+export const C2_COVER_ALIGN_SCALE = 0.875;
+/** R70 盖板对齐竖灯开关（默认 ON，`#r70c2align=off` 回 R68 全宽盖板）。 */
+export const R70_C2_ALIGN_ON = !r69HookOff('r70c2align');
 export const C2_COVER_ROUGHNESS_BASELINE = 0.72;
 export const C2_COVER_ROUGHNESS_R68 = 0.78;
 /** atlas 内深色 surround 颜色（不透明、非渐变、零几何）。 */
@@ -554,6 +566,7 @@ export function buildTailLampC2(opts: C2BuildOptions): C2BuildResult {
   // R69 终裁：竖灯缩小（高 ×0.48 / 宽 ×0.40）+ 侧贴完整尾灯纹理 + 盖板宽度 ×0.50。
   // `C2_GEOM` 逐字不动（r68_visual:247 toEqual 钉死）；`#r69c2lamp=off` ⇒ 全部回 R68 基线。
   const r69 = R69_C2_LAMP_ON;
+  const r70Align = R70_C2_ALIGN_ON;
   const tex = makeC2AtlasTexture(tweak);
   const texList: THREE.Texture[] = tex ? [tex] : [];
 
@@ -589,10 +602,12 @@ export function buildTailLampC2(opts: C2BuildOptions): C2BuildResult {
   // 唯一标量：世界厚度 10mm → 0.5mm ⇒ 侧视/3/4 的端面投影面积 −95%，侧壁不再读作黑板。
   const coverDepth =
     (tweak ? C2_COVER_DEPTH_R68_M : C2_COVER_DEPTH_BASELINE_M) / opts.scale;
-  // 盖板保持全宽（R68 基线）：它遮住 body 残留红带；缩窄会两侧露出黑带（已目检证伪，撤销）。
-  // 竖灯缩小后复用同一张 atlas ⇒ 与全宽盖板同底色，读作一条连续灯带。
+  // 盖板宽度：R70 缩到与竖灯外缘平齐（lampCenterX + 生效 lampHalfW），遮住边缘红带；
+  // 两灯之间中央区可能露 body 残留红带 ⇒ 目检，露则迭代。`#r70c2align=off` 回 R68 全宽。
+  const effLampHalfW = r69 ? G.lampHalfW * C2_LAMP_SHRINK_WIDTH : G.lampHalfW;
+  const coverHalfW = r70Align ? G.lampCenterX + effLampHalfW : G.coverHalfW;
   const coverGeo = new THREE.BoxGeometry(
-    G.coverHalfW * 2, G.coverYHi - G.coverYLo, coverDepth
+    coverHalfW * 2, G.coverYHi - G.coverYLo, coverDepth
   );
   // BoxGeometry 原点在盒心 ⇒ 平移使「外表面 = coverZ、内表面嵌到 body 尾门面」
   coverGeo.translate(0, (G.coverYLo + G.coverYHi) / 2, G.coverZ + coverDepth / 2);
