@@ -86,6 +86,18 @@ const R49R7EYE_FIX: boolean =
 export const R27_INTERIOR_LIFT = R49R7EYE_FIX ? 0.14 : 0.26;
 
 /**
+ * R69 任务#4：把 cabinRear 机位重标为「看主驾座椅 + A/B 柱」视角。
+ * 用户反馈 cabin 看不见座椅和 AB 柱：原 rear 眼点 (0,1.23,-0.7) 朝前下只看仪表台，
+ * 座椅（眼点后下）/ B 柱（正后）/ A 柱（被 cabin 遮挡策略隐藏）全不可见。
+ * 重标后眼点移到车厢后部中央 (0,1.42,-1.30)、加大前向俯角看 (0.12,0.62,0.35)
+ * ⇒ 主驾座椅背/坐垫在下幅、A/B 柱两侧入画。
+ * 回滚：`#r69r7seat=off` ⇒ 逐位回 R68 原 rear（眼 1.230/-0.700，target 1.030/1.300）。
+ * ⚠ 只动 cabinRear 审查机位，不碰 cabinDriver（它承担「可见车外%」指标）与其遮挡策略。
+ */
+const R69R7SEAT_VIEW: boolean =
+  typeof window === 'undefined' || !/(?:^|[#&])r69r7seat=off/i.test(window.location.hash);
+
+/**
  * R50：cabin 态「车顶内壁剔除」阈值（world y）。
  *
  * 病根（主理人 A/B 实测 `.qa/r50/glassab/`，eye/target 已固定为扫描最优 c01）：
@@ -141,8 +153,16 @@ export const R7_INTERIOR_VIEWS = {
       : ([-0.140, 1.020, 1.750] as [number, number, number]),
   },
   rear: {
-    eye: [0.0, 1.230, -0.700] as [number, number, number],
-    target: [0.0, 1.030, 1.300] as [number, number, number],
+    eye: R69R7SEAT_VIEW
+      ? // R69 任务#4：把 cabinRear 重标为「看主驾座椅 + A/B 柱」机位。原 rear（眼 1.23/-0.7
+        //   朝前下）只看仪表台 ⇒ 用户「看不见座椅和 AB 柱」。新眼点移到车厢后部中央、抬高、
+        //   加大前向俯角 ⇒ 主驾座椅背/坐垫在下幅、A 柱(左)/B 柱(右)在两侧入画。
+        //   `#r69r7seat=off` ⇒ 逐位回 R68 原 rear（眼 1.230/-0.700）。
+        ([0.0, 1.42, -1.30] as [number, number, number])
+      : ([0.0, 1.230, -0.700] as [number, number, number]),
+    target: R69R7SEAT_VIEW
+      ? ([0.12, 0.62, 0.35] as [number, number, number])
+      : ([0.0, 1.030, 1.300] as [number, number, number]),
   },
 } as const;
 

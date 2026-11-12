@@ -27,9 +27,13 @@ describe('R50-B · R7 眼点校准（默认开）', () => {
     expect(s).toContain('([0.150, 1.160, 1.950] as [number, number, number])');
     expect(s).toContain('([-0.300, 1.290, -0.090] as [number, number, number])');
     expect(s).toContain('([-0.140, 1.160, 1.750] as [number, number, number])');
-    // rear 保持 R49 值（后排无台面遮挡问题，工单明令不动）
-    expect(s).toContain('eye: [0.0, 1.230, -0.700] as [number, number, number]');
-    expect(s).toContain('target: [0.0, 1.030, 1.300] as [number, number, number]');
+    // rear：R69 任务#4 把 cabinRear 重标为「看主驾座椅+AB柱」机位（R69R7SEAT_VIEW 分支）；
+    // R68 基线眼点/target 字面量仍保留在 off 分支 ⇒ 逐位回滚成立。
+    expect(s).toContain('const R69R7SEAT_VIEW: boolean =');
+    expect(s).toContain('([0.0, 1.42, -1.30] as [number, number, number])'); // R69 on 眼点
+    expect(s).toContain('([0.12, 0.62, 0.35] as [number, number, number])'); // R69 on target
+    expect(s).toContain('([0.0, 1.230, -0.700] as [number, number, number])'); // off 基线眼点
+    expect(s).toContain('([0.0, 1.030, 1.300] as [number, number, number])'); // off 基线 target
   });
 
   it('R27 内饰抬升量降到 0.14（默认态）；回滚分支保 0.26', () => {
