@@ -83,9 +83,26 @@ export const C2_ATLAS_H = 1024;
 export const C2_PHOENIX_PANEL = {
   cols: 22,
   rows: 30,
+  /** R68 基线凤冠顶（`#r69c2lamp=off` 回此）。 */
   vLo: 0.10,
+  /** R68 基线凤尾底（`#r69c2lamp=off` 回此）。 */
   vHi: 0.92
 } as const;
+
+/** R69 凤凰收窄基线：v 区间 [0.10,0.92]→[0.19,0.83]（高度 ×0.755），上下留更多黑底，治「黄凤凰贴牌偏大」。 */
+export const C2_PHOENIX_VLO_R69 = 0.19;
+export const C2_PHOENIX_VHI_R69 = 0.83;
+
+/** 当前生效的凤凰 v 区间：R69 ON 收窄、off 回 R68 基线（护栏只钉 cols/rows/点亮比，不钉 vLo/vHi）。 */
+export function phoenixVRangeActive(): { vLo: number; vHi: number } {
+  return R69_C2_LAMP_ON
+    ? { vLo: C2_PHOENIX_VLO_R69, vHi: C2_PHOENIX_VHI_R69 }
+    : { vLo: C2_PHOENIX_PANEL.vLo, vHi: C2_PHOENIX_PANEL.vHi };
+}
+/** 内部取值（paintC2Atlas 用）。 */
+function phoenixVRange(): { vLo: number; vHi: number } {
+  return phoenixVRangeActive();
+}
 
 /**
  * GLB 局部坐标定标（× manifest.scale = 世界系）。
@@ -323,11 +340,12 @@ export function paintC2Atlas(
     for (let yy = y0 + 20; yy < y0 + bh - 20; yy += 12) {
       p.rect(x0 + 12, yy, bw - 24, 1, '#121218');
     }
-    // 金色点阵凤凰（22×30 网格，占 atlas 高的 v∈[0.10,0.92] ⇒ 灯高 ~82%）
+    // 金色点阵凤凰（22×30 网格，R69 收窄 v 区间治「凤凰偏大」；off 回 [0.10,0.92] 基线）
     const cols = C2_PHOENIX_PANEL.cols;
     const rows = C2_PHOENIX_PANEL.rows;
-    const gy0 = h * C2_PHOENIX_PANEL.vLo;
-    const gy1 = h * C2_PHOENIX_PANEL.vHi;
+    const vr = phoenixVRange();
+    const gy0 = h * vr.vLo;
+    const gy1 = h * vr.vHi;
     const cw = (bw - 28) / cols;
     const ch = (gy1 - gy0) / rows;
     const r = Math.min(cw, ch) * 0.33;

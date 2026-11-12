@@ -18,6 +18,7 @@ const src = (p: string): string =>
 const shell = src('src/model/external/ExternalShell.ts');
 const v800 = src('src/model/V800Adapter.ts');
 const r7 = src('src/model/R7Adapter.ts');
+const wheelHub = src('src/model/parts/wheelHub.ts');
 
 const slice = (s: string, from: string, to: string): string =>
   s.slice(s.indexOf(from), s.indexOf(to));
@@ -78,6 +79,16 @@ describe('R62-P0-1 · 刹车盘 + 卡钳新增几何', () => {
   it('卡钳 R7 红（语义 caliper-red #B0202A），V800 暗灰低调', () => {
     expect(shell).toMatch(/const R62_CALIPER: Record<ExternalCarId, number> = \{ r7: 0xb0202a, v800: 0x[0-9a-f]+ \}/);
     expect(shell).toMatch(/r7: 0xb0202a/); // R7 红卡钳
+  });
+
+  it('R69 卡钳缩小：buildCaliper 三轴 ×R69_CALIPER_SHRINK，#r69caliper=off 回原尺寸', () => {
+    // 用户反馈「两侧刹车需适当缩小」⇒ buildCaliper 盒 0.07×0.05×0.05 三轴 ×0.75（R69 默认 ON）。
+    // 护栏钉结构不变量：缩放系数常量 + 开关三元 + 盒尺寸乘 k；off ⇒ k=1 逐位回原尺寸。
+    expect(wheelHub).toContain('export const R69_CALIPER_SHRINK = 0.75;');
+    expect(wheelHub).toContain('export const R69_CALIPER_ON = ');
+    expect(wheelHub).toMatch(/r69caliper=off/);
+    expect(wheelHub).toContain('const k = R69_CALIPER_ON ? R69_CALIPER_SHRINK : 1;');
+    expect(wheelHub).toContain('new THREE.BoxGeometry(0.07 * k, 0.05 * k, 0.05 * k)');
   });
 
   it('盘随轮自转（挂 spin）+ 卡钳不转（挂 spin 的非自转父）', () => {

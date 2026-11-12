@@ -101,6 +101,20 @@ const NSEG_SMALL = 24;
  */
 export const N_WINDOWS = R68_WHEEL_ON ? 20 : 18;
 const WIN_PITCH = (Math.PI * 2) / N_WINDOWS;
+
+/* ── R69 · 刹车卡钳缩小 ──
+ * 用户反馈「两侧刹车需适当缩小」。卡钳 buildCaliper 是盘缘小盒 0.07×0.05×0.05，
+ * 护栏只钉名/阴影/挂载、不钉尺寸 ⇒ 安全缩小。×0.75 三轴同缩，位置（盘缘 r0.20）不变。
+ * ⚠ 本地 hash 判据（字节等价 ExternalShell 私有 r51HookOff）：wheelHub 被 ExternalShell
+ *   反向 import（buildWheelHub），若从 ExternalShell/tailLampC2 import 会成环 ⇒ 就地复制。
+ * `#r69caliper=off` ⇒ 回原尺寸基线。 */
+/** R69 卡钳缩放系数：三轴 ×0.75。 */
+export const R69_CALIPER_SHRINK = 0.75;
+/** R69 卡钳缩小开关（默认 ON，`#r69caliper=off` 回原尺寸）。 */
+export const R69_CALIPER_ON = (() => {
+  if (typeof window === 'undefined') return true;
+  return !new RegExp('(?:^|[#&])r69caliper=off', 'i').test(window.location.hash);
+})();
 /**
  * 窗角半宽（弧度）。
  * R33：参考图轮面开口是**大面积梯形通风窗**，不是 6° 细缝。原 6.1°×0.030R
@@ -510,7 +524,9 @@ function buildBrakeDisc(): THREE.BufferGeometry {
  * 处于盘缘 r≈0.20、z≈0.12，透窗可见，给「这是真刹车」的读感锚点。
  */
 function buildCaliper(): THREE.BufferGeometry {
-  const g = new THREE.BoxGeometry(0.07, 0.05, 0.05);
+  // R69：三轴 ×0.75 缩小（治「刹车偏大」），位置（盘缘 r0.20 / z0.12）不变；off 回原尺寸。
+  const k = R69_CALIPER_ON ? R69_CALIPER_SHRINK : 1;
+  const g = new THREE.BoxGeometry(0.07 * k, 0.05 * k, 0.05 * k);
   g.translate(0, 0.2, 0.12 * KZ); // 盘缘顶部（局部 +Y），落在窗带/暗腔之后的盘前缘
   g.computeVertexNormals();
   g.computeBoundingBox();

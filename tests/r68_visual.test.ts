@@ -90,6 +90,7 @@ import {
   C2_TEX_BUDGET,
   C2_TRI_BUDGET,
   R69_C2_LAMP_ON,
+  phoenixVRangeActive,
   buildTailLampC2,
   paintC2Atlas,
   type C2Painter
@@ -739,12 +740,19 @@ describe('R68 · paintC2Atlas 像素缓冲指纹 + 默认/off 对照口径', () 
     console.info(`[R68] C2_ATLAS_LIVE_SHA256=${a}`);
   });
 
-  it('★ off 态逐位回 R67 原 atlas：默认 3 参 ≡ surround=false ≡ 冻结基线 sha256', () => {
+  it('★ atlas 指纹按 R69 凤凰收窄开关动态期望：off 回 R67 冻结基线、on(R69) 收窄后 ≠ 基线', () => {
     // 开发线修正 A/D 后 `paintC2Atlas(p,w,h,surround=false)` 有第 4 个可选形参，
     // 原「纯函数无开关形参 ⇒ 只能用冻结基线常量」的注释已过时，改为直接精确断言。
+    // R69：默认 ON 收窄凤凰（vLo/vHi [0.10,0.92]→[0.19,0.83]）⇒ 默认 atlas ≠ R67 基线；
+    // `#r69c2lamp=off` ⇒ 凤凰回基线 ⇒ atlas 逐位回 R67 冻结 sha。
     const offR = makeRaster(C2_ATLAS_W, C2_ATLAS_H);
     paintC2Atlas(offR.p, C2_ATLAS_W, C2_ATLAS_H, false);
-    expect(sha256(offR.buf)).toBe(R68_C2_ATLAS_BASELINE_SHA256);
+    if (R69_C2_LAMP_ON) {
+      // R69 默认：凤凰收窄 ⇒ 与 R67 冻结基线不同（这是预期改动，非回归）
+      expect(sha256(offR.buf)).not.toBe(R68_C2_ATLAS_BASELINE_SHA256);
+    } else {
+      expect(sha256(offR.buf)).toBe(R68_C2_ATLAS_BASELINE_SHA256);
+    }
     expect(sha256(raster.buf)).toBe(sha256(offR.buf)); // 3 参默认 ≡ false
     expect(offR.ops[0]).toEqual({ op: 'fill', color: '#0a0a0e', args: [C2_ATLAS_W, C2_ATLAS_H] });
     expect(c2src).toContain('surround = false');
@@ -752,7 +760,11 @@ describe('R68 · paintC2Atlas 像素缓冲指纹 + 默认/off 对照口径', () 
     // 绘制参数常量恒定 + 零新依赖（不引入 canvas/jsdom/skia 等）
     expect(C2_ATLAS_W).toBe(1024);
     expect(C2_ATLAS_H).toBe(1024);
+    // C2_PHOENIX_PANEL 是 R68 基线常量（vLo/vHi 恒 0.10/0.92）；R69 收窄走 phoenixVRangeActive
     expect(C2_PHOENIX_PANEL).toEqual({ cols: 22, rows: 30, vLo: 0.10, vHi: 0.92 });
+    const vr = phoenixVRangeActive();
+    expect(vr.vLo).toBe(R69_C2_LAMP_ON ? 0.19 : 0.10);
+    expect(vr.vHi).toBe(R69_C2_LAMP_ON ? 0.83 : 0.92);
     expect(C2_STRIP_COUNTS).toEqual({ top: 3, bottom: 2 });
     expect(c2src).toContain("import * as THREE from 'three';");
     expect(c2src).toContain("import { mergeSafe } from '../../util/geo';");
