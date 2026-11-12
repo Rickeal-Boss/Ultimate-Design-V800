@@ -68,6 +68,8 @@
  */
 import * as THREE from 'three';
 import { mergeSafe } from '../../util/geo';
+// R68 P1-6：开关真源在 ExternalShell.ts（与其余六个 R68 开关同源，禁在本模块另起真源）
+import { R68_WHEEL_ON } from '../external/ExternalShell';
 
 /* ================================================================
  * 0. 局部系常量（改这里就够了）
@@ -89,8 +91,15 @@ const K = R_FACE / 0.3;
 const NSEG = 28;
 /** 小件（黑盖/徽标）周向段数 */
 const NSEG_SMALL = 24;
-/** 窗数（参考图实测 18）/ 角距 */
-export const N_WINDOWS = 18;
+/**
+ * 窗数（参考图实测 18）→ R68 P1-6 按官图「约 20 个切向矩形/梯形镂空环」重建为 20。
+ * ⚠ 主理人终裁：**否决**两个 150 万 tri 桌面轮毂 GLB 原样替换
+ *   （×4 = 600 万 tri ⇒ 置换后递交 7,201,522 = 4.36× 预算 + ~200MB VRAM + 无 LOD，
+ *    正撞用户 P0「运行时流畅度」）；改走零资产程序化重建。
+ * ⚠ 只用同一个 `N_WINDOWS` 派生全部窗带/倒角/孔/统计 ⇒ `#r68wheel=off` 逐位回 R62/R66 18 窗。
+ * ⚠ 20 窗时 pitch=18°、窗角半宽 7.6°（总 15.2° < 18°）⇒ 相邻窗不重叠、不破 band 边界。
+ */
+export const N_WINDOWS = R68_WHEEL_ON ? 20 : 18;
 const WIN_PITCH = (Math.PI * 2) / N_WINDOWS;
 /**
  * 窗角半宽（弧度）。
@@ -679,6 +688,36 @@ export function createWheelHubMaterials(emblemTex?: THREE.Texture | null): Wheel
   };
 }
 
+/**
+ * R68 P1-6 · 中央盾形徽标（官图「中央实心盘 + 盾形徽标」）。
+ * 轮廓按 **CCW**（shoelace > 0，绕序铁律；曾唯一 CW 件 emblem-shield 致盾标隐形），
+ * UV 归一到 [0,1]² ⇒ 复用既有 `makeWheelEmblemTexture()` 的 MAEXTRO 字标 / 铭牌线，
+ * 零新增贴图、零新增材质、零新增 DC（仍是 emblem 桶里 1 个 mesh）。
+ */
+function buildShieldEmblemGeometry(): THREE.BufferGeometry {
+  const R = EMBLEM_R * 1.18;
+  const pts: ReadonlyArray<readonly [number, number]> = [
+    [0, -1.0], [0.92, 0.12], [0.92, 0.82], [-0.92, 0.82], [-0.92, 0.12]
+  ];
+  const s = new THREE.Shape();
+  s.moveTo(pts[0][0] * R, pts[0][1] * R);
+  for (let i = 1; i < pts.length; i += 1) s.lineTo(pts[i][0] * R, pts[i][1] * R);
+  s.closePath();
+  const g = new THREE.ShapeGeometry(s, 1);
+  const pos = g.getAttribute('position') as THREE.BufferAttribute;
+  const uv = g.getAttribute('uv') as THREE.BufferAttribute;
+  for (let i = 0; i < pos.count; i += 1) {
+    const x = pos.getX(i);
+    const y = pos.getY(i);
+    pos.setZ(i, CAP_TOP_Z + 0.0006);
+    uv.setXY(i, 0.5 + x / (2 * R), 0.5 + y / (2 * R));
+  }
+  pos.needsUpdate = true;
+  uv.needsUpdate = true;
+  g.computeVertexNormals();
+  return g;
+}
+
 /* ================================================================
  * 5. 主构造
  * ================================================================ */
@@ -735,8 +774,9 @@ export function createWheelHub(side: WheelHubSide = 1, materials?: WheelHubMater
   ];
   const capGeo = revolve(capProfile, NSEG_SMALL);
 
-  /* ---- 5.5 徽标圆面（UV 归一到 canvas，浮在盖顶 0.3mm）---- */
-  const emblemGeo = (() => {
+  /* ---- 5.5 徽标面（UV 归一到 canvas，浮在盖顶 0.3mm）----
+   * R68 P1-6：开态走盾形徽标；`#r68wheel=off` ⇒ 逐位回 R22 圆面徽标。 */
+  const emblemGeo = R68_WHEEL_ON ? buildShieldEmblemGeometry() : (() => {
     const s = new THREE.Shape();
     polygonPath(s, EMBLEM_R, NSEG_SMALL, false);
     const g = new THREE.ShapeGeometry(s, 1);

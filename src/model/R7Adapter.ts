@@ -38,7 +38,9 @@ import {
 import { loadInteriorSteering } from './external/InteriorSteering';
 import { setFxWheelOffsets } from '../fx';
 import { DEFAULT_VARIANT } from '../config/vehiclePaint';
-import { createR7FrontDetails } from './parts/r7FrontDetails';
+// R68 P0-3 修正 C 双路径：别名接入新增导出函数，原 createR7FrontDetails() 逐字保留
+// （r33_car_details.test.ts 仍直调原函数），:572 调用点一字未改。
+import { createR7FrontDetailsR68 as createR7FrontDetails } from './parts/r7FrontDetails';
 // R65：R7 轮拱内衬（此前 R7 无衬板，舱内座椅从轮辐条间隙看穿）。共享 V800 的衬板件。
 import { createWheelArchLiner, WHEEL_ARCH_LINER_MATERIAL_ID } from './parts/wheelArchLiner';
 import { WHEEL_HUB_CENTERS } from './parts/wheelHub';
@@ -1685,11 +1687,35 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
       linerMat.userData.sculptMaterial = { id: WHEEL_ARCH_LINER_MATERIAL_ID };
       linerMat.name = WHEEL_ARCH_LINER_MATERIAL_ID;
       let linerCount = 0;
+      /* ══ R68 P0-1 · 四轮拱内衬归位（用户「两个后轮偏后、两个前轮偏前」）══════════
+       * 旧值 `WHEEL_HUB_CENTERS` 是 **V800 程序化树口径** (±0.855, 0.382, ±1.715)，
+       * 而 R7 外部壳真轮位来自 `manifest.hubs × 4.323` =
+       *   fl/fr (±0.8884, 0.3800, +1.4594)、rl/rr (±0.8884, 0.3800, −1.4880)。
+       * ⇒ 前轮衬板偏前 +255.6mm、后轮偏后 −227.0mm ⇒ 衬板没封住真轮拱，
+       *   舱内 cognac / 橙色点阵从轮辐间隙透出（R65 210° 扩角只解决了角度、没解决轮位）。
+       *
+       * ⚠ 坐标变换式（body-local）：`body` 组带 rotY(π) 且**无 scale**，
+       *   世界系 (xw, y, zw) = (−xl, y, −zl)；`wheelOffsetsWorldXZ` 返回的是
+       *   **世界系** (−h[0]·s, −h[2]·s) ⇒ 直接套会再翻一次号。
+       *   故 body-local 必须取 (h[0]·s, h[1]·s, h[2]·s)，s = manifest.scale。
+       * 几何本体（rIn/rOut/210°/centerDeg 95）不变 ⇒ **零 tri / DC / 材质增量**。
+       * `#r68arch=off` ⇒ 逐位回 R65 旧坐标（加载期求值，A/B 各自 reload 走逐字相同序列）。
+       * ⚠ 键名不含 noprewarm（Game.ts 入口守卫）。
+       */
+      const r68ArchOn = !/(?:^|[#&])r68arch=off/i.test(
+        typeof window === 'undefined' ? '' : window.location.hash
+      );
+      const r68HubScale = shell.manifest.scale;
       for (const corner of ['fl', 'fr', 'rl', 'rr'] as const) {
         const c = WHEEL_HUB_CENTERS[corner];
         const mesh = new THREE.Mesh(createWheelArchLiner(c.side), linerMat);
         mesh.name = `r22-arch-liner-${corner}`;
-        mesh.position.set(c.x, c.y, c.z);
+        const hub = shell.manifest.hubs[corner];
+        if (r68ArchOn && hub) {
+          mesh.position.set(hub[0] * r68HubScale, hub[1] * r68HubScale, hub[2] * r68HubScale);
+        } else {
+          mesh.position.set(c.x, c.y, c.z);
+        }
         mesh.castShadow = false;
         mesh.receiveShadow = true;
         body.add(mesh);

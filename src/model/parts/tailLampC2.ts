@@ -106,6 +106,37 @@ export const C2_GEOM = {
   stripHalfH: 0.003
 } as const;
 
+/**
+ * R68 P0-4 · 盖板侧视悬空黑板收口「标量白名单」（主理人修正 A / D 终裁）。
+ *
+ * 修正 D 覆盖原派单与修正 A 的「宽度 clamp / 重标 z / 重标 face UV」：`tests/r67_tail_c2.test.ts`
+ * 对 `C2_GEOM` 有等号级断言（:445-455）+ 36/32/16 tri（:384/:393/:429/:441）+
+ * dispose 账本位置（:206-212），且 `tests/**` 归 tester、开发线禁碰 ⇒
+ * **本波 P0-4 必须零护栏改动**：`C2_GEOM` 全字段逐字不动、几何拓扑逐字不动、
+ * `C2_TRI_BUDGET=36` / `C2_STRIP_COUNTS` 不动、恒 3 mesh / 36 tri / 3 DC。
+ *
+ * 允许的 3 处（全部零 tri / 零 DC / 零新增材质贴图）：
+ *  ① `coverDepth` 标量 10mm → 0.5mm（下面两个具名常量；护栏未钉死 coverDepth，已 grep 实证）；
+ *  ② `paintC2Atlas(p,w,h,surround)` Canvas 内画中央白块深色 surround；
+ *  ③ 盖板材质标量 color / roughness（下面成对具名常量）。
+ * `#r68c2cover=off` ⇒ `opts.coverTweak=false` ⇒ 三处逐位回 R67 基线。
+ *
+ * ⚠ 具名常量供 tester 护栏读做 off 逐位回滚断言（主理人索取的可读命名）：
+ *   `C2_COVER_DEPTH_BASELINE_M` / `C2_COVER_DEPTH_R68_M`、
+ *   `C2_COVER_COLOR_BASELINE` / `C2_COVER_COLOR_R68`、
+ *   `C2_COVER_ROUGHNESS_BASELINE` / `C2_COVER_ROUGHNESS_R68`。
+ */
+/** 盖板薄盒世界厚度（m）：R67 基线 10mm → R68 近共面 0.5mm，端面投影 −95%。 */
+export const C2_COVER_DEPTH_BASELINE_M = 0.010;
+export const C2_COVER_DEPTH_R68_M = 0.0005;
+/** 盖板材质标量：R68 略微提亮 + 降反射，缓和与牌照白框的反差。 */
+export const C2_COVER_COLOR_BASELINE = 0x1c1c22;
+export const C2_COVER_COLOR_R68 = 0x24242c;
+export const C2_COVER_ROUGHNESS_BASELINE = 0.72;
+export const C2_COVER_ROUGHNESS_R68 = 0.78;
+/** atlas 内深色 surround 颜色（不透明、非渐变、零几何）。 */
+export const C2_ATLAS_SURROUND_COLOR = '#101016';
+
 /** 预算上限（护栏消费）。新增 mesh 恒 3；tri = 盖板薄盒 12 + face 4 + 2·(top+bottom)·2。 */
 export const C2_DC_BUDGET = 3;
 export const C2_TRI_BUDGET = 36;
@@ -238,7 +269,9 @@ export interface C2Painter {
  *  · **不画红条**：红条由独立 mesh 复用 `lampRearMat` 承担，随 brakeLevel 联动；
  *  · 左右半幅镜像对称（右灯 u 取反），最终画面「头朝左」需 A/B 确认（body rotY(π) 翻 x）。
  */
-export function paintC2Atlas(p: C2Painter, w: number, h: number): void {
+export function paintC2Atlas(
+  p: C2Painter, w: number, h: number, surround = false
+): void {
   p.fill(w, h, '#0a0a0e');
   const half = w / 2;
   for (const side of [0, 1]) {
@@ -286,10 +319,24 @@ export function paintC2Atlas(p: C2Painter, w: number, h: number): void {
       }
     }
   }
+  /* R68 P0-4 · 中央白块深色 surround（修正 A/D：直接画进现有 atlas Canvas，
+   * 零新增几何 / 零 DC / 零材质 / 零贴图）。画在两半幅下沿，把深色盖板与牌照白框
+   * 之间读成「深色面板包白框」，缓和反差。surround=false ⇒ 逐位回 R67 原 atlas。 */
+  if (surround) {
+    const sh = Math.round(h * 0.055);
+    for (const side of [0, 1]) {
+      const ox = side * half;
+      const x0 = ox + Math.round(half * 0.045);
+      const bw = half - Math.round(half * 0.045) * 2;
+      p.rect(x0 + 10, h - sh - 16, bw - 20, sh, C2_ATLAS_SURROUND_COLOR);
+      p.rect(x0 + 10, h - sh - 16, bw - 20, 3, '#33343c');
+    }
+  }
 }
 
-/** CanvasTexture。node（无 document）返回 null ⇒ 调用方降级为无图材质，QA shim 不受影响。 */
-export function makeC2AtlasTexture(): THREE.CanvasTexture | null {
+/** CanvasTexture。node（无 document）返回 null ⇒ 调用方降级为无图材质，QA shim 不受影响。
+ *  `surround=false`（默认）⇒ 与 R67 逐位一致；`true` ⇒ 同一张 atlas 内加深色 surround。 */
+export function makeC2AtlasTexture(surround = false): THREE.CanvasTexture | null {
   if (typeof document === 'undefined') return null;
   const canvas = document.createElement('canvas');
   canvas.width = C2_ATLAS_W;
@@ -312,7 +359,7 @@ export function makeC2AtlasTexture(): THREE.CanvasTexture | null {
       ctx.fill();
     }
   };
-  paintC2Atlas(p, C2_ATLAS_W, C2_ATLAS_H);
+  paintC2Atlas(p, C2_ATLAS_W, C2_ATLAS_H, surround);
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 4;
@@ -403,6 +450,12 @@ export interface C2BuildOptions {
   lampRearMat: THREE.Material;
   stripTop?: number;
   stripBottom?: number;
+  /**
+   * R68 P0-4（修正 A/D 终裁）：只驱动 3 处**标量**——coverDepth 10mm→0.5mm、
+   * `paintC2Atlas` 内深色 surround、盖板材质标量；`C2_GEOM` 全字段与几何拓扑不动。
+   * 缺省 / false ⇒ **逐位回 R67 三段式**（3 mesh / 36 tri / 3 DC，护栏断言全部成立）。
+   */
+  coverTweak?: boolean;
 }
 
 export interface C2BuildResult {
@@ -445,16 +498,20 @@ export function buildTailLampC2(opts: C2BuildOptions): C2BuildResult {
     bottom: opts.stripBottom ?? C2_STRIP_COUNTS.bottom
   };
   const G = C2_GEOM;
-  const tex = makeC2AtlasTexture();
+  // 修正 D：`coverTweak` 只驱动 3 处标量（coverDepth / atlas surround / 材质标量），
+  // **不驱动任何几何拓扑**；默认 / off 态三处逐位回 R67 基线。
+  const tweak = opts.coverTweak === true;
+  const tex = makeC2AtlasTexture(tweak);
   const texList: THREE.Texture[] = tex ? [tex] : [];
 
   // 盖板：深墨不发光、不透明（FrontSide）；盖住横带开口 + 中央白梯形/圆徽。
   // Phase 2b-B（主理人目检）：0x141418 → 0x1c1c22 提亮一档，读作「深色面板」而非纯黑洞；
   // roughness 0.82 → 0.72 配合提亮给一点环境反射层次。不做跟随 variant 车漆（需扩
   // V800Adapter setVariant 钩子，本波不做，列下一波）。
+  // ⚠ 不碰 side（恒 FrontSide）、不碰 transparent（修正 D 硬约束）。
   const coverMat = new THREE.MeshStandardMaterial({
-    color: 0x1c1c22,
-    roughness: 0.72,
+    color: tweak ? C2_COVER_COLOR_R68 : C2_COVER_COLOR_BASELINE,
+    roughness: tweak ? C2_COVER_ROUGHNESS_R68 : C2_COVER_ROUGHNESS_BASELINE,
     metalness: 0.08,
     side: THREE.FrontSide
   });
@@ -475,7 +532,10 @@ export function buildTailLampC2(opts: C2BuildOptions): C2BuildResult {
   // 薄盒给盖板 z 方向真实厚度、内表面嵌到 body 尾门面 ⇒ 3/4 下看到侧壁而非悬空片。
   // 代价：盖板 2 tri → 12 tri（+10），DC 不变、材质不变 ⇒ 全车净 −17,449 tri（远小于原 17,485）。
   // 用 BoxGeometry 而非 4 片手写侧壁 quad ⇒ 法线/绕序由 three 保证，避绕向踩坑；纯色无 UV 需求。
-  const coverDepth = 0.010 / opts.scale; // 10mm 世界 ⇒ GLB 局部厚度
+  // 修正 D：`C2_GEOM` 全字段逐字使用、BoxGeometry 拓扑逐字不变（恒 12 tri）。
+  // 唯一标量：世界厚度 10mm → 0.5mm ⇒ 侧视/3/4 的端面投影面积 −95%，侧壁不再读作黑板。
+  const coverDepth =
+    (tweak ? C2_COVER_DEPTH_R68_M : C2_COVER_DEPTH_BASELINE_M) / opts.scale;
   const coverGeo = new THREE.BoxGeometry(
     G.coverHalfW * 2, G.coverYHi - G.coverYLo, coverDepth
   );
@@ -484,6 +544,8 @@ export function buildTailLampC2(opts: C2BuildOptions): C2BuildResult {
   const coverMesh = markExternal(
     new THREE.Mesh(coverGeo, coverMat), 'r67_tail_cover', opts.scale, 2
   );
+  // 修正 A/D：中央白块 surround **不再新增任何几何**，改由 `paintC2Atlas(...,true)`
+  // 画进现有 atlas（见本文件 §3）⇒ 恒 3 mesh / 36 tri / 3 DC / 2 材质 / 1 贴图。
 
   // face：左右各 1 quad，UV 先 0..1 再按自身 bbox 归一到 atlas 左/右半幅
   const faceQuads: THREE.BufferGeometry[] = [];
@@ -524,6 +586,7 @@ export function buildTailLampC2(opts: C2BuildOptions): C2BuildResult {
     new THREE.Mesh(stripGeo, opts.lampRearMat), 'r67_tail_c2_strips', opts.scale, 4
   );
 
+  // 恒 3 mesh / 36 tri（修正 D：零护栏改动，on/off 两态拓扑逐位一致）
   const meshes = [coverMesh, faceMesh, redStripMesh];
   const tri =
     (coverGeo.getIndex()?.count ?? coverGeo.getAttribute('position').count) / 3 +

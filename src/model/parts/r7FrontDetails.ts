@@ -18,6 +18,10 @@
  */
 import * as THREE from 'three';
 import { mergeSafe } from '../../util/geo';
+// R68 P0-3 双路径：开关真源复用 ExternalShell.ts 末尾常量（主理人确认的单一真源方案，
+// 无环：ExternalShell 只 import util/geo + tailLampC2 + r7TailWrap + r7FrontAtlas，不反向依赖本文件）。
+import { R68_R7_LAMP_ON } from '../external/ExternalShell';
+import { makeR7FrontAtlasTexture } from './r7FrontAtlas';
 
 const Z_FACE = 2.444;
 const Z_LENS = Z_FACE + 0.006;
@@ -419,4 +423,48 @@ export function createR7FrontDetails(): R7FrontDetailResult {
       'headlamp-projector-4-r'
     ]
   };
+}
+
+/**
+ * R68 P0-3 · 修正 C「双路径」：回退树 `#r44ext=off` 也要吃到程序化前灯贴图。
+ *
+ * ⚠ 原 `createR7FrontDetails()` **逐字保留**（签名 / 返回结构 / r33_car_details.test.ts
+ *   的 7 材质桶 / triangleCount / bbox 断言全部不变）；本函数是**新增导出**，
+ *   由 `R7Adapter.ts:41` 以别名接入，不改调用点 `:572` 的一行代码。
+ * ⚠ 坐标是**工厂局部系**（车头 +Z、Z_FACE=2.444），与 `r7FrontAtlas.ts` 里
+ *   外部壳用的 GLB 局部系（x±0.229 / z 0.47~0.54）是两套，禁混。
+ * ⚠ 新增 mesh 故意**不带 `sculptMaterial.id`** ⇒ 外部壳 on 态被 `setExteriorHidden(true)`
+ *   按 id-less 规则隐藏，不会与 `ExternalShell.ts` 的 `r68_r7_front_lamp` 双份叠加；
+ *   `#r44ext=off` 时 setExteriorHidden 根本不执行 ⇒ 本件可见，回退树生效。
+ * ⚠ 贴图走 `map` + `emissiveMap`，`R7Adapter.dispose()` 的 `TEXTURE_SLOTS` 含
+ *   `map`/`emissiveMap`（:206-214）⇒ 自动释放，无泄漏。
+ * 回滚：`#r68r7lamp=off` ⇒ 直接返回原函数结果 ⇒ 逐位回 R33/R65 基线。
+ */
+export function createR7FrontDetailsR68(): R7FrontDetailResult {
+  const base = createR7FrontDetails();
+  if (!R68_R7_LAMP_ON) return base;
+  const tex = makeR7FrontAtlasTexture();
+  if (!tex) return base; // Node / 无 document ⇒ 优雅降级（vitest 无 DOM，护栏零影响）
+  const mat = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    map: tex,
+    emissive: new THREE.Color(0xffffff),
+    emissiveMap: tex,
+    emissiveIntensity: 0.85,
+    roughness: 0.35,
+    metalness: 0.08,
+    side: THREE.FrontSide
+  });
+  // 覆盖左右灯腔全宽（x±0.93）、灯腔高度带（y 0.755..0.855），UV 0..1 吃整幅 atlas：
+  // 上排 4 方灯珠 / 中部贯穿镀铬细条 / 下沿高密度点阵 DRL 与官图排布逐项对应。
+  const geo = new THREE.PlaneGeometry(1.86, 0.10);
+  geo.translate(0, 0.805, Z_DETAIL + 0.006);
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.name = 'r68-r7-front-lamp-fallback';
+  mesh.castShadow = false;
+  mesh.receiveShadow = false;
+  mesh.renderOrder = 4;
+  base.group.add(mesh);
+  base.triangleCount += (geo.index?.count ?? geo.getAttribute('position').count) / 3;
+  return base;
 }

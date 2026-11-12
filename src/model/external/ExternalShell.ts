@@ -34,6 +34,8 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { mergeSafe } from '../../util/geo';
 import { buildTailLampC2, resolveC2StripCounts } from '../parts/tailLampC2';
+import { buildR7TailWrap } from '../parts/r7TailWrap';
+import { r68BuildR7FrontLamp } from '../parts/r7FrontAtlas';
 import {
   SHELL_TOTAL_MB,
   isHighDetailEnabled,
@@ -2328,6 +2330,11 @@ export async function loadExternalShell(
      *  lampRearMeshes 在 dispose() 里统一释放，无需另立几何账本）。 */
     const r67TailMats: THREE.Material[] = [];
     const r67TailTex: THREE.Texture[] = [];
+    /** R68：本波新建的 R7 尾灯包裹 / 前灯细节材质与贴图（dispose 显式释放） */
+    const r68TailWrapMats: THREE.Material[] = [];
+    const r68TailWrapTex: THREE.Texture[] = [];
+    const r68FrontLampMats: THREE.Material[] = [];
+    const r68FrontLampTex: THREE.Texture[] = [];
     /** R46：前灯最终是否挂了 emissiveMap（供 r44ShellStatus.lampMap 机读） */
     let hasLampMap = false;
     /** R53：前灯细节新增材质/几何（dispose 显式释放，防泄漏） */
@@ -2389,7 +2396,10 @@ export async function loadExternalShell(
           scale: manifest.scale,
           lampRearMat,
           stripTop: strip.top,
-          stripBottom: strip.bottom
+          stripBottom: strip.bottom,
+          // R68 P0-4：盖板侧视悬空黑板收口（近共面 + 宽度 clamp + 深色 surround）。
+          // 纯可选参数 ⇒ `#r68c2cover=off` 时 buildTailLampC2 逐位回 R67 三段式。
+          coverTweak: R68_C2_COVER_ON
         });
         for (const mesh of c2.meshes) lampRearMeshes.push(mesh);
         for (const mat of c2.mats) r67TailMats.push(mat);
@@ -2524,6 +2534,36 @@ export async function loadExternalShell(
          * **alpha 未被正确采样**，整块平面按不透明白渲染。它比它要遮的东西更糟，
          * 故本波先移除；待 landing-review 在真实 GPU 上确认 alpha 通道行为后再启用。
          * 保留 `#r49hole=off` 与下方注释，避免下一位同学重复踩。 */
+
+        /* ══ R68 P0-2 · R7 尾灯包裹 / 缩小 / 侧贴（并行分支，既有字面量一字不动）══
+         * 定罪：`lamp_rear.glb` 中央 x[-0.0967,0.0962] local = 0.834 m 世界实缺口
+         *   （48 桶 x 复算 b13..b34 零顶点）+ 上缘抖动 20.06mm 世界 ⇒ 红碎裂是纯几何破面。
+         * 三段式：① 三个黑色方模块横向左/中/右铺满缺口（z=-(bodyMaxZ+0.010)，R49 教训②）；
+         *   ② 新增 0.75 基准缩小尾灯带，复用 lampRearMat ⇒ 刹车联动零改动；
+         *   ③ 左右侧贴同款 atlas（UV 走 remapUVToRegion，几何波后跑 #uvassert）。
+         * ⚠ 三套坐标系禁混：本分支新建 mesh 是「装配局部世界米、body 无 scale」，
+         *   GLB 语义件是「模型单位 × s」，V800 C2 是「GLB 局部 + mesh.scale.setScalar(4.75)」。
+         * ⚠ 隐藏旧语义件必须**同时**从 `lampMeshes` 出口数组 filter（见 :2589 区），
+         *   只设 visible=false 会被 setPaintShadow 的 `sm.visible = !interior` 复位。
+         * 回滚：`#r68r7tail=off` ⇒ 不建任何资源、不过滤出口 ⇒ 逐位回 R51/R48 基线。 */
+        if (R68_R7_TAIL_ON && lampRearMat) {
+          for (const m of lampRearMeshes) {
+            if (m.name === 'lamp_rear' || m.name === 'lamp_rear_band') m.visible = false;
+          }
+          // 与 R49 盖板共用同一张程序化 CanvasTexture（零外部图片资产）
+          const wrapAtlas = makeR7RearBandAtlas();
+          const wrap = buildR7TailWrap({
+            scale: s,
+            bodyMaxZ,
+            bodyHalfWidth: (manifest.bodyBBox?.max?.[0] ?? 0.257411) * s,
+            lampRearMat,
+            atlasTex: wrapAtlas,
+            shrink: 0.75
+          });
+          for (const mesh of wrap.meshes) lampRearMeshes.push(mesh);
+          for (const mat of wrap.mats) r68TailWrapMats.push(mat);
+          if (wrapAtlas) r68TailWrapTex.push(wrapAtlas);
+        }
       }
     }
     if (lfGltf) {
@@ -2567,6 +2607,25 @@ export async function loadExternalShell(
       if (lampFrontMeshes.length > 0) {
         r53BuildLampDetail(lampFrontMeshes[0], car, r53DetailMats, r53DetailGeos);
       }
+      /* ══ R68 P0-3 · R7 前灯「4 方灯珠 + 点阵 DRL + 贯穿镀铬细条」主接线 ══════
+       * 病灶三层：① `lamp_front_atlas.png` 两车全缺 ⇒ lampFrontMat 纯 emissive 暗块；
+       *   ② R53 child 未打 r44External ⇒ setExteriorHidden(true) 按 id-less 规则连藏；
+       *   ③ r53AddBox 单一 bb.max.z ⇒ R7 楔形曲面(0.4761→0.5408)外端细节盒悬空 0.284m。
+       * 修法：新增**并行**曲面灯带（8 段/侧、逐顶点 zMax+0.003 查表），自带程序化
+       *   CanvasTexture 与 UV（remapUVToRegion），child 自带 r44External ⇒ 三条遍历全跳过。
+       *   **不改**共享 r53SplitLampBoxes / R53_R7_ELEMS ⇒ `#r68r7lamp=off` 逐位回 R53/R57。
+       * 修正 C 双路径：回退树 `#r44ext=off` 由 `r7FrontDetails.ts` 新增导出
+       *   `createR7FrontDetailsR68()` 接入同一张程序化 Canvas（原 createR7FrontDetails()
+       *   逐字保留、`#r68r7lamp=off` 逐位回 R33/R65）；`R7Adapter.ts:41` 用别名接入，
+       *   :572 调用点一字未改。该回退件不带 sculptMaterial.id ⇒ 外部壳 on 态被
+       *   setExteriorHidden 按 id-less 规则隐藏，不会与本件双份叠加。
+       * 几何写 GLB 局部（父 lampMesh 自带 scale=manifest.scale），零外部图片资产。 */
+      if (R68_R7_LAMP_ON && car === 'r7' && lampFrontMeshes.length > 0) {
+        const front = r68BuildR7FrontLamp();
+        for (const mat of front.mats) r68FrontLampMats.push(mat);
+        for (const t of front.tex) r68FrontLampTex.push(t);
+        lampFrontMeshes[0].add(front.meshes[0]);
+      }
     }
 
     let currentVariant = variant;
@@ -2589,7 +2648,11 @@ export async function loadExternalShell(
       lampMeshes: [
         ...(R67_TAIL_C2_ON && car === 'v800'
           ? lampRearMeshes.filter((m) => m.name !== 'lamp_rear')
-          : lampRearMeshes),
+          : (R68_R7_TAIL_ON && car === 'r7')
+            ? lampRearMeshes.filter(
+              (m) => m.name !== 'lamp_rear' && m.name !== 'lamp_rear_band'
+            )
+            : lampRearMeshes),
         ...lampFrontMeshes
       ],
       lampRearMat,
@@ -2653,9 +2716,26 @@ export async function loadExternalShell(
       },
       setGlassOpaque(opaque: boolean): void {
         if (glassMode === 'solid' || glassMode === 'off') return; // QA A/B 钩子优先
+        /* ══ R68 P0-5 · 外景态玻璃 opaque 化（本波唯一真每帧收益）══════════════
+         * 外景态 `opacity` 早已被 R47 置 1，但 `transparent` 恒 true ⇒ 玻璃仍进
+         * 透明混合 + 排序队列（V800 187,838 / R7 77,118 tri）。此处按内外态切换
+         * transparent / depthWrite，把玻璃移入不透明深度队列。
+         * ⚠ 不动 `forceSinglePass` / `R51_GLASSPASS_ON` / `side`（r51_visual B4 契约）；
+         * ⚠ 只在内外切换时改（needsUpdate ⇒ 一次性 program 重编译，**非每帧**）；
+         * ⚠ 颜色逐位等价：opacity=1 的混合结果恒等于不透明写入；排序/深度交互
+         *   仍需 Phase 3 同构建 `#r68glassopaque=off` 三机位像素 A/B 复核。
+         * 回滚：`#r68glassopaque=off` ⇒ 不进此块，逐位回 R47「transparent 恒 true」。 */
+        if (R68_GLASS_OPAQUE_ON) {
+          const wantTransparent = !opaque;
+          if (glassMat.transparent !== wantTransparent) {
+            glassMat.transparent = wantTransparent;
+            glassMat.depthWrite = !wantTransparent;
+            glassMat.needsUpdate = true;
+          }
+        }
         const next = opaque ? 1 : 0.55;
         if (glassMat.opacity === next) return;
-        glassMat.opacity = next; // transparent 恒 true ⇒ 0.55→1 完全覆盖后方内饰
+        glassMat.opacity = next; // R47 原语义：0.55→1 完全覆盖后方内饰
       },
       dispose(): void {
         bodyMesh.geometry.dispose();
@@ -2694,6 +2774,12 @@ export async function loadExternalShell(
         // 放在 lampAtlasTex 之后 ⇒ 不进 r64_brake_batch 的 r62 dispose slice。
         for (const m of r67TailMats) m.dispose();
         for (const t of r67TailTex) t.dispose();
+        // R68：本波新建材质 / 程序化贴图（几何随 lampRearMeshes / lampFrontMeshes 一并释放）。
+        // 位置在 r67 之后 ⇒ 不进 r64_brake_batch 的 r62 dispose slice。
+        for (const m of r68TailWrapMats) m.dispose();
+        for (const t of r68TailWrapTex) t.dispose();
+        for (const m of r68FrontLampMats) m.dispose();
+        for (const t of r68FrontLampTex) t.dispose();
         // R64：wheelAlloyMat 已从 r62BrakeMats 移出（A4 账本 length=2），单独释放
         wheelAlloyMat?.dispose();
         material.map?.dispose();
@@ -2943,3 +3029,31 @@ export function r64WriteTireBands(
  *   不能同页改 hash（R64 五开关同源纪律）。
  * ══════════════════════════════════════════════════════════════════════════════ */
 export const R67_TAIL_C2_ON = !r51HookOff('r67tail');
+
+/* ══════════════════════════════════════════════════════════════════════════════
+ * R68 · 七项视觉主理开关（**单一真源**，默认全 ON、`#r68xxx=off` 逐位回基线）
+ *
+ * ⚠ 全部声明后置到文件末尾（必须在 R67_TAIL_C2_ON 之后）：R64 护栏用
+ *   `readFileSync + slice(from,to)` 做源码字符串断言，在 :1987 之前写入新声明会
+ *   重复锚点字面量 ⇒ 整片红（ExternalShell.ts:2752 / :2938 注释同源纪律）。
+ *   模块顶层求值 + 使用点全在异步 loadExternalShell 函数体内 ⇒ 无 TDZ。
+ * ⚠ 键名一律不含 `noprewarm` 子串（Game.ts 入口守卫）。
+ * ⚠ 加载期求值 ⇒ A/B 必须 before/after 各自 reload 且走逐字相同序列，
+ *   不能同页改 hash（R64 五开关同源纪律；同时治跨 reload 车灯污染与 R7 SPA 缓存冒名）。
+ * ⚠ Node / vitest 无 window ⇒ r51HookOff 恒 false ⇒ 七个常量恒 true（零副作用）。
+ *
+ * P0-1 `#r68arch=off`        R7 四轮拱内衬归位（manifest.hubs × 4.323，body-local）
+ * P0-2 `#r68r7tail=off`      R7 尾灯三黑模块 / 0.75 缩小带 / 双侧贴灯
+ * P0-3 `#r68r7lamp=off`      R7 前灯 4 方灯珠 + 点阵 DRL + 贯穿镀铬细条
+ * P0-4 `#r68c2cover=off`     V800 C2 盖板近共面 + 宽度 clamp + 深色 surround
+ * P0-5 `#r68glassopaque=off` 外景态玻璃 opaque 化（移入不透明队列）
+ * P1-6 `#r68wheel=off`       程序化轮毂 18→20 窗 + 中央盾徽
+ * P1-7 `#r68gldiag=off`      WebGL 上下文丢失 / renderer.info 真机定标钩子
+ * ══════════════════════════════════════════════════════════════════════════════ */
+export const R68_ARCH_ON = !r51HookOff('r68arch');
+export const R68_R7_TAIL_ON = !r51HookOff('r68r7tail');
+export const R68_R7_LAMP_ON = !r51HookOff('r68r7lamp');
+export const R68_C2_COVER_ON = !r51HookOff('r68c2cover');
+export const R68_GLASS_OPAQUE_ON = !r51HookOff('r68glassopaque');
+export const R68_WHEEL_ON = !r51HookOff('r68wheel');
+export const R68_GLDIAG_ON = !r51HookOff('r68gldiag');
