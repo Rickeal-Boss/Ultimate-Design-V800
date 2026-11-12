@@ -168,8 +168,9 @@ export const C2_COVER_COLOR_R68 = 0x24242c;
 export const C2_LAMP_SHRINK_HEIGHT = 0.48;
 /** R69 竖灯宽度缩放：lampHalfW / stripHalfW × 0.40（世界 0.356m → 0.142m）。 */
 export const C2_LAMP_SHRINK_WIDTH = 0.40;
-/** R69 侧贴深度（GLB 局部 m）：沿 +z 覆盖 face→strip 的进深，掩住侧看金色竖条。 */
-export const C2_LAMP_SIDE_DEPTH = 0.002;
+/** R69 侧贴深度（GLB 局部 m）：沿 +z 覆盖 face→strip 的进深，掩住侧看金色竖条。
+ *  R70 加厚 0.002→0.02（世界 ≈0.095m）：原值太薄 ⇒ 斜视角侧面读作光秃黑、纹理不可见。 */
+export const C2_LAMP_SIDE_DEPTH = 0.02;
 
 /** 本地 hash 开关判据（与 ExternalShell.ts:78 r51HookOff 字节等价；node/SSR 无 window ⇒ false=ON）。 */
 function r69HookOff(key: string): boolean {
