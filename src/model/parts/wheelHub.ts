@@ -87,10 +87,6 @@ import { R68_WHEEL_ON } from '../external/ExternalShell';
 export const R_FACE = 0.343;
 /** R66 等比放大因子（0.300→0.343），所有径向派生尺寸同步乘 k，z 深度保持不外凸 */
 const K = R_FACE / 0.3;
-/** 回转体周向段数：28 段 ⇒ 矢高 1.9mm（屏幕 <0.6px）；窗带边界圆同点数保证无缝 */
-const NSEG = 28;
-/** 小件（黑盖/徽标）周向段数 */
-const NSEG_SMALL = 24;
 /**
  * 窗数（参考图实测 18）→ R68 P1-6 按官图「约 20 个切向矩形/梯形镂空环」重建为 20。
  * ⚠ 主理人终裁：**否决**两个 150 万 tri 桌面轮毂 GLB 原样替换
@@ -101,6 +97,32 @@ const NSEG_SMALL = 24;
  */
 export const N_WINDOWS = R68_WHEEL_ON ? 20 : 18;
 const WIN_PITCH = (Math.PI * 2) / N_WINDOWS;
+
+/* ── R69 · 程序化轮毂几何细节抬升（B 案）──
+ * 用户终裁：走 B 案「程序化轮毂加细节」（A 案外部 GLB 前几轮无法根治，否决）。
+ * 抬高三处周向/角向细分 ⇒ 轮缘/窗带/唇/黑盖更圆润、窗角更顺滑，tri 从 ~1.7k 抬到 ~4-5k/轮
+ * （4 轮 ~16-20k，远低于预算余量，零 VRAM/零资产/复用现有 PBR）。
+ * ⚠ 护栏只钉 triangleCount>1200 / bbox≤0.3 / 5 材质桶 / N_WINDOWS，不钉 NSEG/NSEG_SMALL/WIN_ARC_PTS
+ *   ⇒ 安全抬高。`#r69hubdetail=off` ⇒ 三个常量回 R68 基线（逐位回滚）。
+ * ⚠ 本地 hash 判据（字节等价 r51HookOff）：避与 ExternalShell/tailLampC2 成环。 */
+/** R69 轮毂细节抬升开关（默认 ON，`#r69hubdetail=off` 回 R68 基线细分）。 */
+export const R69_HUB_DETAIL_ON = (() => {
+  if (typeof window === 'undefined') return true;
+  return !new RegExp('(?:^|[#&])r69hubdetail=off', 'i').test(window.location.hash);
+})();
+/** R68 基线细分（off 回滚值）。 */
+export const HUB_NSEG_BASELINE = 28;
+export const HUB_NSEG_SMALL_BASELINE = 24;
+export const HUB_WIN_ARC_PTS_BASELINE = 3;
+/** R69 细节档：回转体周向段 28→44（矢高 1.9mm→0.8mm）、小件 24→32、窗角弧段 3→5（12→20 边形圆角）。 */
+export const HUB_NSEG_R69 = 44;
+export const HUB_NSEG_SMALL_R69 = 32;
+export const HUB_WIN_ARC_PTS_R69 = 5;
+
+/** 回转体周向段数：R68 基线 28 段（矢高 1.9mm）；R69 细节档 44 段（矢高 0.8mm）⇒ 轮缘/窗带/唇更圆润。 */
+const NSEG = R69_HUB_DETAIL_ON ? HUB_NSEG_R69 : HUB_NSEG_BASELINE;
+/** 小件（黑盖/徽标）周向段数：R68 24 → R69 32。 */
+const NSEG_SMALL = R69_HUB_DETAIL_ON ? HUB_NSEG_SMALL_R69 : HUB_NSEG_SMALL_BASELINE;
 
 /* ── R69 · 刹车卡钳缩小 ──
  * 用户反馈「两侧刹车需适当缩小」。卡钳 buildCaliper 是盘缘小盒 0.07×0.05×0.05，
@@ -128,8 +150,8 @@ const WIN_HALF_ANG = (7.6 * Math.PI) / 180;
 const WIN_HALF_R = 0.034 * K;
 const WIN_CORNER = 0.009;
 const WIN_TILT = (7.5 * Math.PI) / 180;
-/** 窗轮廓每角弧段点数（3 点/角 = 12 边形圆角矩形） */
-const WIN_ARC_PTS = 3;
+/** 窗轮廓每角弧段点数：R68 基线 3（12 边形圆角矩形）；R69 细节档 5（20 边形，窗角更顺滑）。 */
+const WIN_ARC_PTS = R69_HUB_DETAIL_ON ? HUB_WIN_ARC_PTS_R69 : HUB_WIN_ARC_PTS_BASELINE;
 /** 窗框倒角宽度 + 抬起高度 */
 const BEZEL_W = 0.0035;
 const BEZEL_LIFT = 0.0072;
