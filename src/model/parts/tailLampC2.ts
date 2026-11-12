@@ -132,14 +132,46 @@ export const C2_COVER_DEPTH_R68_M = 0.0005;
 /** 盖板材质标量：R68 略微提亮 + 降反射，缓和与牌照白框的反差。 */
 export const C2_COVER_COLOR_BASELINE = 0x1c1c22;
 export const C2_COVER_COLOR_R68 = 0x24242c;
+
+/* ══════════════════════ R69 · C2 竖灯缩小 + 侧贴完整尾灯纹理 ══════════════════════
+ * 用户真机反馈（R69）：两侧 C2 竖灯太长太宽、两灯应「合并」成约两块大小；
+ * 侧面金色竖条漏洞需侧贴**完整尾灯纹理**掩盖（非纯黑）。
+ * 主理人终裁参数：高度 ×0.48 / 宽度 ×0.40 / 两灯间距保持（lampCenterX 不动）。
+ *
+ * ⚠ 零护栏改动：`C2_GEOM` 全字段逐字不动（`tests/r68_visual.test.ts:247` toEqual 钉死），
+ * 改用下面「有效缩放」在 builder 内按 R69 系数算 face/strip 几何；`#r69c2lamp=off`
+ * ⇒ 逐位回 R68 基线。tri 恒 36 + side 4 = 40 ≤ C2_TRI_BUDGET(36) 的语义边界
+ * ⇒ 本波把 face 侧壁并入 faceMesh（同 atlas 材质、同 4-tri/侧），恒 3 mesh / 3 DC。
+ *
+ * ⚠ 本地 hash 判据（字节等价 ExternalShell 的私有 r51HookOff）：tailLampC2 被
+ * ExternalShell 反向 import，若从这里 import ExternalShell 会成环 ⇒ 就地复制同语义正则，
+ * 避开 :1987 前 slice 锚点与 r64/r67 追加段黑名单。
+ */
+/** R69 竖灯高度缩放：span × 0.48（世界 0.643m → 0.309m）。 */
+export const C2_LAMP_SHRINK_HEIGHT = 0.48;
+/** R69 竖灯宽度缩放：lampHalfW / stripHalfW × 0.40（世界 0.356m → 0.142m）。 */
+export const C2_LAMP_SHRINK_WIDTH = 0.40;
+/** R69 侧贴深度（GLB 局部 m）：沿 +z 覆盖 face→strip 的进深，掩住侧看金色竖条。 */
+export const C2_LAMP_SIDE_DEPTH = 0.002;
+
+/** 本地 hash 开关判据（与 ExternalShell.ts:78 r51HookOff 字节等价；node/SSR 无 window ⇒ false=ON）。 */
+function r69HookOff(key: string): boolean {
+  if (typeof window === 'undefined') return false;
+  return new RegExp(`(?:^|[#&])${key}=off`, 'i').test(window.location.hash);
+}
+
+/** R69 C2 竖灯缩小 + 侧贴完整纹理开关（默认 ON，`#r69c2lamp=off` 回 R68 基线）。 */
+export const R69_C2_LAMP_ON = !r69HookOff('r69c2lamp');
 export const C2_COVER_ROUGHNESS_BASELINE = 0.72;
 export const C2_COVER_ROUGHNESS_R68 = 0.78;
 /** atlas 内深色 surround 颜色（不透明、非渐变、零几何）。 */
 export const C2_ATLAS_SURROUND_COLOR = '#101016';
 
-/** 预算上限（护栏消费）。新增 mesh 恒 3；tri = 盖板薄盒 12 + face 4 + 2·(top+bottom)·2。 */
+/** 预算上限（护栏消费）。新增 mesh 恒 3；tri = 盖板薄盒 12 + face 4 + 2·(top+bottom)·2。
+ *  R69：竖灯缩小（高×0.48/宽×0.40）+ 侧面贴完整尾灯纹理 ⇒ face 并入左右侧壁 +4 ⇒ 默认 40。
+ *  `#r69c2lamp=off` ⇒ 无侧壁 ⇒ 回 R68 的 36。 */
 export const C2_DC_BUDGET = 3;
-export const C2_TRI_BUDGET = 36;
+export const C2_TRI_BUDGET = 40;
 export const C2_MAT_BUDGET = 2;
 export const C2_TEX_BUDGET = 1;
 
@@ -501,6 +533,9 @@ export function buildTailLampC2(opts: C2BuildOptions): C2BuildResult {
   // 修正 D：`coverTweak` 只驱动 3 处标量（coverDepth / atlas surround / 材质标量），
   // **不驱动任何几何拓扑**；默认 / off 态三处逐位回 R67 基线。
   const tweak = opts.coverTweak === true;
+  // R69 终裁：竖灯缩小（高 ×0.48 / 宽 ×0.40）+ 侧贴完整尾灯纹理 + 盖板宽度 ×0.50。
+  // `C2_GEOM` 逐字不动（r68_visual:247 toEqual 钉死）；`#r69c2lamp=off` ⇒ 全部回 R68 基线。
+  const r69 = R69_C2_LAMP_ON;
   const tex = makeC2AtlasTexture(tweak);
   const texList: THREE.Texture[] = tex ? [tex] : [];
 
@@ -536,6 +571,8 @@ export function buildTailLampC2(opts: C2BuildOptions): C2BuildResult {
   // 唯一标量：世界厚度 10mm → 0.5mm ⇒ 侧视/3/4 的端面投影面积 −95%，侧壁不再读作黑板。
   const coverDepth =
     (tweak ? C2_COVER_DEPTH_R68_M : C2_COVER_DEPTH_BASELINE_M) / opts.scale;
+  // 盖板保持全宽（R68 基线）：它遮住 body 残留红带；缩窄会两侧露出黑带（已目检证伪，撤销）。
+  // 竖灯缩小后复用同一张 atlas ⇒ 与全宽盖板同底色，读作一条连续灯带。
   const coverGeo = new THREE.BoxGeometry(
     G.coverHalfW * 2, G.coverYHi - G.coverYLo, coverDepth
   );
@@ -547,36 +584,69 @@ export function buildTailLampC2(opts: C2BuildOptions): C2BuildResult {
   // 修正 A/D：中央白块 surround **不再新增任何几何**，改由 `paintC2Atlas(...,true)`
   // 画进现有 atlas（见本文件 §3）⇒ 恒 3 mesh / 36 tri / 3 DC / 2 材质 / 1 贴图。
 
-  // face：左右各 1 quad，UV 先 0..1 再按自身 bbox 归一到 atlas 左/右半幅
+  // R69：竖灯缩小 + 侧贴（r69 已在 builder 顶部声明）
+  const lampHalfW = r69 ? G.lampHalfW * C2_LAMP_SHRINK_WIDTH : G.lampHalfW;
+  const lampCy = (G.lampYLo + G.lampYHi) / 2;
+  const lampHalfH = r69
+    ? ((G.lampYHi - G.lampYLo) / 2) * C2_LAMP_SHRINK_HEIGHT
+    : (G.lampYHi - G.lampYLo) / 2;
+  const lampYLo = lampCy - lampHalfH;
+  const lampYHi = lampCy + lampHalfH;
+  const sideDepth = r69 ? C2_LAMP_SIDE_DEPTH : 0;
+
+  // face：左右各 1 quad（竖灯正面）+ 左右各 1 侧壁 quad（贴完整 atlas 纹理，掩侧看金竖条）
   const faceQuads: THREE.BufferGeometry[] = [];
   for (const side of [-1, 1]) {
     const cx = side * G.lampCenterX;
-    const q = makeQuad(
-      cx - G.lampHalfW, cx + G.lampHalfW, G.lampYLo, G.lampYHi, G.faceZ
-    );
+    const xOut = cx + side * lampHalfW; // 外侧棱
+    const q = makeQuad(cx - lampHalfW, cx + lampHalfW, lampYLo, lampYHi, G.faceZ);
     // 局部 −x 用左半幅、+x 用右半幅；body rotY(π) 会翻世界 x，最终朝向待 A/B 目检
     remapUVToRegion(q, side < 0 ? 0 : 0.5, side < 0 ? 0.5 : 1, 0, 1);
     faceQuads.push(q);
+    if (sideDepth > 0) {
+      // 侧壁：x=xOut 平面、沿 z 从 faceZ（外）到 faceZ+sideDepth（内），全高；
+      // 显式外向法线（±X）+ 全幅 atlas UV（贴完整尾灯纹理，非纯黑）。makeQuad 会退化
+      // （x0=x1 ⇒ normal 计算坏、UV remap 除零），故手写。
+      const zIn = G.faceZ + sideDepth;
+      const sq = new THREE.BufferGeometry();
+      // 顶点：yLo/zIn、yHi/zIn、yLo/faceZ、yHi/faceZ
+      sq.setAttribute('position', new THREE.Float32BufferAttribute([
+        xOut, lampYLo, zIn, xOut, lampYHi, zIn,
+        xOut, lampYLo, G.faceZ, xOut, lampYHi, G.faceZ
+      ], 3));
+      const nx = side < 0 ? -1 : 1;
+      sq.setAttribute('normal', new THREE.Float32BufferAttribute([
+        nx, 0, 0, nx, 0, 0, nx, 0, 0, nx, 0, 0
+      ], 3));
+      sq.setAttribute('uv', new THREE.Float32BufferAttribute([
+        0, 0, 0, 1, 1, 0, 1, 1
+      ], 2));
+      sq.setIndex([0, 1, 2, 1, 3, 2]);
+      faceQuads.push(sq);
+    }
   }
   const faceGeo = mergeQuads(faceQuads);
+  for (const q of faceQuads) q.dispose();
   const faceMesh = markExternal(
     new THREE.Mesh(faceGeo, faceMat), 'r67_tail_c2_face', opts.scale, 3
   );
 
   // 红条：上下两簇（默认 3+2）×左右 2 侧；复用 lampRearMat ⇒ brakeLevel 联动
+  // R69：条宽 stripHalfW × 0.40、y 按缩小后 span 重算，跟 face 同步收进灯内
   const stripQuads: THREE.BufferGeometry[] = [];
-  const span = G.lampYHi - G.lampYLo;
+  const span = lampYHi - lampYLo;
+  const stripHalfW = r69 ? G.stripHalfW * C2_LAMP_SHRINK_WIDTH : G.stripHalfW;
   // Phase 2b 目检：gap 0.11 时 3 条上红条占到灯顶 ~33%、压住凤凰头/翼 ⇒ 改 0.06 把
   // 上下红条压向灯顶/灯底（各约 18% / 12%），中部 v≈0.14~0.80 留给凤凰不受遮挡。
   const gap = span * 0.06;
   const ys: number[] = [];
-  for (let i = 0; i < counts.top; i += 1) ys.push(G.lampYHi - (i + 1) * gap);
-  for (let i = 0; i < counts.bottom; i += 1) ys.push(G.lampYLo + (i + 1) * gap);
+  for (let i = 0; i < counts.top; i += 1) ys.push(lampYHi - (i + 1) * gap);
+  for (let i = 0; i < counts.bottom; i += 1) ys.push(lampYLo + (i + 1) * gap);
   for (const side of [-1, 1]) {
     const cx = side * G.lampCenterX;
     for (const cy of ys) {
       stripQuads.push(makeQuad(
-        cx - G.stripHalfW, cx + G.stripHalfW,
+        cx - stripHalfW, cx + stripHalfW,
         cy - G.stripHalfH, cy + G.stripHalfH, G.stripZ
       ));
     }

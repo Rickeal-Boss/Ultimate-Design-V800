@@ -37,6 +37,7 @@ import {
   makeC2AtlasTexture,
   paintC2Atlas,
   phoenixMask,
+  R69_C2_LAMP_ON,
   remapUVToRegion,
   resolveC2StripCounts,
   type C2Painter
@@ -381,7 +382,7 @@ describe('R67 · C2 atlas 数据指纹（零外部图片资产）', () => {
 describe('R67 · 三段式装配与预算（实测，不沿用旧估算）', () => {
   const scale = 4.75;
 
-  it('★ 恒 3 mesh / 36 tri：盖板薄盒 12 + face 4 + 红条 20；净 −17,449 tri', () => {
+  it('★ 恒 3 mesh：盖板薄盒 12 + face(4|R69侧壁8) + 红条 20；净 tri 按开关', () => {
     const lampRearMat = new THREE.MeshStandardMaterial({
       color: 0x1a0505,
       emissive: new THREE.Color(0x7a1f1a),
@@ -390,10 +391,13 @@ describe('R67 · 三段式装配与预算（实测，不沿用旧估算）', () 
     const r = buildTailLampC2({ scale, lampRearMat });
     expect(r.meshes).toHaveLength(3);
     expect(r.budget.dc).toBe(3);
-    expect(r.budget.tri).toBe(36); // 盖板薄盒 12 + face 4 + 红条 20
+    // R69 默认：竖灯缩小 + 侧面贴完整尾灯纹理 ⇒ face 并入左右侧壁(4+4) ⇒ 40；
+    // #r69c2lamp=off ⇒ 无侧壁 ⇒ 回 R68 的 36（盖板12+face4+红条20）。
+    const faceTri = R69_C2_LAMP_ON ? 8 : 4;
+    expect(r.budget.tri).toBe(12 + faceTri + 20);
     expect(r.budget.mat).toBe(2);
     expect(r.budget.tex).toBe(0); // node 无 DOM ⇒ 贴图降级，不新增贴图实例
-    expect(17485 - r.budget.tri).toBe(17449);
+    expect(17485 - r.budget.tri).toBe(17485 - (12 + faceTri + 20));
   });
 
   it('红条 material === lampRearMat（同一实例 ⇒ brakeLevel 每帧联动）', () => {
@@ -421,12 +425,13 @@ describe('R67 · 三段式装配与预算（实测，不沿用旧估算）', () 
 
   it('预算常量上限、条数扫参后 tri 仍 ≤ 上限', () => {
     expect(C2_DC_BUDGET).toBe(3);
-    expect(C2_TRI_BUDGET).toBe(36);
+    expect(C2_TRI_BUDGET).toBe(R69_C2_LAMP_ON ? 40 : 36);
     expect(C2_MAT_BUDGET).toBe(2);
     expect(C2_TEX_BUDGET).toBe(1);
     const lampRearMat = new THREE.MeshStandardMaterial();
     const r = buildTailLampC2({ scale, lampRearMat, stripTop: 2, stripBottom: 2 });
-    expect(r.budget.tri).toBe(32); // 盖板薄盒 12 + face 4 + (2+2)*2*2
+    const faceTri2 = R69_C2_LAMP_ON ? 8 : 4;
+    expect(r.budget.tri).toBe(12 + faceTri2 + (2 + 2) * 2 * 2);
     expect(r.budget.tri).toBeLessThanOrEqual(C2_TRI_BUDGET);
     expect(r.budget.dc).toBeLessThanOrEqual(C2_DC_BUDGET);
     expect(r.budget.mat).toBeLessThanOrEqual(C2_MAT_BUDGET);
@@ -438,7 +443,7 @@ describe('R67 · 三段式装配与预算（实测，不沿用旧估算）', () 
     const r = buildTailLampC2({ scale, lampRearMat, stripTop: 0, stripBottom: 0 });
     expect(r.redStripMesh.geometry.getAttribute('position')).toBeDefined();
     expect(r.redStripMesh.geometry.getAttribute('position').count).toBe(0);
-    expect(r.budget.tri).toBe(16); // 盖板薄盒 12 + face 4
+    expect(r.budget.tri).toBe(12 + (R69_C2_LAMP_ON ? 8 : 4)); // 盖板薄盒 12 + face(4|R69侧壁8)
     expect(r.meshes).toHaveLength(3);
   });
 

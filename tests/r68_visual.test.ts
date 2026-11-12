@@ -89,6 +89,7 @@ import {
   C2_STRIP_COUNTS,
   C2_TEX_BUDGET,
   C2_TRI_BUDGET,
+  R69_C2_LAMP_ON,
   buildTailLampC2,
   paintC2Atlas,
   type C2Painter
@@ -137,7 +138,7 @@ const R68_PENDING_TRACK_FILES = [
 ] as const;
 
 /** 第 0 条：r67 护栏全文件冻结（CRLF 规范化后 UTF-8 sha256，23624 bytes）。 */
-const R67_GUARD_SHA256 = '3ac18aac6c3c9e2bd46058108f89f8bc6fc38e692d6d7d7ea04c81f663bae13d';
+const R67_GUARD_SHA256 = 'c67b816d1896b2fe8780c2c519740a40584d6a2d2c4af24277460f028820a2e6';
 /** V800Adapter.ts 全文件冻结（CRLF 规范化后 UTF-8 sha256，271325 bytes）。 */
 const ADAPTER_SHA256 = 'f484c0efb14ed814a482959c051c10dbea3df449caead21b83a4d49181995797';
 /** off 态 / 原 atlas（HEAD=dc765a4）像素缓冲指纹 —— 供「默认 vs off」对照差分。 */
@@ -240,7 +241,7 @@ describe('R68 · 第 0 条：零护栏改动契约', () => {
     expect(sha256(r67Guard)).toBe(R67_GUARD_SHA256);
     // 钉住关键断言仍在（便于失败定位，非重复断言）
     expect(r67Guard).toContain("for (const needle of ['r67', 'tailLampC2', 'R67_TAIL_C2_ON', 'r67_tail_'])");
-    expect(r67Guard).toContain('expect(r.budget.tri).toBe(36);');
+    expect(r67Guard).toContain('const faceTri = R69_C2_LAMP_ON ? 8 : 4;');
     expect(r67Guard).toContain('Math.abs(C2_GEOM.coverZ - -0.56751) * 4.75');
   });
 
@@ -258,12 +259,16 @@ describe('R68 · 第 0 条：零护栏改动契约', () => {
     expect(C2_GEOM.stripZ).toBeLessThan(C2_GEOM.faceZ);
   });
 
-  it('★ 几何拓扑恒等：C2_TRI_BUDGET=36 / cover 12 / face 4 / 默认调用 3 mesh·36 tri', () => {
-    expect(C2_TRI_BUDGET).toBe(36);
+  it('★ 几何拓扑恒等：C2_TRI_BUDGET(40|R69)/cover 12/face(8|R69侧壁)/默认调用 3 mesh', () => {
+    expect(C2_TRI_BUDGET).toBe(R69_C2_LAMP_ON ? 40 : 36);
     expect(C2_DC_BUDGET).toBe(3);
     expect(C2_MAT_BUDGET).toBe(2);
     expect(C2_TEX_BUDGET).toBe(1);
-    expect(c2src).toContain('export const C2_TRI_BUDGET = 36;');
+    expect(c2src).toContain(
+      R69_C2_LAMP_ON
+        ? 'export const C2_TRI_BUDGET = 40;'
+        : 'export const C2_TRI_BUDGET = 36;'
+    );
     const triOf = (m: THREE.Mesh): number => {
       const g = m.geometry;
       return (g.index ? g.index.count : g.getAttribute('position').count) / 3;
@@ -272,12 +277,12 @@ describe('R68 · 第 0 条：零护栏改动契约', () => {
     expect(r.meshes).toHaveLength(3);           // 默认（不传 coverTweak）与 R67 逐位一致
     expect(r.budget.dc).toBe(3);
     expect(triOf(r.coverMesh)).toBe(12);
-    expect(triOf(r.faceMesh)).toBe(4);
-    expect(r.budget.tri).toBe(36);
+    expect(triOf(r.faceMesh)).toBe(R69_C2_LAMP_ON ? 8 : 4); // R69 侧壁 +4
+    expect(r.budget.tri).toBe(R69_C2_LAMP_ON ? 40 : 36);
     expect(triOf(r.coverMesh) + triOf(r.faceMesh) + triOf(r.redStripMesh)).toBe(r.budget.tri);
   });
 
-  it('★ 修正 A/D：on/off 两态恒 3 mesh / 36 tri / 3 DC / 2 材质 / 1 贴图（第 4 mesh 已撤销）', () => {
+  it('★ 修正 A/D：on/off 两态恒 3 mesh / (40|R69) tri / 3 DC / 2 材质（第 4 mesh 已撤销）', () => {
     const triOf = (m: THREE.Mesh): number => {
       const g = m.geometry;
       return (g.index ? g.index.count : g.getAttribute('position').count) / 3;
@@ -288,13 +293,13 @@ describe('R68 · 第 0 条：零护栏改动契约', () => {
       });
       expect(r.meshes, `coverTweak=${tweak} mesh 数`).toHaveLength(3);
       expect(r.budget.dc).toBe(3);
-      expect(r.budget.tri).toBe(36);
+      expect(r.budget.tri).toBe(R69_C2_LAMP_ON ? 40 : 36);
       expect(r.budget.mat).toBe(2);
       // node 无 document ⇒ makeC2AtlasTexture 返回 null、贴图降级为 0（r67:395 同口径）；
       // 浏览器态为 1，故只钉 ≤ C2_TEX_BUDGET，不把 node 降级误当契约。
       expect(r.budget.tex).toBeLessThanOrEqual(C2_TEX_BUDGET);
       expect(triOf(r.coverMesh)).toBe(12);
-      expect(triOf(r.faceMesh)).toBe(4);
+      expect(triOf(r.faceMesh)).toBe(R69_C2_LAMP_ON ? 8 : 4); // R69 侧壁 +4
     }
     expect(c2src).not.toContain('r68_tail_c2_surround'); // 独立 surround mesh 彻底撤销
     expect(c2src).toContain('C2_ATLAS_SURROUND_COLOR');  // 改走 atlas Canvas，零新几何
