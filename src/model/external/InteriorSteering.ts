@@ -65,6 +65,24 @@ export async function loadInteriorSteering(
   scale: number
 ): Promise<THREE.Mesh | null> {
   if (inTestEnv()) { console.info('[InteriorSteering] skipped in test env'); return null; }
+  /* ── R69 · 高精度方向盘黑帧根治（默认关闭高精度 GLB）──────────────────────────
+   * 真机实录量化（.qa/r69_video/steer_frames.py，cv2 逐帧亮度）：主驾视角移动时
+   *   整帧亮度在 77(亮)↔20(暗) 高频往复，|Δ|≈50-68，黑帧(<25) 占 148/417 帧 = **35%**，
+   *   暗帧右侧 82% 被纯黑大面覆盖（文件 0.5MB 大面积纯色 vs 亮帧 2.5MB 细节丰富）
+   *   ⇒ 高精度方向盘 GLB 大面扫过主驾相机 ⇒ 高频闪烁/黑帧（非偶发，是持续振荡）。
+   * 根因：52k-tri 高精度方向盘挂在 body 下、仅 cabin 机位可见；主驾相机移动时与盘面
+   *   近平面/深度冲突，盘面扫过相机 ⇒ 闪烁。本环境（headless/SwiftShader）不可复现，
+   *   故 R68 P1-7 只加了 __r68glDiag 诊断钩子、未盲改。
+   * 修复（P0 流畅度优先）：默认**不加载**高精度 GLB（返回 null ⇒ 程序化方向盘保持完整，
+   *   游戏零感知），消除黑帧；`#r68steerhires=on` 显式开启高精度供真机定标
+   *   （配合 __r68glDiag 抓 contextLost / renderer.info）。
+   * 回滚：去掉该开关即恢复 R68 行为（高精度默认开）。 */
+  if (!/(?:^|[#&])r68steerhires=on/i.test(
+    typeof window === 'undefined' ? '' : window.location.hash
+  )) {
+    console.info('[InteriorSteering] high-res steering OFF by default (black-frame fix); #r68steerhires=on to enable');
+    return null;
+  }
   try {
     const urls = STEERING_URLS[car];
     console.info(`[InteriorSteering] ${car} fetching ${urls.glb.split('/').pop()} scale=${scale}`);

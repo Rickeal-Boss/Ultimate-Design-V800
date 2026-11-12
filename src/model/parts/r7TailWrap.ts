@@ -44,7 +44,6 @@
  */
 import * as THREE from 'three';
 import { mergeSafe } from '../../util/geo';
-import { remapUVToRegion } from './tailLampC2';
 
 /* ══════════════════════ 1. 对外常量（装配局部 = 世界米）══════════════════════ */
 
@@ -206,6 +205,21 @@ export function buildR7TailWrap(opts: R7TailWrapOptions): R7TailWrapResult {
     new THREE.Mesh(moduleGeo, moduleMat), 'r68_r7_tail_modules', 5
   );
 
+  // ①b 上下封边（R69 用户真机反馈：三黑模块上/下边缘裸露会透出舱内米色菱格 seat-quilt，
+  //   需「围成一个封闭」）—— 加两条同色封边把「三模块 + 上下封边」围成封闭包裹。
+  //   零新增材质（复用 moduleMat）；宽覆盖三模块全宽（3×0.278）。
+  const edgeH = 0.05;
+  const edgeGeos: THREE.BufferGeometry[] = [];
+  const edgeX0 = -s * 1.5;
+  const edgeX1 = s * 1.5;
+  edgeGeos.push(tailQuad(edgeX0, edgeX1, G.bandY + s / 2, G.bandY + s / 2 + edgeH, zModules));
+  edgeGeos.push(tailQuad(edgeX0, edgeX1, G.bandY - s / 2 - edgeH, G.bandY - s / 2, zModules));
+  const edgeGeo = mergeSafe(edgeGeos);
+  for (const g of edgeGeos) g.dispose();
+  const edgeMesh = marked(
+    new THREE.Mesh(edgeGeo, moduleMat), 'r68_r7_tail_edge', 5
+  );
+
   // ② 缩小尾灯带：复用 lampRearMat ⇒ brakeLevel 联动零改动
   const bandW = G.bandWidthBase * k;
   const bandGeo = tailQuad(-bandW / 2, bandW / 2, G.bandY - G.bandHeight / 2, G.bandY + G.bandHeight / 2, zBand);
@@ -213,45 +227,36 @@ export function buildR7TailWrap(opts: R7TailWrapOptions): R7TailWrapResult {
     new THREE.Mesh(bandGeo, opts.lampRearMat), 'r68_r7_tail_band', 6
   );
 
-  // ③ 侧贴灯：左右各 1 quad，共享 atlas；UV 按各自 bbox 归一到 atlas 半幅
+  // ③ 侧贴：左右各 1 quad，**改用与三黑模块同款黑色材质**（R69 用户真机反馈：原贴 band
+  //   atlas 会把横向灯带映射到竖直 quad 上显示成歪斜的「LUX」小标签，且 x=±1.1168 跑到
+  //   车轮(±0.888)外 ⇒ 「贴图歪了 / 坐标去到车轮外」）。纯黑既掩盖侧面米色菱格漏洞、
+  //   又不歪；位置内收到车身宽度内（-0.06，落在轮拱内衬覆盖范围）。
   const sideQuads: THREE.BufferGeometry[] = [];
   for (const side of [-1, 1] as const) {
-    const x = side * (opts.bodyHalfWidth + 0.004);
+    const x = side * (opts.bodyHalfWidth - 0.06);
     const q = sideQuad(
       side, x, G.sideZ - G.sideW / 2, G.sideZ + G.sideW / 2,
       G.bandY - G.sideH / 2, G.bandY + G.sideH / 2
     );
-    // 左右各映射 atlas 半幅（按 mesh 自身 UV bbox 归一，禁线性 remap）
-    remapUVToRegion(q, side < 0 ? 0 : 0.5, side < 0 ? 0.5 : 1, 0, 1);
     sideQuads.push(q);
   }
   const sideGeo = mergeSafe(sideQuads);
   for (const q of sideQuads) q.dispose();
-  const sideMat = new THREE.MeshStandardMaterial({
-    color: 0xffffff,
-    map: opts.atlasTex ?? undefined,
-    emissive: new THREE.Color(0x5a1e1e),
-    emissiveMap: opts.atlasTex ?? undefined,
-    emissiveIntensity: 0.45,
-    roughness: 0.5,
-    metalness: 0.1,
-    side: THREE.DoubleSide
-  });
-  const sideMesh = marked(new THREE.Mesh(sideGeo, sideMat), 'r68_r7_tail_side', 4);
+  const sideMesh = marked(new THREE.Mesh(sideGeo, moduleMat), 'r68_r7_tail_side', 4);
 
-  const meshes = [moduleMesh, bandMesh, sideMesh];
-  const tri = triOf(moduleGeo) + triOf(bandGeo) + triOf(sideGeo);
+  const meshes = [moduleMesh, edgeMesh, bandMesh, sideMesh];
+  const tri = triOf(moduleGeo) + triOf(edgeGeo) + triOf(bandGeo) + triOf(sideGeo);
 
   return {
     meshes,
-    mats: [moduleMat, sideMat],
-    geos: [moduleGeo, bandGeo, sideGeo],
+    mats: [moduleMat],
+    geos: [moduleGeo, edgeGeo, bandGeo, sideGeo],
     tex: [],
     budget: {
       dc: meshes.length,
       tri,
-      mat: 2,
-      tex: opts.atlasTex ? 1 : 0
+      mat: 1,
+      tex: 0
     }
   };
 }
