@@ -135,22 +135,43 @@ describe('R47 · 高精度方向盘接入', () => {
       const s = src(f);
       expect(s).toContain("loadInteriorSteering('");
       expect(s).toContain('shell.manifest.scale');
-      expect(s).toContain('if (steeringMesh) steeringMesh.visible = interior;');
-      expect(s).toContain('wheel.visible = lastInteriorState;');
     }
+    // V800（本批不动）：仍走 setPaintShadow 内的差量写。
+    const v800 = src('src/model/V800Adapter.ts');
+    expect(v800).toContain('if (steeringMesh) steeringMesh.visible = interior;');
+    expect(v800).toContain('wheel.visible = lastInteriorState;');
+    // R7（W1）：方向盘显隐收敛进 applyVisibility 每帧全量覆盖 —— cabin 显高精盘、
+    // 近距门控(steerNear)覆盖切程序化盘。语义等价「仅 cabin 态可见」并多一层门控，
+    // 故钉新结构（不再是 lastInteriorState 差量）。
+    const r7 = src('src/model/R7Adapter.ts');
+    expect(r7).toContain('if (steeringMesh) steeringMesh.visible = interior && !steerNear;');
+    expect(r7).toContain('for (const m of proceduralSteeringMeshes) m.visible = interior && steerNear;');
   });
 });
 
 describe('R47 · 方块内饰外景隐藏 + R7 尾灯台账', () => {
-  it('两台适配器都有独立 Set 的方块隐藏，且调用顺序在 poke 之后', () => {
-    for (const f of ['src/model/V800Adapter.ts', 'src/model/R7Adapter.ts']) {
-      const s = src(f);
-      expect(s).toContain('const r47BlockHidden = new Set<THREE.Mesh>()');
-      expect(s).toContain("mesh.name !== 'welcome-carpet'");
-      expect(s.indexOf('setCabinBlocksHidden(!interior && r47CabinFix)')).toBeGreaterThan(
-        s.indexOf('setPokeHidden(!interior)')
-      );
-    }
+  it('两台适配器都隐藏方块内饰外景透出，R7 收敛进 applyVisibility 的 isBlock/isPoke 合取', () => {
+    // V800（本批不动）：独立 Set 差量登记 + 调用顺序在 poke 之后。
+    const v800 = src('src/model/V800Adapter.ts');
+    expect(v800).toContain('const r47BlockHidden = new Set<THREE.Mesh>()');
+    expect(v800).toContain("mesh.name !== 'welcome-carpet'");
+    expect(v800.indexOf('setCabinBlocksHidden(!interior && r47CabinFix)')).toBeGreaterThan(
+      v800.indexOf('setPokeHidden(!interior)')
+    );
+    // R7（W1）：删 r47BlockHidden / setCabinBlocksHidden / setPokeHidden 差量账本，改为
+    // buildVisibilityTable 打 isBlock / isPoke tag + applyVisibility 每帧合取覆盖。原断言
+    // 防的回归（方块内饰外景不透出 + poke 件外景不透顶）在 applyVisibility 里等价钉住：
+    //   · isPoke  ⇒ 外景藏车顶穿透件（v = v && interior）
+    //   · isBlock ⇒ 外景藏方块内饰（v = v && (interior || !r47CabinFix)），#r47cabin=off 不藏
+    //   · welcome-carpet 仍排除在方块之外（迎宾光毯由 exterior 静态 keep 单独管）
+    const r7 = src('src/model/R7Adapter.ts');
+    expect(r7).toContain('if (e.isPoke) v = v && interior;');
+    expect(r7).toContain('if (e.isBlock) v = v && (interior || !r47CabinFix);');
+    expect(r7).toContain("if (keepByName && mesh.name !== 'welcome-carpet') isBlock = true;");
+    // 旧差量账本 / 函数确已删除（防复活）
+    expect(r7).not.toContain('const r47BlockHidden = new Set<THREE.Mesh>()');
+    expect(r7).not.toContain('const setCabinBlocksHidden =');
+    expect(r7).not.toContain('const setPokeHidden =');
   });
 
   it('R7 尾灯语义件已从车牌板重产为横贯灯带（tri 1,136 → 14,333）', () => {

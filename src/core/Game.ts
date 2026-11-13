@@ -29,6 +29,9 @@ import type { CameraMode } from '../render/CameraRig';
 import { Postfx } from '../render/Postfx';
 import { createRenderer } from '../render/Renderer';
 import { createV800CarAdapter, type CarLike } from '../model/V800Adapter';
+// W1：R7 幂等可见性状态表的每帧输入。**type-only import** —— 编译期完全擦除（esbuild/Vite
+// 不产出任何运行时 import），不破坏下方 R7 chunk 的 `import()` 懒加载（V800 玩家不下载 R7）。
+import type { CarVisibilityState } from '../model/R7Adapter';
 import { Environment } from '../render/scene/Environment';
 import { ContactShadow } from '../render/scene/ContactShadow';
 
@@ -689,15 +692,14 @@ export class Game {
         const known = new Set<string>(['chase', 'hood', 'cabin', 'cabinDriver', 'cabinPassenger', 'cabinRear', 'orbit', 'side']);
         if (known.has(mode)) {
           // selectView 有 phase 门禁（仅 accel/brake），未开局会被拦 → QA 钩子直接
-          // 驱动 rig + 遮挡切换，与 frame 内 wantHide 同一条路径（含 setPaintShadow）。
+          // 驱动 rig + 遮挡切换。W1：遮挡切换改调统一入口 applyInteriorVisibility
+          // （R7 走幂等状态表全量覆盖，V800 走旧差量路径），删除此处的逐套手写副本
+          // （旧副本与 syncInteriorOcclusion 重复写 windshield/cabinOccluder/paintShadow，
+          // 是「QA 路径与游戏路径状态脱节」的隐患之一）。
           requestAnimationFrame(() => {
             this.rig.setMode(mode as CameraMode);
             this.hud.setActiveView(mode as CameraMode);
-            const hide = isInteriorMode(mode as CameraMode);
-            this.windshieldHidden = hide;
-            for (const wm of this.windshieldMeshes) wm.visible = !hide;
-            for (const om of this.cabinOccluderMaterials) om.visible = !hide;
-            this.paintShadow?.(hide);
+            this.applyInteriorVisibility(isInteriorMode(mode as CameraMode));
             console.info(`[QA] #view=${mode} 已切换`);
           });
         }
@@ -1334,20 +1336,42 @@ export class Game {
   }
 
   /**
-   * 车内机位遮挡切换（前挡 / 第一排座椅 / 车漆内舱暗面）：
-   * 仅在模式变化时写，零每帧开销。自由探索也能切到 cabin 系机位，故两模式共用。
+   * 车内机位遮挡切换（前挡 / 第一排座椅 / 车漆内舱暗面）：自由探索也能切到 cabin 系机位，
+   * 故两模式共用。
+   *
+   * W1（R7）：改为调适配器的 `applyVisibility` —— **每帧无条件全量覆盖**，删除旧的
+   * `windshieldHidden` 短路（`wantHide===this.windshieldHidden` 早退）。旧短路是雪崩根因：
+   * 模式未变即整体早退 ⇒ 任一系统短路/被抢先改写后无人自愈。R7 的 windshield /
+   * cabinOccluder / 内舱暗面 / poke / block / rearView 全收敛进适配器状态表，Game 不再
+   * 逐套写（单写者）。
+   * V800：无 `applyVisibility`（本批不动 / sha 冻结）⇒ 走旧差量路径，行为逐位不变。
    */
   private syncInteriorOcclusion(): void {
     // R71：高精度方向盘极近距门控 —— 每帧算相机到高精盘世界距离，过近切程序化盘（防黑帧）。
-    // 必须在下面的「模式未变即早退」之前调用：门控是连续距离态，不能只在机位切换那一刻算。
-    // GLB 未装载（加载失败 / #r68steerhires=off）时适配器内部空操作。
+    // 必须先于 applyInteriorVisibility 调用：R7 的 updateSteeringGate 会刷新 cameraInRearZone
+    // / steerNearCam，当帧即被 applyVisibility 消费。GLB 未装载时适配器内部空操作。
     this.car.updateSteeringGate?.(this.rig.camera);
-    const wantHide = isInteriorMode(this.rig.mode);
-    if (wantHide === this.windshieldHidden) return;
-    this.windshieldHidden = wantHide;
-    for (const m of this.windshieldMeshes) m.visible = !wantHide;
-    for (const m of this.cabinOccluderMaterials) m.visible = !wantHide;
-    this.paintShadow?.(wantHide);
+    this.applyInteriorVisibility(isInteriorMode(this.rig.mode));
+  }
+
+  /**
+   * 机位 → 可见性的统一入口（`syncInteriorOcclusion` + `#view=` QA 钩子共用，W1 收敛）。
+   * R7（有 `applyVisibility`）：每帧无条件调，幂等状态表全量覆盖。
+   * V800：旧差量路径（windshieldHidden 短路保留 ⇒ V800 行为逐位不变）。
+   */
+  private applyInteriorVisibility(interior: boolean): void {
+    const applyVis = (
+      this.car as CarLike & { applyVisibility?: (s: CarVisibilityState) => void }
+    ).applyVisibility;
+    if (applyVis) {
+      applyVis({ interior }); // R7：无条件、无短路
+      return;
+    }
+    if (interior === this.windshieldHidden) return; // V800 旧短路（本批不动）
+    this.windshieldHidden = interior;
+    for (const m of this.windshieldMeshes) m.visible = !interior;
+    for (const m of this.cabinOccluderMaterials) m.visible = !interior;
+    this.paintShadow?.(interior);
   }
 
   /**

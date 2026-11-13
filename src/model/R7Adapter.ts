@@ -49,6 +49,20 @@ import { damp } from '../util/math';
 
 export type { CarLike, WheelPivot };
 
+/**
+ * W1 · 幂等可见性状态表的每帧输入（Game 汇总后传给 `applyVisibility`）。
+ *
+ * Game 只拥有 `interior`（由 `rig.mode` 派生）；其余门控（exteriorShellReady /
+ * inRearZone / steerNearCam / roofCull）依赖适配器私有句柄（shellHandle / body 局部系 /
+ * 高精盘世界距离），Game 拿不到 ⇒ 由适配器在 applyVisibility 内自算（updateSteeringGate
+ * 已在 apply 前刷新 cameraInRearZone / steerNearCam）。核心铁律是「每帧全量重算 + 无条件
+ * 覆盖」，故 state 只需携带 Game 独有的那一维。
+ */
+export interface CarVisibilityState {
+  /** 是否车内机位（cabinDriver / cabinPassenger / cabinRear） */
+  interior: boolean;
+}
+
 /** 车头朝向基准偏航（工厂 +Z → 世界 -Z）。root 不转，只转 body。 */
 export const R7_BASE_YAW = Math.PI;
 
@@ -1281,28 +1295,10 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
     }
     headlinerMesh = (byId.get('headliner') as THREE.Mesh | undefined) ?? null;
   }
-  /** 相机是否在后排区（cabinRear）——由 updateSteeringGate 每帧按 body 局部 z 更新 */
+  /** 相机是否在后排区（cabinRear）——由 updateSteeringGate 每帧按 body 局部 z 无条件刷新，
+   *  applyVisibility 每帧读它做 seat-rear / A 柱 / 顶棚的**双向**覆盖（W1 收敛旧系统⑥，
+   *  改掉「进 rear 写 false 离开不写回」的非对称旧账）。 */
   let cameraInRearZone = false;
-  /**
-   * cabinRear 后排视角可见性覆盖（幂等，每帧/每机位切换调用）。
-   * @param interior 当前是否车内机位（setPaintShadow 传入）
-   * @param inRear   相机是否在后排区（updateSteeringGate 传入）
-   */
-  const applyRearViewOverrides = (interior: boolean, inRear: boolean): void => {
-    const rear = R71_REAR_VIEW && interior && inRear;
-    // ② cabinRear 要看后排长凳 + A 柱：seat-rear 独占材质/网格显；A 柱克隆材质显。
-    //    主驾/副驾（rear=false）seat-rear 由 leather-ivory 材质级隐藏；
-    //    A 柱由 Game 遍历 cabinOccluderMats 写 material.visible=false，此处按 rear 覆盖。
-    if (rearSeatMat) rearSeatMat.visible = rear;
-    for (const mesh of rearSeatMeshes) mesh.visible = rear;
-    if (apillarClone) apillarClone.visible = rear;
-    // ③ cabinRear 藏程序化顶棚（消除头顶米白平板）。只在进后排区时写 false，离开不写
-    //    true —— 交还原主（外景 setExteriorHidden 按 sculpt id keep / cabin 态本就可见），
-    //    避免与 setExteriorHidden 的恢复逻辑打架。
-    if (headlinerMesh && R71_REAR_ROOF && rear) {
-      headlinerMesh.visible = false;
-    }
-  };
 
   // ---- R27：内饰件整体抬升（治 body-lower 壳顶「腰带台面」吞掉方向盘/仪表台）----
   // 病根（.qa/r27_pick.mjs 逐三角射线 + 侧视轮廓实测）：body-lower 是连续侧视轮廓
@@ -1524,10 +1520,10 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
   let steeringMesh: THREE.Mesh | null = null;
   /** R47：高精度盘装配成功后要恒隐藏的程序化盘（防双盘重叠 / z-fighting） */
   const proceduralSteeringMeshes: THREE.Mesh[] = [];
-  /** R71：距离门控当前态 —— true = 相机过近，隐藏高精盘、显示程序化盘 */
+  /** R71：距离门控当前态 —— true = 相机过近，隐藏高精盘、显示程序化盘（applyVisibility 每帧消费） */
   let steerNearCam = false;
-  let proceduralExteriorHidden = false;
-  let lastInteriorState = false;
+  // W1 删除旧账本：`proceduralExteriorHidden` / `lastInteriorState` —— 改由 applyVisibility
+  // 每帧从 state + shellHandle 现算，不再持「上次态」差量（差量登记是雪崩根因）。
   /** spinWheels 弧长→角度换算半径；外部壳装载成功后取 manifest.wheelRadius */
   let wheelSpinRadius = WHEEL_RADIUS;
 
@@ -1572,76 +1568,227 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
     roofCullActiveAt = clipWorldY;
   };
 
-  const setPaintShadow = (interior: boolean): void => {
-    lastInteriorState = interior;
-    /* R47 开关（提到函数顶：setPokeHidden 之后还要给方块内饰 / 方向盘用）。
-     * `#r47cabin=off` ⇒ 逐位回滚 R44/R46 原状（整壳隐藏 + 玻璃 0.55 + 内饰全留）。 */
-    const r47CabinFix = !/(?:^|[#&])r47cabin=off/i.test(
-      typeof window === 'undefined' ? '' : window.location.hash
-    );
-    // R44：外部壳 body（含玻璃）随内舱态整体显隐（轮挂 spin 枢轴下，保持旋转）
-    if (shellHandle) {
-      /* R47：「高精度车内视角外模材质消失」修复 —— 不再整壳隐藏。
-       * 外部壳材质 FrontSide，从车内看车壳外表面被背面剔除 ⇒ 天然不遮挡座舱视线；
-       * 保留可见才能让高精度外模（翼子板 / 引擎盖 / 门板外沿）继续存在。
-       * glass(DoubleSide) / lamp 语义件仍按原语义随 cabin 态隐藏（紧跟其后的循环）。
-       * 回滚：`#r47cabin=off` ⇒ 逐位恢复 R44/R46「整壳隐藏 + 玻璃 0.55」原状。 */
-      shellHandle.bodyMesh.visible = r47CabinFix || !interior;
-      // R47：「普通内饰方块透车外」修复 —— 外景态隐私玻璃完全不透明，直接遮住
-      // 程序化低模方块内饰；只改 opacity（transparent 恒 true）⇒ 零 program 重编译。
-      shellHandle.setGlassOpaque(!interior && r47CabinFix);
-      // R47：cabin 态让高精度外模内壁可见（用户点名「车内视角外模材质消失」）。
-      // FrontSide 从车内会被背面剔除 ⇒ 整壳看似消失、座舱直接透出道路/城堡；
-      // DoubleSide 让车顶 / 门板 / A 柱内壁参与渲染，形成完整座舱包裹。
-      // 只在机位切换时改一次（needsUpdate 触发 program 重编译，非每帧）；
-      // `#r47cabin=off` 逐位回滚 FrontSide。body 与 4 轮共享同一材质实例（不新增实例）。
-      {
-        const bm = shellHandle.bodyMesh.material as THREE.MeshPhysicalMaterial;
-        const wantSide = (interior && r47CabinFix) ? THREE.DoubleSide : THREE.FrontSide;
-        if (bm.side !== wantSide) { bm.side = wantSide; bm.needsUpdate = true; }
+  /* ══════════════ W1 · 幂等可见性状态表（收敛旧 ①②③④⑤⑥ 六套显隐系统）══════════════
+   * 病根（见文件头 R71/R72 注 + 《致主理人_车内视角穿帮结构性结论》§3.2）：R7 的显隐
+   * 分散在 6 套系统、交叉写同一属性（mesh.visible 多套写、material.visible 3 套写），
+   * 全是「差量登记 + 条件恢复」、无每帧无条件重算 ⇒ 任一系统短路/被抢先改写即状态脱节、
+   * 无仲裁者（真机：全车贴图失效 + 上半部消失 + 座椅时有时无 + 切机位雪崩）。
+   *
+   * 修法：装配期一次性遍历 root 打静态 tag 建「一张状态表」，运行时每帧 applyVisibility
+   * 全量重算 + **无条件覆盖**（不读旧值、不进 Set、不做 if(skip)）。表分两层：
+   *   · 材质级（覆盖合批）：按材质实例登记（合批批次共享一实例 ⇒ 一表项管整批），
+   *     管 material.visible；apillar / rearSeat 克隆按实例单独钉住 cabinRear 双向覆盖。
+   *   · 网格级：按 mesh 引用登记，管 mesh.visible + 暗面用哪支材质克隆。
+   * mesh 最终可见性 = 各系统语义的**合取/优先级**（先材质级、后网格级），非顺序覆盖。
+   *
+   * 覆盖旧系统：① windshield / cabinOccluder / paintShadow（原 Game.syncInteriorOcclusion
+   *   + QA 副本，改由 Game 调 applyVisibility，删 windshieldHidden 短路）②setPaintShadow
+   *   ③setExteriorHidden ④setPokeHidden ⑤cabinOccluderMats ⑥applyRearViewOverrides
+   *   （非对称「进 rear 写 false 离开不写回」改按 inRearZone **双向无条件写**）。
+   * 删旧账本/短路：lastInteriorState / proceduralExteriorHidden / r44HiddenMaterials /
+   *   r44HiddenMeshes / r44PokeShown / r47BlockHidden / windshieldHidden(Game) /
+   *   QA 副本(Game)。
+   * side 重编译：material.side 切换触发 program 重编译 ⇒ apply 内对 side 保留「值变才
+   *   needsUpdate」（与 visible 的无条件写不同，勿一刀切，否则每帧重编译掉帧）。
+   * 暗面材质引用：paintShadowPair 存 exterior/interior **克隆引用**（存「用哪支」而非
+   *   布尔标量），车内换暗面克隆、车外换回原漆（治 R19 亮铜板回归）。
+   * 验收基线 = R73：seat-driver 由 cabinOccluderMats 材质级隐藏、不豁免（勿重回 R72 主驾
+   *   座椅穿帮）；seat-rear / apillar 仅 cabinRear 豁免（双向）。 */
+
+  /** `#r47cabin=off` ⇒ 逐位回滚 R44/R46 原状（整壳隐藏 + 玻璃 0.55 + 内饰全留）。
+   *  提到适配器作用域（原在 setPaintShadow 内）：applyVisibility / 建表共用。 */
+  const r47CabinFix = !/(?:^|[#&])r47cabin=off/i.test(
+    typeof window === 'undefined' ? '' : window.location.hash
+  );
+
+  /** 材质级表项（覆盖合批：合批批次共享一材质实例 ⇒ 一表项管整批）。 */
+  interface MatEntry {
+    /** 不限 MeshPhysical：轮拱内衬(MeshStandard)/车牌等非 physical 材质也要能登记统一管 visible。 */
+    mat: THREE.Material;
+    /** R73：seat-rear 独占克隆（cabinHidable:false）——仅 cabinRear 双向显。 */
+    rearSeat: boolean;
+    /** R24：A 柱内衬克隆（cabinOccluderMats 之一）——cabin 隐藏但 cabinRear 豁免。 */
+    apillar: boolean;
+    /** 座舱遮挡克隆（cabinOccluderMats）——cabin 隐藏、车外显。 */
+    cabinHidable: boolean;
+    /** setExteriorHidden keep（id 白名单）⇒ 车外仍显（透出座舱）；非 keep ⇒ shell ready 后永久隐藏。 */
+    kept: boolean;
+  }
+  /** 网格级表项（管 mesh.visible + 暗面用哪支材质克隆）。 */
+  interface MeshEntry {
+    mesh: THREE.Mesh;
+    /** 任一材质有 sculpt id 或 cabinHidable ⇒ setExteriorHidden 不按 id-less 规则藏。 */
+    hasId: boolean;
+    /** 名字 ∈ R44_KEEP_MESH_NAMES ⇒ setExteriorHidden keep。 */
+    keepByName: boolean;
+    /** 材质级 cabinHidable 管（apillar / 座舱遮挡）⇒ mesh 恒可见、apply 不写 mesh.visible。 */
+    cabinHidable: boolean;
+    /** ④ 车顶穿透件（y > roofGlassY）——cabin 显、外景藏。 */
+    isPoke: boolean;
+    /** cabin 方块内饰（id 白名单 / keepByName≠welcome-carpet）——外景藏（#r47cabin=off 不藏）。 */
+    isBlock: boolean;
+    /** ① 风挡（glass-clear）——cabin 藏。 */
+    windshield: boolean;
+    /** ② 内舱暗面 exterior/interior **克隆引用**（存「用哪支」，非布尔标量）。 */
+    pair: { exterior: THREE.Material; interior: THREE.Material } | null;
+    /** ⑥ cabinRear：seat-rear 长凳（仅 cabinRear 显）/ headliner 顶棚（cabinRear 藏）。 */
+    rearView: 'seat' | 'headliner' | null;
+  }
+
+  /** 状态表（buildVisibilityTable 填充；此前为空 ⇒ applyVisibility 对表空转，安全）。 */
+  const matEntries: MatEntry[] = [];
+  const meshEntries: MeshEntry[] = [];
+
+  /**
+   * 装配期一次性建表 + 打静态 tag。在 shell body/glass/lamp 挂载后、**轮拱内衬 / 高精盘
+   * 加载前**调用 ⇒ 内衬 / 高精盘不入表（保持恒可见 / 由 steering 专属逻辑管，与 R73 一致；
+   * 也因此无需为内衬特设白名单——它根本不进表、applyVisibility 不碰它）。
+   * @param roofGlassY 车顶玻璃线 y（④ poke 阈值，外景藏「穿顶内饰」）
+   */
+  const buildVisibilityTable = (roofGlassY: number): void => {
+    matEntries.length = 0;
+    meshEntries.length = 0;
+    const pairByMesh = new Map<THREE.Mesh, { exterior: THREE.Material; interior: THREE.Material }>();
+    for (const p of paintShadowPairs) pairByMesh.set(p.mesh, { exterior: p.exterior, interior: p.interior });
+    const rearSeatMeshSet = new Set<THREE.Mesh>(rearSeatMeshes);
+    const matSeen = new Set<THREE.Material>();
+    root.updateWorldMatrix(true, true);
+    root.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      if ((mesh.userData as { r44External?: boolean }).r44External === true) return; // 外部壳本体
+      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      // —— 材质级登记（按实例去重；合批批次共享实例 ⇒ 自动覆盖整批）——
+      for (const mt of mats) {
+        if (!mt) continue;
+        if (matSeen.has(mt)) continue;
+        matSeen.add(mt);
+        const ud = mt.userData as { sculptMaterial?: { id?: string }; cabinHidable?: boolean };
+        const id = ud?.sculptMaterial?.id ?? null;
+        matEntries.push({
+          mat: mt,
+          rearSeat: mt === rearSeatMat,
+          apillar: mt === apillarClone,
+          cabinHidable: ud?.cabinHidable === true,
+          kept: id != null && R44_INTERIOR_MATERIAL_IDS.has(id),
+        });
       }
-      // R50：cabin 态剔除车顶内壁（world y>阈值的三角退化化），消除对前向风挡视线的
-      // 遮挡；外部机位恢复完整 index（逐位不变）。见 R50 注。
-      // R71 修③：阈值按机位取 —— cabinRear 用更高 R7_REAR_ROOF_CLIP_WORLD_Y(1.42)，
-      // 连风挡上梁 header 一起剔（消除后排头顶白平板）；其余机位沿用 R50_ROOF_CLIP_WORLD_Y(1.30)。
-      // `#r50roof=off` 时 applyRoofCull 直通（roofCullFull=null）⇒ 回 R47 base 态。
-      applyRoofCull(
-        interior && r47CabinFix,
-        (interior && cameraInRearZone && R71_REAR_ROOF) ? R7_REAR_ROOF_CLIP_WORLD_Y : R50_ROOF_CLIP_WORLD_Y,
-      );
-      // R44-6：glass/lamp 语义件与外壳同显隐
+      // —— 网格级 tag ——
+      const keepByName = R44_KEEP_MESH_NAMES.has(mesh.name);
+      let hasId = false;
+      let cabinHidableMesh = false;
+      let isBlock = false;
+      let windshield = false;
+      for (const mt of mats) {
+        if (!mt) continue;
+        const ud = mt.userData as { sculptMaterial?: { id?: string }; cabinHidable?: boolean };
+        const id = ud?.sculptMaterial?.id ?? null;
+        if (ud?.cabinHidable === true) { hasId = true; cabinHidableMesh = true; }
+        if (id != null) {
+          hasId = true;
+          if (R44_INTERIOR_MATERIAL_IDS.has(id)) isBlock = true;
+          if (id === 'glass-clear') windshield = true;
+        }
+      }
+      // welcome-carpet 是车外迎宾光毯（③ setExteriorHidden 单独 keep），不是座舱方块
+      if (keepByName && mesh.name !== 'welcome-carpet') isBlock = true;
+      // ④ poke：白名单 / keepByName（且非 cabinHidable）且 bbox 顶 > roofGlassY
+      const whitelistedForPoke =
+        keepByName ||
+        mats.some((mt) => {
+          const ud = mt?.userData as { sculptMaterial?: { id?: string }; cabinHidable?: boolean } | undefined;
+          if (ud?.cabinHidable) return false;
+          const id = ud?.sculptMaterial?.id;
+          return id != null && R44_INTERIOR_MATERIAL_IDS.has(id);
+        });
+      let isPoke = false;
+      if (whitelistedForPoke) {
+        const box = new THREE.Box3().setFromObject(mesh);
+        if (box.max.y > roofGlassY) isPoke = true;
+      }
+      meshEntries.push({
+        mesh,
+        hasId,
+        keepByName,
+        cabinHidable: cabinHidableMesh,
+        isPoke,
+        isBlock,
+        windshield,
+        pair: pairByMesh.get(mesh) ?? null,
+        rearView: rearSeatMeshSet.has(mesh) ? 'seat' : mesh === headlinerMesh ? 'headliner' : null,
+      });
+    });
+    console.info(
+      `[R7Adapter] W1 可见性状态表：材质 ${matEntries.length} / 网格 ${meshEntries.length} 项` +
+        `（poke 阈值 y>${roofGlassY.toFixed(2)}）`
+    );
+  };
+
+  /**
+   * 每帧全量重算 + 无条件覆盖（R7 显隐**唯一仲裁者**）。Game 每帧传 `interior`（rig.mode
+   * 派生）；相机 / 句柄派生门控（inRearZone / steerNearCam / exteriorShellReady / roofCull）
+   * 由适配器自算（依赖私有 shellHandle / body 局部系 / 盘世界距离，Game 拿不到）——
+   * updateSteeringGate 已在 applyVisibility 前刷新 cameraInRearZone / steerNearCam。
+   * 核心铁律：对每表项直接 `visible = computed`，**不读旧值、不进 Set、不做 if(skip)**。
+   * 顺序固定：先材质级、后网格级；mesh 最终可见性算成各系统语义的合取 / 优先级。
+   */
+  const applyVisibility = (state: CarVisibilityState): void => {
+    const interior = state.interior;
+    const exteriorShellReady = shellHandle != null;
+    const inRearZone = interior && cameraInRearZone; // cameraInRearZone 已含 R71_REAR_VIEW 门控
+    const steerNear = R71_STEER_GATE && steerNearCam;
+
+    model.visible = true; // ②：外部壳在场时程序化树整体保留（透明玻璃透出座舱 = 官图观感）
+
+    // —— pass 1 · 材质级（先）：material.visible 全量覆盖 ——
+    for (const e of matEntries) {
+      if (e.rearSeat) e.mat.visible = interior && inRearZone;       // ⑥ seat-rear：仅 cabinRear（双向）
+      else if (e.apillar) e.mat.visible = !interior || inRearZone;   // ⑥ A 柱：cabin 隐藏但 cabinRear 豁免（双向）
+      else if (e.cabinHidable) e.mat.visible = !interior;           // ①⑤ 座舱遮挡：cabin 隐藏、车外显
+      else e.mat.visible = e.kept || !exteriorShellReady;           // ③ 非白名单 ⇒ shell ready 后永久隐藏
+    }
+
+    // —— pass 2 · 网格级（后）：mesh.visible + 暗面材质引用 全量覆盖 ——
+    for (const e of meshEntries) {
+      if (e.cabinHidable) continue; // 材质级已管（apillar / 座舱遮挡），mesh 恒可见
+      // ③ id-less 且非 keep ⇒ shell ready 后永久隐藏（含程序化车牌；内衬 / 高精盘不入表）
+      if (!e.hasId && !e.keepByName) { e.mesh.visible = !exteriorShellReady; continue; }
+      let v = true;
+      if (e.isPoke) v = v && interior;                       // ④ poke：cabin 显、外景藏
+      if (e.isBlock) v = v && (interior || !r47CabinFix);    // cabin 方块：外景藏（#r47cabin=off 不藏）
+      if (e.windshield) v = v && !interior;                  // ① 风挡：cabin 藏
+      if (e.pair) {                                          // ② 内舱暗面：换材质 + 显隐
+        e.mesh.material = interior ? e.pair.interior : e.pair.exterior; // 存「用哪支克隆」
+        v = interior ? false : !exteriorShellReady;          // 外景：外部壳接手 ⇒ 程序化外壳隐藏
+      }
+      if (e.rearView === 'seat') v = interior && inRearZone;  // ⑥ 后排长凳：仅 cabinRear（双向）
+      if (e.rearView === 'headliner') v = v && !(R71_REAR_ROOF && interior && inRearZone); // ⑥ cabinRear 藏顶棚（双向）
+      e.mesh.visible = v;
+    }
+
+    // —— 外部壳专属（bodyMesh / glass / lamp / side / opacity / roofCull）——
+    if (shellHandle) {
+      // ②：R47 不再整壳隐藏（FrontSide 背面剔除天然不遮挡座舱视线）
+      shellHandle.bodyMesh.visible = r47CabinFix || !interior;
+      // ②：外景态隐私玻璃完全不透明（只改 opacity，零 program 重编译）
+      shellHandle.setGlassOpaque(!interior && r47CabinFix);
+      // ②：cabin 态 DoubleSide 让外模内壁可见（**值变才 needsUpdate**，非每帧重编译）
+      const bm = shellHandle.bodyMesh.material as THREE.MeshPhysicalMaterial;
+      const wantSide = interior && r47CabinFix ? THREE.DoubleSide : THREE.FrontSide;
+      if (bm.side !== wantSide) { bm.side = wantSide; bm.needsUpdate = true; }
+      // ②：glass/lamp 语义件与外壳同显隐
       for (const sm of [...shellHandle.glassMeshes, ...shellHandle.lampMeshes]) {
         sm.visible = !interior;
       }
-      // R44-6 修订（同 V800）：外景态恢复程序化内饰可见（透明玻璃透出座舱 =
-      // 官图观感）；不透明车身深度遮挡防内饰透金属；poke 由玻璃深 tint 把关。
-      model.visible = true;
+      // ② R50/R71：cabin 剔顶（cabinRear 用更高阈值连 header 一起剔；#r50roof=off 直通）
+      applyRoofCull(
+        interior && r47CabinFix,
+        interior && cameraInRearZone && R71_REAR_ROOF ? R7_REAR_ROOF_CLIP_WORLD_Y : R50_ROOF_CLIP_WORLD_Y,
+      );
     }
-    setPokeHidden(!interior); // R44：车顶穿透件外景藏、cabin 态恢复
-    // ⚠ 顺序不可倒置：poke 件先登记隐藏，本函数才不会重复登记（见上方长注）
-    setCabinBlocksHidden(!interior && r47CabinFix);
-    if (steeringMesh) steeringMesh.visible = interior;
-    // 高精度盘接管后恒隐藏程序化盘；放在最后，覆盖 setCabinBlocksHidden 的恢复
-    for (const m of proceduralSteeringMeshes) m.visible = false;
-    // R71：距离门控近距态覆盖上一行的 cabin 可见性（相机过近 ⇒ 隐高精盘、显程序化盘）
-    if (R71_STEER_GATE && steerNearCam) {
-      if (steeringMesh) steeringMesh.visible = false;
-      for (const m of proceduralSteeringMeshes) m.visible = interior;
-    }
-    for (const p of paintShadowPairs) {
-      if (interior) {
-        p.mesh.visible = false;
-        p.mesh.material = p.interior;
-      } else {
-        p.mesh.material = p.exterior;
-        // R44：外部壳在场时程序化外壳保持隐藏（外部壳接手外观）
-        p.mesh.visible = !proceduralExteriorHidden;
-      }
-    }
-    // R71 修②/③：cabinRear 后排视角可见性覆盖（座椅/A 柱豁免 + 藏顶棚）。放在最后，
-    // 覆盖上面 setCabinBlocksHidden / 材质级隐藏写入的态；每帧 updateSteeringGate 会再
-    // re-assert 一次（相机在后排区实时跟踪）。
-    applyRearViewOverrides(interior, cameraInRearZone);
+    // ② R47/R71：高精盘 cabin 显（近距门控覆盖）；程序化盘接管后恒隐藏、近距态恢复
+    if (steeringMesh) steeringMesh.visible = interior && !steerNear;
+    for (const m of proceduralSteeringMeshes) m.visible = interior && steerNear;
   };
 
   /* ══════════════ R44 外部壳（外观 GLB 资产化）══════════════
@@ -1653,124 +1800,13 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
     'pedal-metal', 'screen-ui', 'speaker-lattice', 'suede-ivory'
   ]);
   const R44_KEEP_MESH_NAMES = new Set<string>(['brake-pedal', 'cabin-floor-carpet', 'cabin-roof-carpet']);
-  /* R47：外景态隐藏「程序化方块内饰」（用户点名「高精度外膜普通内饰方块
-   * 模型透车外」）。R44 的 setExteriorHidden 白名单刻意保留内饰（透明玻璃时代
-   * 要『透出座舱』），但它们会从轮拱 / 门缝 / 风挡下沿以橙棕网格块穿出外壳
-   * （实拍 verify/r46/after/r47wheel_on_v800-white-wheel.png 轮拱上方橙色块，
-   *  且 r47wheel_on 与 r47wheel_off 两态均在 ⇒ 与轮旋转无关）。
-   * 用独立 Set 管理，与 setExteriorHidden 的 r44HiddenMeshes（只碰 keep=false 的
-   * 外观件）不相交；且**必须在 setPokeHidden 之后调用**：poke 件先被隐藏，
-   * 本函数见 mesh.visible=false 便不会重复登记 ⇒ 两套恢复逻辑零冲突。
-   * cabin 态（interior=true）全部恢复 ⇒ 座舱内饰完整。
-   * 回滚：#r47cabin=off ⇒ 本函数不隐藏，逐位恢复 R44/R46 原状。 */
-  const r47BlockHidden = new Set<THREE.Mesh>();
-  const setCabinBlocksHidden = (hidden: boolean): void => {
-    root.traverse((o) => {
-      const mesh = o as THREE.Mesh;
-      if (!mesh.isMesh) return;
-      if ((mesh.userData as { r44External?: boolean }).r44External === true) return;
-      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-      // welcome-carpet 是车外迎宾光毯（由 setPaintShadow 单独管），不是座舱方块
-      const keepByName = R44_KEEP_MESH_NAMES.has(mesh.name) && mesh.name !== 'welcome-carpet';
-      let isBlock = keepByName;
-      for (const mt of mats) {
-        if (!mt) continue;
-        const ud = mt.userData as { sculptMaterial?: { id?: string }; cabinHidable?: boolean };
-        if (ud?.cabinHidable === true) continue; // 座舱遮挡克隆归 Game 的 cabinOccluder 管
-        const id = ud?.sculptMaterial?.id;
-        if (id != null && R44_INTERIOR_MATERIAL_IDS.has(id)) isBlock = true;
-      }
-      if (!isBlock) return;
-      if (hidden) {
-        if (mesh.visible) { mesh.visible = false; r47BlockHidden.add(mesh); }
-      } else if (r47BlockHidden.has(mesh)) {
-        mesh.visible = true;
-        r47BlockHidden.delete(mesh);
-      }
-    });
-  };
-  const r44HiddenMaterials = new Set<THREE.Material>();
-  const r44HiddenMeshes = new Set<THREE.Mesh>();
-  const setExteriorHidden = (hidden: boolean): void => {
-    root.traverse((o) => {
-      const mesh = o as THREE.Mesh;
-      if (!mesh.isMesh) return;
-      if ((mesh.userData as { r44External?: boolean }).r44External === true) return; // 外部壳本体
-      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-      const keepByName = R44_KEEP_MESH_NAMES.has(mesh.name);
-      let hasId = false;
-      for (const mt of mats) {
-        if (!mt) continue;
-        const ud = mt.userData as { sculptMaterial?: { id?: string }; cabinHidable?: boolean };
-        if (ud?.cabinHidable === true) {
-          hasId = true;
-          continue;
-        }
-        const id = ud?.sculptMaterial?.id;
-        if (id) hasId = true;
-        const keep = keepByName || (id != null && R44_INTERIOR_MATERIAL_IDS.has(id));
-        if (hidden && !keep) {
-          if (mt.visible) {
-            mt.visible = false;
-            r44HiddenMaterials.add(mt);
-          }
-        } else if (!hidden && r44HiddenMaterials.has(mt)) {
-          mt.visible = true;
-          r44HiddenMaterials.delete(mt);
-        }
-      }
-      if (!hasId && !keepByName) {
-        if (hidden) {
-          if (mesh.visible) {
-            mesh.visible = false;
-            r44HiddenMeshes.add(mesh);
-          }
-        } else if (r44HiddenMeshes.has(mesh)) {
-          mesh.visible = true;
-          r44HiddenMeshes.delete(mesh);
-        }
-      }
-    });
-    proceduralExteriorHidden = hidden;
-  };
-
-  /* R44 二次打回项 2：车顶黑色悬空物定罪 = 程序化内饰顶棚堆叠（headliner 批次
-   * y1.7 / starlight 1.68 / cabin-roof-carpet 1.668 / curtain 1.7 / pillar-trim 1.75）
-   * 穿透外壳车顶轮廓。这些件座舱视角必需、外景必须藏 ⇒ 按「外壳顶玻璃线」阈值
-   * 挑出 pokeList，随 setPaintShadow 的内外舱态切换显隐（cabin 态恢复完整内饰）。 */
-  const r44PokeMeshes: THREE.Mesh[] = [];
-  const r44PokeShown = new Set<THREE.Mesh>();
-  const buildPokeList = (roofGlassY: number): void => {
-    r44PokeMeshes.length = 0;
-    const box = new THREE.Box3();
-    root.updateWorldMatrix(true, true);
-    root.traverse((o) => {
-      const mesh = o as THREE.Mesh;
-      if (!mesh.isMesh) return;
-      if ((mesh.userData as { r44External?: boolean }).r44External === true) return;
-      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-      const whitelisted = mats.some((mt) => {
-        const ud = mt?.userData as { sculptMaterial?: { id?: string }; cabinHidable?: boolean } | undefined;
-        if (ud?.cabinHidable) return false;
-        const id = ud?.sculptMaterial?.id;
-        return id != null && R44_INTERIOR_MATERIAL_IDS.has(id);
-      });
-      if (!whitelisted && !R44_KEEP_MESH_NAMES.has(mesh.name)) return;
-      box.setFromObject(mesh);
-      if (box.max.y > roofGlassY) r44PokeMeshes.push(mesh);
-    });
-    console.info(`[R7Adapter] R44 车顶穿透件：${r44PokeMeshes.length} 个（阈值 y>${roofGlassY.toFixed(2)}）`);
-  };
-  const setPokeHidden = (hidden: boolean): void => {
-    for (const mesh of r44PokeMeshes) {
-      if (hidden) {
-        if (mesh.visible) { mesh.visible = false; r44PokeShown.add(mesh); }
-      } else if (r44PokeShown.has(mesh)) {
-        mesh.visible = true;
-        r44PokeShown.delete(mesh);
-      }
-    }
-  };
+  /* W1：旧「程序化方块内饰外景隐藏」（r47BlockHidden / setCabinBlocksHidden）、
+   * 「程序化外观隐藏」（r44HiddenMaterials / r44HiddenMeshes / setExteriorHidden /
+   * proceduralExteriorHidden）、「车顶穿透件」（r44PokeMeshes / r44PokeShown /
+   * buildPokeList / setPokeHidden）全部删除——职责收敛进 W1 幂等状态表
+   * （buildVisibilityTable 打 isBlock / hasId / keepByName / isPoke tag + applyVisibility
+   * 每帧全量覆盖）。旧实现是「差量登记（进 Set）+ 条件恢复（has→delete）」，多套交叉写
+   * 同一属性且依赖调用顺序（poke 必须先于 block），是切机位状态雪崩的根因之一。 */
 
   void (async () => {
     try {
@@ -1809,12 +1845,14 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
         console.warn('[R7Adapter] R50 车顶剔除不可用（index 非 Uint32 / 缺失），跳过');
       }
     }
-    // 先隐藏程序化外观再挂轮：挂轮环节任何异常都不能把「程序化外观残留」留在画面上
-    // （R44 打回项 1：R7 曾因挂轮异常跳过隐藏 ⇒ glass-dark/matte-black 逃逸可见）
-    setExteriorHidden(true);
-    setPaintShadow(lastInteriorState);
-    buildPokeList(shell.manifest.bodyBBox.max[1] * shell.manifest.scale * 0.90);
-    setPokeHidden(!lastInteriorState);
+    // W1：建幂等可见性状态表 + 首次 apply。时机 = shell body/glass/lamp 已挂（已打
+    // r44External ⇒ 建表自动跳过）、**轮拱内衬 / 高精盘加载前** ⇒ 二者不入表（内衬恒可见、
+    // 高精盘由 steering 专属逻辑管，与 R73 一致）。一次性建表取代旧手排
+    // ③setExteriorHidden → ②setPaintShadow → ④buildPokeList → ④setPokeHidden 顺序——
+    // 那套顺序耦合正是雪崩根因；现在每帧 applyVisibility 全量覆盖，无需手排。
+    // 首次 apply 用 exterior（interior=false）= 装配默认外景态；Game 首帧即接管逐帧覆盖。
+    buildVisibilityTable(shell.manifest.bodyBBox.max[1] * shell.manifest.scale * 0.90);
+    applyVisibility({ interior: false });
     /* R49-A2：阴影投影代理 —— R7 高模壳（body 882,300 + 4 轮 507,655 = 1,389,955 tri）
      * 已退出 shadow pass，改由程序化树里 R29 阴影白名单保留的车体壳 + 4 轮
      * （`SHADOW_CASTER_MATERIAL_IDS` / wheelKeep，见本文件上方同名块）复制代理承担。
@@ -1848,7 +1886,9 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
         if (/方向盘|steering/i.test(m.name)) proceduralSteeringMeshes.push(m);
       });
       steeringMesh = wheel;
-      wheel.visible = lastInteriorState; // 外景态隐藏 ⇒ 不透车外、零 DC
+      // W1：初值 exterior（隐藏，不透车外 / 零 DC）；此后每帧 applyVisibility 全量覆盖
+      // （cabin 显高精盘、近距门控切程序化盘），不再读「上次内舱态」差量。
+      wheel.visible = false;
       for (const m of proceduralSteeringMeshes) m.visible = false;
     })();
     const hubTags = ['fl', 'fr', 'rl', 'rr'] as const;
@@ -1941,39 +1981,42 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
   })();
 
   /* R71 · 距离门控核心（滞回，与 V800Adapter 同构）：近于 NEAR 切程序化盘、远于 FAR
-   * 恢复高精盘，中间保持上次态。只在态翻转时改 visible；GLB 未装载 / 门控关闭则空操作。 */
+   * 恢复高精盘，中间保持上次态。W1：本函数只更新 steerNearCam 门控态，**不再直接写
+   * visible** —— 高精盘 / 程序化盘的 mesh.visible 统一交 applyVisibility 每帧全量覆盖
+   * （消除旧「applySteerGate 写一次 + setPaintShadow 写一次」双写竞态）。GLB 未装载 /
+   * 门控关闭则空操作。 */
   const applySteerGate = (dist: number): void => {
     if (!R71_STEER_GATE || !steeringMesh) return;
     const next = steerNearCam ? dist < STEER_GATE_FAR_M : dist < STEER_GATE_NEAR_M;
     if (next === steerNearCam) return;
-    steerNearCam = next;
-    const interior = lastInteriorState;
-    steeringMesh.visible = interior && !next;
-    for (const m of proceduralSteeringMeshes) m.visible = interior && next;
+    steerNearCam = next; // visible 写交给 applyVisibility（每帧全量覆盖）
   };
 
-  const api: CarLike = {
+  // W1：不标 `: CarLike` —— R7 额外暴露 `applyVisibility`（CarLike 定义在 V800Adapter.ts，
+  // 本批 sha 冻结禁改，无法加可选成员）。去掉注解让 TS 推断含 applyVisibility 的 richer
+  // 类型，`return api` 仍按函数返回类型 CarLike 做结构检查（缺 CarLike 必需成员照样报错），
+  // 多出的 applyVisibility 对非新鲜字面量不触发 excess-property 检查。Game 侧用
+  // `CarLike & { applyVisibility? }` 交叉类型读取（与既有 interiorViews 读取同款）。
+  const api = {
     root,
     body,
     wheels,
     // R15：内饰三机位（装配局部坐标），由 Game → CameraRig.setInteriorViews 消费
     interiorViews: R7_INTERIOR_VIEWS,
     cabinOccluderMaterials: cabinOccluderMats,
-    setPaintShadow,
+    // W1：唯一显隐仲裁入口 —— Game 每帧无条件调（删旧 windshieldHidden 短路 + QA 副本）
+    applyVisibility,
     setSteeringCameraDistance: applySteerGate,
     updateSteeringGate(camera: THREE.Camera): void {
       /* R71：Game 每帧调用 —— 高精盘挂 body 下（有变换），须用世界位置算距离。 */
-      // R71 修②/③：先按 body 局部 z 判定相机是否在后排区（cabinRear）。放在 R71_STEER_GATE/
-      // steeringMesh 早退之前 —— GLB 未装载时也要跟踪，否则首帧 applyRearViewOverrides
-      // 拿到陈旧标记。Game 在 syncInteriorOcclusion（材质级遮挡 + setPaintShadow）之前
-      // 调本方法 ⇒ 这里刷新的 cameraInRearZone 当帧即被 setPaintShadow / 覆盖逻辑消费。
+      // W1：先按 body 局部 z 判定相机是否在后排区（cabinRear），**每帧无条件刷新**
+      // cameraInRearZone（不再 if-change 早退、不再就地调 applyRearViewOverrides）。
+      // 放在 R71_STEER_GATE / steeringMesh 早退之前 —— GLB 未装载时也要跟踪。
+      // Game 在 syncInteriorOcclusion → applyVisibility 之前调本方法 ⇒ 这里刷新的
+      // cameraInRearZone 当帧即被 applyVisibility 的 seat-rear / A 柱 / 顶棚覆盖消费。
       camera.getWorldPosition(STEER_GATE_TMP_VEC);
       const localCam = body.worldToLocal(STEER_GATE_TMP_VEC);
-      const rearNow = R71_REAR_VIEW && localCam.z < R7_REAR_ZONE_LOCAL_Z;
-      if (rearNow !== cameraInRearZone) {
-        cameraInRearZone = rearNow;
-        applyRearViewOverrides(lastInteriorState, cameraInRearZone);
-      }
+      cameraInRearZone = R71_REAR_VIEW && localCam.z < R7_REAR_ZONE_LOCAL_Z;
       if (!R71_STEER_GATE || !steeringMesh) return;
       steeringMesh.getWorldPosition(STEER_GATE_TMP_VEC_B);
       applySteerGate(STEER_GATE_TMP_VEC.distanceTo(STEER_GATE_TMP_VEC_B));
