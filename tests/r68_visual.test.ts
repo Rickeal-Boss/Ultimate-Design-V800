@@ -142,8 +142,8 @@ const R68_PENDING_TRACK_FILES = [
 
 /** 第 0 条：r67 护栏全文件冻结（CRLF 规范化后 UTF-8 sha256）。R71 更新基线：该护栏新增 R71 侧贴/盖板填充 shim 探针，属预期改动。 */
 const R67_GUARD_SHA256 = 'e4a350a82699bf2a4c8b93e18eff0e1295faaaa0b1646b623c13c38723ebc60f';
-/** V800Adapter.ts 全文件冻结（CRLF 规范化后 UTF-8 sha256）。R71 更新基线：新增高精方向盘相机距离门控（updateSteeringGate/setSteeringCameraDistance），属预期改动。 */
-const ADAPTER_SHA256 = '14ca4468890db98cf55bdd8082731796526ab7cb676d7439f06c519c3d6056ef';
+/** V800Adapter.ts 全文件冻结（CRLF 规范化后 UTF-8 sha256）。R71 更新基线：方向盘距离门控阈值收紧（STEER_GATE_NEAR_M 0.32→0.25 / FAR_M 0.4→0.3，主驾恒显高精盘），属预期改动。 */
+const ADAPTER_SHA256 = '1c3d2b86398b61d11902b0fe6a79bf12071d39ca3edbbe496213ccdc3e890a4b';
 /** off 态 / 原 atlas（HEAD=dc765a4）像素缓冲指纹 —— 供「默认 vs off」对照差分。 */
 const R68_C2_ATLAS_BASELINE_SHA256 = '1bb27545a399a7d7e14f56f778f9a309973298a508ca5e97a90ba76784183347';
 const R68_R7_BAND_SLICE_SHA256_BASELINE = '08ecfe355d212a1252665b381305df1e2b6cf1640cb055739ab4c8ec1814038c';

@@ -143,10 +143,12 @@ const GAUGE_MIN_INTERVAL = 1 / 15;
  *   俯仰侧倾）、near=0.05 ⇒ 相机移动时盘面扫过近平面 ⇒ 整帧闪烁/黑帧。
  * 门控：每帧算相机到高精盘世界距离，过近显示程序化盘、过远恢复高精盘（滞回防抖）。
  * 回滚钩子：`#r71steergate=off` ⇒ 关闭距离门控，恒显示高精盘（恢复默认关 GLB 的旧行为）。 */
-/** 相机到高精盘距离 < NEAR ⇒ 切程序化盘（留 0.08m 滞回带防近阈值处抖动） */
-const STEER_GATE_NEAR_M = 0.32;
-/** 相机到高精盘距离 > FAR ⇒ 恢复高精盘 */
-const STEER_GATE_FAR_M = 0.4;
+/** 相机到高精盘距离 < NEAR ⇒ 切程序化盘。R71 收紧：阈值压到盘半径(0.225)+余量 ≈0.25，
+ *   正常主驾眼点距盘 ≈0.55m 恒显示高精盘，仅相机真正贴脸(<盘缘)时才兜底切低模，
+ *   彻底消除上一轮 0.32 阈值在 0.55m 主驾视角附近穿阈值导致的高模↔低模跳变。 */
+const STEER_GATE_NEAR_M = 0.25;
+/** 相机到高精盘距离 > FAR ⇒ 恢复高精盘（0.05m 滞回带防近阈值处抖动） */
+const STEER_GATE_FAR_M = 0.3;
 /** `#r71steergate=off` ⇒ 恒显示高精盘（模块顶层求值一次，每帧只读布尔） */
 const R71_STEER_GATE: boolean =
   typeof window === 'undefined' || !/(?:^|[#&])r71steergate=off/i.test(window.location.hash);

@@ -168,9 +168,10 @@ export const C2_COVER_COLOR_R68 = 0x24242c;
 export const C2_LAMP_SHRINK_HEIGHT = 0.48;
 /** R69 竖灯宽度缩放：lampHalfW / stripHalfW × 0.40（世界 0.356m → 0.142m）。 */
 export const C2_LAMP_SHRINK_WIDTH = 0.40;
-/** R69 侧贴深度（GLB 局部 m）：沿 +z 覆盖 face→strip 的进深，掩住侧看金色竖条。
- *  R70 加厚 0.002→0.02（世界 ≈0.095m）：原值太薄 ⇒ 斜视角侧面读作光秃黑、纹理不可见。 */
-export const C2_LAMP_SIDE_DEPTH = 0.02;
+/** R71 重做：侧面竖灯沿 z 进深（GLB 局部 m），从 faceZ 向 +z 延伸。
+ *  上一轮 0.02（世界 ≈0.095m）力度严重不足 ⇒ 侧面仍是光秃黑柱；本波放大到 0.12
+ *  （世界 ≈0.57m）配合 y 半高 0.10，把侧壁 quad 撑成一块完整的「侧面竖灯大面」。 */
+export const C2_LAMP_SIDE_DEPTH = 0.12;
 
 /** 本地 hash 开关判据（与 ExternalShell.ts:78 r51HookOff 字节等价；node/SSR 无 window ⇒ false=ON）。 */
 function r69HookOff(key: string): boolean {
@@ -197,18 +198,26 @@ export const C2_COVER_ROUGHNESS_R68 = 0.78;
 /** atlas 内深色 surround 颜色（不透明、非渐变、零几何）。 */
 export const C2_ATLAS_SURROUND_COLOR = '#101016';
 
-/* ── R71 · C2 竖灯侧面外扩 + 盖板侧面黑填充 ──
- * 用户反馈：车尾侧面看竖灯应比正面读作更大，且盖板 ±x 端面斜视角有缝隙/漏洞。
- * ① 侧壁外扩：侧壁 quad 顶点 xOut 再外推 C2_LAMP_SIDE_OUTSET ⇒ 侧壁外缘比正面外缘
- *    更外凸（读作「侧面竖灯比正面大」）。法线 ±X 不变、UV 仍全幅 atlas、零 tri 增量。
- * ② 盖板侧面黑填充：盖板 ±x 端各加一个 quad（x=±coverHalfW、法线 ±X、z 从 coverZ
- *    向内 C2_COVER_FILL_DEPTH、coverYLo..coverYHi 全高），复用 coverMat 纯色零新材质，
- *    掩盖薄盒端面斜视角缝隙。+2 quad = +4 tri。
+/* ── R71 · C2 竖灯侧面大面重做 + 盖板侧面黑填充 ──
+ * 用户反馈（R71 二轮）：上一轮（commit 7497d34）只做毫米级改动（侧壁外扩 6mm、盖板填 2cm），
+ * 侧面仍是光秃黑柱 + 锯齿破面，力度严重不足。本波把**现有的薄侧壁 quad 撑成完整侧面竖灯大面**：
+ * ① 侧面竖灯大面：复用侧壁 quad（已 faceMat + atlas、法线 ±X），把它的 y 范围从跟随 R69
+ *    缩小后的 lampYLo..lampYHi（高 0.0648）改成固定 sideYLo..sideYHi（半高 C2_LAMP_SIDE_HALF_H
+ *    = 0.10 ⇒ 高 0.20，**比正面大**），沿 z 从 faceZ 向 +z 延伸 C2_LAMP_SIDE_DEPTH = 0.12，
+ *    UV remap 到 atlas 半幅（凤凰点阵完整居中）。x 外缘仍外推 C2_LAMP_SIDE_OUTSET（外凸）。
+ *    **零 tri 增量**（仍是左右各 1 quad，face 8 tri 不变）——这是与上一轮的本质区别：
+ *    不是把 quad 微微外推，而是把同一块 quad 的尺寸撑到能覆盖整段黑柱。
+ * ② 盖板侧面黑填充：盖板 ±x 端各一个 quad（x=±coverHalfW、法线 ±X、z 从 coverZ 向内
+ *    C2_COVER_FILL_DEPTH、coverYLo..coverYHi 全高），复用 coverMat。本波进深 2cm→6cm（≥0.05）
+ *    真正遮住端面斜视角缝隙。+2 quad = +4 tri。
  * 两处各自 `#r71c2side=off` / `#r71c2coverfill=off` ⇒ 逐位回 R70。 */
 /** R71 侧壁外扩量（GLB 局部 m）：侧壁外缘比正面外缘更外凸。 */
 export const C2_LAMP_SIDE_OUTSET = 0.006;
-/** R71 盖板侧面填充深度（GLB 局部 m）：沿 +z 从 coverZ 向内，掩端面缝隙。 */
-export const C2_COVER_FILL_DEPTH = 0.02;
+/** R71 侧面竖灯半高（GLB 局部 m）：sideYLo/Hi = lampCy ∓ 此值，高 0.20 比正面(0.0648)大。 */
+export const C2_LAMP_SIDE_HALF_H = 0.10;
+/** R71 盖板侧面填充深度（GLB 局部 m）：沿 +z 从 coverZ 向内，掩端面缝隙。
+ *  上一轮 0.02 太薄 ⇒ 本波 0.06（≥0.05 进深）真正遮住。 */
+export const C2_COVER_FILL_DEPTH = 0.06;
 /** R71 竖灯侧面外扩开关（默认 ON，`#r71c2side=off` 回 R70）。 */
 export const R71_C2_SIDE_ON = !r69HookOff('r71c2side');
 /** R71 盖板侧面黑填充开关（默认 ON，`#r71c2coverfill=off` 回 R70）。 */
@@ -675,6 +684,10 @@ export function buildTailLampC2(opts: C2BuildOptions): C2BuildResult {
   const lampYLo = lampCy - lampHalfH;
   const lampYHi = lampCy + lampHalfH;
   const sideDepth = r69 ? C2_LAMP_SIDE_DEPTH : 0;
+  // R71 重做：侧面竖灯大面的 y 范围固定为 lampCy ∓ C2_LAMP_SIDE_HALF_H（高 0.20），
+  // **比正面竖灯**（R69 缩小后高 0.0648）大，覆盖车尾侧面那段光秃黑柱。
+  const sideYLo = lampCy - C2_LAMP_SIDE_HALF_H;
+  const sideYHi = lampCy + C2_LAMP_SIDE_HALF_H;
 
   // face：左右各 1 quad（竖灯正面）+ 左右各 1 侧壁 quad（贴完整 atlas 纹理，掩侧看金竖条）
   const faceQuads: THREE.BufferGeometry[] = [];
@@ -686,17 +699,17 @@ export function buildTailLampC2(opts: C2BuildOptions): C2BuildResult {
     remapUVToRegion(q, side < 0 ? 0 : 0.5, side < 0 ? 0.5 : 1, 0, 1);
     faceQuads.push(q);
     if (sideDepth > 0) {
-      // 侧壁：x=xOut 平面、沿 z 从 faceZ（外）到 faceZ+sideDepth（内），全高；
-      // 显式外向法线（±X）+ 全幅 atlas UV（贴完整尾灯纹理，非纯黑）。makeQuad 会退化
-      // （x0=x1 ⇒ normal 计算坏、UV remap 除零），故手写。
+      // 侧面竖灯大面（R71 重做）：x=xWall 平面、沿 z 从 faceZ（外）到 faceZ+sideDepth（内）、
+      // y 用 sideYLo..sideYHi（高 0.20，比正面大）；显式外向法线（±X）+ atlas 半幅 UV
+      // （凤凰点阵完整居中，与正面同款）。makeQuad 会退化（x0=x1 ⇒ normal 坏/UV 除零），故手写。
       const zIn = G.faceZ + sideDepth;
       const sq = new THREE.BufferGeometry();
-      // 顶点：yLo/zIn、yHi/zIn、yLo/faceZ、yHi/faceZ
-      // R71：侧壁外缘再外推 C2_LAMP_SIDE_OUTSET ⇒ 侧面竖灯比正面读作更大
+      // 顶点：sideYLo/zIn、sideYHi/zIn、sideYLo/faceZ、sideYHi/faceZ
+      // R71：外缘再外推 C2_LAMP_SIDE_OUTSET ⇒ 侧面竖灯比正面外缘更外凸
       const xWall = R71_C2_SIDE_ON ? xOut + side * C2_LAMP_SIDE_OUTSET : xOut;
       sq.setAttribute('position', new THREE.Float32BufferAttribute([
-        xWall, lampYLo, zIn, xWall, lampYHi, zIn,
-        xWall, lampYLo, G.faceZ, xWall, lampYHi, G.faceZ
+        xWall, sideYLo, zIn, xWall, sideYHi, zIn,
+        xWall, sideYLo, G.faceZ, xWall, sideYHi, G.faceZ
       ], 3));
       const nx = side < 0 ? -1 : 1;
       sq.setAttribute('normal', new THREE.Float32BufferAttribute([
@@ -706,6 +719,8 @@ export function buildTailLampC2(opts: C2BuildOptions): C2BuildResult {
         0, 0, 0, 1, 1, 0, 1, 1
       ], 2));
       sq.setIndex([0, 1, 2, 1, 3, 2]);
+      // UV 按 bbox 归一后映射到 atlas 半幅（同正面：−x 左半幅 / +x 右半幅），凤凰点阵居中
+      remapUVToRegion(sq, side < 0 ? 0 : 0.5, side < 0 ? 0.5 : 1, 0, 1);
       faceQuads.push(sq);
     }
   }

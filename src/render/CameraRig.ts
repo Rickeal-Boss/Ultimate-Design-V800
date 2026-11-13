@@ -98,6 +98,19 @@ const POSE: ModePose = {
 const CABIN_EYE: readonly [number, number, number] = [-0.40, 1.34, -0.72];
 const CABIN_TARGET: readonly [number, number, number] = [-0.30, 0.98, -9];
 
+/* ── R71 · cabin 近平面根治方向盘黑帧（渲染层，与 R7/V800Adapter 的距离门控同补位）──────
+ * 根因：52k-tri 高精盘挂 body 下随俯仰/侧倾，cabin 相机只随偏航、near=0.05 ⇒ 盘面逼近/
+ *   扫过近平面时 near 区深度精度极差（far/near = 12000/0.05 = 24 万），盘自身三角深度冲突
+ *   ⇒ 整帧高频闪烁（黑帧）。增大 near 收紧 near 区、大幅提升近区深度精度。
+ * 取值：主驾眼点到盘心 ≈0.55m，near 0.1 远小于该距离，不裁盘/不裁内饰近景（R17b 眼点余量
+ *   仍满足）；相比 0.05 把近区深度精度提约 2 倍。
+ * 回滚钩子：`#r71steerrender=off` ⇒ 回 near=0.05（模块顶层求值一次，每帧只读常数）。 */
+/** `#r71steerrender=off` ⇒ 回退 near=0.05（旧行为）；默认 ON ⇒ near=0.1 */
+const R71_STEER_RENDER: boolean =
+  typeof window === 'undefined' || !/(?:^|[#&])r71steerrender=off/i.test(window.location.hash);
+/** cabin 系机位（cabin / cabinDriver/Passenger/Rear）的近平面：R71 由 0.05 提到 0.1 */
+const CABIN_NEAR: number = R71_STEER_RENDER ? 0.1 : 0.05;
+
 /**
  * QA 机位标定钩子：`#eye=x,y,z,tx,ty,tz` 覆盖内建 cabin 机位（世界坐标）。
  * 用途：车内视角「被某块面挡住」时，沿纵深逐点扫描找可行的眼点，
@@ -197,7 +210,7 @@ const MODES: Record<CameraMode, (speed: number, portrait: boolean, time: number)
     POSE.look.set(...(CABIN_TARGET_OVERRIDE ?? CABIN_TARGET));
     POSE.fov = 68;
     POSE.k = 4;
-    POSE.near = 0.05;
+    POSE.near = CABIN_NEAR;
     POSE.local = true;
   },
   cabinDriver: () => setInteriorPose('driver'),
@@ -259,7 +272,7 @@ function setInteriorPose(slot: keyof InteriorViews): void {
   }
   POSE.fov = 68;
   POSE.k = 4;
-  POSE.near = 0.05;
+  POSE.near = CABIN_NEAR;
   POSE.local = true;
 }
 /** 自由视角限位：偏航 ±225°（可绕到车后再多半圈）、俯仰 ±63°（防过顶翻转/钻地） */
@@ -564,7 +577,7 @@ export class CameraRig {
       this.anchor.y + this.lookOffset.y + this.panOffset.y,
       this.anchor.z + this.lookOffset.z + this.panOffset.z
     );
-    // cabin 需要 near≈0.05 防内饰裁剪；其余模式维持 0.1
+    // cabin 系 near 由 R71 提到 0.1（CABIN_NEAR，根治方向盘黑帧）；其余模式维持 0.1
     if (cam.near !== pose.near) {
       cam.near = pose.near;
       cam.updateProjectionMatrix();
