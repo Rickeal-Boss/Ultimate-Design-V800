@@ -141,6 +141,16 @@ const HOOD_Y = HOOD_POSE_OVERRIDE?.y ?? 1.45;
 const HOOD_Z = HOOD_POSE_OVERRIDE?.z ?? -1.45;
 const HOOD_LOOK_Y = HOOD_POSE_OVERRIDE?.lookY ?? 0.95;
 
+/**
+ * R71 · 照片模式自由飞行回滚钩子：`#r71freefly=off` 逐位回 R70 绕车轨道。
+ * off 时 beginFly() 直接 no-op（flyActive 恒 false），update() 不走飞行早退分支，
+ * 照片平移退回 panOffset 叠加链路 —— 全部原轨道代码保留不删，便于 A/B 与回滚。
+ */
+const FREE_FLY_DISABLED = (() => {
+  if (typeof window === 'undefined') return false;
+  return /(?:^|[#&])r71freefly=off/i.test(window.location.hash);
+})();
+
 const MODES: Record<CameraMode, (speed: number, portrait: boolean, time: number) => void> = {
   orbit: (_speed, portrait, time) => {
     // 相位 3π/4：t=0 机位落在右前 45°（游戏里车头朝 -Z，无相位时 t=0 正对车尾，
@@ -301,6 +311,15 @@ export class CameraRig {
   private anchor = new THREE.Vector3();
   /** R65 · 照片模式方向键平移偏移（世界系）。加到相机位与注视点 ⇒ 平移不旋转视线。 */
   private panOffset = new THREE.Vector3();
+  /**
+   * R71 · 照片模式自由飞行状态（相机脱离车锚点，全世界游动）。
+   * flyPos 为世界坐标；flyYaw/flyPitch 由视线反解，驱动 lookAt 而非 Spherical 环绕。
+   * flyActive=true 时 update() 走早退分支，绕过 anchor+offset 绕车链路与 free 世界钳位。
+   */
+  private flyPos = new THREE.Vector3();
+  private flyYaw = 0;
+  private flyPitch = 0;
+  private flyActive = false;
   private tmpOffset = new THREE.Vector3();
   private tmpLook = new THREE.Vector3();
   /** 自由视角：用户拖拽产生的偏航/俯仰偏移与缩放（双击或切机位复位） */
@@ -353,9 +372,16 @@ export class CameraRig {
     this.shake = Math.max(this.shake, amount);
   }
 
-  /** 拖拽增量：dx→偏航，dy→俯仰（外部机位为环绕惯例：上拖 = 相机升高俯视） */
+  /** 拖拽增量：dx→偏航，dy→俯仰（外部机位为环绕惯例：上拖 = 相机升高俯视）。
+   *  R71 自由飞行态：直接驱动 flyYaw/flyPitch（FPS 惯例：右拖右转、上拖抬视线），
+   *  不走 Spherical 环绕 ⇒ 照片模式鼠标拖拽仍可转视线。 */
   addLook(dx: number, dy: number): void {
     this.dragging = true;
+    if (this.flyActive) {
+      this.flyYaw -= dx * 0.005;
+      this.flyPitch = clamp(this.flyPitch - dy * 0.004, -1.45, 1.45); // 防过顶/穿地（±83°）
+      return;
+    }
     this.userYaw = clamp(this.userYaw - dx * 0.005, -YAW_LIMIT, YAW_LIMIT);
     this.userPitch = clamp(this.userPitch + dy * 0.004, -PITCH_LIMIT, PITCH_LIMIT);
   }
@@ -364,8 +390,17 @@ export class CameraRig {
     this.dragging = false;
   }
 
-  /** 滚轮 / 捏合缩放（仅外部机位生效） */
+  /** 滚轮 / 捏合缩放（仅外部机位生效）。
+   *  R71 自由飞行态：滚轮映射为沿视线前后移动 flyPos（推近/拉远），不改 FOV。 */
   addZoom(deltaY: number): void {
+    if (this.flyActive) {
+      const cp = Math.cos(this.flyPitch);
+      const step = deltaY > 0 ? -1.5 : 1.5; // 上滚(拉远)为正前进的逆：deltaY>0 = 后退
+      this.flyPos.x += -Math.sin(this.flyYaw) * cp * step;
+      this.flyPos.y = Math.max(0.2, this.flyPos.y + Math.sin(this.flyPitch) * step);
+      this.flyPos.z += -Math.cos(this.flyYaw) * cp * step;
+      return;
+    }
     this.userZoom = clamp(this.userZoom * (deltaY > 0 ? 1.1 : 0.9), 0.55, 2.2);
   }
 
@@ -378,11 +413,21 @@ export class CameraRig {
 
   /** R65 · 照片模式方向键平移：按相机右向/前向(水平投影)/上向平移 panOffset。
    *  strafe 左右沿右向、fwd 前后沿视线水平投影、up 升降。世界系累计，逐帧调小步长。
-   *  平移相机+注视点 ⇒ 场景自由移动而非控制车辆（车由 FreeDrive.photoMode 冻结）。 */
+   *  平移相机+注视点 ⇒ 场景自由移动而非控制车辆（车由 FreeDrive.photoMode 冻结）。
+   *  R71 自由飞行态：平移量加到 flyPos（沿 flyYaw 水平朝向算前后/左右），脱离车锚点。 */
   pan(strafe: number, fwd: number, up: number, dt: number): void {
     const speed = 6; // m/s
     const step = speed * dt;
     const cam = this.camera;
+    if (this.flyActive) {
+      const sy = Math.sin(this.flyYaw);
+      const cy = Math.cos(this.flyYaw);
+      // forward_h = (-sin yaw, -cos yaw)，right = forward_h × up = (cos yaw, -sin yaw)
+      this.flyPos.x += (cy * strafe - sy * fwd) * step;
+      this.flyPos.z += (-sy * strafe - cy * fwd) * step;
+      this.flyPos.y = Math.max(0.2, this.flyPos.y + up * step); // 防钻地
+      return;
+    }
     // 右向 = 视线 × 上，水平投影归一
     const fwdV = this.tmpLook.copy(cam.getWorldDirection(this.tmpRight)).setY(0).normalize();
     const rightV = this.tmpRight.crossVectors(fwdV, UP).normalize();
@@ -393,6 +438,23 @@ export class CameraRig {
 
   resetPan(): void {
     this.panOffset.set(0, 0, 0);
+  }
+
+  /** R71 · 进入照片模式：以当前相机位姿播种自由飞行（flyPos=眼点，yaw/pitch 由视线反解）。
+   *  `#r71freefly=off` 时 no-op，保持绕车轨道。 */
+  beginFly(): void {
+    if (FREE_FLY_DISABLED) return;
+    const cam = this.camera;
+    this.flyPos.copy(cam.position);
+    const d = cam.getWorldDirection(this.tmpRight);
+    this.flyPitch = Math.asin(clamp(d.y, -1, 1));
+    this.flyYaw = Math.atan2(-d.x, -d.z);
+    this.flyActive = true;
+  }
+
+  /** R71 · 退出照片模式：交还绕车轨道（flyActive=false，flyPos/flyYaw/flyPitch 保留待复用）。 */
+  endFly(): void {
+    this.flyActive = false;
   }
 
   get isDragging(): boolean {
@@ -410,6 +472,31 @@ export class CameraRig {
     this.time += dt;
     MODES[this.mode](speed, portrait, this.time);
     const pose = POSE;
+
+    // R71 · 照片模式自由飞行早退分支：相机脱离车锚点，全世界游动。绕过 anchor+offset
+    // 绕车链路、绕过 free 世界钳位；near/fov 写回仍沿用当前机位 POSE。
+    if (this.flyActive) {
+      const cp = Math.cos(this.flyPitch);
+      const dir = this.tmpLook.set(
+        -Math.sin(this.flyYaw) * cp,
+        Math.sin(this.flyPitch),
+        -Math.cos(this.flyYaw) * cp
+      );
+      const lookPt = this.tmpOffset.copy(this.flyPos).add(dir);
+      cam.position.copy(this.flyPos);
+      this.shake = Math.max(0, this.shake - dt * 1.4);
+      cam.lookAt(lookPt);
+      if (cam.near !== pose.near) {
+        cam.near = pose.near;
+        cam.updateProjectionMatrix();
+      }
+      const fov = cam.fov + (pose.fov - cam.fov) * Math.min(1, dt * 2);
+      if (Math.abs(fov - cam.fov) > 0.001) {
+        cam.fov = fov;
+        cam.updateProjectionMatrix();
+      }
+      return;
+    }
 
     // 局部视角（hood/cabin*/side）偏移随车体朝向旋转
     const q = pose.local ? carQuat : IDENT;

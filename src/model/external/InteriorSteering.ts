@@ -65,22 +65,18 @@ export async function loadInteriorSteering(
   scale: number
 ): Promise<THREE.Mesh | null> {
   if (inTestEnv()) { console.info('[InteriorSteering] skipped in test env'); return null; }
-  /* ── R69 · 高精度方向盘黑帧根治（默认关闭高精度 GLB）──────────────────────────
-   * 真机实录量化（.qa/r69_video/steer_frames.py，cv2 逐帧亮度）：主驾视角移动时
-   *   整帧亮度在 77(亮)↔20(暗) 高频往复，|Δ|≈50-68，黑帧(<25) 占 148/417 帧 = **35%**，
-   *   暗帧右侧 82% 被纯黑大面覆盖（文件 0.5MB 大面积纯色 vs 亮帧 2.5MB 细节丰富）
-   *   ⇒ 高精度方向盘 GLB 大面扫过主驾相机 ⇒ 高频闪烁/黑帧（非偶发，是持续振荡）。
-   * 根因：52k-tri 高精度方向盘挂在 body 下、仅 cabin 机位可见；主驾相机移动时与盘面
-   *   近平面/深度冲突，盘面扫过相机 ⇒ 闪烁。本环境（headless/SwiftShader）不可复现，
-   *   故 R68 P1-7 只加了 __r68glDiag 诊断钩子、未盲改。
-   * 修复（P0 流畅度优先）：默认**不加载**高精度 GLB（返回 null ⇒ 程序化方向盘保持完整，
-   *   游戏零感知），消除黑帧；`#r68steerhires=on` 显式开启高精度供真机定标
-   *   （配合 __r68glDiag 抓 contextLost / renderer.info）。
-   * 回滚：去掉该开关即恢复 R68 行为（高精度默认开）。 */
-  if (!/(?:^|[#&])r68steerhires=on/i.test(
+  /* ── R71 · 恢复默认加载 + 极近距门控（推翻 R69「默认不加载」）──────────────────
+   * R69 为规避主驾相机黑帧（盘面扫过近平面 ⇒ 35% 帧闪烁）默认不加载 GLB；但用户本轮
+   * 要求**必须引入高精度方向盘**，故 R71 改为「默认加载 + 距离门控」：
+   *   · 这里恢复默认加载 GLB（不再因 hash 早退）；
+   *   · 黑帧改由 adapter 每帧的距离门控根治（相机过近时显示程序化盘、隐藏高精盘，
+   *     见 V800Adapter/R7Adapter 的 setSteeringCameraDistance + Game.syncInteriorOcclusion）。
+   * 逃生门：`#r68steerhires=off` 仍可强制不加载 GLB（保留 R69 行为供 A/B 定标）。
+   * 既有纪律不变：test 环境跳过、fetch/parse/贴图失败返回 null ⇒ 程序化盘保持完整。 */
+  if (/(?:^|[#&])r68steerhires=off/i.test(
     typeof window === 'undefined' ? '' : window.location.hash
   )) {
-    console.info('[InteriorSteering] high-res steering OFF by default (black-frame fix); #r68steerhires=on to enable');
+    console.info('[InteriorSteering] high-res steering force-OFF (#r68steerhires=off); procedural wheel stays');
     return null;
   }
   try {
@@ -120,7 +116,12 @@ export async function loadInteriorSteering(
       map: tex,
       metalness: 0.1, // 源材质 metal=1 是扫描导出默认值（会读成全金属黑），契约 §3 重标定
       roughness: 0.65,
-      side: THREE.FrontSide
+      side: THREE.FrontSide,
+      // R71：辅助防 z-fighting —— 盘面与近共面件（仪表台/气囊盖）深度冲突时把盘面
+      // 向相机方向偏移（负 factor/units），降低共面闪烁；主修仍是距离门控，此为兜底。
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+      polygonOffsetUnits: -2
     });
     steering.position.set(...STEERING_PLACEMENT[car]);
     // 源扫描自带盘面倾角（R7 ≈20–30° / V800 ≈40–45°），rotation 保持 0；

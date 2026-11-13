@@ -112,6 +112,17 @@ export interface CarLike {
   readonly cabinOccluderMaterials?: readonly THREE.Material[];
   /** R19：进入/离开 cabin 系机位时切换车漆内舱暗面（BackSide 渲染） */
   setPaintShadow?: (interior: boolean) => void;
+  /**
+   * R71 · 高精度方向盘极近距门控：Game 每帧传入相机到高精盘的世界距离。
+   * dist 过近（< NEAR）时显示程序化盘、隐藏高精盘（根治主驾相机黑帧）；
+   * 过远（> FAR）恢复高精盘；两阈值间保持上次态（滞回防抖）。GLB 未装载则空操作。
+   */
+  setSteeringCameraDistance?: (dist: number) => void;
+  /**
+   * R71 · 每帧入口：Game 传相机，适配器内部取高精盘世界位置算距离再走 setSteeringCameraDistance。
+   * （steeringMesh 是适配器私有句柄，Game 拿不到，故由适配器自算世界距离。GLB 未装载则空操作。）
+   */
+  updateSteeringGate?: (camera: THREE.Camera) => void;
 }
 
 const MS_TO_RPM_SCALE = 2.6; // 视觉轮速系数（车轮半径 0.382，弧度 = dist/r，视觉略放大）
@@ -126,6 +137,22 @@ const MS_TO_RPM_SCALE = 2.6; // 视觉轮速系数（车轮半径 0.382，弧度
 const MAX_WHEEL_STEP_PER_FRAME = (Math.PI / 20) * 0.9;
 /** 仪表重绘最小间隔（s）→ 15Hz 上限，避免 512×288 Canvas 每帧重绘 + 纹理上传 */
 const GAUGE_MIN_INTERVAL = 1 / 15;
+
+/* ── R71 · 高精度方向盘极近距门控（根治主驾相机黑帧）──────────────────────────
+ * 根因：52k-tri 高精盘挂 body 下随俯仰/侧倾，而 cabin 相机只随偏航（Game.ts 不随 body
+ *   俯仰侧倾）、near=0.05 ⇒ 相机移动时盘面扫过近平面 ⇒ 整帧闪烁/黑帧。
+ * 门控：每帧算相机到高精盘世界距离，过近显示程序化盘、过远恢复高精盘（滞回防抖）。
+ * 回滚钩子：`#r71steergate=off` ⇒ 关闭距离门控，恒显示高精盘（恢复默认关 GLB 的旧行为）。 */
+/** 相机到高精盘距离 < NEAR ⇒ 切程序化盘（留 0.08m 滞回带防近阈值处抖动） */
+const STEER_GATE_NEAR_M = 0.32;
+/** 相机到高精盘距离 > FAR ⇒ 恢复高精盘 */
+const STEER_GATE_FAR_M = 0.4;
+/** `#r71steergate=off` ⇒ 恒显示高精盘（模块顶层求值一次，每帧只读布尔） */
+const R71_STEER_GATE: boolean =
+  typeof window === 'undefined' || !/(?:^|[#&])r71steergate=off/i.test(window.location.hash);
+/** R71：距离门控每帧复用的临时向量（避免每帧 new 的 GC 抖动） */
+const STEER_GATE_TMP_VEC = new THREE.Vector3();
+const STEER_GATE_TMP_VEC_B = new THREE.Vector3();
 
 /**
  * 灯光材质 ID 契约（按材质 ID 查表，不再依赖组件 ID）。
@@ -4741,6 +4768,8 @@ const R48_LAMP_TONE: boolean =
   let steeringMesh: THREE.Mesh | null = null;
   /** R47：高精度盘装配成功后要恒隐藏的程序化盘（防双盘重叠 / z-fighting） */
   const proceduralSteeringMeshes: THREE.Mesh[] = [];
+  /** R71：距离门控当前态 —— true = 相机过近，隐藏高精盘、显示程序化盘 */
+  let steerNearCam = false;
   let proceduralExteriorHidden = false;
   let lastInteriorState = false;
   /** spinWheels 弧长→角度换算半径；外部壳装载成功后取 manifest.wheelRadius */
@@ -4793,6 +4822,11 @@ const R48_LAMP_TONE: boolean =
     if (steeringMesh) steeringMesh.visible = interior;
     // 高精度盘接管后恒隐藏程序化盘；放在最后，覆盖 setCabinBlocksHidden 的恢复
     for (const m of proceduralSteeringMeshes) m.visible = false;
+    // R71：距离门控近距态覆盖上一行的 cabin 可见性（相机过近 ⇒ 隐高精盘、显程序化盘）
+    if (R71_STEER_GATE && steerNearCam) {
+      if (steeringMesh) steeringMesh.visible = false;
+      for (const m of proceduralSteeringMeshes) m.visible = interior;
+    }
     for (const p of paintShadowPairs) {
       if (interior) {
         // 车内：整批隐藏（材质级再兜一层，防合批 mesh 被别的路径重新置可见）
@@ -5105,12 +5139,32 @@ const R48_LAMP_TONE: boolean =
   }
   })();
 
+  /* R71 · 距离门控核心（滞回）：近于 NEAR 切程序化盘、远于 FAR 恢复高精盘，中间保持上次态。
+   * 只在态翻转时改 visible（防每帧写触发不必要的工作）；GLB 未装载 / 门控关闭则空操作。 */
+  const applySteerGate = (dist: number): void => {
+    if (!R71_STEER_GATE || !steeringMesh) return;
+    const next = steerNearCam ? dist < STEER_GATE_FAR_M : dist < STEER_GATE_NEAR_M;
+    if (next === steerNearCam) return;
+    steerNearCam = next;
+    const interior = lastInteriorState;
+    steeringMesh.visible = interior && !next;
+    for (const m of proceduralSteeringMeshes) m.visible = interior && next;
+  };
+
   const api: CarLike = {
     root,
     body,
     wheels,
     cabinOccluderMaterials: cabinOccluderMats,
     setPaintShadow,
+    setSteeringCameraDistance: applySteerGate,
+    updateSteeringGate(camera: THREE.Camera): void {
+      /* R71：Game 每帧调用 —— 高精盘挂 body 下（有变换），须用世界位置算距离。 */
+      if (!R71_STEER_GATE || !steeringMesh) return;
+      camera.getWorldPosition(STEER_GATE_TMP_VEC);
+      steeringMesh.getWorldPosition(STEER_GATE_TMP_VEC_B);
+      applySteerGate(STEER_GATE_TMP_VEC.distanceTo(STEER_GATE_TMP_VEC_B));
+    },
     get currentHeat() {
       return heat;
     },

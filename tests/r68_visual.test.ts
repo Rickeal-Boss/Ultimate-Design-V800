@@ -90,6 +90,8 @@ import {
   C2_TEX_BUDGET,
   C2_TRI_BUDGET,
   R69_C2_LAMP_ON,
+  R71_C2_COVERFILL_ON,
+  R71_C2_SIDE_ON,
   phoenixVRangeActive,
   buildTailLampC2,
   paintC2Atlas,
@@ -138,10 +140,10 @@ const R68_PENDING_TRACK_FILES = [
   'src/model/parts/r7FrontAtlas.ts', 'src/model/parts/r7TailWrap.ts'
 ] as const;
 
-/** 第 0 条：r67 护栏全文件冻结（CRLF 规范化后 UTF-8 sha256，23624 bytes）。 */
-const R67_GUARD_SHA256 = 'c67b816d1896b2fe8780c2c519740a40584d6a2d2c4af24277460f028820a2e6';
-/** V800Adapter.ts 全文件冻结（CRLF 规范化后 UTF-8 sha256，271325 bytes）。 */
-const ADAPTER_SHA256 = 'f484c0efb14ed814a482959c051c10dbea3df449caead21b83a4d49181995797';
+/** 第 0 条：r67 护栏全文件冻结（CRLF 规范化后 UTF-8 sha256）。R71 更新基线：该护栏新增 R71 侧贴/盖板填充 shim 探针，属预期改动。 */
+const R67_GUARD_SHA256 = 'e4a350a82699bf2a4c8b93e18eff0e1295faaaa0b1646b623c13c38723ebc60f';
+/** V800Adapter.ts 全文件冻结（CRLF 规范化后 UTF-8 sha256）。R71 更新基线：新增高精方向盘相机距离门控（updateSteeringGate/setSteeringCameraDistance），属预期改动。 */
+const ADAPTER_SHA256 = '14ca4468890db98cf55bdd8082731796526ab7cb676d7439f06c519c3d6056ef';
 /** off 态 / 原 atlas（HEAD=dc765a4）像素缓冲指纹 —— 供「默认 vs off」对照差分。 */
 const R68_C2_ATLAS_BASELINE_SHA256 = '1bb27545a399a7d7e14f56f778f9a309973298a508ca5e97a90ba76784183347';
 const R68_R7_BAND_SLICE_SHA256_BASELINE = '08ecfe355d212a1252665b381305df1e2b6cf1640cb055739ab4c8ec1814038c';
@@ -260,26 +262,23 @@ describe('R68 · 第 0 条：零护栏改动契约', () => {
     expect(C2_GEOM.stripZ).toBeLessThan(C2_GEOM.faceZ);
   });
 
-  it('★ 几何拓扑恒等：C2_TRI_BUDGET(40|R69)/cover 12/face(8|R69侧壁)/默认调用 3 mesh', () => {
-    expect(C2_TRI_BUDGET).toBe(R69_C2_LAMP_ON ? 40 : 36);
+  it('★ 几何拓扑恒等：C2_TRI_BUDGET(44|R71填充·40|R69·36)/cover(16|R71填充·12)/face(8|R69侧壁·4)/默认调用 3 mesh', () => {
+    expect(C2_TRI_BUDGET).toBe(36 + (R69_C2_LAMP_ON ? 4 : 0) + (R71_C2_COVERFILL_ON ? 4 : 0));
     expect(C2_DC_BUDGET).toBe(3);
     expect(C2_MAT_BUDGET).toBe(2);
     expect(C2_TEX_BUDGET).toBe(1);
-    expect(c2src).toContain(
-      R69_C2_LAMP_ON
-        ? 'export const C2_TRI_BUDGET = 40;'
-        : 'export const C2_TRI_BUDGET = 36;'
-    );
+    // R71 盖板侧面黑填充把预算改为表达式（base 36 + R69 侧壁 4 + R71 填充 4）
+    expect(c2src).toContain('export const C2_TRI_BUDGET = 36 + (R69_C2_LAMP_ON ? 4 : 0) + (R71_C2_COVERFILL_ON ? 4 : 0);');
     const triOf = (m: THREE.Mesh): number => {
       const g = m.geometry;
       return (g.index ? g.index.count : g.getAttribute('position').count) / 3;
     };
     const r = buildTailLampC2({ scale: 4.75, lampRearMat: new THREE.MeshStandardMaterial() });
-    expect(r.meshes).toHaveLength(3);           // 默认（不传 coverTweak）与 R67 逐位一致
+    expect(r.meshes).toHaveLength(3);           // 默认（不传 coverTweak）恒 3 mesh
     expect(r.budget.dc).toBe(3);
-    expect(triOf(r.coverMesh)).toBe(12);
+    expect(triOf(r.coverMesh)).toBe(R71_C2_COVERFILL_ON ? 16 : 12); // R71 盖板侧面填充 +4
     expect(triOf(r.faceMesh)).toBe(R69_C2_LAMP_ON ? 8 : 4); // R69 侧壁 +4
-    expect(r.budget.tri).toBe(R69_C2_LAMP_ON ? 40 : 36);
+    expect(r.budget.tri).toBe(36 + (R69_C2_LAMP_ON ? 4 : 0) + (R71_C2_COVERFILL_ON ? 4 : 0));
     expect(triOf(r.coverMesh) + triOf(r.faceMesh) + triOf(r.redStripMesh)).toBe(r.budget.tri);
   });
 
@@ -294,12 +293,12 @@ describe('R68 · 第 0 条：零护栏改动契约', () => {
       });
       expect(r.meshes, `coverTweak=${tweak} mesh 数`).toHaveLength(3);
       expect(r.budget.dc).toBe(3);
-      expect(r.budget.tri).toBe(R69_C2_LAMP_ON ? 40 : 36);
+      expect(r.budget.tri).toBe(36 + (R69_C2_LAMP_ON ? 4 : 0) + (R71_C2_COVERFILL_ON ? 4 : 0));
       expect(r.budget.mat).toBe(2);
       // node 无 document ⇒ makeC2AtlasTexture 返回 null、贴图降级为 0（r67:395 同口径）；
       // 浏览器态为 1，故只钉 ≤ C2_TEX_BUDGET，不把 node 降级误当契约。
       expect(r.budget.tex).toBeLessThanOrEqual(C2_TEX_BUDGET);
-      expect(triOf(r.coverMesh)).toBe(12);
+      expect(triOf(r.coverMesh)).toBe(R71_C2_COVERFILL_ON ? 16 : 12); // R71 盖板侧面填充 +4
       expect(triOf(r.faceMesh)).toBe(R69_C2_LAMP_ON ? 8 : 4); // R69 侧壁 +4
     }
     expect(c2src).not.toContain('r68_tail_c2_surround'); // 独立 surround mesh 彻底撤销

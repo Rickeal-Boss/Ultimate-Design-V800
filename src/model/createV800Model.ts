@@ -6,6 +6,23 @@ import { BokehPass } from 'three/examples/jsm/postprocessing/BokehPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
+/* ── R71 · 星空顶内衬板下移（治 cabin 态抬头看不到星空）──────────────────────
+ * 根因：程序化 starlight headliner y=1.682 > 外部壳车顶玻璃线阈值 roofGlassY≈1.647
+ * （= body.glb bodyBBox.max.y 0.3853 × scale 4.75 × 0.90），被 V800Adapter
+ * buildPokeList 收进 r44PokeMeshes（车顶穿透件）；cabin 态 setPokeHidden(false)
+ * 恢复 visible，但被 DoubleSide 外部壳车顶内壁（body.glb 单 mesh，y≈1.65~1.83）
+ * 从上方遮挡 ⇒ 星空被盖。方案②：把内衬 quad 下移到阈值 + 内壁之下（cabin 抬头可见
+ * 、不再进 pokeList）；外景态从全景天窗看到不透明顶棚属可接受（星空顶本就是车内顶棚）。
+ * 回滚钩子：`#r71star=off` ⇒ y 回 R70 基线 1.682（pokeList 行为自动回 R70）。 */
+/** R70 星空顶基线 y（`#r71star=off` 回此）。 */
+export const STARLIGHT_HEADLINER_Y_BASELINE = 1.682;
+/** R71 星空顶下移 y：低于 roofGlassY(≈1.647) + 外壳车顶内壁(≈1.65) ⇒ cabin 抬头可见。 */
+export const STARLIGHT_HEADLINER_Y_R71 = 1.6;
+/** `#r71star=off` ⇒ 回 R70 基线（node/SSR 无 window ⇒ 默认 ON）。 */
+const R71_STAR_HEADLINER_ON: boolean =
+  typeof window === 'undefined' ||
+  !/(?:^|[#&])r71star=off/i.test(window.location.hash);
+
 export type ProceduralModelOptions = {
   wireframe?: boolean;
   castShadow?: boolean;
@@ -5748,7 +5765,7 @@ export function createZunjieV800LuxuryMPVModel(options: ProceduralModelOptions =
     node_starlight_headliner_119.position.copy(endpoint_starlight_headliner_119.start);
     node_starlight_headliner_119.rotation.set(0.0, 0.0, 0.0);
   } else {
-    node_starlight_headliner_119.position.set(0.0, 1.682, -1.45);
+    node_starlight_headliner_119.position.set(0.0, R71_STAR_HEADLINER_ON ? STARLIGHT_HEADLINER_Y_R71 : STARLIGHT_HEADLINER_Y_BASELINE, -1.45);
     node_starlight_headliner_119.rotation.set(0.0, 0.0, 0.0);
   }
   node_starlight_headliner_119.userData.sculptComponent = {"id": "starlight-headliner", "name": "星空顶内衬板", "level": "meso", "role": "detail", "importance": 0.85, "confidence": 0.88, "primitive": "extrude", "topologyClass": "assembled-solid", "topologyRationale": "薄板/回转体，硬表面可展拓扑", "geometryDescriptor": {"topologyIntent": "R18 星空顶后移：span z 0.300..1.630 → -1.45..0.35（center -0.55 / depth 1.80），宽 1.36→1.30，并从 headliner-front(1.69..1.71) 之上降到 y1.682 之下 —— 原先它夹在 headliner-front/rear 之间，只有探出车顶的前段可见，正好撒在机盖上方", "edgeTreatment": {"type": "rounded", "bevelRadius": 0.0015, "segments": 4}, "deformationStack": [], "uvStrategy": "generated procedural coordinates", "normalStrategy": "vertex normals from generated geometry", "profile2D": {"points": [[0.498897, -0.5], [0.499319, -0.48097], [0.499677, -0.426777], [0.499916, -0.345671], [0.5, -0.25], [0.5, 0.25], [0.499916, 0.345671], [0.499677, 0.426777], [0.499319, 0.48097], [0.498897, 0.5], [-0.498897, 0.5], [-0.499319, 0.48097], [-0.499677, 0.426777], [-0.499916, 0.345671], [-0.5, 0.25], [-0.5, -0.25], [-0.499916, -0.345671], [-0.499677, -0.426777], [-0.499319, -0.48097], [-0.498897, -0.5]], "depth": 1, "bevel": {"thickness": 0.000833, "size": 0.001154, "offset": -0.001154, "segments": 2}}}, "parent": "cabin-interior", "attachment": null, "dimensions": {"width": 1.3, "height": 0.006, "depth": 1.8, "units": "meters", "confidence": 0.88}, "transform": {"position": [0, 1.682, -1.45], "rotation": [0, 0, 0], "scale": [1.3, 0.006, 1.8]}, "actionProfile": {"animationRole": "static", "pivot": {"mode": "center", "localPosition": [0, 0, 0], "axis": [0, 1, 0], "confidence": 0.92}, "transformChannels": {"translate": false, "rotate": false, "scale": false, "bend": false, "twist": false, "detach": false, "visibility": true, "materialState": true}, "sockets": [], "collider": {"type": "box", "offset": [0, 0, 0], "scale": [1, 1, 1], "isTrigger": false, "notes": ""}, "constraints": [], "destruction": {"breakable": false, "fractureGroup": "root", "seamRefs": [], "detachableFragments": [], "breakImpulse": 0, "debrisMaterial": "base"}}, "material": "starlight", "materialLayers": ["starlight"], "deformations": [], "joints": [], "seams": [], "localFeatures": [{"name": "星空顶内衬板", "kind": "panel", "note": "坐标依据：车顶内表面 y=1.72（roof-panel 顶 1.72），既有 headliner-front 底面 y=1.69，本板取 1.686±0.003 贴在其下不穿模；x ±0.68 / z −0.28~1.05 沿用原星点分布区。"}], "surfaceDetail": {"macroRoughness": 0, "microRoughness": 0, "bumpAmplitude": 0, "normalPattern": "", "displacementPattern": "", "occlusionPattern": "", "edgeWearPattern": "", "notes": ""}, "evidenceRefs": ["img-cabin", "img-popup1"], "details": ["d-starlight-headliner"], "fidelityTier": "hero", "colorMaterialRecipe": {"dominantAlbedo": "rgba(42, 30, 24, 1.0)", "secondaryAlbedo": "rgba(42, 30, 24, 1.0)", "materialClass": "fabric", "materialClassConfidence": 0.88}, "notes": "坐标依据：车顶内表面 y=1.72（roof-panel 顶 1.72），既有 headliner-front 底面 y=1.69，本板取 1.686±0.003 贴在其下不穿模；x ±0.68 / z −0.28~1.05 沿用原星点分布区。 [level→meso] 替代 160 实例星点阵的唯一承载件，必须存在。"};

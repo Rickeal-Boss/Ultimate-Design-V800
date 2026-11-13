@@ -197,11 +197,30 @@ export const C2_COVER_ROUGHNESS_R68 = 0.78;
 /** atlas 内深色 surround 颜色（不透明、非渐变、零几何）。 */
 export const C2_ATLAS_SURROUND_COLOR = '#101016';
 
+/* ── R71 · C2 竖灯侧面外扩 + 盖板侧面黑填充 ──
+ * 用户反馈：车尾侧面看竖灯应比正面读作更大，且盖板 ±x 端面斜视角有缝隙/漏洞。
+ * ① 侧壁外扩：侧壁 quad 顶点 xOut 再外推 C2_LAMP_SIDE_OUTSET ⇒ 侧壁外缘比正面外缘
+ *    更外凸（读作「侧面竖灯比正面大」）。法线 ±X 不变、UV 仍全幅 atlas、零 tri 增量。
+ * ② 盖板侧面黑填充：盖板 ±x 端各加一个 quad（x=±coverHalfW、法线 ±X、z 从 coverZ
+ *    向内 C2_COVER_FILL_DEPTH、coverYLo..coverYHi 全高），复用 coverMat 纯色零新材质，
+ *    掩盖薄盒端面斜视角缝隙。+2 quad = +4 tri。
+ * 两处各自 `#r71c2side=off` / `#r71c2coverfill=off` ⇒ 逐位回 R70。 */
+/** R71 侧壁外扩量（GLB 局部 m）：侧壁外缘比正面外缘更外凸。 */
+export const C2_LAMP_SIDE_OUTSET = 0.006;
+/** R71 盖板侧面填充深度（GLB 局部 m）：沿 +z 从 coverZ 向内，掩端面缝隙。 */
+export const C2_COVER_FILL_DEPTH = 0.02;
+/** R71 竖灯侧面外扩开关（默认 ON，`#r71c2side=off` 回 R70）。 */
+export const R71_C2_SIDE_ON = !r69HookOff('r71c2side');
+/** R71 盖板侧面黑填充开关（默认 ON，`#r71c2coverfill=off` 回 R70）。 */
+export const R71_C2_COVERFILL_ON = !r69HookOff('r71c2coverfill');
+
 /** 预算上限（护栏消费）。新增 mesh 恒 3；tri = 盖板薄盒 12 + face 4 + 2·(top+bottom)·2。
  *  R69：竖灯缩小（高×0.48/宽×0.40）+ 侧面贴完整尾灯纹理 ⇒ face 并入左右侧壁 +4 ⇒ 默认 40。
  *  `#r69c2lamp=off` ⇒ 无侧壁 ⇒ 回 R68 的 36。 */
 export const C2_DC_BUDGET = 3;
-export const C2_TRI_BUDGET = 40;
+/** tri 上限：base 40（盖板12 + face4/侧壁8 + 红条20），R71 盖板侧面填充 +4 ⇒ 44。
+ *  `#r71c2coverfill=off` ⇒ 回 40；`#r69c2lamp=off` ⇒ 回 36 基线。 */
+export const C2_TRI_BUDGET = 36 + (R69_C2_LAMP_ON ? 4 : 0) + (R71_C2_COVERFILL_ON ? 4 : 0);
 export const C2_MAT_BUDGET = 2;
 export const C2_TEX_BUDGET = 1;
 
@@ -607,11 +626,40 @@ export function buildTailLampC2(opts: C2BuildOptions): C2BuildResult {
   // 两灯之间中央区可能露 body 残留红带 ⇒ 目检，露则迭代。`#r70c2align=off` 回 R68 全宽。
   const effLampHalfW = r69 ? G.lampHalfW * C2_LAMP_SHRINK_WIDTH : G.lampHalfW;
   const coverHalfW = r70Align ? G.lampCenterX + effLampHalfW : G.coverHalfW;
-  const coverGeo = new THREE.BoxGeometry(
+  const coverBox = new THREE.BoxGeometry(
     coverHalfW * 2, G.coverYHi - G.coverYLo, coverDepth
   );
   // BoxGeometry 原点在盒心 ⇒ 平移使「外表面 = coverZ、内表面嵌到 body 尾门面」
-  coverGeo.translate(0, (G.coverYLo + G.coverYHi) / 2, G.coverZ + coverDepth / 2);
+  coverBox.translate(0, (G.coverYLo + G.coverYHi) / 2, G.coverZ + coverDepth / 2);
+  // R71 盖板侧面黑填充：左右端各加一个 quad（x=±coverHalfW、法线 ±X、z 从 coverZ
+  // 向内 C2_COVER_FILL_DEPTH、coverYLo..coverYHi 全高），复用 coverMat 纯色零新材质，
+  // 掩盖薄盒 ±x 端面斜视角缝隙/漏洞。合并进 coverGeo ⇒ 恒 3 mesh / 零 DC / 零新材质。
+  let coverGeo: THREE.BufferGeometry = coverBox;
+  if (R71_C2_COVERFILL_ON) {
+    const fillQuads: THREE.BufferGeometry[] = [];
+    for (const side of [-1, 1]) {
+      const fq = new THREE.BufferGeometry();
+      const nx = side < 0 ? -1 : 1;
+      // 顶点：yLo/zIn、yHi/zIn、yLo/coverZ、yHi/coverZ（绕序同侧壁 quad，法线 ±X）
+      fq.setAttribute('position', new THREE.Float32BufferAttribute([
+        side * coverHalfW, G.coverYLo, G.coverZ + C2_COVER_FILL_DEPTH,
+        side * coverHalfW, G.coverYHi, G.coverZ + C2_COVER_FILL_DEPTH,
+        side * coverHalfW, G.coverYLo, G.coverZ,
+        side * coverHalfW, G.coverYHi, G.coverZ
+      ], 3));
+      fq.setAttribute('normal', new THREE.Float32BufferAttribute([
+        nx, 0, 0, nx, 0, 0, nx, 0, 0, nx, 0, 0
+      ], 3));
+      fq.setAttribute('uv', new THREE.Float32BufferAttribute([
+        0, 0, 0, 1, 1, 0, 1, 1
+      ], 2));
+      fq.setIndex([0, 1, 2, 1, 3, 2]);
+      fillQuads.push(fq);
+    }
+    coverGeo = mergeSafe([coverBox, ...fillQuads]);
+    coverBox.dispose();
+    for (const q of fillQuads) q.dispose();
+  }
   const coverMesh = markExternal(
     new THREE.Mesh(coverGeo, coverMat), 'r67_tail_cover', opts.scale, 2
   );
@@ -644,9 +692,11 @@ export function buildTailLampC2(opts: C2BuildOptions): C2BuildResult {
       const zIn = G.faceZ + sideDepth;
       const sq = new THREE.BufferGeometry();
       // 顶点：yLo/zIn、yHi/zIn、yLo/faceZ、yHi/faceZ
+      // R71：侧壁外缘再外推 C2_LAMP_SIDE_OUTSET ⇒ 侧面竖灯比正面读作更大
+      const xWall = R71_C2_SIDE_ON ? xOut + side * C2_LAMP_SIDE_OUTSET : xOut;
       sq.setAttribute('position', new THREE.Float32BufferAttribute([
-        xOut, lampYLo, zIn, xOut, lampYHi, zIn,
-        xOut, lampYLo, G.faceZ, xOut, lampYHi, G.faceZ
+        xWall, lampYLo, zIn, xWall, lampYHi, zIn,
+        xWall, lampYLo, G.faceZ, xWall, lampYHi, G.faceZ
       ], 3));
       const nx = side < 0 ? -1 : 1;
       sq.setAttribute('normal', new THREE.Float32BufferAttribute([

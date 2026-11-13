@@ -28,6 +28,9 @@ import {
   C2_ATLAS_W,
   C2_DC_BUDGET,
   C2_GEOM,
+  C2_LAMP_SIDE_OUTSET,
+  C2_COVER_FILL_DEPTH,
+  C2_LAMP_SHRINK_WIDTH,
   C2_MAT_BUDGET,
   C2_PHOENIX_PANEL,
   C2_STRIP_COUNTS,
@@ -38,6 +41,8 @@ import {
   paintC2Atlas,
   phoenixMask,
   R69_C2_LAMP_ON,
+  R71_C2_COVERFILL_ON,
+  R71_C2_SIDE_ON,
   remapUVToRegion,
   resolveC2StripCounts,
   type C2Painter
@@ -382,7 +387,7 @@ describe('R67 · C2 atlas 数据指纹（零外部图片资产）', () => {
 describe('R67 · 三段式装配与预算（实测，不沿用旧估算）', () => {
   const scale = 4.75;
 
-  it('★ 恒 3 mesh：盖板薄盒 12 + face(4|R69侧壁8) + 红条 20；净 tri 按开关', () => {
+  it('★ 恒 3 mesh：盖板薄盒 12(+R71填充4) + face(4|R69侧壁8) + 红条 20；净 tri 按开关', () => {
     const lampRearMat = new THREE.MeshStandardMaterial({
       color: 0x1a0505,
       emissive: new THREE.Color(0x7a1f1a),
@@ -393,11 +398,13 @@ describe('R67 · 三段式装配与预算（实测，不沿用旧估算）', () 
     expect(r.budget.dc).toBe(3);
     // R69 默认：竖灯缩小 + 侧面贴完整尾灯纹理 ⇒ face 并入左右侧壁(4+4) ⇒ 40；
     // #r69c2lamp=off ⇒ 无侧壁 ⇒ 回 R68 的 36（盖板12+face4+红条20）。
+    // R71：盖板侧面黑填充 +2 quad(4 tri) 并入盖板 ⇒ +4。
     const faceTri = R69_C2_LAMP_ON ? 8 : 4;
-    expect(r.budget.tri).toBe(12 + faceTri + 20);
+    const coverTri = R71_C2_COVERFILL_ON ? 16 : 12;
+    expect(r.budget.tri).toBe(coverTri + faceTri + 20);
     expect(r.budget.mat).toBe(2);
     expect(r.budget.tex).toBe(0); // node 无 DOM ⇒ 贴图降级，不新增贴图实例
-    expect(17485 - r.budget.tri).toBe(17485 - (12 + faceTri + 20));
+    expect(17485 - r.budget.tri).toBe(17485 - (coverTri + faceTri + 20));
   });
 
   it('红条 material === lampRearMat（同一实例 ⇒ brakeLevel 每帧联动）', () => {
@@ -425,13 +432,13 @@ describe('R67 · 三段式装配与预算（实测，不沿用旧估算）', () 
 
   it('预算常量上限、条数扫参后 tri 仍 ≤ 上限', () => {
     expect(C2_DC_BUDGET).toBe(3);
-    expect(C2_TRI_BUDGET).toBe(R69_C2_LAMP_ON ? 40 : 36);
+    expect(C2_TRI_BUDGET).toBe(36 + (R69_C2_LAMP_ON ? 4 : 0) + (R71_C2_COVERFILL_ON ? 4 : 0));
     expect(C2_MAT_BUDGET).toBe(2);
     expect(C2_TEX_BUDGET).toBe(1);
     const lampRearMat = new THREE.MeshStandardMaterial();
     const r = buildTailLampC2({ scale, lampRearMat, stripTop: 2, stripBottom: 2 });
     const faceTri2 = R69_C2_LAMP_ON ? 8 : 4;
-    expect(r.budget.tri).toBe(12 + faceTri2 + (2 + 2) * 2 * 2);
+    expect(r.budget.tri).toBe((R71_C2_COVERFILL_ON ? 16 : 12) + faceTri2 + (2 + 2) * 2 * 2);
     expect(r.budget.tri).toBeLessThanOrEqual(C2_TRI_BUDGET);
     expect(r.budget.dc).toBeLessThanOrEqual(C2_DC_BUDGET);
     expect(r.budget.mat).toBeLessThanOrEqual(C2_MAT_BUDGET);
@@ -443,7 +450,7 @@ describe('R67 · 三段式装配与预算（实测，不沿用旧估算）', () 
     const r = buildTailLampC2({ scale, lampRearMat, stripTop: 0, stripBottom: 0 });
     expect(r.redStripMesh.geometry.getAttribute('position')).toBeDefined();
     expect(r.redStripMesh.geometry.getAttribute('position').count).toBe(0);
-    expect(r.budget.tri).toBe(12 + (R69_C2_LAMP_ON ? 8 : 4)); // 盖板薄盒 12 + face(4|R69侧壁8)
+    expect(r.budget.tri).toBe((R71_C2_COVERFILL_ON ? 16 : 12) + (R69_C2_LAMP_ON ? 8 : 4)); // 盖板薄盒 12(+R71填充4) + face(4|R69侧壁8)
     expect(r.meshes).toHaveLength(3);
   });
 
@@ -458,6 +465,46 @@ describe('R67 · 三段式装配与预算（实测，不沿用旧估算）', () 
     // 竖灯压在盖板之前（更外），红条再外凸防 z-fighting
     expect(C2_GEOM.faceZ).toBeLessThan(C2_GEOM.coverZ);
     expect(C2_GEOM.stripZ).toBeLessThan(C2_GEOM.faceZ);
+  });
+
+  it('R71 · 侧壁外扩 + 盖板侧面填充（顶点数 / z 跨度 shim 探针）', () => {
+    const lampRearMat = new THREE.MeshStandardMaterial();
+    const r = buildTailLampC2({ scale, lampRearMat });
+    const facePos = r.faceMesh.geometry.getAttribute('position');
+    const coverPos = r.coverMesh.geometry.getAttribute('position');
+    if (R69_C2_LAMP_ON) {
+      // 侧壁：正面左右各 1 quad(6) + 左右侧壁各 1 quad(6) = 24 顶点（mergeSafe 把 indexed
+      // quad 转 non-indexed ⇒ 4 顶点扩成 6；下同）
+      expect(facePos.count).toBe(24);
+      // 侧壁 x 外缘比正面外缘更外凸 C2_LAMP_SIDE_OUTSET（读作「侧面竖灯比正面大」）
+      if (R71_C2_SIDE_ON) {
+        let maxAbsX = 0;
+        for (let i = 0; i < facePos.count; i += 1) {
+          maxAbsX = Math.max(maxAbsX, Math.abs(facePos.getX(i)));
+        }
+        expect(maxAbsX).toBeCloseTo(
+          C2_GEOM.lampCenterX + C2_GEOM.lampHalfW * C2_LAMP_SHRINK_WIDTH + C2_LAMP_SIDE_OUTSET, 4
+        );
+      }
+    } else {
+      expect(facePos.count).toBe(12);
+    }
+    if (R71_C2_COVERFILL_ON) {
+      // 盖板：BoxGeometry 12 tri(36 顶点 non-indexed) + 左右填充各 4 顶点 = 44
+      expect(coverPos.count).toBe(48);
+      // 填充 z 从 coverZ 向内 C2_COVER_FILL_DEPTH ⇒ z 跨度含 [coverZ, coverZ+depth]
+      let zMin = Infinity;
+      let zMax = -Infinity;
+      for (let i = 0; i < coverPos.count; i += 1) {
+        zMin = Math.min(zMin, coverPos.getZ(i));
+        zMax = Math.max(zMax, coverPos.getZ(i));
+      }
+      expect(zMin).toBeCloseTo(C2_GEOM.coverZ, 5);
+      expect(zMax).toBeCloseTo(C2_GEOM.coverZ + C2_COVER_FILL_DEPTH, 5);
+    } else {
+      // off：盖板仍为 indexed BoxGeometry（24 顶点 / 12 tri），未与填充 quad 合并
+      expect(coverPos.count).toBe(24);
+    }
   });
 });
 

@@ -85,7 +85,13 @@ describe('R50 · cabin 车顶内壁剔除（真修 R47 DoubleSide 回归）', ()
     const s = src(ADAPTER);
     // 纯函数 index 剔除 + cabin 态应用
     expect(s).toContain('export function buildRoofCulledIndex(');
-    expect(s).toContain('applyRoofCull(interior && r47CabinFix);');
+    // R71 修③：applyRoofCull 现按机位传阈值（cabinRear 1.42 / 其余 1.30），
+    // 认两态：旧单参调用 `applyRoofCull(interior && r47CabinFix);` 或新双参调用
+    // `applyRoofCull(\n  interior && r47CabinFix,\n  ...R7_REAR_ROOF_CLIP_WORLD_Y...);`
+    expect(
+      /applyRoofCull\(\s*interior && r47CabinFix/.test(s),
+      'applyRoofCull 须以 interior && r47CabinFix 作为 active 实参调用',
+    ).toBe(true);
     // A/B 回滚：关车顶剔除 → 回 R47 base（车顶内壁重新遮挡）
     expect(s).toContain('r50roof=off');
     expect(s).toContain('/(?:^|[#&])r50roof=off/i');

@@ -488,8 +488,14 @@ export class Game {
         if (!this.freeDrive) return;
         this.freeDrive.photoMode = !this.freeDrive.photoMode;
         this.hud.setPhotoActive(this.freeDrive.photoMode);
-        // 退出照片模式时复位方向键平移，避免下次进入继承上次的相机偏移
-        if (!this.freeDrive.photoMode) this.rig.resetPan();
+        if (this.freeDrive.photoMode) {
+          // R71 · 进入照片模式：以当前相机位姿播种自由飞行（全世界游动，脱离车锚点）
+          this.rig.beginFly();
+        } else {
+          // 退出照片模式：复位方向键平移并交还绕车轨道，避免下次进入继承上次的相机偏移
+          this.rig.resetPan();
+          this.rig.endFly();
+        }
         this.sfx.uiClick();
       }
     });
@@ -1170,6 +1176,7 @@ export class Game {
       this.freeDrive.photoMode = false;
       this.hud.setPhotoActive(false);
       this.rig.resetPan(); // 复位方向键平移偏移
+      this.rig.endFly(); // R71 · 交还绕车轨道（自由飞行早退分支关闭）
       this.photoPanKeys.clear();
     }
     // 照片模式方向键监听不解绑：exit 回菜单而 Game 存活，下次 enterFreeExplore 复用
@@ -1331,6 +1338,10 @@ export class Game {
    * 仅在模式变化时写，零每帧开销。自由探索也能切到 cabin 系机位，故两模式共用。
    */
   private syncInteriorOcclusion(): void {
+    // R71：高精度方向盘极近距门控 —— 每帧算相机到高精盘世界距离，过近切程序化盘（防黑帧）。
+    // 必须在下面的「模式未变即早退」之前调用：门控是连续距离态，不能只在机位切换那一刻算。
+    // GLB 未装载（加载失败 / #r68steerhires=off）时适配器内部空操作。
+    this.car.updateSteeringGate?.(this.rig.camera);
     const wantHide = isInteriorMode(this.rig.mode);
     if (wantHide === this.windshieldHidden) return;
     this.windshieldHidden = wantHide;
@@ -1407,7 +1418,21 @@ export class Game {
     // 下次进入复用同一批监听）。
     const ac = new AbortController();
     const opts = { signal: ac.signal, capture: true } as const;
-    const DRIVE_CODES = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
+    // R71 · 照片自由飞行：方向键 + WASD 平移、PageUp/PageDown 升降。
+    // capture 拦在 FreeDrive 之前；photoMode 下 step() 本就忽略驾驶输入（双保险），
+    // WASD 不会驱动车辆。Esc/R/H 仍放行给 FreeDrive。仅 photoMode 拦截，正常驾驶零影响。
+    const DRIVE_CODES = new Set([
+      'ArrowUp',
+      'ArrowDown',
+      'ArrowLeft',
+      'ArrowRight',
+      'KeyW',
+      'KeyA',
+      'KeyS',
+      'KeyD',
+      'PageUp',
+      'PageDown'
+    ]);
     window.addEventListener(
       'keydown',
       (e) => {
@@ -1428,16 +1453,20 @@ export class Game {
     );
   }
 
-  /** frameFree 每帧调用：photoMode 下按方向键平移相机（WASD 不占用，避免与驾驶肌肉记忆冲突）。 */
+  /** frameFree 每帧调用：photoMode 下按方向键/WASD 平移相机、PageUp/PageDown 升降
+   *  （R71 自由飞行：全世界游动，rig.pan 在 flyActive 时驱动 flyPos）。 */
   private applyPhotoPan(dt: number): void {
     if (!this.freeDrive?.photoMode) {
       if (this.photoPanKeys.size > 0) this.photoPanKeys.clear();
       return;
     }
     const k = this.photoPanKeys;
-    const strafe = (k.has('ArrowRight') ? 1 : 0) - (k.has('ArrowLeft') ? 1 : 0);
-    const fwd = (k.has('ArrowUp') ? 1 : 0) - (k.has('ArrowDown') ? 1 : 0);
-    if (strafe !== 0 || fwd !== 0) this.rig.pan(strafe, fwd, 0, dt);
+    const strafe =
+      (k.has('ArrowRight') || k.has('KeyD') ? 1 : 0) - (k.has('ArrowLeft') || k.has('KeyA') ? 1 : 0);
+    const fwd =
+      (k.has('ArrowUp') || k.has('KeyW') ? 1 : 0) - (k.has('ArrowDown') || k.has('KeyS') ? 1 : 0);
+    const up = (k.has('PageUp') ? 1 : 0) - (k.has('PageDown') ? 1 : 0);
+    if (strafe !== 0 || fwd !== 0 || up !== 0) this.rig.pan(strafe, fwd, up, dt);
   }
 
   /** V 键：ACCEL/BRAKE 段按车型循环（V800 5 档 / R7 7 档）；自由探索段不受 phase 门禁 */
