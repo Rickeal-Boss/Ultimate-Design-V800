@@ -24449,7 +24449,7 @@
    "topologyClass": "assembled-solid",
    "topologyRationale": "box 适合该部件的可展拓扑",
    "geometryDescriptor": {
-    "topologyIntent": "R18 顶棚前段：depth 1.45 → 1.00（span z 0.10..1.55 → 0.10..1.10）—— 前端超出车顶前缘 1.14，俯视时压在前风挡上沿之外（与 headliner-rear 同源的「白色大板」）",
+    "topologyIntent": "R18 顶棚前段：depth 1.45 → 1.00（span z 0.10..1.55 → 0.10..1.10）—— 前端超出车顶前缘 1.14，俯视时压在前风挡上沿之外（与 headliner-rear 同源的「白色大板」）；R77 W2批2：pivot y1.70→1.60，顶面1.71→1.61<roofGlassY1.647，退出poke名单治白板(z不裁,前缘1.10<1.14)",
     "edgeTreatment": {
      "type": "rounded",
      "bevelRadius": 0.004,
@@ -24562,7 +24562,7 @@
    "transform": {
     "position": [
      0,
-     1.7,
+     1.6,
      0.1
     ],
     "rotation": [
