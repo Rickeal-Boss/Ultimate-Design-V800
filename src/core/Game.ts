@@ -350,13 +350,10 @@ export class Game {
    * 增量却恒 0，而「整帧 DC 类别」同时显示 159→168（+9 = 阴影 pass），两者矛盾，
    * 说明该增量在 three 内部不是同步可见的。**结论：用整帧 DC 类别判**，
    * 由离线脚本出表（.qa/r39_perf/r39_probe.mjs 的 shadowClass 段）。 */
-  /** cabin 机位专用遮挡件（前挡玻璃），进入/离开车内视角时切换可见性 */
-  private readonly windshieldMeshes: THREE.Mesh[] = [];
   /** cabin 机位专用遮挡材质（第一排座椅独占克隆）—— 按材质开关，与合批解耦 */
   private readonly cabinOccluderMaterials: readonly THREE.Material[];
-  /** R19：内舱暗面开关（null = 该车未实现，安全跳过） */
-  private readonly paintShadow: ((interior: boolean) => void) | null;
-  private windshieldHidden = false;
+  // W1：删除 `paintShadow` / `windshieldHidden` 旧账本 —— 两车显隐统一收敛进适配器的
+  // `applyVisibility`（每帧无条件全量覆盖），Game 不再持有差量态 / 独立入口。
   /**
    * 复用同一份 HUD 载荷对象（perf-r14 热点分配清扫）：原先每帧 `hud.update({...})`
    * 要新建一个 12 字段对象字面量（60 fps × 12 字段 = 纯垃圾），Hud.update 只同步读、
@@ -416,27 +413,10 @@ export class Game {
     this.car = this.createCar();
     this.interiorViews = this.readInteriorViews();
     this.cabinOccluderMaterials = this.car.cabinOccluderMaterials ?? [];
-    // R19：车漆内舱暗面开关（body-lower/root 反面在 cabin 机位切 BackSide 深色）
-    this.paintShadow = this.car.setPaintShadow ?? null;
     if (import.meta.env.DEV) {
       console.info(`[cabin] 遮挡材质 ${this.cabinOccluderMaterials.length} 个`);
     }
     this.scene.add(this.car.root);
-    // R14 座舱机位：从车内看，前挡（glass-clear，全车唯一）会糊成一块灰板
-    // （env 反射 + 单面材质从背面看 = 半透明灰皮），驾驶视野被吃掉。
-    // 只在 cabin 机位期间隐藏前挡，其余机位原样保留 —— 只影响玻璃网格本身。
-    this.car.root.traverse((o) => {
-      const m = o as THREE.Mesh;
-      if (!m.isMesh) return;
-      const mats = Array.isArray(m.material) ? m.material : [m.material];
-      for (const mt of mats) {
-        const id = (mt as THREE.MeshPhysicalMaterial)?.userData?.sculptMaterial?.id;
-        if (id === 'glass-clear') {
-          this.windshieldMeshes.push(m);
-          break;
-        }
-      }
-    });
     this.fx = new FxSystems(this.scene, quality.tier);
 
     // ---- QA 消去法钩子：`#hidemat=<id1,id2>` 隐藏指定材质（合批后仍可按材质定罪）----
@@ -1339,39 +1319,30 @@ export class Game {
    * 车内机位遮挡切换（前挡 / 第一排座椅 / 车漆内舱暗面）：自由探索也能切到 cabin 系机位，
    * 故两模式共用。
    *
-   * W1（R7）：改为调适配器的 `applyVisibility` —— **每帧无条件全量覆盖**，删除旧的
+   * W1（两车）：改为调适配器的 `applyVisibility` —— **每帧无条件全量覆盖**，删除旧的
    * `windshieldHidden` 短路（`wantHide===this.windshieldHidden` 早退）。旧短路是雪崩根因：
-   * 模式未变即整体早退 ⇒ 任一系统短路/被抢先改写后无人自愈。R7 的 windshield /
-   * cabinOccluder / 内舱暗面 / poke / block / rearView 全收敛进适配器状态表，Game 不再
-   * 逐套写（单写者）。
-   * V800：无 `applyVisibility`（本批不动 / sha 冻结）⇒ 走旧差量路径，行为逐位不变。
+   * 模式未变即整体早退 ⇒ 任一系统短路/被抢先改写后无人自愈。R7 与 V800 的 windshield /
+   * cabinOccluder / 内舱暗面 / poke / block 全收敛进各自适配器状态表，Game 不再逐套写
+   * （单写者）。R7 额外含 rearView 维度（V800 无 rear-zone 机位）。
    */
   private syncInteriorOcclusion(): void {
     // R71：高精度方向盘极近距门控 —— 每帧算相机到高精盘世界距离，过近切程序化盘（防黑帧）。
-    // 必须先于 applyInteriorVisibility 调用：R7 的 updateSteeringGate 会刷新 cameraInRearZone
-    // / steerNearCam，当帧即被 applyVisibility 消费。GLB 未装载时适配器内部空操作。
+    // 必须先于 applyInteriorVisibility 调用：适配器的 updateSteeringGate 会刷新 steerNearCam
+    // （R7 还刷新 cameraInRearZone），当帧即被 applyVisibility 消费。GLB 未装载时空操作。
     this.car.updateSteeringGate?.(this.rig.camera);
     this.applyInteriorVisibility(isInteriorMode(this.rig.mode));
   }
 
   /**
    * 机位 → 可见性的统一入口（`syncInteriorOcclusion` + `#view=` QA 钩子共用，W1 收敛）。
-   * R7（有 `applyVisibility`）：每帧无条件调，幂等状态表全量覆盖。
-   * V800：旧差量路径（windshieldHidden 短路保留 ⇒ V800 行为逐位不变）。
+   * 两车都有 `applyVisibility` ⇒ 都走**无条件幂等**路径（每帧全量覆盖，无短路 / 无差量）。
    */
   private applyInteriorVisibility(interior: boolean): void {
     const applyVis = (
       this.car as CarLike & { applyVisibility?: (s: CarVisibilityState) => void }
     ).applyVisibility;
-    if (applyVis) {
-      applyVis({ interior }); // R7：无条件、无短路
-      return;
-    }
-    if (interior === this.windshieldHidden) return; // V800 旧短路（本批不动）
-    this.windshieldHidden = interior;
-    for (const m of this.windshieldMeshes) m.visible = !interior;
-    for (const m of this.cabinOccluderMaterials) m.visible = !interior;
-    this.paintShadow?.(interior);
+    // 两车均实现 applyVisibility；缺失则空操作（GLB 未装载时适配器内部已自兜底）。
+    applyVis?.({ interior });
   }
 
   /**

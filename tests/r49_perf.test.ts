@@ -73,12 +73,13 @@ describe('R49-A2 · 阴影投影代理', () => {
     }
   });
 
-  it('代理不进 setPaintShadow 的 glass/lamp 显隐循环（须全机位常驻投影）', () => {
-    // 该循环只遍历 shell.glassMeshes / shell.lampMeshes，代理不在其中 —— 结构不变即安全。
-    // 这里钉住「代理只调一次 build，且不在 setPaintShadow 内」。
+  it('代理不进 applyVisibility 的 glass/lamp 显隐循环（须全机位常驻投影）', () => {
+    // W1：旧 setPaintShadow 收敛进 applyVisibility（每帧全量覆盖显隐）。该循环只遍历
+    // shell.glassMeshes / shell.lampMeshes，代理不在其中 —— 结构不变即安全。
+    // 这里钉住「代理只调一次 build，且不在 applyVisibility 内」。
     const s = src(V800);
-    const paintShadowBody = s.slice(s.indexOf('const setPaintShadow = ('), s.indexOf('/* ══════════════ R38-P1-5'));
-    expect(paintShadowBody).not.toContain('buildShadowProxies');
+    const visBody = s.slice(s.indexOf('const applyVisibility = ('), s.indexOf('/* ══════════════ R38-P1-5'));
+    expect(visBody).not.toContain('buildShadowProxies');
   });
 });
 
