@@ -14,6 +14,17 @@ import * as THREE from 'three';
 /** 画布宽高比 3.5:1（标准号牌 440×140mm 口径） */
 const W = 700;
 const H = 200;
+/* ══ W2批4 · 透明件渲染排序治理（车牌贴花）══════════════════════════════════
+ * 车牌是 MeshBasic + 透明贴图 + depthWrite:false 的表面贴花（双车前后共 4 牌），
+ * 历史上无 renderOrder ⇒ three 透明队列按相机距离排序，近景会与内饰/玻璃错序。
+ * 表面贴花先画 ⇒ renderOrder=1（玻璃最后画 = 10，见各 Adapter 同名常量）。
+ * ⚠ 只设 renderOrder，不动 depthWrite / transparent / opacity / side。
+ * 回滚：`#vorder=off` ⇒ 不设 renderOrder（保持默认 0，逐位回 R77 原状）。 */
+/** `#vorder=off` ⇒ 关闭透明件显式 renderOrder（模块顶层求值一次，每处只读布尔） */
+const VORDER_ON: boolean =
+  typeof window === 'undefined' || !/(?:^|[#&])vorder=off/i.test(window.location.hash);
+/** 表面贴花：先画（贴在承载面上），同类件统一 1 */
+const TRANSPARENT_DECAL_RENDER_ORDER = 1;
 
 export function createGreenPlateTexture(_text: string): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
@@ -98,6 +109,7 @@ export function mountLicensePlate(opts: LicensePlateMount): THREE.Mesh {
   });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.name = opts.name;
+  if (VORDER_ON) mesh.renderOrder = TRANSPARENT_DECAL_RENDER_ORDER;
   mesh.castShadow = false;
   mesh.receiveShadow = false;
   mesh.position.set(opts.position[0], opts.position[1], opts.position[2]);

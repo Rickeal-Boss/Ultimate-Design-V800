@@ -169,6 +169,42 @@ const STEER_GATE_FAR_M = 0.3;
 /** `#r71steergate=off` ⇒ 恒显示高精盘（模块顶层求值一次，每帧只读布尔） */
 const R71_STEER_GATE: boolean =
   typeof window === 'undefined' || !/(?:^|[#&])r71steergate=off/i.test(window.location.hash);
+/* ══ W2批4 · 透明件渲染排序治理 ═══════════════════════════════════════════════
+ * 背景：车内近景透明件历史上只设 `depthWrite=false` 却无 `renderOrder` ⇒ three.js
+ * 透明队列按相机距离排序 ⇒ 近景玻璃/贴花闪烁、透出关系错乱。本批给它们钉显式
+ * renderOrder，稳定绘制顺序（值越大越后画）：
+ *   · 透明玻璃（glass-dark/clear 桶、rear-glass-upper 独占克隆）：renderOrder=10
+ *     —— 最后画，稳定透出内饰；
+ *   · 表面贴花/屏（welcome-carpet 迎宾光毯 / tailgate-maextro 贯通小字 /
+ *     gauge-screen 仪表屏；车牌见 plateTexture.ts）：renderOrder=1 —— 先画，
+ *     贴在承载面上（MeshBasic 无光照贴花先例）。
+ * ⚠ 只设 renderOrder，不动 depthWrite / transparent / opacity / side（外景态切换
+ *   depthWrite 涉 R44-6「透明玻璃透出座舱」观感依赖，回归风险高，留下一批单独做）。
+ * 回滚：`#vorder=off` ⇒ 不设 renderOrder（保持默认 0，逐位回 R77 原状）。 */
+/** `#vorder=off` ⇒ 关闭透明件显式 renderOrder（模块顶层求值一次，每处只读布尔） */
+const VORDER_ON: boolean =
+  typeof window === 'undefined' || !/(?:^|[#&])vorder=off/i.test(window.location.hash);
+/** 表面贴花/屏：先画（贴在承载面上），同类件统一 1 */
+const TRANSPARENT_DECAL_RENDER_ORDER = 1;
+/** 透明玻璃：最后画（透出内饰），同类件统一 10 */
+const TRANSPARENT_GLASS_RENDER_ORDER = 10;
+/** 给「标记为透明玻璃」的全部 mesh 钉 renderOrder（renderOrder 在 Object3D 上，
+ * 材质无此属性；共享材质 ⇒ 逐 mesh 设，值一致故同材质件彼此相对次序不变）。
+ * 玻璃材质在建桶时打 `userData.vorderGlass = true` 标记，此处按标记命中。 */
+function applyGlassRenderOrder(root: THREE.Object3D): number {
+  if (!VORDER_ON) return 0;
+  let hit = 0;
+  root.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    const mats = Array.isArray(m.material) ? m.material : [m.material];
+    if (mats.some((mm) => (mm as THREE.MeshPhysicalMaterial)?.userData?.vorderGlass === true)) {
+      m.renderOrder = TRANSPARENT_GLASS_RENDER_ORDER;
+      hit += 1;
+    }
+  });
+  return hit;
+}
 /** R71：距离门控每帧复用的临时向量（避免每帧 new 的 GC 抖动） */
 const STEER_GATE_TMP_VEC = new THREE.Vector3();
 const STEER_GATE_TMP_VEC_B = new THREE.Vector3();
@@ -2017,6 +2053,7 @@ export function createV800CarAdapter(tier: QualityTier = 'high', paintId: string
       mat.transmission = 0;
       mat.transparent = true;
       mat.depthWrite = false;
+      mat.userData.vorderGlass = true; // W2批4：标记为透明玻璃，供 applyGlassRenderOrder 命中
       // 复用既有降级不透明度表（玻璃/crystal 语义），质量档只在 high 上再放开一档
       const fallback = GLASS_OPACITY_FALLBACK[id] ?? DEFAULT_GLASS_OPACITY;
       mat.opacity = Math.min(1, Math.max(fallback * 0.94, opacityFor * 0.9));
@@ -2243,6 +2280,7 @@ export function createV800CarAdapter(tier: QualityTier = 'high', paintId: string
   });
   const welcomeMesh = new THREE.Mesh(welcomeGeo, welcomeMat);
   welcomeMesh.name = 'welcome-carpet';
+  if (VORDER_ON) welcomeMesh.renderOrder = TRANSPARENT_DECAL_RENDER_ORDER;
   welcomeMesh.castShadow = false;
   welcomeMesh.receiveShadow = false;
   body.add(welcomeMesh);
@@ -2912,6 +2950,7 @@ export function createV800CarAdapter(tier: QualityTier = 'high', paintId: string
         });
         const maextro = new THREE.Mesh(maextroGeo, maextroMat);
         maextro.name = 'tailgate-maextro';
+        if (VORDER_ON) maextro.renderOrder = TRANSPARENT_DECAL_RENDER_ORDER;
         maextro.castShadow = false;
         maextro.receiveShadow = false;
         maextro.position.set(
@@ -3400,6 +3439,7 @@ const R48_LAMP_TONE: boolean =
     // 不透明黑底会把 READY/P 盖成「黑盒压屏」。数字/力度条内容自身着色，其余全透明。
     mat.transparent = true;
     mat.depthWrite = false;
+    gaugeMesh.renderOrder = TRANSPARENT_DECAL_RENDER_ORDER; // W2批4（gaugeMesh 已判非空）
     mat.needsUpdate = true;
   }
   let lastGaugeKey = '';
@@ -3807,6 +3847,7 @@ const R48_LAMP_TONE: boolean =
       rearGlassMat.transmission = 0;
       rearGlassMat.transparent = true;
       rearGlassMat.depthWrite = false;
+      rearGlassMat.userData.vorderGlass = true; // W2批4：标记为透明玻璃，供 applyGlassRenderOrder 命中
       rearGlassMat.opacity = 0.8;
       rearGlassMat.color.set(0x10151b);
       rearGlassMat.metalness = 0.22;
@@ -3833,6 +3874,18 @@ const R48_LAMP_TONE: boolean =
         console.warn('[V800Adapter] rear-glass-upper 未命中任何 leaf mesh（期望 ≥1）——保持工厂 paint-lower');
       }
     }
+  }
+
+  // W2批4：玻璃钉显式 renderOrder（在 Object3D 上，非材质）。在 greenhouse 桶（上方
+  // transmission→alpha）与 rear-glass-upper 克隆两处材质都打 `userData.vorderGlass`
+  // 标记后统一遍历一次 ⇒ 整车透明玻璃同 renderOrder=10，稳定透出内饰。
+  // `#vorder=off` ⇒ applyGlassRenderOrder 内部 no-op，逐位回 R77（renderOrder 默认 0）。
+  {
+    const nGlass = applyGlassRenderOrder(model);
+    if (nGlass > 0)
+      console.info(
+        `[V800Adapter] W2批4 透明玻璃 renderOrder=${TRANSPARENT_GLASS_RENDER_ORDER}：${nGlass} mesh`
+      );
   }
 
   // ---- R21-B/C：尾灯 / 前大灯手写几何接线（parts/tailLamp.ts + parts/headLamp.ts）----

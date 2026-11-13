@@ -118,6 +118,39 @@ const R71_REAR_VIEW: boolean =
 /** `#r71r7roof=off` ⇒ 关闭 cabinRear 剔顶 + headliner 隐藏（回 R70 前） */
 const R71_REAR_ROOF: boolean =
   typeof window === 'undefined' || !/(?:^|[#&])r71r7roof=off/i.test(window.location.hash);
+/* ══ W2批4 · 透明件渲染排序治理 ═══════════════════════════════════════════════
+ * 背景：车内近景透明件历史上只设 `depthWrite=false` 却无 `renderOrder` ⇒ three.js
+ * 透明队列按相机距离排序 ⇒ 近景玻璃/贴花闪烁、透出关系错乱。本批给它们钉显式
+ * renderOrder，稳定绘制顺序（值越大越后画）：
+ *   · 透明玻璃（glass-dark / glass-clear）：renderOrder=10 —— 最后画，稳定透出内饰；
+ *   · 表面贴花/屏（welcome-carpet / 车牌 / maextro / gauge-screen）：renderOrder=1
+ *     —— 先画，贴在承载面上（本文件只涉玻璃，贴花常量见 V800Adapter）。
+ * ⚠ 只设 renderOrder，不动 depthWrite / transparent / opacity / side（外景态切换
+ *   depthWrite 涉 R44-6「透明玻璃透出座舱」观感依赖，回归风险高，留下一批单独做）。
+ * 回滚：`#vorder=off` ⇒ 不设 renderOrder（保持默认 0，逐位回 R77 原状）。 */
+/** `#vorder=off` ⇒ 关闭透明件显式 renderOrder（模块顶层求值一次，每处只读布尔） */
+const VORDER_ON: boolean =
+  typeof window === 'undefined' || !/(?:^|[#&])vorder=off/i.test(window.location.hash);
+/** 透明玻璃：最后画（透出内饰），同类件统一 10 */
+const TRANSPARENT_GLASS_RENDER_ORDER = 10;
+/** 给「承载透明玻璃材质」的全部 mesh 钉 renderOrder（renderOrder 在 Object3D 上，
+ * 材质无此属性；共享材质 ⇒ 逐 mesh 设，值一致故同材质件彼此相对次序不变）。 */
+function applyGlassRenderOrder(root: THREE.Object3D, matIds: ReadonlyArray<string>): number {
+  if (!VORDER_ON) return 0;
+  const ids = new Set(matIds);
+  let hit = 0;
+  root.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    const sm = (m.material as { userData?: { sculptMaterial?: { id?: string } } })?.userData
+      ?.sculptMaterial?.id;
+    if (typeof sm === 'string' && ids.has(sm)) {
+      m.renderOrder = TRANSPARENT_GLASS_RENDER_ORDER;
+      hit += 1;
+    }
+  });
+  return hit;
+}
 /** cabinRear 眼点装配局部 z（车厢后部中央，R69 重标） */
 const R7_REAR_EYE_LOCAL_Z = -1.30;
 /** 第一排座椅装配局部 z（前排 H 点）——后排区判定下界（去前排留余量） */
@@ -708,6 +741,15 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
       mat.depthWrite = false;
       mat.needsUpdate = true;
     }
+  }
+  // W2批4：玻璃钉显式 renderOrder（在 Object3D 上，非材质；两档共用一条遍历）。
+  // `#vorder=off` ⇒ applyGlassRenderOrder 内部 no-op，逐位回 R77（renderOrder 默认 0）。
+  {
+    const nGlass = applyGlassRenderOrder(model, ['glass-dark', 'glass-clear']);
+    if (nGlass > 0)
+      console.info(
+        `[R7Adapter] W2批4 透明玻璃 renderOrder=${TRANSPARENT_GLASS_RENDER_ORDER}：${nGlass} mesh`
+      );
   }
 
   // ---- 车漆：墨绿金属漆 clearcoat 语义（工厂已给标量，这里补齐 env 与色调）----

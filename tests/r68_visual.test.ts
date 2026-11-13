@@ -142,12 +142,11 @@ const R68_PENDING_TRACK_FILES = [
 
 /** 第 0 条：r67 护栏全文件冻结（CRLF 规范化后 UTF-8 sha256）。R71 更新基线：该护栏新增 R71 侧贴/盖板填充 shim 探针，属预期改动。 */
 const R67_GUARD_SHA256 = 'e4a350a82699bf2a4c8b93e18eff0e1295faaaa0b1646b623c13c38723ebc60f';
-/** V800Adapter.ts 全文件冻结（CRLF 规范化后 UTF-8 sha256）。W1 迁移更新基线：显隐系统收敛为
- *  幂等可见性状态表（buildVisibilityTable + applyVisibility，照搬 R74 R7 架构），删旧账本
- *  lastInteriorState / proceduralExteriorHidden / r44Hidden 系列 / r44Poke 系列 /
- *  r47BlockHidden 及 setPaintShadow / setExteriorHidden / setPokeHidden /
- *  setCabinBlocksHidden / buildPokeList 差量实现，属预期改动。 */
-const ADAPTER_SHA256 = '6125d9ab5064b97502a58eee9294501f34a4ec31895e63c357ccf60abe678620';
+/** V800Adapter.ts 全文件冻结（CRLF 规范化后 UTF-8 sha256）。W2批4 更新基线：透明件渲染排序
+ *  治理——给 depthWrite=false 的玻璃（greenhouse 桶 + rear-glass-upper 克隆）经
+ *  userData.vorderGlass 标记批量钉 renderOrder=10、welcome-carpet / tailgate-maextro /
+ *  gauge-screen 表面贴花钉 renderOrder=1，新增 `#vorder=off` 回滚钩子，属预期改动。 */
+const ADAPTER_SHA256 = 'bd4734c410e296055c63b2a4b0d4ab08b625633acc487034bc6256e69d01ae4a';
 /** off 态 / 原 atlas（HEAD=dc765a4）像素缓冲指纹 —— 供「默认 vs off」对照差分。 */
 const R68_C2_ATLAS_BASELINE_SHA256 = '1bb27545a399a7d7e14f56f778f9a309973298a508ca5e97a90ba76784183347';
 const R68_R7_BAND_SLICE_SHA256_BASELINE = '08ecfe355d212a1252665b381305df1e2b6cf1640cb055739ab4c8ec1814038c';
