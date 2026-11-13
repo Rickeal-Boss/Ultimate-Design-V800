@@ -24678,7 +24678,7 @@
    "topologyClass": "assembled-solid",
    "topologyRationale": "box 适合该部件的可展拓扑",
    "geometryDescriptor": {
-    "topologyIntent": "R18 顶棚后段：span z -0.925..2.425 → -2.275..1.175（前端原来伸出到 z2.425，在机盖上方露出一块 1.52m 宽的白色平板，这是 roof/front34 机位白色大板的根因）；同时补齐后舱顶棚（原后端只到 -0.925）；R76 W2批1：实测前缘 z1.175 仍探出车顶前缘 1.14 → 裁 scale.z 3.45→3.375（前缘收至 1.10，后端 -2.275 保后舱），并降 y 1.726→1.62（顶面 1.736→1.63 < roofGlassY 1.647，退出 poke 名单），`#vgeo=off` 回 R75",
+    "topologyIntent": "R18 顶棚后段：span z -0.925..2.425 → -2.275..1.175（前端原来伸出到 z2.425，在机盖上方露出一块 1.52m 宽的白色平板，这是 roof/front34 机位白色大板的根因）；同时补齐后舱顶棚（原后端只到 -0.925）；R76 W2批1：实测前缘 z1.175 仍探出车顶前缘 1.14 → 裁 scale.z 3.45→3.375（前缘收至 1.10，后端 -2.275 保后舱），并降 y 1.726→1.62（顶面 1.736→1.63 < roofGlassY 1.647，退出 poke 名单），`#vgeo=off` 回 R75；R79 W2批3 去重叠：pivot y1.62→1.63，与 starlight(顶1.603,z[-2.35,-0.55]) 的 z 重叠区拉开 y 间隙(底1.62距1.603仅0.007→现底1.62距0.017)，仍<roofGlassY1.647 不穿顶",
     "edgeTreatment": {
      "type": "rounded",
      "bevelRadius": 0.004,
@@ -24791,7 +24791,7 @@
    "transform": {
     "position": [
      0,
-     1.62,
+     1.63,
      -2.275
     ],
     "rotation": [
@@ -27448,7 +27448,7 @@
    "topologyClass": "assembled-solid",
    "topologyRationale": "薄板/回转体，硬表面可展拓扑",
    "geometryDescriptor": {
-    "topologyIntent": "R18 星空顶后移：span z 0.300..1.630 → -1.45..0.35（center -0.55 / depth 1.80），宽 1.36→1.30，并从 headliner-front(1.69..1.71) 之上降到 y1.682 之下 —— 原先它夹在 headliner-front/rear 之间，只有探出车顶的前段可见，正好撒在机盖上方",
+    "topologyIntent": "R18 星空顶后移：span z 0.300..1.630 → -1.45..0.35（center -0.55 / depth 1.80），宽 1.36→1.30，并从 headliner-front(1.69..1.71) 之上降到 y1.682 之下 —— 原先它夹在 headliner-front/rear 之间，只有探出车顶的前段可见，正好撒在机盖上方；R79 同步规格漂移：R71 已把 pivot y1.682→1.6(顶1.603<roofGlassY1.647,脱pokeList)但当时漏同步spec, 本批补齐 spec=1.6 与 .ts 一致",
     "edgeTreatment": {
      "type": "rounded",
      "bevelRadius": 0.0015,
@@ -27561,7 +27561,7 @@
    "transform": {
     "position": [
      0,
-     1.682,
+     1.6,
      -1.45
     ],
     "rotation": [
