@@ -111,29 +111,20 @@ const R7_FRONT_SEAT_LOCAL_Z = 0.18;
 /** body 局部 z < 此值 ⇒ 相机在后排区（cabinRear）。取 rear 眼点与前排 H 点中点。 */
 const R7_REAR_ZONE_LOCAL_Z =
   (R7_REAR_EYE_LOCAL_Z + R7_FRONT_SEAT_LOCAL_Z) / 2; // ≈ -0.56
-/** 主驾眼点装配局部 x（+X 车左，R7 左舵）——主驾区判定：z 过前排线且 x 在主驾侧 */
-const R7_DRIVER_EYE_LOCAL_X = 0.300;
 /** cabinRear 剔顶阈值（world y）——眼点 1.42 之上全剔（车顶 + 风挡上梁 header），
  *  消除头顶白平板；比 cabinDriver 的 R50_ROOF_CLIP_WORLD_Y(1.30) 更高（后排不保 hood）。 */
 const R7_REAR_ROOF_CLIP_WORLD_Y = 1.42;
 
-/* ── R71-driver · cabinDriver 主驾视角看得见主驾座椅 + A 柱内衬 ───────────────
- * 用户主诉（真机主驾视角）：主驾视角看不见主驾座椅（方向盘下方座位整块缺失）、
- * 看不见 A 柱内衬。根因：CABIN_HIDE_RE 把 `seat-(driver|passenger)-` 与 `apillar-inner`
- * 整批纳入 cabin 隐藏（R24 为治「近场内饰穿模成大斜面」的预防性隐藏）。
- * 探针（tools/r71_driver_probe.mjs，主驾眼点 [0.30,1.29,-0.09] → target [0.15,1.16,1.95] fov68）：
- *   · apillar-inner-l  4/8 角点进视锥、NDC x[-1.49,-0.50]（画面左缘竖条）、最小深度 0.367m
- *     不触近平面 ⇒ **不穿模，纯预防性隐藏** ⇒ 豁免即让 A 柱内衬回画面左缘。
- *   · seat-driver-*    角点 NDC 极端（部分在相机后方）、座椅顶 y1.048 < 眼点 1.29 ⇒
- *     前视主视线不被挡，「看不见」= 被整批隐藏；显示后下幅入画（坐垫 y0.6 / 靠背 y~1.05）。
- *   · bpillar-l        NDC x>1.5 全在画面外（正侧方）⇒ 主驾前视本不该见，不动。
- * 落地（与 cabinRear 豁免同构）：主驾座椅造**独占**材质克隆（cabinHidable:false ⇒ 不进
- * cabinOccluderMats，不被 Game 材质级隐藏连坐），A 柱复用 R71 修②已记的 apillarClone；
- * 可见性由「相机是否在主驾区」逐帧 re-assert（applyRearViewOverrides 扩为同时覆盖主驾区）。
- * 回滚：`#r71r7driver=off` ⇒ 关闭主驾区豁免（回 R71 现状：主驾座椅/A 柱在主驾机位维持隐藏）。 */
-/** `#r71r7driver=off` ⇒ 关闭 cabinDriver 对 seat-driver / apillar-inner 的可见性豁免 */
-const R71_DRIVER_VIEW: boolean =
-  typeof window === 'undefined' || !/(?:^|[#&])r71r7driver=off/i.test(window.location.hash);
+/* ── R72 止血 · 已回退 R72 的「cabinDriver 主驾座椅/A柱豁免」──────────────────
+ * R72 曾让主驾机位看得见 seat-driver + apillar-inner：用「driverSeatMat 独占克隆
+ * (cabinHidable:false) + applyRearViewOverrides 扩 driver 分支 + cameraInDriverZone
+ * 逐帧 re-assert」。真机回归：全车贴图失效 + 车辆上半部消失 + 座椅只在主驾出现且
+ * 只一个 + 仪表盘消失。根因 = 与 rearSeatMat / cabinOccluderMats / Game 材质级隐藏
+ * **多套系统交叉写同一属性**（见《致主理人_车内视角穿帮结构性结论》§3.2：62.6% mesh
+ * 可见性由 ≥2 套系统写入顺序决定），触发状态机雪崩。
+ * 裁决：按该文档「别再往可见性开关层叠加补丁」——回退整套 driverSeat 机制，seat-driver
+ *   回归 R71 稳定态（由 cabinOccluderMats 材质级隐藏管理）。主驾座椅可见性留待文档
+ *   W1（幂等状态表）/ W2（削几何）根治，不再用独占克隆打补丁。`#r71r7driver` 钩子废除。 */
 
 /** R50-B：R7 眼点校准开关（`#r49r7eye=off` 逐位回 R49 前）。 */
 const R49R7EYE_FIX: boolean =
@@ -1259,9 +1250,6 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
   let apillarClone: THREE.MeshPhysicalMaterial | null = null;
   /** 程序化顶棚（headliner，suede-ivory）——cabinRear 藏之，消除头顶白平板 */
   let headlinerMesh: THREE.Mesh | null = null;
-  /** seat-driver-* 独占材质克隆（cabinHidable:false ⇒ 不进 cabinOccluderMats，由本段自管） */
-  let driverSeatMat: THREE.MeshPhysicalMaterial | null = null;
-  const driverSeatMeshes: THREE.Mesh[] = [];
   {
     for (const id of ['seat-rear-cushion', 'seat-rear-back'] as const) {
       const node = byId.get(id);
@@ -1292,53 +1280,22 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
       });
     }
     headlinerMesh = (byId.get('headliner') as THREE.Mesh | undefined) ?? null;
-    // R71-driver：主驾座椅独占克隆（同 seat-rear 模式）——cabinHidable:false ⇒ 不进
-    //   cabinOccluderMats，不被 Game 材质级隐藏连坐；可见性由主驾区逐帧 re-assert。
-    //   seat-driver-cushion/back 仍被 R24 兜底段扫成 leather-ivory cabinHidable，但此处
-    //   已把 mesh.material 换成这支独占克隆，故 Game 遍历 cabinOccluderMats（原 leather-ivory）
-    //   写 visible=false 不再连坐主驾座椅；外景隐藏由 setCabinBlocksHidden（按 r44 材质判据）
-    //   兜底，与 cabinOccluder 正交。
-    for (const id of ['seat-driver-cushion', 'seat-driver-back'] as const) {
-      const node = byId.get(id);
-      if (!node) continue;
-      node.traverse((o) => {
-        const mesh = o as THREE.Mesh;
-        if (!mesh.isMesh) return;
-        driverSeatMeshes.push(mesh);
-        const src = (Array.isArray(mesh.material) ? mesh.material[0] : mesh.material) as THREE.MeshPhysicalMaterial | undefined;
-        if (src && !driverSeatMat) {
-          driverSeatMat = src.clone();
-          driverSeatMat.userData = { ...src.userData, cabinHidable: false };
-          driverSeatMat.needsUpdate = true;
-        }
-        if (driverSeatMat) mesh.material = driverSeatMat;
-      });
-    }
   }
-  /** 相机是否在主驾区（cabinDriver）——由 updateSteeringGate 每帧按 body 局部 z/x 更新 */
-  let cameraInDriverZone = false;
   /** 相机是否在后排区（cabinRear）——由 updateSteeringGate 每帧按 body 局部 z 更新 */
   let cameraInRearZone = false;
   /**
-   * cabinRear 后排视角 + cabinDriver 主驾视角可见性覆盖（幂等，每帧/每机位切换调用）。
+   * cabinRear 后排视角可见性覆盖（幂等，每帧/每机位切换调用）。
    * @param interior 当前是否车内机位（setPaintShadow 传入）
    * @param inRear   相机是否在后排区（updateSteeringGate 传入）
-   * @param inDriver 相机是否在主驾区（updateSteeringGate 传入）
    */
-  const applyRearViewOverrides = (interior: boolean, inRear: boolean, inDriver: boolean): void => {
+  const applyRearViewOverrides = (interior: boolean, inRear: boolean): void => {
     const rear = R71_REAR_VIEW && interior && inRear;
-    // R71-driver：主驾区要看主驾座椅 + A 柱内衬。seat-driver 独占材质/网格显（探针实证
-    //   前视主视线不被座椅挡，纯预防性隐藏 ⇒ 豁免）；A 柱内衬复用 apillarClone 显（进视锥、
-    //   不触近平面 ⇒ 不穿模）。副驾机位（inDriver=false，|x| 同主驾）不豁免座椅，维持原隐藏。
-    const driver = R71_DRIVER_VIEW && interior && inDriver;
-    if (driverSeatMat) driverSeatMat.visible = driver;
-    for (const mesh of driverSeatMeshes) mesh.visible = driver;
-    // ② cabinRear 要看后排长凳 + A 柱：seat-rear 独占材质/网格显；A 柱克隆材质显（主驾区亦显）。
+    // ② cabinRear 要看后排长凳 + A 柱：seat-rear 独占材质/网格显；A 柱克隆材质显。
     //    主驾/副驾（rear=false）seat-rear 由 leather-ivory 材质级隐藏；
-    //    A 柱由 Game 遍历 cabinOccluderMats 写 material.visible=false，此处按 rear||driver 覆盖。
+    //    A 柱由 Game 遍历 cabinOccluderMats 写 material.visible=false，此处按 rear 覆盖。
     if (rearSeatMat) rearSeatMat.visible = rear;
     for (const mesh of rearSeatMeshes) mesh.visible = rear;
-    if (apillarClone) apillarClone.visible = rear || driver;
+    if (apillarClone) apillarClone.visible = rear;
     // ③ cabinRear 藏程序化顶棚（消除头顶米白平板）。只在进后排区时写 false，离开不写
     //    true —— 交还原主（外景 setExteriorHidden 按 sculpt id keep / cabin 态本就可见），
     //    避免与 setExteriorHidden 的恢复逻辑打架。
@@ -1681,10 +1638,10 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
         p.mesh.visible = !proceduralExteriorHidden;
       }
     }
-    // R71 修②/③ + R71-driver：cabinRear 后排 / cabinDriver 主驾视角可见性覆盖（座椅/A 柱
-    // 豁免 + 藏顶棚）。放在最后，覆盖上面 setCabinBlocksHidden / 材质级隐藏写入的态；每帧
-    // updateSteeringGate 会再 re-assert 一次（相机在后排/主驾区实时跟踪）。
-    applyRearViewOverrides(interior, cameraInRearZone, cameraInDriverZone);
+    // R71 修②/③：cabinRear 后排视角可见性覆盖（座椅/A 柱豁免 + 藏顶棚）。放在最后，
+    // 覆盖上面 setCabinBlocksHidden / 材质级隐藏写入的态；每帧 updateSteeringGate 会再
+    // re-assert 一次（相机在后排区实时跟踪）。
+    applyRearViewOverrides(interior, cameraInRearZone);
   };
 
   /* ══════════════ R44 外部壳（外观 GLB 资产化）══════════════
@@ -2006,29 +1963,16 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
     setSteeringCameraDistance: applySteerGate,
     updateSteeringGate(camera: THREE.Camera): void {
       /* R71：Game 每帧调用 —— 高精盘挂 body 下（有变换），须用世界位置算距离。 */
-      // R71 修②/③ + R71-driver：先按 body 局部 z 判定相机是否在后排区（cabinRear）、
-      // 按 z 过前排线 + x 在主驾侧判定主驾区（cabinDriver）。放在 R71_STEER_GATE/
+      // R71 修②/③：先按 body 局部 z 判定相机是否在后排区（cabinRear）。放在 R71_STEER_GATE/
       // steeringMesh 早退之前 —— GLB 未装载时也要跟踪，否则首帧 applyRearViewOverrides
       // 拿到陈旧标记。Game 在 syncInteriorOcclusion（材质级遮挡 + setPaintShadow）之前
-      // 调本方法 ⇒ 这里刷新的 cameraInRearZone/cameraInDriverZone 当帧即被 setPaintShadow
-      // / 覆盖逻辑消费。
+      // 调本方法 ⇒ 这里刷新的 cameraInRearZone 当帧即被 setPaintShadow / 覆盖逻辑消费。
       camera.getWorldPosition(STEER_GATE_TMP_VEC);
       const localCam = body.worldToLocal(STEER_GATE_TMP_VEC);
       const rearNow = R71_REAR_VIEW && localCam.z < R7_REAR_ZONE_LOCAL_Z;
       if (rearNow !== cameraInRearZone) {
         cameraInRearZone = rearNow;
-        applyRearViewOverrides(lastInteriorState, cameraInRearZone, cameraInDriverZone);
-      }
-      // R71-driver：主驾区 = 前排段（z 过前排 H 点线）且相机在主驾侧（body 局部 x 与主驾
-      //   眼点同号）。cabinDriver 眼点 z=-0.09 > 前排线 0.18? 否 —— 眼点略靠后，故用
-      //   「z > R7_REAR_ZONE_LOCAL_Z（非后排）且非副驾侧」界定，兼容 cabinDriver/cabin 通用态。
-      const driverNow =
-        R71_DRIVER_VIEW &&
-        localCam.z >= R7_REAR_ZONE_LOCAL_Z &&
-        Math.sign(localCam.x) === Math.sign(R7_DRIVER_EYE_LOCAL_X);
-      if (driverNow !== cameraInDriverZone) {
-        cameraInDriverZone = driverNow;
-        applyRearViewOverrides(lastInteriorState, cameraInRearZone, cameraInDriverZone);
+        applyRearViewOverrides(lastInteriorState, cameraInRearZone);
       }
       if (!R71_STEER_GATE || !steeringMesh) return;
       steeringMesh.getWorldPosition(STEER_GATE_TMP_VEC_B);
