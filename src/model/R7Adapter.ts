@@ -118,6 +118,20 @@ const R71_REAR_VIEW: boolean =
 /** `#r71r7roof=off` ⇒ 关闭 cabinRear 剔顶 + headliner 隐藏（回 R70 前） */
 const R71_REAR_ROOF: boolean =
   typeof window === 'undefined' || !/(?:^|[#&])r71r7roof=off/i.test(window.location.hash);
+
+/* ── R80 · 主驾视角「看得见座椅 / A·B 柱 / 门内饰」（用户连续 4 轮打回）────────────
+ * 病根（R80 主理人复核）：`CABIN_HIDE_RE` 把 `seat-(driver|passenger)-` / `apillar-inner`
+ *   / `door-card|door-trim|door-speaker` 整批扫成 cabinHidable ⇒ cabin 态材质级隐藏；
+ *   而状态表只有「cabinRear 豁免」一条通道，**主驾机位没有任何豁免** ⇒ 主驾看穿座椅/柱。
+ * R72→R73 的教训：当时用独占克隆 + applyRearViewOverrides 扩 driver 分支 + cameraInDriverZone
+ *   逐帧 re-assert，与 rearSeatMat / cabinOccluderMats / Game 材质级隐藏**多套交叉写**
+ *   ⇒ 状态机雪崩。本波**不新增任何写入点**：只在状态表里给这批材质打一个新 tag
+ *   `driverStruct`，由唯一的 applyVisibility 每帧覆盖（语义与 rearSeat / apillar 同构）。
+ * 语义：driverStruct 材质 = 「车厢前半（主驾/副驾/普通 cabin 眼点）可见、外景与后排隐藏」。
+ *   判据用**相机 body 局部 z** 分区（与 rearZone 同源，不依赖 rig.mode）。
+ * 回滚：`#r80r7seat=off` ⇒ 这批件退回 cabinHidable（逐位回 R79）。 */
+const R80_R7_DRIVER_VIEW: boolean =
+  typeof window === 'undefined' || !/(?:^|[#&])r80r7seat=off/i.test(window.location.hash);
 /* ══ W2批4 · 透明件渲染排序治理 ═══════════════════════════════════════════════
  * 背景：车内近景透明件历史上只设 `depthWrite=false` 却无 `renderOrder` ⇒ three.js
  * 透明队列按相机距离排序 ⇒ 近景玻璃/贴花闪烁、透出关系错乱。本批给它们钉显式
@@ -281,11 +295,16 @@ const GAUGE_MIN_INTERVAL = 1 / 15;
  * 门控：相机过近显示程序化盘、过远恢复高精盘（滞回）。阈值已收紧到盘半径+余量，
  *   正常主驾眼点距盘 ≈0.55m 恒显示高精盘，仅相机真正贴脸(<盘缘)才兜底切低模。
  * 回滚钩子：`#r71steergate=off` ⇒ 关闭距离门控，恒显示高精盘。 */
-/** 相机到高精盘距离 < NEAR ⇒ 切程序化盘。R71 收紧：盘半径(0.225)+余量 ≈0.25，
- *   主驾 0.55m 恒高精盘，消除上一轮 0.32 阈值在主驾视角附近穿阈值的高模↔低模跳变。 */
-const STEER_GATE_NEAR_M = 0.25;
-/** 相机到高精盘距离 > FAR ⇒ 恢复高精盘（0.05m 滞回带防近阈值处抖动） */
-const STEER_GATE_FAR_M = 0.3;
+/* ── R80 · 门控判据改「盘心距离」→「相机到盘包围球 clearance」（与 V800Adapter 同构）──
+ * R71/R72 的 0.25/0.30 是**盘心距离**阈值，而主驾眼点到盘心 ≈0.55m ⇒ 判据恒为远、
+ *   门控永不进入近态 ⇒ 高精盘恒显，盘缘扫过 near 区时整帧黑闪（V800 尤其明显）。
+ * 修法：clearance = |cam − 盘心| − 盘包围球半径(世界)；< 0.16 进近态、> 0.26 退（滞回）。
+ *   主驾 clearance ≈0.325 ⇒ 恒显高精盘（用户要求），仅贴到盘面 16cm 内才切程序化盘。
+ * 回滚钩子：`#r71steergate=off` ⇒ 关闭整套门控，恒显示高精盘。 */
+/** 相机到盘**表面**的 clearance < NEAR ⇒ 切程序化盘 */
+const STEER_GATE_NEAR_M = 0.16;
+/** clearance > FAR ⇒ 恢复高精盘（0.10m 滞回带防阈值处抖动） */
+const STEER_GATE_FAR_M = 0.26;
 /** `#r71steergate=off` ⇒ 恒显示高精盘（模块顶层求值一次，每帧只读布尔） */
 const R71_STEER_GATE: boolean =
   typeof window === 'undefined' || !/(?:^|[#&])r71steergate=off/i.test(window.location.hash);
@@ -351,49 +370,8 @@ const TEXTURE_SLOTS = [
 
 const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);
 
-/**
- * R50：按 world-y 阈值把 bodyMesh 的「车顶区」三角形从 index 退化化，用于 cabin 态
- * 消除车顶内壁对前向风挡视线的遮挡（病根 / 阈值来历见 R50_ROOF_CLIP_WORLD_Y 注）。
- *
- * 纯函数（只读 geometry，返回新数组，无副作用）⇒ 可单测。
- * - 分类判据：三角形三顶点的最大 world y（= local y × scale）> roofWorldY ⇒ 车顶 / 上框。
- * - `culled`：车顶三角三索引置 0（退化零面积 ⇒ GPU 不光栅化），其余照抄 ⇒ cabin 态用。
- * - `full`：原 index 逐位副本 ⇒ 外部机位恢复用（外部视角逐位不变）。
- * - bodyMesh 与 4 轮**各自独立 geometry**（轮不在 bodyMesh.geometry 上）⇒ 剔除不连带轮；
- *   也不新建材质实例（沿用共享 paint 材质）⇒ 无变体重涂 / 轮耦合风险。
- * - 非 Uint32 index 或无 index/position ⇒ 返回 null（调用方跳过，等同关闭剔除）。
- *   body 526,457 顶点 > 65535 ⇒ GLB 必为 Uint32 index（882,300 tri × 3）。
- */
-export function buildRoofCulledIndex(
-  geometry: THREE.BufferGeometry,
-  scale: number,
-  roofWorldY: number,
-): { full: Uint32Array; culled: Uint32Array; roofTris: number; totalTris: number } | null {
-  const index = geometry.getIndex();
-  if (!index || !(index.array instanceof Uint32Array)) return null;
-  const pos = geometry.getAttribute('position');
-  if (!pos) return null;
-  const src = index.array;
-  const totalTris = Math.floor(src.length / 3);
-  const roofLocal = roofWorldY / scale;
-  const full = new Uint32Array(src); // 副本（外部机位）
-  const culled = new Uint32Array(src); // 副本（cabin 剔除）
-  let roofTris = 0;
-  for (let t = 0; t < totalTris; t++) {
-    const i0 = src[t * 3];
-    const i1 = src[t * 3 + 1];
-    const i2 = src[t * 3 + 2];
-    // BufferAttribute.getY 对普通 / 交错 attribute 都成立
-    const maxY = Math.max(pos.getY(i0), pos.getY(i1), pos.getY(i2));
-    if (maxY > roofLocal) {
-      culled[t * 3] = 0;
-      culled[t * 3 + 1] = 0;
-      culled[t * 3 + 2] = 0;
-      roofTris++;
-    }
-  }
-  return { full, culled, roofTris, totalTris };
-}
+import { buildRoofCulledIndex } from './roofCull';
+export { buildRoofCulledIndex } from './roofCull';
 
 /**
  * N-5（R34 实锤修复）：R7 尾灯 **静态**目标发光强度。
@@ -1270,7 +1248,12 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
       ')'
     );
     const cloneBySrc = new Map<THREE.MeshPhysicalMaterial, THREE.MeshPhysicalMaterial>();
+    /* R80：主驾结构件（座椅/A·B 柱/门内饰）走「driverStruct」通道，不进 cabinOccluderMats。
+     * 与 cabinHidable 克隆分两张 map（同一源材质可能同时被结构件与非结构件共享）。 */
+    const R80_DRIVER_STRUCT_RE = /^(seat-driver-|apillar-inner|door-card|door-trim|door-speaker)/;
+    const driverCloneBySrc = new Map<THREE.MeshPhysicalMaterial, THREE.MeshPhysicalMaterial>();
     let swept = 0;
+    let driverSwept = 0;
     model.traverse((o) => {
       const mesh = o as THREE.Mesh;
       if (!mesh.isMesh) return;
@@ -1278,6 +1261,19 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
       if (!id || !CABIN_HIDE_RE.test(id)) return;
       const src = (Array.isArray(mesh.material) ? mesh.material[0] : mesh.material) as THREE.MeshPhysicalMaterial | undefined;
       if (!src || src.userData?.cabinHidable) return;
+      if (R80_R7_DRIVER_VIEW && R80_DRIVER_STRUCT_RE.test(id)) {
+        let dclone = driverCloneBySrc.get(src);
+        if (!dclone) {
+          dclone = src.clone();
+          // cabinHidable:false ⇒ 不进 cabinOccluderMats；driverStruct:true ⇒ 状态表按机位分区。
+          dclone.userData = { ...src.userData, cabinHidable: false, r80DriverStruct: true };
+          dclone.needsUpdate = true;
+          driverCloneBySrc.set(src, dclone);
+        }
+        mesh.material = dclone;
+        driverSwept += 1;
+        return;
+      }
       let clone = cloneBySrc.get(src);
       if (!clone) {
         clone = src.clone();
@@ -1289,6 +1285,10 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
       mesh.material = clone;
       swept += 1;
     });
+    console.info(
+      `[R7Adapter] R80 主驾结构件通道 → ${driverSwept} mesh / ${driverCloneBySrc.size} 材质克隆` +
+        `（driverStruct：仅车厢前半可见）`
+    );
     console.info(`[R7Adapter] 座舱遮挡稳健扫描 → ${swept} mesh / ${cloneBySrc.size} 材质克隆`);
   }
 
@@ -1564,6 +1564,8 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
   const proceduralSteeringMeshes: THREE.Mesh[] = [];
   /** R71：距离门控当前态 —— true = 相机过近，隐藏高精盘、显示程序化盘（applyVisibility 每帧消费） */
   let steerNearCam = false;
+  /** R80：高精盘包围球世界半径（装载后算一次；门控用它把盘心距离换成 clearance）。 */
+  let steerGateRadius = 0.225;
   // W1 删除旧账本：`proceduralExteriorHidden` / `lastInteriorState` —— 改由 applyVisibility
   // 每帧从 state + shellHandle 现算，不再持「上次态」差量（差量登记是雪崩根因）。
   /** spinWheels 弧长→角度换算半径；外部壳装载成功后取 manifest.wheelRadius */
@@ -1653,6 +1655,9 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
     apillar: boolean;
     /** 座舱遮挡克隆（cabinOccluderMats）——cabin 隐藏、车外显。 */
     cabinHidable: boolean;
+    /** R80：主驾结构件（seat-driver / apillar-inner / door-card|trim|speaker）——
+     *  车厢前半（cabin / cabinDriver / cabinPassenger）显、外景与后排隐藏。 */
+    driverStruct: boolean;
     /** setExteriorHidden keep（id 白名单）⇒ 车外仍显（透出座舱）；非 keep ⇒ shell ready 后永久隐藏。 */
     kept: boolean;
   }
@@ -1705,13 +1710,18 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
         if (!mt) continue;
         if (matSeen.has(mt)) continue;
         matSeen.add(mt);
-        const ud = mt.userData as { sculptMaterial?: { id?: string }; cabinHidable?: boolean };
+        const ud = mt.userData as {
+          sculptMaterial?: { id?: string };
+          cabinHidable?: boolean;
+          r80DriverStruct?: boolean;
+        };
         const id = ud?.sculptMaterial?.id ?? null;
         matEntries.push({
           mat: mt,
           rearSeat: mt === rearSeatMat,
           apillar: mt === apillarClone,
           cabinHidable: ud?.cabinHidable === true,
+          driverStruct: ud?.r80DriverStruct === true,
           kept: id != null && R44_INTERIOR_MATERIAL_IDS.has(id),
         });
       }
@@ -1778,6 +1788,9 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
     const interior = state.interior;
     const exteriorShellReady = shellHandle != null;
     const inRearZone = interior && cameraInRearZone; // cameraInRearZone 已含 R71_REAR_VIEW 门控
+    /* R80：车厢前半区（主驾/副驾/普通 cabin 眼点）——按 body 局部 z 直接分区，
+     * 与 rearZone 同源（同一 worldToLocal 结果），不依赖 rig.mode。 */
+    const inFrontZone = interior && !cameraInRearZone && R80_R7_DRIVER_VIEW;
     const steerNear = R71_STEER_GATE && steerNearCam;
 
     model.visible = true; // ②：外部壳在场时程序化树整体保留（透明玻璃透出座舱 = 官图观感）
@@ -1785,6 +1798,7 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
     // —— pass 1 · 材质级（先）：material.visible 全量覆盖 ——
     for (const e of matEntries) {
       if (e.rearSeat) e.mat.visible = interior && inRearZone;       // ⑥ seat-rear：仅 cabinRear（双向）
+      else if (e.driverStruct) e.mat.visible = inFrontZone;         // R80 主驾结构件：仅车厢前半
       else if (e.apillar) e.mat.visible = !interior || inRearZone;   // ⑥ A 柱：cabin 隐藏但 cabinRear 豁免（双向）
       else if (e.cabinHidable) e.mat.visible = !interior;           // ①⑤ 座舱遮挡：cabin 隐藏、车外显
       else e.mat.visible = e.kept || !exteriorShellReady;           // ③ 非白名单 ⇒ shell ready 后永久隐藏
@@ -1928,6 +1942,9 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
         if (/方向盘|steering/i.test(m.name)) proceduralSteeringMeshes.push(m);
       });
       steeringMesh = wheel;
+      /* R80：算一次盘包围球世界半径（rotateY(π) 后 boundingSphere 需重算）。 */
+      wheel.geometry.computeBoundingSphere();
+      steerGateRadius = (wheel.geometry.boundingSphere?.radius ?? 0.225) * Math.abs(wheel.scale.x);
       // W1：初值 exterior（隐藏，不透车外 / 零 DC）；此后每帧 applyVisibility 全量覆盖
       // （cabin 显高精盘、近距门控切程序化盘），不再读「上次内舱态」差量。
       wheel.visible = false;
@@ -2029,7 +2046,9 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
    * 门控关闭则空操作。 */
   const applySteerGate = (dist: number): void => {
     if (!R71_STEER_GATE || !steeringMesh) return;
-    const next = steerNearCam ? dist < STEER_GATE_FAR_M : dist < STEER_GATE_NEAR_M;
+    /* R80：clearance = 盘心距离 − 盘包围球半径（相机到盘表面最近距离）。 */
+    const clearance = dist - steerGateRadius;
+    const next = steerNearCam ? clearance < STEER_GATE_FAR_M : clearance < STEER_GATE_NEAR_M;
     if (next === steerNearCam) return;
     steerNearCam = next; // visible 写交给 applyVisibility（每帧全量覆盖）
   };

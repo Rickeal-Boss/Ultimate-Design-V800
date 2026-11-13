@@ -50,8 +50,9 @@ import { mergeSafe } from '../../util/geo';
 export const R7_TAIL_WRAP_GEOM = {
   /** 中央缺口半宽（世界 m）：0.834 / 2 */
   gapHalfW: 0.417,
-  /** 单个黑色方模块边长（世界 m）：3 × 0.278 = 0.834 */
-  moduleSize: 0.278,
+  /** 单个黑色方模块边长（世界 m）：R80 由 0.278 → 0.30，三连 = 0.90（±0.45, 缺口 ±0.417
+   *  ⇒ 每侧多盖 33mm，把 GLB 非流形边抖动带压进黑面下） */
+  moduleSize: 0.30,
   /** 尾灯带中心高（世界 m）：R7 默认 coverY = 0.240 × 4.323 = 1.0375 */
   bandY: 1.0375,
   /** R7 既有 `lamp_rear_band` 高（世界 m），缩小版沿用 */
@@ -187,7 +188,9 @@ export function buildR7TailWrap(opts: R7TailWrapOptions): R7TailWrapResult {
   const zModules = -modulePlane;
   const zBand = -bandPlane;
 
-  // ① 三黑方模块：横向左 / 中 / 右，铺满 0.834 m 中央缺口
+  // ① 三黑方模块：横向左 / 中 / 右，铺满中央缺口并**向左右各外扩 33mm**（R80）。
+  //   缺口实测 ±0.417（b13..b34 零顶点段），模块行现覆盖 ±0.45 ⇒ 每侧多盖 33mm，
+  //   把 GLB 非流形边（上边缘抖动 20.06mm 世界）也压进黑面之下，不再露锯齿。
   const moduleGeos: THREE.BufferGeometry[] = [];
   const s = G.moduleSize;
   for (const cx of [-s, 0, s]) {
@@ -205,15 +208,21 @@ export function buildR7TailWrap(opts: R7TailWrapOptions): R7TailWrapResult {
     new THREE.Mesh(moduleGeo, moduleMat), 'r68_r7_tail_modules', 5
   );
 
-  // ①b 上下封边（R69 用户真机反馈：三黑模块上/下边缘裸露会透出舱内米色菱格 seat-quilt，
-  //   需「围成一个封闭」）—— 加两条同色封边把「三模块 + 上下封边」围成封闭包裹。
-  //   零新增材质（复用 moduleMat）；宽覆盖三模块全宽（3×0.278）。
-  const edgeH = 0.05;
+  // ①b 四边封边（R69 上下两条 → R80 升级为**完整矩形框**）
+  //   用户 11-13 截图：上下封边后仍从左右两侧与转角透出米色菱格 + 白色锯齿。
+  //   改为「上下两条横向封边 + 左右两条竖向封边」，四条同材质、同 z 平面、接缝重叠 2mm
+  //   ⇒ 中央缺口被围成完全封闭的矩形包裹。
+  const edgeH = 0.06;
   const edgeGeos: THREE.BufferGeometry[] = [];
   const edgeX0 = -s * 1.5;
   const edgeX1 = s * 1.5;
-  edgeGeos.push(tailQuad(edgeX0, edgeX1, G.bandY + s / 2, G.bandY + s / 2 + edgeH, zModules));
-  edgeGeos.push(tailQuad(edgeX0, edgeX1, G.bandY - s / 2 - edgeH, G.bandY - s / 2, zModules));
+  const edgeY0 = G.bandY - s / 2 - edgeH;
+  const edgeY1 = G.bandY + s / 2 + edgeH;
+  edgeGeos.push(tailQuad(edgeX0, edgeX1, G.bandY + s / 2 - 0.002, G.bandY + s / 2 + edgeH, zModules));
+  edgeGeos.push(tailQuad(edgeX0, edgeX1, edgeY0, G.bandY - s / 2 + 0.002, zModules));
+  // 左右竖封边：宽度 0.06，纵向覆盖 上封边上沿→下封边下沿（含 2mm 搭接）
+  edgeGeos.push(tailQuad(edgeX0, edgeX0 + edgeH, edgeY0, edgeY1, zModules));
+  edgeGeos.push(tailQuad(edgeX1 - edgeH, edgeX1, edgeY0, edgeY1, zModules));
   const edgeGeo = mergeSafe(edgeGeos);
   for (const g of edgeGeos) g.dispose();
   const edgeMesh = marked(
@@ -227,25 +236,34 @@ export function buildR7TailWrap(opts: R7TailWrapOptions): R7TailWrapResult {
     new THREE.Mesh(bandGeo, opts.lampRearMat), 'r68_r7_tail_band', 6
   );
 
-  // ③ 侧贴：左右各 1 quad，**改用与三黑模块同款黑色材质**（R69 用户真机反馈：原贴 band
-  //   atlas 会把横向灯带映射到竖直 quad 上显示成歪斜的「LUX」小标签，且 x=±1.1168 跑到
-  //   车轮(±0.888)外 ⇒ 「贴图歪了 / 坐标去到车轮外」）。纯黑既掩盖侧面米色菱格漏洞、
-  //   又不歪；位置内收到车身宽度内（-0.06，落在轮拱内衬覆盖范围）。
+  // ③ 侧贴（R80 默认**关闭**）
+  //   用户 11-13 真机截图定罪：R69 的黑色侧贴 quad 在 x=±(bodyHalfWidth−0.06)=±1.0527、
+  //   z=−2.44 处读作「车轮外侧悬着的一块黑底红条方片」，且把同机位本该完整的
+  //   `lamp_rear_band` 遮掉了一截 ⇒ 侧贴这个补丁本身制造了新的穿帮。
+  //   裁决：默认不建侧贴（尾灯包裹交给 ①/①b 的封闭矩形框）。`#r80r7side=on` 可恢复
+  //   R69 旧侧贴供 A/B 对照。
+  const R80_R7_SIDE_ON =
+    typeof window !== 'undefined' && /(?:^|[#&])r80r7side=on/i.test(window.location.hash);
   const sideQuads: THREE.BufferGeometry[] = [];
-  for (const side of [-1, 1] as const) {
-    const x = side * (opts.bodyHalfWidth - 0.06);
-    const q = sideQuad(
-      side, x, G.sideZ - G.sideW / 2, G.sideZ + G.sideW / 2,
-      G.bandY - G.sideH / 2, G.bandY + G.sideH / 2
-    );
-    sideQuads.push(q);
+  if (R80_R7_SIDE_ON) {
+    for (const side of [-1, 1] as const) {
+      const x = side * (opts.bodyHalfWidth - 0.06);
+      const q = sideQuad(
+        side, x, G.sideZ - G.sideW / 2, G.sideZ + G.sideW / 2,
+        G.bandY - G.sideH / 2, G.bandY + G.sideH / 2
+      );
+      sideQuads.push(q);
+    }
   }
   const sideGeo = mergeSafe(sideQuads);
   for (const q of sideQuads) q.dispose();
   const sideMesh = marked(new THREE.Mesh(sideGeo, moduleMat), 'r68_r7_tail_side', 4);
 
-  const meshes = [moduleMesh, edgeMesh, bandMesh, sideMesh];
-  const tri = triOf(moduleGeo) + triOf(edgeGeo) + triOf(bandGeo) + triOf(sideGeo);
+  const meshes = R80_R7_SIDE_ON
+    ? [moduleMesh, edgeMesh, bandMesh, sideMesh]
+    : [moduleMesh, edgeMesh, bandMesh];
+  const tri = triOf(moduleGeo) + triOf(edgeGeo) + triOf(bandGeo) +
+    (R80_R7_SIDE_ON ? triOf(sideGeo) : 0);
 
   return {
     meshes,

@@ -82,10 +82,13 @@ describe('R65 R7 轮拱内衬接线', () => {
 
 /** 机盖机位 R65-G8 回退到最初已知正确态（1.45/-1.45）。护栏钉常量。 */
 describe('R65 机盖机位（hood）回退', () => {
-  it('CameraRig hood 默认 offset 回最初正确机盖态（y1.45/z-1.45）', () => {
+  it('CameraRig hood 默认 offset 回最初正确机盖态（y1.45/z 基线 -1.45，R80 回退 0.15）', () => {
     const src = readSrc('render/CameraRig.ts');
     expect(src).toMatch(/HOOD_Y = HOOD_POSE_OVERRIDE\?\.y \?\? 1\.45/);
-    expect(src).toMatch(/HOOD_Z = HOOD_POSE_OVERRIDE\?\.z \?\? -1\.45/);
+    // R80：默认值改为 R80_HOOD_BACK 三元式 —— on=-1.30（回退 0.15）/ off=-1.45（R65-G8 逐位）
+    expect(src).toMatch(
+      /HOOD_Z = HOOD_POSE_OVERRIDE\?\.z \?\? \(R80_HOOD_BACK \? -1\.30 : -1\.45\)/,
+    );
     // #hoodcam=off 回滚态（R65-F 值）保留
     expect(src).toContain('hoodcam=off');
     expect(src).toContain('1.55, z: 1.4');

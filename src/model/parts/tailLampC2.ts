@@ -171,7 +171,9 @@ export const C2_LAMP_SHRINK_WIDTH = 0.40;
 /** R71 重做：侧面竖灯沿 z 进深（GLB 局部 m），从 faceZ 向 +z 延伸。
  *  上一轮 0.02（世界 ≈0.095m）力度严重不足 ⇒ 侧面仍是光秃黑柱；本波放大到 0.12
  *  （世界 ≈0.57m）配合 y 半高 0.10，把侧壁 quad 撑成一块完整的「侧面竖灯大面」。 */
-export const C2_LAMP_SIDE_DEPTH = 0.12;
+/** 侧面竖灯沿 z 的进深（GLB 局部 m）：R80 由 0.12(世界 0.57m) 收回到 0.03(0.14m)。
+ *  R71 的 0.57m 进深把侧面拖成一根从车尾一直伸到后轮的黑柱，用户判为「黑柱 / 不像尾灯」。 */
+export const C2_LAMP_SIDE_DEPTH = 0.03;
 
 /** 本地 hash 开关判据（与 ExternalShell.ts:78 r51HookOff 字节等价；node/SSR 无 window ⇒ false=ON）。 */
 function r69HookOff(key: string): boolean {
@@ -213,11 +215,19 @@ export const C2_ATLAS_SURROUND_COLOR = '#101016';
  * 两处各自 `#r71c2side=off` / `#r71c2coverfill=off` ⇒ 逐位回 R70。 */
 /** R71 侧壁外扩量（GLB 局部 m）：侧壁外缘比正面外缘更外凸。 */
 export const C2_LAMP_SIDE_OUTSET = 0.006;
-/** R71 侧面竖灯半高（GLB 局部 m）：sideYLo/Hi = lampCy ∓ 此值，高 0.20 比正面(0.0648)大。 */
-export const C2_LAMP_SIDE_HALF_H = 0.10;
+/* ── R80 重定标（用户 11-13 真机：侧面读作「一根黑柱」，不像正面竖灯）────────────
+ * R71 把侧面竖灯撑到半高 0.10 local（世界 0.475 → 总高 0.95m），是正面竖灯
+ * （R69 缩小后 0.0648 local = 0.31m 世界）的 **3 倍**；进深 0.12 local = 0.57m 世界。
+ * 于是 atlas 半幅（凤凰点阵 + 深色 surround）被拉伸 3 倍铺在超大 quad 上 ⇒ 侧视只读到
+ * 大片深色 + 一点灰，用户判为「没贴上正面同款尾灯」。
+ * 修正：侧面竖灯 = 正面高 × 1.15（用户「比正面大一些适当」）、进深 0.03 local(0.14m)。
+ * 护栏只按符号引用 C2_LAMP_SIDE_OUTSET / C2_COVER_FILL_DEPTH（无字面量断言），故重定标安全。 */
+/** R80 侧面竖灯半高（GLB 局部 m）= 正面半高 × 1.15；正面 R69 半高 0.0324 ⇒ 0.0373。 */
+export const C2_LAMP_SIDE_HALF_H = 0.0373;
 /** R71 盖板侧面填充深度（GLB 局部 m）：沿 +z 从 coverZ 向内，掩端面缝隙。
- *  上一轮 0.02 太薄 ⇒ 本波 0.06（≥0.05 进深）真正遮住。 */
-export const C2_COVER_FILL_DEPTH = 0.06;
+ *  R71 0.06（世界 0.285m）；R80 再加深到 0.10（世界 0.475m）——用户 11-13 反馈侧面
+ *  竖灯周边仍有漏洞/锯齿，加深填充把端面斜视角缝隙整段盖住（零 tri / 零预算变化）。 */
+export const C2_COVER_FILL_DEPTH = 0.10;
 /** R71 竖灯侧面外扩开关（默认 ON，`#r71c2side=off` 回 R70）。 */
 export const R71_C2_SIDE_ON = !r69HookOff('r71c2side');
 /** R71 盖板侧面黑填充开关（默认 ON，`#r71c2coverfill=off` 回 R70）。 */

@@ -83,8 +83,10 @@ describe('R50 · cabin 车顶内壁剔除（真修 R47 DoubleSide 回归）', ()
 
   it('剔除机制 + 三重回滚钩子存在', () => {
     const s = src(ADAPTER);
-    // 纯函数 index 剔除 + cabin 态应用
-    expect(s).toContain('export function buildRoofCulledIndex(');
+    // R80：纯函数 index 剔除抽到 src/model/roofCull.ts（V800 与本车共用），
+    // R7Adapter 保留同名 re-export ⇒ 既有 import 路径（含护栏）不破。
+    expect(s).toContain("export { buildRoofCulledIndex } from './roofCull';");
+    expect(src('src/model/roofCull.ts')).toContain('export function buildRoofCulledIndex(');
     // R71 修③：applyRoofCull 现按机位传阈值（cabinRear 1.42 / 其余 1.30），
     // 认两态：旧单参调用 `applyRoofCull(interior && r47CabinFix);` 或新双参调用
     // `applyRoofCull(\n  interior && r47CabinFix,\n  ...R7_REAR_ROOF_CLIP_WORLD_Y...);`
@@ -101,14 +103,14 @@ describe('R50 · cabin 车顶内壁剔除（真修 R47 DoubleSide 回归）', ()
   });
 
   it('剔除不新建材质实例、不连带轮（body 与 4 轮各自独立 geometry）', () => {
-    const s = src(ADAPTER);
-    // buildRoofCulledIndex 只读 geometry、返回 index 双缓冲，绝不 touch material/side
-    expect(s).toContain('const full = new Uint32Array(src);');
-    expect(s).toContain('const culled = new Uint32Array(src);');
+    // R80：函数体已迁至 roofCull.ts；断言改读该文件（语义与旧断言逐条等价）。
+    const c = src('src/model/roofCull.ts');
+    expect(c).toContain('const full = new Uint32Array(src);');
+    expect(c).toContain('const culled = new Uint32Array(src);');
     // 抽出 buildRoofCulledIndex 函数体，确认它只碰 index/position，不碰材质 side/visible
-    const fnStart = s.indexOf('export function buildRoofCulledIndex(');
+    const fnStart = c.indexOf('export function buildRoofCulledIndex(');
     expect(fnStart, 'buildRoofCulledIndex 缺失').toBeGreaterThanOrEqual(0);
-    const fnBody = s.slice(fnStart, s.indexOf('\n}', fnStart) + 2);
+    const fnBody = c.slice(fnStart, c.indexOf('\n}', fnStart) + 2);
     expect(fnBody).toContain('geometry.getIndex()');
     expect(fnBody).not.toContain('.side');
     expect(fnBody).not.toContain('.visible');

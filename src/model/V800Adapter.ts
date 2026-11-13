@@ -29,6 +29,7 @@ import {
   type ExternalShellHandle
 } from './external/ExternalShell';
 import { loadInteriorSteering } from './external/InteriorSteering';
+import { buildRoofCulledIndex } from './roofCull';
 import { setFxWheelOffsets } from '../fx';
 import { DEFAULT_VARIANT } from '../config/vehiclePaint';
 import { applyReferenceTextures } from './refTextures';
@@ -160,12 +161,19 @@ const GAUGE_MIN_INTERVAL = 1 / 15;
  *   俯仰侧倾）、near=0.05 ⇒ 相机移动时盘面扫过近平面 ⇒ 整帧闪烁/黑帧。
  * 门控：每帧算相机到高精盘世界距离，过近显示程序化盘、过远恢复高精盘（滞回防抖）。
  * 回滚钩子：`#r71steergate=off` ⇒ 关闭距离门控，恒显示高精盘（恢复默认关 GLB 的旧行为）。 */
-/** 相机到高精盘距离 < NEAR ⇒ 切程序化盘。R71 收紧：阈值压到盘半径(0.225)+余量 ≈0.25，
- *   正常主驾眼点距盘 ≈0.55m 恒显示高精盘，仅相机真正贴脸(<盘缘)时才兜底切低模，
- *   彻底消除上一轮 0.32 阈值在 0.55m 主驾视角附近穿阈值导致的高模↔低模跳变。 */
-const STEER_GATE_NEAR_M = 0.25;
-/** 相机到高精盘距离 > FAR ⇒ 恢复高精盘（0.05m 滞回带防近阈值处抖动） */
-const STEER_GATE_FAR_M = 0.3;
+/* ══ R80 · 门控判据从「盘心距离」改为「相机到盘包围球的间隙 clearance」══════════
+ * 病根（R80 主理人定罪）：R71/R72 用 `|cam − 盘心|` 与 0.25/0.30 比，而**主驾眼点到盘心
+ *   实测 ≈0.55m（V800）/ 更远于 R7 的盘缘几何** ⇒ 判据恒为「远」、门控**永不进入近态** ⇒
+ *   高精盘恒显。相机自由观察/车身俯仰时盘缘扫过 near=0.1，near 区被裁剪的三角在视口内
+ *   铺成大面 ⇒ 整帧黑闪。R7 眼点更近、判据偶能触发，故「R7 已解决、V800 未解决」。
+ * 修法：clearance = |cam − 盘心| − 盘包围球半径(×scale)，即**相机到盘表面的最近距离**：
+ *   进入近态 clearance < 0.16（≈near×1.6）、退出 clearance > 0.26（≈near×2.4，滞回防抖）。
+ *   主驾眼点 clearance ≈0.55−0.225 = 0.325 > 0.26 ⇒ 恒显高精盘（满足用户「必须高精盘」）；
+ *   仅相机真正贴到盘面 16cm 内才切程序化盘，此时高精盘不可能扫过近平面。
+ * 回滚：`#r71steergate=off` 关闭整套门控（恒显高精盘 = R69 前的旧行为）。 */
+const STEER_GATE_NEAR_M = 0.16;
+/** clearance > FAR ⇒ 恢复高精盘（0.10m 滞回带防阈值处抖动） */
+const STEER_GATE_FAR_M = 0.26;
 /** `#r71steergate=off` ⇒ 恒显示高精盘（模块顶层求值一次，每帧只读布尔） */
 const R71_STEER_GATE: boolean =
   typeof window === 'undefined' || !/(?:^|[#&])r71steergate=off/i.test(window.location.hash);
@@ -4836,12 +4844,53 @@ const R48_LAMP_TONE: boolean =
   // ---- R44 状态：外部壳句柄 / 程序化外观隐藏标记 / 最近一次内舱态 ----
   // （声明在 setPaintShadow 之前，异步装载回调与既有内舱语义共用）
   let shellHandle: ExternalShellHandle | null = null;
+  /* ── R80 · V800 车顶内壁剔除（移植 R7 的 R50 机制；V800 历史上一直缺失）──────────
+   * 病根（用户 11-13 image#19 主驾抬头）：cabin 态 bodyMesh 走 DoubleSide，外模车顶
+   *   内壁（深色亮面）露在星顶盖板之上 ⇒ 「光滑黑亮弧形面板 + 上方锯齿白边」。
+   *   过去 13 组补丁全打在「藏哪几个内饰件」，从未动外壳车顶 ⇒ 永远差一块。
+   * 修法：cabin 态把 bodyMesh index 里 world y > V800_ROOF_CLIP_WORLD_Y 的三角形退化
+   *   （0 tri 增量、0 新材质、外景态逐位恢复）。阈值取 1.45：高于侧窗上沿、低于车顶
+   *   外壳（1.647），星顶/顶棚（程序化件，独立 geometry）不受影响。
+   * 回滚：`#r80v800roof=off` ⇒ 不剔除（逐位回 R79）。 */
+  let roofCullFull: Uint32Array | null = null;
+  let roofCullCulled: Uint32Array | null = null;
+  /** 当前 bodyMesh index 是否处于剔除态（防每帧重传 ~10MB index 到 GPU） */
+  let roofCullActive = false;
+  const R80_V800_ROOF_CULL: boolean =
+    typeof window === 'undefined' || !/(?:^|[#&])r80v800roof=off/i.test(window.location.hash);
+  /** R80 车顶剔除阈值（世界 y）——见上方注释 */
+  const V800_ROOF_CLIP_WORLD_Y = 1.45;
+  const applyRoofCull = (active: boolean): void => {
+    if (!R80_V800_ROOF_CULL || !shellHandle) return;
+    const idx = shellHandle.bodyMesh.geometry.getIndex();
+    if (!idx || !(idx.array instanceof Uint32Array)) return;
+    if (roofCullFull === null) {
+      const built = buildRoofCulledIndex(
+        shellHandle.bodyMesh.geometry,
+        shellHandle.manifest.scale,
+        V800_ROOF_CLIP_WORLD_Y,
+      );
+      if (!built) return;
+      roofCullFull = built.full;
+      roofCullCulled = built.culled;
+      console.info(
+        `[V800Adapter] R80 车顶内壁剔除索引就绪：${built.roofTris}/${built.totalTris} tri 剔除（y>${V800_ROOF_CLIP_WORLD_Y}）`,
+      );
+    }
+    if (active === roofCullActive) return;
+    idx.array.set(active && roofCullCulled ? roofCullCulled : roofCullFull);
+    idx.needsUpdate = true;
+    roofCullActive = active;
+  };
   /** R47：高精度方向盘（仅 cabin 态可见；外景态零 DC / 不透车外） */
   let steeringMesh: THREE.Mesh | null = null;
   /** R47：高精度盘装配成功后要恒隐藏的程序化盘（防双盘重叠 / z-fighting） */
   const proceduralSteeringMeshes: THREE.Mesh[] = [];
   /** R71：距离门控当前态 —— true = 相机过近，隐藏高精盘、显示程序化盘 */
   let steerNearCam = false;
+  /** R80：高精盘包围球半径（世界米）= geometry.boundingSphere.radius × scale，装载后算一次。
+   *  门控判据用它把「盘心距离」换成「到盘面的 clearance」（见 STEER_GATE 注释）。 */
+  let steerGateRadius = 0.225;
   // W1 删除旧账本：`proceduralExteriorHidden` / `lastInteriorState` —— 改由 applyVisibility
   // 每帧从 state + shellHandle 现算，不再持「上次态」差量（差量登记是雪崩根因）。
   /** spinWheels 弧长→角度换算半径；外部壳装载成功后取 manifest.wheelRadius */
@@ -5042,6 +5091,8 @@ const R48_LAMP_TONE: boolean =
       const bm = shellHandle.bodyMesh.material as THREE.MeshPhysicalMaterial;
       const wantSide = interior && r47CabinFix ? THREE.DoubleSide : THREE.FrontSide;
       if (bm.side !== wantSide) { bm.side = wantSide; bm.needsUpdate = true; }
+      // R80：cabin 态剔除外壳车顶内壁（治主驾抬头「黑亮弧形面板 + 锯齿白边」）
+      applyRoofCull(interior && r47CabinFix);
       // ②：glass/lamp 语义件与外壳同显隐
       for (const sm of [...shellHandle.glassMeshes, ...shellHandle.lampMeshes]) {
         sm.visible = !interior;
@@ -5182,6 +5233,11 @@ const R48_LAMP_TONE: boolean =
         if (/方向盘|steering/i.test(m.name)) proceduralSteeringMeshes.push(m);
       });
       steeringMesh = wheel;
+      /* R80：算一次盘包围球半径（世界米）。⚠ rotateY(π) 之后 boundingSphere 可能为空/
+       *   未更新 ⇒ 必须显式 computeBoundingSphere() 再乘 scale（scale 只缩顶点，不改半径
+       *   的几何口径：radius × scale.x 即世界半径）。 */
+      wheel.geometry.computeBoundingSphere();
+      steerGateRadius = (wheel.geometry.boundingSphere?.radius ?? 0.225) * Math.abs(wheel.scale.x);
       // W1：初值 exterior（隐藏，不透车外 / 零 DC）；此后每帧 applyVisibility 全量覆盖
       // （cabin 显高精盘、近距门控切程序化盘），不再读「上次内舱态」差量。
       wheel.visible = false;
@@ -5254,7 +5310,9 @@ const R48_LAMP_TONE: boolean =
    * setPaintShadow 写一次」双写竞态）。GLB 未装载 / 门控关闭则空操作。 */
   const applySteerGate = (dist: number): void => {
     if (!R71_STEER_GATE || !steeringMesh) return;
-    const next = steerNearCam ? dist < STEER_GATE_FAR_M : dist < STEER_GATE_NEAR_M;
+    /* R80：clearance = 盘心距离 − 盘包围球半径（到盘表面的最近距离）。 */
+    const clearance = dist - steerGateRadius;
+    const next = steerNearCam ? clearance < STEER_GATE_FAR_M : clearance < STEER_GATE_NEAR_M;
     if (next === steerNearCam) return;
     steerNearCam = next; // visible 写交给 applyVisibility（每帧全量覆盖）
   };

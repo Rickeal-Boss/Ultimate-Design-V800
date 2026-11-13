@@ -46,10 +46,11 @@ describe('R31 座舱黑屏修复：涉内机位切换首帧落位', () => {
     expect(rig.camera.position.distanceTo(new THREE.Vector3(-0.40, 1.34, -0.72))).toBeLessThan(1e-6);
     rig.setMode('hood');
     rig.update(DT, ANCHOR, 0, IDENT);
-    // MODES.hood：offset (0, 1.45, -1.45) 静态（R65-G8 回退到最初已知正确机盖态）
+    // MODES.hood：offset (0, 1.45, -1.30)；z 由 R65-G8 的 -1.45 在 R80 回退 0.15
+    // （用户 11-13「机盖视角又前移了」，`#r80hood=off` 回 -1.45）。
     expect(rig.camera.position.x).toBeCloseTo(0, 6);
     expect(rig.camera.position.y).toBeCloseTo(1.45, 6);
-    expect(rig.camera.position.z).toBeCloseTo(-1.45, 6);
+    expect(rig.camera.position.z).toBeCloseTo(-1.3, 6);
   });
 
   it('落位后持续稳定（snap 只触发一帧，之后 offset 已在目标位）', () => {

@@ -150,8 +150,15 @@ const HOOD_POSE_OVERRIDE: { y: number; z: number; lookY: number } | null = (() =
   if (!m) return null;
   return { y: Number(m[1]), z: Number(m[2]), lookY: m[3] !== undefined ? Number(m[3]) : 0.95 };
 })();
+/* ── R80 · 机盖机位回退 0.15（用户 11-13：R7「机盖视角又前移了」）──────────────────
+ * R65-G8 定案的 (0,1.45,−1.45) 是「真机确认机盖正确入画」的基线；此后多轮改的是车身
+ * 几何与内饰，机盖在画面里的占比变化被读作「视角前移」。按用户诉求把相机沿车头方向
+ * **回退 0.15m**（−1.45 → −1.30），机盖前缘在画面里下移、车头占比变小。
+ * 回滚：`#r80hood=off` ⇒ 逐位回 R65-G8 基线 −1.45。 */
+const R80_HOOD_BACK: boolean =
+  typeof window === 'undefined' || !/(?:^|[#&])r80hood=off/i.test(window.location.hash);
 const HOOD_Y = HOOD_POSE_OVERRIDE?.y ?? 1.45;
-const HOOD_Z = HOOD_POSE_OVERRIDE?.z ?? -1.45;
+const HOOD_Z = HOOD_POSE_OVERRIDE?.z ?? (R80_HOOD_BACK ? -1.30 : -1.45);
 const HOOD_LOOK_Y = HOOD_POSE_OVERRIDE?.lookY ?? 0.95;
 
 /**
