@@ -24678,7 +24678,7 @@
    "topologyClass": "assembled-solid",
    "topologyRationale": "box 适合该部件的可展拓扑",
    "geometryDescriptor": {
-    "topologyIntent": "R18 顶棚后段：span z -0.925..2.425 → -2.275..1.175（前端原来伸出到 z2.425，在机盖上方露出一块 1.52m 宽的白色平板，这是 roof/front34 机位白色大板的根因）；同时补齐后舱顶棚（原后端只到 -0.925）",
+    "topologyIntent": "R18 顶棚后段：span z -0.925..2.425 → -2.275..1.175（前端原来伸出到 z2.425，在机盖上方露出一块 1.52m 宽的白色平板，这是 roof/front34 机位白色大板的根因）；同时补齐后舱顶棚（原后端只到 -0.925）；R76 W2批1：实测前缘 z1.175 仍探出车顶前缘 1.14 → 裁 scale.z 3.45→3.375（前缘收至 1.10，后端 -2.275 保后舱），并降 y 1.726→1.62（顶面 1.736→1.63 < roofGlassY 1.647，退出 poke 名单），`#vgeo=off` 回 R75",
     "edgeTreatment": {
      "type": "rounded",
      "bevelRadius": 0.004,
@@ -24784,14 +24784,14 @@
    "dimensions": {
     "width": 1.52,
     "height": 0.02,
-    "depth": 3.45,
+    "depth": 3.375,
     "units": "meters",
     "confidence": 0.9
    },
    "transform": {
     "position": [
      0,
-     1.726,
+     1.62,
      -2.275
     ],
     "rotation": [
@@ -24802,7 +24802,7 @@
     "scale": [
      1.52,
      0.02,
-     3.45
+     3.375
     ]
    },
    "actionProfile": {
@@ -24898,7 +24898,7 @@
    "topologyClass": "assembled-solid",
    "topologyRationale": "box 适合该部件的可展拓扑",
    "geometryDescriptor": {
-    "topologyIntent": "R18 顶置控制台：y1.835 → 1.692（原顶面 1.8575 破出车顶 1.848，俯视能看到一块白板；现在落到顶棚之下）",
+    "topologyIntent": "R18 顶置控制台：y1.835 → 1.692（原顶面 1.8575 破出车顶 1.848，俯视能看到一块白板；现在落到顶棚之下）；R76 W2批1：顶面 1.7145 仍 > roofGlassY 1.647（俯视白板）→ 降 y 1.692→1.58（顶面 1.6025 < 1.647，退出 poke 名单），`#vgeo=off` 回 R75",
     "edgeTreatment": {
      "type": "rounded",
      "bevelRadius": 0.009,
@@ -25011,7 +25011,7 @@
    "transform": {
     "position": [
      0,
-     1.692,
+     1.58,
      0.55
     ],
     "rotation": [
