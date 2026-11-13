@@ -146,7 +146,7 @@ const R67_GUARD_SHA256 = 'e4a350a82699bf2a4c8b93e18eff0e1295faaaa0b1646b623c13c3
  *  治理——给 depthWrite=false 的玻璃（greenhouse 桶 + rear-glass-upper 克隆）经
  *  userData.vorderGlass 标记批量钉 renderOrder=10、welcome-carpet / tailgate-maextro /
  *  gauge-screen 表面贴花钉 renderOrder=1，新增 `#vorder=off` 回滚钩子，属预期改动。 */
-const ADAPTER_SHA256 = 'bd4734c410e296055c63b2a4b0d4ab08b625633acc487034bc6256e69d01ae4a';
+const ADAPTER_SHA256 = 'f0bc5137a7906d868421d624762de2b4458723509002a06c18affb8d6100bc04';
 /** off 态 / 原 atlas（HEAD=dc765a4）像素缓冲指纹 —— 供「默认 vs off」对照差分。 */
 const R68_C2_ATLAS_BASELINE_SHA256 = '1bb27545a399a7d7e14f56f778f9a309973298a508ca5e97a90ba76784183347';
 const R68_R7_BAND_SLICE_SHA256_BASELINE = '08ecfe355d212a1252665b381305df1e2b6cf1640cb055739ab4c8ec1814038c';
