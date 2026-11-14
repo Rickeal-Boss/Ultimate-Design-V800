@@ -325,8 +325,8 @@ describe('R81 · 2. P0-2 C2 左右对称：quad 几何法线分别朝局部 ±X'
     expect(c2).toContain('? [0, 2, 1, 1, 2, 3]');
     expect(c2).toContain(': [0, 1, 2, 1, 3, 2];');
     expect(c2).toContain('r81c2side=off');
-    // 三处调用点（盖板侧面填充 / 侧面竖灯大面 / R84 上半区黑填充），一处都不能漏
-    expect(c2.match(/setIndex\(c2SideWindingIndex\(side\)\)/g) ?? []).toHaveLength(3);
+    // 四处调用点（盖板侧面填充 / 侧面竖灯大面 / R84 上半区黑填充 / R86 外上填充），一处都不能漏
+    expect(c2.match(/setIndex\(c2SideWindingIndex\(side\)\)/g) ?? []).toHaveLength(4);
     const fill = slice(c2, 'if (R71_C2_COVERFILL_ON) {', 'const coverMesh =');
     const side = slice(c2, 'const faceQuads: THREE.BufferGeometry[] = [];', 'const faceGeo =');
     expect(fill).toContain('for (const side of [-1, 1])');

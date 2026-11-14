@@ -139,6 +139,14 @@ export function isLowDetail(): boolean {
   return LOW_DETAIL;
 }
 
+/**
+ * R86 · **城内后排「纯废 tri」剔除开关**（正面 gameplay 相机被前排完全遮挡的体量）。
+ * 默认 ON：跳过 makeInnerCity 内 A 档连墙 / 二进院落实体 / 中央塔身等被前排街区塔顶
+ * （≈44.3m）遮死的生成。加 `#r86citytrim=off` 逐位回到 R85 行为（回滚开关）。
+ */
+const R86_CITY_TRIM_ON =
+  typeof window === 'undefined' || !/(?:^|[#&])r86citytrim=off/i.test(window.location.hash);
+
 const TILE: Record<StoneKind, number> = { ...STONE_TILE_METERS };
 
 /** castleKit 形体族的贴图口径（ashlar / wall / gold 均属 StoneKind） */
@@ -3329,15 +3337,19 @@ export function makeInnerCity(): StoneBuckets {
         const r1 = R29_REAR_ROW;
         const r1x = (r1.xIn + r1.xOut) / 2;
         const r1w = r1.xOut - r1.xIn;
-        b.wall.push(put(box('wall', r1w, r1.wallH, blockLen, r1x, r1.wallH / 2, 0)));
-        b.ashlar.push(put(box('ashlar', r1w + 0.6, 0.5, blockLen + 0.6, r1x, r1.wallH + 0.25, 0)));
+        // R86 剔正面被前排遮挡的纯废 tri + 开关：排1 后排连墙(24) + 顶盖 + 盲拱/雕像龛
+        // + 墙顶敞廊全部 < 前排街区塔顶 44.3，正面 gameplay 完全遮挡。4 塔冠保留（见下）。
+        if (!R86_CITY_TRIM_ON) {
+          b.wall.push(put(box('wall', r1w, r1.wallH, blockLen, r1x, r1.wallH / 2, 0)));
+          b.ashlar.push(put(box('ashlar', r1w + 0.6, 0.5, blockLen + 0.6, r1x, r1.wallH + 0.25, 0)));
+        }
         /* ── R32 街墙加密 ②：后排长墙 5 盲拱节拍 + 雕像龛交替（参考图 A 中墙段）────
          * 节拍按参考图判读：龛心距 = 墙宽 1/5、龛宽 = 间距 2/3、龛高 = 墙高 2/3、
          * 龛底离地 = 墙高 1/6；「盲拱 ×3 + 雕像龛 ×2」五站位交替 ⇒ 立面明暗节奏
          * （FBX Arch_3.001 龛深 1.16m 的比例层：plateBack 0.8）。
          * 铺量：k%8===0（每 8 块一面）控预算；远区经 DEEP_FAR 由族内自裁立像/卷叶。
          * 位置：龛底抬到墙高 1/6+1（前排建筑 17.9 屋脊之上仍可读的可见带）。 */
-        if (k % R32_WALL_RHYTHM.rearMod === 0) {
+        if (!R86_CITY_TRIM_ON && k % R32_WALL_RHYTHM.rearMod === 0) {
           const p5 = blockLen / 5; // 9.2 龛心距
           const half5 = (p5 * 2) / 3 / 2; // 龛宽 = 间距 2/3
           const base5 = r1.wallH / 6 + 1;
@@ -3360,7 +3372,7 @@ export function makeInnerCity(): StoneBuckets {
         // R31 ① 墙顶敞廊（隔块；回廊柱列骑在 24m 墙顶 —— 街面透过前排建筑间隙可见）
         //   R34 回砍：588 tri/座 —— 柱 0.84m 径、隔块铺 10 块。改 k%4（隔三块），
         //   敞廊**长度/柱距/层高一概不变**（铁律 33），只降街区重复次数。
-        if (k % R34_DENSITY.cloisterMod === 0) {
+        if (!R86_CITY_TRIM_ON && k % R34_DENSITY.cloisterMod === 0) {
           pour(
             b,
             mapParts(
@@ -3411,6 +3423,9 @@ export function makeInnerCity(): StoneBuckets {
           const R33 = R33_COURTYARD;
           /** 附属侧殿/章室/圣器室：结构长度双档一致，只由 nearZone/far 控装饰密度 */
           const annex = (cx: number, cz: number, hExtra = 0): void => {
+            // R86 剔正面被前排遮挡的纯废 tri + 开关：二进院落附属殿 annex(22) 整体
+            // < 前排塔顶 44.3，正面完全遮挡。apse/bell/stack 塔冠不在此函数，另行保留。
+            if (R86_CITY_TRIM_ON) return;
             const h = R33.annexH + hExtra;
             const half = R33.annexW / 2;
             // 大理石基座（近中景可见的亮一档台明）
@@ -3463,6 +3478,11 @@ export function makeInnerCity(): StoneBuckets {
            * z-fight 余量 ≥2cm 铁律）、与 pave-walk（|x|≤15.4 / y 0.014）零重叠。
            * 建筑基座压在板上（板顶 0.08 埋进基座 0..0.9 内，不出面）。
            * 只铺近/中区前 8 块（hero 可读带），12 tri/块；far/DEEP_FAR 跳过。 */
+          /* R86 修正：院落地坪板 + 拼花带（pave 桶）**不剔**。二者是 ground-level 水平板
+           * （y ≤ 0.115，正面 gameplay 相机几乎零像素、非 fill-rate 瓶颈），全部 8 块仅
+           * ~96 tri ⇒ 剔它无性能收益；且它是 R36-A2 `castle-pave` 变体桶的**唯一来源**
+           * （r32_castle_r36 契约要求该桶在场）。故 floor/pave 无条件生成，R86 只剔
+           * 院落里**高大的墙/annex/中景盒**（见下 motif / R86 guard）。 */
           if (!far && k < 8) {
             extra(b, 'pave', put(box('floor', 18, 0.05, blockLen - 4, 19, 0.055, 0)));
             /* ── R37-A 内庭地坪**拼花带**（内部材料丰富度深化①）──────────────────
@@ -3502,6 +3522,9 @@ export function makeInnerCity(): StoneBuckets {
             annex(R33.annexX, -blockLen * 0.32, variant * 1.2);
           } else if (motif === 2) {
             // ③ 长回廊 + 低坡侧殿：中景盒降到 22m（天际线留空给后排），前脸补三联暖窗
+            // R86 剔正面被前排遮挡的纯废 tri + 开关：中景墙/长回廊/三联窗/坡顶全部
+            // < 前排塔顶 44.3，正面完全遮挡。下面的 48m 院内楼梯塔（塔冠露出）保留。
+            if (!R86_CITY_TRIM_ON) {
             const mid = 22 + variant * 1.5;
             const mw = cy.xOut - cy.xIn - 4;
             const mz = (cy.xIn + cy.xOut) / 2;
@@ -3543,6 +3566,7 @@ export function makeInnerCity(): StoneBuckets {
                 put(boxRot('roof', Math.hypot(mw / 2, 2.2), 0.4, blockLen - 14, lx, (mid + ridgeY2) / 2, 0, -rs * Math.atan2(2.2, mw / 2)))
               );
             }
+            } // end R86 trim guard (motif2 中景)
             // ④b 院内楼梯塔（48m + 瓦顶）：四母题里唯一的长回廊块也需要一个
             // 越过前排 44m 塔线的竖向高点，否则 aerial 上该块仍是「一条低屋脊」。
             {
@@ -3561,6 +3585,9 @@ export function makeInnerCity(): StoneBuckets {
             }
           } else {
             // ④ 双山墙礼拜堂 + 中央烟囱/灯笼塔：aerial 唯一有「两坡 + 高烟囱」轮廓的母题
+            // R86 剔正面被前排遮挡的纯废 tri + 开关：双山墙礼拜堂 twin(22) < 前排塔顶
+            // 44.3，正面完全遮挡。下面的 stack(46) 灯笼塔塔冠露出，保留。
+            if (!R86_CITY_TRIM_ON) {
             for (const zs of [-1, 1] as const) {
               const h = R33.twinH + variant * 1.2;
               const cz = zs * R33.twinZ;
@@ -3599,6 +3626,7 @@ export function makeInnerCity(): StoneBuckets {
               }
               extra(b, 'wood', put(box('wood', 0.38, 0.34, R33.twinD, cx - half - 0.1, 0.8 + h - 0.2, cz)));
             }
+            } // end R86 trim guard (motif3 twin)
             // 中央烟囱/灯笼塔：高 22m，顶部小瓦帽 + 3 条 glass 光缝
             const sx = R33.annexX + 1.2;
             extra(b, 'marble', put(box('marble', R33.stackW + 0.8, 1.0, R33.stackW + 0.8, sx, 0.5, 0)));
@@ -3618,7 +3646,11 @@ export function makeInnerCity(): StoneBuckets {
         const r2 = R29_REAR2;
         const r2x = (r2.xIn + r2.xOut) / 2;
         const r2w = r2.xOut - r2.xIn;
-        b.wall.push(put(box('wall', r2w, r2.wallH, blockLen, r2x, r2.wallH / 2, 0)));
+        // R86 剔正面被前排遮挡的纯废 tri + 开关：第三排连墙(26) < 前排塔顶 44.3，
+        // 正面完全遮挡。下面的 2 座 82 塔冠保留。
+        if (!R86_CITY_TRIM_ON) {
+          b.wall.push(put(box('wall', r2w, r2.wallH, blockLen, r2x, r2.wallH / 2, 0)));
+        }
         for (const oz of [-11, 11]) {
           b.ashlar.push(put(box('ashlar', r2w, r2.towerH, 14, r2x, r2.towerH / 2, oz)));
           b.ashlar.push(put(box('ashlar', r2w + 2, 1.2, 16, r2x, r2.towerH + 0.6, oz)));
@@ -3641,18 +3673,24 @@ export function makeInnerCity(): StoneBuckets {
         /* ── R30/R31 第三排中央高塔（块心、第三排位；R31 外移 + 84 → 88）──────── */
         const rc = R30_REAR_CORE;
         const rcTop = rc.h - 1.4 - 12;
-        b.ashlar.push(put(box('ashlar', rc.w + 1.6, 1.4, rc.w + 1.6, r2x, 0.7, 0)));
-        b.ashlar.push(put(box('ashlar', rc.w, rcTop, rc.w, r2x, 1.4 + rcTop / 2, 0)));
-        b.ashlar.push(put(box('ashlar', rc.w + 1.8, 1.0, rc.w + 1.8, r2x, rc.h - 12.4, 0)));
+        // R86 剔正面被前排遮挡的纯废 tri + 开关：中央高塔**塔身 4 段**（基座/塔身/顶带/压顶板）
+        // 正面被前排遮挡。塔尖披顶 + 卷叶顶冠（下方 spire / crookedSpire）保留。
+        if (!R86_CITY_TRIM_ON) {
+          b.ashlar.push(put(box('ashlar', rc.w + 1.6, 1.4, rc.w + 1.6, r2x, 0.7, 0)));
+          b.ashlar.push(put(box('ashlar', rc.w, rcTop, rc.w, r2x, 1.4 + rcTop / 2, 0)));
+          b.ashlar.push(put(box('ashlar', rc.w + 1.8, 1.0, rc.w + 1.8, r2x, rc.h - 12.4, 0)));
+        }
         // R32-A2 桶位纪律：中央高塔（第三排，远景）尖披顶**保留 ashlar**。
         //   塔尖瓦顶只给"近中景真被读到"的前排塔/街区角塔/后排塔；远景排只贡献剪影
         //   且靠雾退远，不值得占用不可剔除桶的 visibleTri 预算（见 castleDetail 文件头）。
         b.ashlar.push(put(spire('ashlar', rc.w * 0.5, 0, 12, 8, r2x, rc.h - 12, 0, Math.PI / 8)));
-        // R32-A2：**桶位更正** —— 原 17×17m 水平金压顶板（40 座，顶面+底面合计
-        // 23,773 m² = 全场景 gold 表面积的 **10.7%**）改 ashlar。它在 76m 塔顶
-        // **水平朝上**，街面只读到 0.24m 的侧边 ⇒ 是"体量件误投 gold 桶"（T1 情形 a），
-        // 也是 gold 表面积口径被虚高的最大单项。
-        b.ashlar.push(put(box('ashlar', rc.w + 2, 0.24, rc.w + 2, r2x, rc.h - 11.8, 0)));
+        if (!R86_CITY_TRIM_ON) {
+          // R32-A2：**桶位更正** —— 原 17×17m 水平金压顶板（40 座，顶面+底面合计
+          // 23,773 m² = 全场景 gold 表面积的 **10.7%**）改 ashlar。它在 76m 塔顶
+          // **水平朝上**，街面只读到 0.24m 的侧边 ⇒ 是"体量件误投 gold 桶"（T1 情形 a），
+          // 也是 gold 表面积口径被虚高的最大单项。R86：属塔身压顶板，随塔身剔除。
+          b.ashlar.push(put(box('ashlar', rc.w + 2, 0.24, rc.w + 2, r2x, rc.h - 11.8, 0)));
+        }
         b.dark.push(put(box('dark', 0.7, 6, 2.0, r2.xIn + 0.05, rc.h * 0.55, 0)));
         pour(
           b,
@@ -3690,7 +3728,11 @@ export function makeInnerCity(): StoneBuckets {
         if (k % 2 === 0) {
           const r4x = (R31_ROW4.xIn + R31_ROW4.xOut) / 2;
           const r4w = R31_ROW4.xOut - R31_ROW4.xIn;
-          b.wall.push(put(box('wall', r4w, R31_ROW4.wallH, blockLen, r4x, R31_ROW4.wallH / 2, 0)));
+          // R86 剔正面被前排遮挡的纯废 tri + 开关：第四排连墙(40) < 前排塔顶 44.3，
+          // 正面完全遮挡。下面的 88 塔冠保留。
+          if (!R86_CITY_TRIM_ON) {
+            b.wall.push(put(box('wall', r4w, R31_ROW4.wallH, blockLen, r4x, R31_ROW4.wallH / 2, 0)));
+          }
           for (const oz of [-14, 14]) {
             b.ashlar.push(put(box('ashlar', r4w, R31_ROW4.towerH, 16, r4x, R31_ROW4.towerH / 2, oz)));
             b.ashlar.push(put(box('ashlar', r4w + 2, 1.2, 18, r4x, R31_ROW4.towerH + 0.6, oz)));
@@ -3710,9 +3752,13 @@ export function makeInnerCity(): StoneBuckets {
         } else {
           const r4x = (R31_ROW4.xIn + R31_ROW4.xOut) / 2;
           const r4w = R31_ROW4.xOut - R31_ROW4.xIn;
-          b.wall.push(put(box('wall', r4w, R31_ROW4.wallH - 8, blockLen, r4x, (R31_ROW4.wallH - 8) / 2, 0)));
-          b.ashlar.push(put(box('ashlar', r4w, 58, 12, r4x, 29, 0)));
-          b.ashlar.push(put(box('ashlar', r4w + 2, 1.2, 14, r4x, 58.6, 0)));
+          // R86 剔正面被前排遮挡的纯废 tri + 开关：奇数块第四排矮墙(32) + 58 塔身 +
+          // 塔身顶盖，正面被前排遮挡。下方 spire/窗玻璃塔冠保留。
+          if (!R86_CITY_TRIM_ON) {
+            b.wall.push(put(box('wall', r4w, R31_ROW4.wallH - 8, blockLen, r4x, (R31_ROW4.wallH - 8) / 2, 0)));
+            b.ashlar.push(put(box('ashlar', r4w, 58, 12, r4x, 29, 0)));
+            b.ashlar.push(put(box('ashlar', r4w + 2, 1.2, 14, r4x, 58.6, 0)));
+          }
           // R32-A2 桶位纪律：奇数块第四排（远景）塔尖披顶**保留 ashlar**
           b.ashlar.push(put(spire('ashlar', 5.5, 0, 12, 8, r4x, 59.2, 0, Math.PI / 8)));
           b.dark.push(put(box('dark', 0.6, 5, 2.4, R31_ROW4.xIn + 0.05, 40, 0)));

@@ -93,6 +93,7 @@ import {
   R71_C2_COVERFILL_ON,
   R71_C2_SIDE_ON,
   R84_C2_SIDE_UP_ON,
+  R86_C2_UPPEROUTER_ON,
   phoenixVRangeActive,
   buildTailLampC2,
   paintC2Atlas,
@@ -145,7 +146,7 @@ const R68_PENDING_TRACK_FILES = [
  *  R82 再更新基线：C2 侧面黑板收口（盖板填充进深 0.10→0.02 / 竖灯外缘 0.006→0.035，`#r82c2filldepth`/`#r82c2outset` 回滚）
  *  触发 r67_tail_c2.test.ts 的 maxAbsX/zMax 两条 toBeCloseTo 精确坐标断言改为 R82 开关感知（ON 断新值 / OFF 断原基线），
  *  护栏强度不减、on/off 两态都被精确钉住，属预期改动。 */
-const R67_GUARD_SHA256 = '5f23a4c9227d1f0a8a325128905b617874eabb984f2220bdf5155e68fe89b26c';
+const R67_GUARD_SHA256 = '2999f131293cc4336516fd3cc6a221ffb74efbfd46d22c39087d152082338ac9';
 /** V800Adapter.ts 全文件冻结（CRLF 规范化后 UTF-8 sha256）。W2批4 更新基线：透明件渲染排序
  *  治理——给 depthWrite=false 的玻璃（greenhouse 桶 + rear-glass-upper 克隆）经
  *  userData.vorderGlass 标记批量钉 renderOrder=10、welcome-carpet / tailgate-maextro /
@@ -155,8 +156,13 @@ const R67_GUARD_SHA256 = '5f23a4c9227d1f0a8a325128905b617874eabb984f2220bdf5155e
  *  防穿壳经 GLB 外皮最低 y 实测压 14mm），`#r82v800roofext=off` 回滚，属预期改动。
  *  R85 再更新基线：治「车内主驾视角车头玻璃区黑色大板」——R84 放行的中段 cabin-roof-carpet 前缘
  *  z +0.575→+0.50 内收 + 两块 cabin-roof-carpet-ext-front（整段压在挡风玻璃上）R85 默认跳过创建，
- *  `#r85v800boardz=off` 回 R84 全创建态；ext-rear 与 R84 抬头看穿收益不动，属预期改动。 */
-const ADAPTER_SHA256 = 'f23679400a7d4f6ae577523e16307cf9b8b41ecc157e509d754b2676778e5839';
+ *  `#r85v800boardz=off` 回 R84 全创建态；ext-rear 与 R84 抬头看穿收益不动，属预期改动。
+ *  R86 再更新基线：①中段前缘进一步内收到 z=-0.30（R85 的 +0.50 仍压玻璃上沿 +0.55 ⇒ cabin
+ *  态视线穿玻璃位撞深色 box = 黑板复发），`#r85v800boardz=off` 回滚语义不变；②方向盘黑帧根治——
+ *  动态 near 推出触发半径 STEER_NEAR_BOOST_RADIUS_M 0.60→0.30 + 下限 STEER_NEAR_BOOST_MIN
+ *  0.245→0.10（旧 0.60 触发半径覆盖正常 cabin 眼点 0.55-0.65 ⇒ 每帧把 near 推到 0.285-0.5 裁掉
+ *  整个座舱近景 = 整屏黑），`#r83steerharden=off` 回滚语义不变，属预期改动。 */
+const ADAPTER_SHA256 = 'eeb290072ae4825e9eea369881d1bc35632cf83a59a442a0dcc270831305dfd6';
 /* ═══ R81 P1/P2 · 冻结基线更新（cam-gate 线实测口径）═════
  * 本波 V800Adapter.ts 两处改动（均属预期改动，故更新本基线）：
  *   · P1 机盖(hood)视角下半屏纯黑根治：shell body GLB 在引擎盖区（world z −1.1~−1.77）
@@ -295,7 +301,8 @@ describe('R68 · 第 0 条：零护栏改动契约', () => {
     // 钉住关键断言仍在（便于失败定位，非重复断言）
     expect(r67Guard).toContain("for (const needle of ['r67', 'tailLampC2', 'R67_TAIL_C2_ON', 'r67_tail_'])");
     // R84：faceTri 补入上半区黑填充项（原 `R69_C2_LAMP_ON ? 8 : 4` → 追加 R84_C2_SIDE_UP_ON ? 4 : 0）
-    expect(r67Guard).toContain('const faceTri = (R69_C2_LAMP_ON ? 8 : 4) + (R84_C2_SIDE_UP_ON ? 4 : 0);');
+    // R86：再追加外上填充项（R86_C2_UPPEROUTER_ON ? 4 : 0），faceTri 折成两行。
+    expect(r67Guard).toContain('const faceTri = (R69_C2_LAMP_ON ? 8 : 4) + (R84_C2_SIDE_UP_ON ? 4 : 0)\n      + (R86_C2_UPPEROUTER_ON ? 4 : 0);');
     expect(r67Guard).toContain('Math.abs(C2_GEOM.coverZ - -0.56751) * 4.75');
   });
 
@@ -313,14 +320,14 @@ describe('R68 · 第 0 条：零护栏改动契约', () => {
     expect(C2_GEOM.stripZ).toBeLessThan(C2_GEOM.faceZ);
   });
 
-  it('★ 几何拓扑恒等：C2_TRI_BUDGET(48|R84上填充·44|R71填充·40|R69·36)/cover(16|R71填充·12)/face(8|R69侧壁·4)/默认调用 3 mesh', () => {
-    expect(C2_TRI_BUDGET).toBe(36 + (R69_C2_LAMP_ON ? 4 : 0) + (R71_C2_COVERFILL_ON ? 4 : 0) + (R84_C2_SIDE_UP_ON ? 4 : 0));
+  it('★ 几何拓扑恒等：C2_TRI_BUDGET(52|R86外上填充·48|R84上填充·44|R71填充·40|R69·36)/cover/face/默认调用 3 mesh', () => {
+    expect(C2_TRI_BUDGET).toBe(36 + (R69_C2_LAMP_ON ? 4 : 0) + (R71_C2_COVERFILL_ON ? 4 : 0) + (R84_C2_SIDE_UP_ON ? 4 : 0) + (R86_C2_UPPEROUTER_ON ? 4 : 0));
     expect(C2_DC_BUDGET).toBe(3);
     expect(C2_MAT_BUDGET).toBe(2);
     expect(C2_TEX_BUDGET).toBe(1);
-    // R71 盖板侧面黑填充 + R84 上半区黑填充把预算改为表达式（base 36 + R69 侧壁 4 + R71 填充 4 + R84 上填充 4）
+    // R71 盖板侧面黑填充 + R84 上半区黑填充 + R86 外上填充把预算改为表达式（base 36 + R69 侧壁 4 + R71 填充 4 + R84 上填充 4 + R86 外上填充 4）
     expect(c2src).toContain('export const C2_TRI_BUDGET = 36');
-    expect(c2src).toContain('+ (R84_C2_SIDE_UP_ON ? 4 : 0);');
+    expect(c2src).toContain('+ (R86_C2_UPPEROUTER_ON ? 4 : 0);');
     const triOf = (m: THREE.Mesh): number => {
       const g = m.geometry;
       return (g.index ? g.index.count : g.getAttribute('position').count) / 3;
@@ -328,12 +335,14 @@ describe('R68 · 第 0 条：零护栏改动契约', () => {
     const r = buildTailLampC2({ scale: 4.75, lampRearMat: new THREE.MeshStandardMaterial() });
     expect(r.meshes).toHaveLength(3);           // 默认（不传 coverTweak）恒 3 mesh
     expect(r.budget.dc).toBe(3);
-    expect(triOf(r.coverMesh)).toBe(R71_C2_COVERFILL_ON ? 16 : 12); // R71 盖板侧面填充 +4
+    // R86 修正：coverMesh 已下移到全部 mergeSafe 之后创建 ⇒ R71 侧面填充 / R84 上填充 / R86
+    // 外上填充都真正进 coverMesh.geometry（旧写法 coverMesh 指向 merge 前的孤儿几何、这两块
+    // 填充从未渲染）。故 coverMesh = base 12 + R71 4 + R84 4 + R86 4。
+    expect(triOf(r.coverMesh)).toBe((R71_C2_COVERFILL_ON ? 16 : 12) + (R84_C2_SIDE_UP_ON ? 4 : 0) + (R86_C2_UPPEROUTER_ON ? 4 : 0)); // 盖板薄盒+三块填充全并入
     expect(triOf(r.faceMesh)).toBe(R69_C2_LAMP_ON ? 8 : 4); // R69 侧壁 +4
-    expect(r.budget.tri).toBe(36 + (R69_C2_LAMP_ON ? 4 : 0) + (R71_C2_COVERFILL_ON ? 4 : 0) + (R84_C2_SIDE_UP_ON ? 4 : 0));
-    // R84 上半区黑填充经 mergeSafe 并入 budget 的 coverGeo 桶（+4），但 coverMesh.geometry
-    // 在 R84 合并前已构造（tailLampC2 里 coverGeo 重赋值为新对象）⇒ 三 mesh 几何和 + R84 上填充 = budget.tri。
-    expect(triOf(r.coverMesh) + triOf(r.faceMesh) + triOf(r.redStripMesh) + (R84_C2_SIDE_UP_ON ? 4 : 0)).toBe(r.budget.tri);
+    expect(r.budget.tri).toBe(36 + (R69_C2_LAMP_ON ? 4 : 0) + (R71_C2_COVERFILL_ON ? 4 : 0) + (R84_C2_SIDE_UP_ON ? 4 : 0) + (R86_C2_UPPEROUTER_ON ? 4 : 0));
+    // coverMesh 已含全部填充 ⇒ 三 mesh 几何和 = budget.tri（无需再外加 R84/R86 项）。
+    expect(triOf(r.coverMesh) + triOf(r.faceMesh) + triOf(r.redStripMesh)).toBe(r.budget.tri);
   });
 
   it('★ 修正 A/D：on/off 两态恒 3 mesh / (40|R69) tri / 3 DC / 2 材质（第 4 mesh 已撤销）', () => {
@@ -347,15 +356,16 @@ describe('R68 · 第 0 条：零护栏改动契约', () => {
       });
       expect(r.meshes, `coverTweak=${tweak} mesh 数`).toHaveLength(3);
       expect(r.budget.dc).toBe(3);
-      expect(r.budget.tri).toBe(36 + (R69_C2_LAMP_ON ? 4 : 0) + (R71_C2_COVERFILL_ON ? 4 : 0) + (R84_C2_SIDE_UP_ON ? 4 : 0));
+      expect(r.budget.tri).toBe(36 + (R69_C2_LAMP_ON ? 4 : 0) + (R71_C2_COVERFILL_ON ? 4 : 0) + (R84_C2_SIDE_UP_ON ? 4 : 0) + (R86_C2_UPPEROUTER_ON ? 4 : 0));
       expect(r.budget.mat).toBe(2);
       // node 无 document ⇒ makeC2AtlasTexture 返回 null、贴图降级为 0（r67:395 同口径）；
       // 浏览器态为 1，故只钉 ≤ C2_TEX_BUDGET，不把 node 降级误当契约。
       expect(r.budget.tex).toBeLessThanOrEqual(C2_TEX_BUDGET);
-      expect(triOf(r.coverMesh)).toBe(R71_C2_COVERFILL_ON ? 16 : 12); // R71 盖板侧面填充 +4
+      // R86 修正：coverMesh 下移到全部 merge 后 ⇒ R71/R84/R86 三块填充都进 coverMesh.geometry。
+      expect(triOf(r.coverMesh)).toBe((R71_C2_COVERFILL_ON ? 16 : 12) + (R84_C2_SIDE_UP_ON ? 4 : 0) + (R86_C2_UPPEROUTER_ON ? 4 : 0)); // 盖板薄盒+三块填充
       expect(triOf(r.faceMesh)).toBe(R69_C2_LAMP_ON ? 8 : 4); // R69 侧壁 +4
-      // R84 上填充并入 budget 的 coverGeo 桶（+4）⇒ on/off 两态预算均含该项（与 mesh 几何解耦）
-      expect(triOf(r.coverMesh) + triOf(r.faceMesh) + triOf(r.redStripMesh) + (R84_C2_SIDE_UP_ON ? 4 : 0)).toBe(r.budget.tri);
+      // coverMesh 已含全部填充 ⇒ 三 mesh 几何和 = budget.tri（无需再外加填充项）。
+      expect(triOf(r.coverMesh) + triOf(r.faceMesh) + triOf(r.redStripMesh)).toBe(r.budget.tri);
     }
     expect(c2src).not.toContain('r68_tail_c2_surround'); // 独立 surround mesh 彻底撤销
     expect(c2src).toContain('C2_ATLAS_SURROUND_COLOR');  // 改走 atlas Canvas，零新几何

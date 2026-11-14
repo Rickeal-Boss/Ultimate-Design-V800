@@ -310,6 +310,30 @@ export const R84_C2_SIDE_UP_ON = !r69HookOff('r84c2sideup');
 /** R84 侧面竖灯拓深后的 z 进深（GLB 局部 m）：0.03 → 0.068（世界 0.14 → 0.32m）。 */
 export const C2_LAMP_SIDE_DEPTH_R84 = 0.068;
 
+/* ── R86 · C2 尾灯上半区「外上填充」quad（补 R84 上填充与真实漏洞 y/z 不重叠）────────
+ * 病根（probe-v800-roof-tail §B）：R84 上填充 quad 的 y 范围 [sideYHi 0.2343, coverYHi 0.266]
+ *   与用户 11-14 截图指的真实漏洞 y ∈ [0.27, 0.36] **完全不重叠**（x/z 也偏内偏后）⇒
+ *   一像素都没盖到。漏洞在盖板顶再往上一段、更外、更向车头的车身侧面破面带。
+ * 处方：在 R84 上填充之后再加一块「外上填充」quad，y ∈ [0.266, 0.366]、z ∈ [-0.578, -0.434]，
+ *   复用 coverMat（正面横杆同款黑）+ c2SideWindingIndex(side) 绕序，merge 进 coverGeo
+ *   ⇒ 恒 3 mesh / 3 DC 不变，+2 quad = +4 tri（C2 tri 48 → 52）。
+ * ⚠ x 取值（**关键**，.qa/r86_c2_upperouter_probe.py GLB 实测 body 半宽）：body 侧围在该
+ *   漏洞段是**内收的 tumblehome 曲面**——y=0.266 处 world 半宽 ≈0.909、y=0.366 处 ≈0.77
+ *   （= local 0.191 / 0.162）。派单稿的 x=±0.205 local（0.974 world）与回退稿 ±0.195（0.926
+ *   world）**都超出 body 顶段**（0.77 world）⇒ 若做成平面 quad 必然重演 R82「外悬空黑板」。
+ *   故本波把 quad 做成**跟随 tumblehome 的倾斜面**：下沿(y=0.266) x=±0.188 local(0.893w，
+ *   body 0.909 内 0.016)、上沿(y=0.366) x=±0.160 local(0.760w，body 0.770 内 0.010)，
+ *   两沿都内收于 body ⇒ 恒不外凸，从破面缝隙看是贴身黑面、不浮鳍。
+ * 回滚：`#r86c2upperouter=off` 逐位回 R84 态（无外上填充）。 */
+/** R86 上半区外上填充开关（默认 ON，`#r86c2upperouter=off` 回 R84 无外上填充态）。 */
+export const R86_C2_UPPEROUTER_ON = !r69HookOff('r86c2upperouter');
+/** R86 外上填充 y 范围（GLB 局部 m）：coverYHi(0.266) → +0.10(0.366)，覆盖截图白框 y0.27–0.36。 */
+export const C2_UPPEROUTER_YHI_R86 = 0.366;
+/** R86 外上填充下沿 x（GLB 局部 m，|x|）：y=coverYHi 处，body 0.909w 内收 0.016w 防外凸。 */
+export const C2_UPPEROUTER_XLO_R86 = 0.188;
+/** R86 外上填充上沿 x（GLB 局部 m，|x|）：y=0.366 处，body 0.770w 内收 0.010w 防外凸。 */
+export const C2_UPPEROUTER_XHI_R86 = 0.160;
+
 /* ── R84 · C2 尾灯盖板侧面黑填充进深加深（缓解 GLB 锯齿破面露头）────────────────
  * 病根：用户 11-14 C2 尾灯特写截图 —— 凤凰点阵正常，但右侧车身有锯齿破面
  *   （lamp_rear.glb 非流形，按 x 分 48 桶上边缘抖动 25.84mm）。R83 三段收口解决的是
@@ -383,12 +407,14 @@ export const R81_C2_SIDE_DOUBLE_ON = !r69HookOff('r81c2dsided');
  *  `#r69c2lamp=off` ⇒ 无侧壁 ⇒ 回 R68 的 36。 */
 export const C2_DC_BUDGET = 3;
 /** tri 上限：base 40（盖板12 + face4/侧壁8 + 红条20），R71 盖板侧面填充 +4 ⇒ 44，
- *  R84 上半区黑填充（左右各一 quad）+4 ⇒ 48。
- *  `#r84c2sideup=off` ⇒ 回 44；`#r71c2coverfill=off` ⇒ 回 40；`#r69c2lamp=off` ⇒ 回 36 基线。 */
+ *  R84 上半区黑填充（左右各一 quad）+4 ⇒ 48，R86 外上填充（左右各一 quad）+4 ⇒ 52。
+ *  `#r86c2upperouter=off` ⇒ 回 48；`#r84c2sideup=off` ⇒ 回 44；`#r71c2coverfill=off` ⇒ 回 40；
+ *  `#r69c2lamp=off` ⇒ 回 36 基线。 */
 export const C2_TRI_BUDGET = 36
   + (R69_C2_LAMP_ON ? 4 : 0)
   + (R71_C2_COVERFILL_ON ? 4 : 0)
-  + (R84_C2_SIDE_UP_ON ? 4 : 0);
+  + (R84_C2_SIDE_UP_ON ? 4 : 0)
+  + (R86_C2_UPPEROUTER_ON ? 4 : 0);
 export const C2_MAT_BUDGET = 2;
 export const C2_TEX_BUDGET = 1;
 
@@ -863,11 +889,13 @@ export function buildTailLampC2(opts: C2BuildOptions): C2BuildResult {
     coverBox.dispose();
     for (const q of fillQuads) q.dispose();
   }
-  const coverMesh = markExternal(
-    new THREE.Mesh(coverGeo, coverMat), 'r67_tail_cover', opts.scale, 2
-  );
+  // ⚠ coverMesh 必须在 R84 上填充 / R86 外上填充 mergeSafe **之后**再创建：mergeSafe 返回
+  //   **新** BufferGeometry，若在此处（merge 前）就 new Mesh(coverGeo) 捕获旧引用，后续
+  //   `coverGeo = mergeSafe([coverGeo, ...])` 重赋值会让 Mesh 仍指旧几何 ⇒ R84/R86 填充 quad
+  //   被并入一个从未挂到 mesh 的孤儿几何、**不渲染**（budget.tri 却按新 coverGeo 计入 ⇒
+  //   账面 tri 与实际渲染不符）。故把 coverMesh 创建下移到 R86 块之后（见下）。
   // 修正 A/D：中央白块 surround **不再新增任何几何**，改由 `paintC2Atlas(...,true)`
-  // 画进现有 atlas（见本文件 §3）⇒ 恒 3 mesh / 36 tri / 3 DC / 2 材质 / 1 贴图。
+  // 画进现有 atlas（见本文件 §3）⇒ 恒 3 mesh / 3 DC / 2 材质 / 1 贴图。
 
   // R69：竖灯缩小 + 侧贴（r69 已在 builder 顶部声明）
   const lampHalfW = r69 ? G.lampHalfW * C2_LAMP_SHRINK_WIDTH : G.lampHalfW;
@@ -966,6 +994,46 @@ export function buildTailLampC2(opts: C2BuildOptions): C2BuildResult {
     coverGeo = mergeSafe([coverGeo, ...upQuads]);
     for (const q of upQuads) q.dispose();
   }
+
+  // R86：上半区「外上填充」（见 R86_C2_UPPEROUTER_ON 注）。补 R84 上填充与真实漏洞
+  //   y[0.27,0.36] 不重叠的缺口——这块 quad y 范围 [coverYHi 0.266, 0.366]、z [-0.578,-0.434]，
+  //   真正压住漏洞段。左右各一块 quad，merge 进 coverGeo ⇒ 恒 3 mesh / 3 DC 不变，+4 tri。
+  // ⚠ 做成**跟随 body tumblehome 的倾斜面**：下沿(y=coverYHi) x=±C2_UPPEROUTER_XLO_R86
+  //   (0.188 local)、上沿(y=C2_UPPEROUTER_YHI_R86) x=±C2_UPPEROUTER_XHI_R86 (0.160 local)，
+  //   两沿都内收于 body 侧围（实测 0.909w / 0.770w）⇒ 恒不外凸，不重演 R82 外悬空黑板。
+  //   x 随 y 收（yHi 顶点用 xHi、yLo 顶点用 xLo），仍是 4 顶点 2 tri 单 quad。
+  // zOut/zIn 取同 R84 上填充（跟随 R83 ztail / R84 拓深），覆盖拓深后整段进深。
+  if (R86_C2_UPPEROUTER_ON) {
+    const zOutOuter = G.faceZ - effZTail;
+    const zInOuter = G.faceZ + sideDepthEff;
+    const yLoOuter = G.coverYHi;
+    const yHiOuter = C2_UPPEROUTER_YHI_R86;
+    const outerQuads: THREE.BufferGeometry[] = [];
+    for (const side of [-1, 1]) {
+      const nxOuter = side < 0 ? -1 : 1;
+      const xLoOuter = side * C2_UPPEROUTER_XLO_R86; // 下沿（靠 fender，更外）
+      const xHiOuter = side * C2_UPPEROUTER_XHI_R86; // 上沿（tumblehome 内收，更内）
+      const oq = new THREE.BufferGeometry();
+      // 顶点序同 R84 上填充 sq：yLo/xLo·zIn、yHi/xHi·zIn、yLo/xLo·zOut、yHi/xHi·zOut
+      oq.setAttribute('position', new THREE.Float32BufferAttribute([
+        xLoOuter, yLoOuter, zInOuter, xHiOuter, yHiOuter, zInOuter,
+        xLoOuter, yLoOuter, zOutOuter, xHiOuter, yHiOuter, zOutOuter
+      ], 3));
+      oq.setAttribute('normal', new THREE.Float32BufferAttribute([
+        nxOuter, 0, 0, nxOuter, 0, 0, nxOuter, 0, 0, nxOuter, 0, 0
+      ], 3));
+      oq.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 0, 1, 1, 0, 1, 1], 2));
+      oq.setIndex(c2SideWindingIndex(side));
+      outerQuads.push(oq);
+    }
+    coverGeo = mergeSafe([coverGeo, ...outerQuads]);
+    for (const q of outerQuads) q.dispose();
+  }
+  // coverMesh 在全部 coverGeo merge（R71 端面填充 + R84 上填充 + R86 外上填充）之后创建，
+  //   确保 Mesh 捕获的是**最终**合并几何 ⇒ 填充 quad 真正渲染（见上方 coverMesh 下移注）。
+  const coverMesh = markExternal(
+    new THREE.Mesh(coverGeo, coverMat), 'r67_tail_cover', opts.scale, 2
+  );
   const faceMesh = markExternal(
     new THREE.Mesh(faceGeo, faceMat), 'r67_tail_c2_face', opts.scale, 3
   );

@@ -132,6 +132,16 @@ const R71_REAR_ROOF: boolean =
  * 回滚：`#r80r7seat=off` ⇒ 这批件退回 cabinHidable（逐位回 R79）。 */
 const R80_R7_DRIVER_VIEW: boolean =
   typeof window === 'undefined' || !/(?:^|[#&])r80r7seat=off/i.test(window.location.hash);
+/* ── R86 · 病A 修复：driverStruct 车厢内常显 ─────────────────────────────────
+ * 病根（probe-r7-interior-tail §二）：driverStruct（主驾座椅/门板/A·B 柱内衬等一整批
+ *   内饰结构件）的可见性绑在 cameraInRearZone（相机 body 局部 z < -0.56）二值开关上，
+ *   前后排分区裁剪，阈值附近抖动 ⇒ 整批「时有时无」。
+ * 处方 A-1：车厢内任意机位常显（前后排都看得见真实存在的结构件），只在车外隐藏。
+ * 回滚：`#r86r7interior=off` ⇒ 退回 R80 旧「仅车厢前半（inFrontZone）」行为。
+ * `#r80r7seat=off` 语义不变：R80_R7_DRIVER_VIEW=false 时这批件不打 driverStruct tag、
+ *   走不进 driverStruct 分支（退回 cabinHidable 的 !interior），与本开关正交。 */
+const R86_R7_INTERIOR_ON: boolean =
+  typeof window === 'undefined' || !/(?:^|[#&])r86r7interior=off/i.test(window.location.hash);
 /* ══ W2批4 · 透明件渲染排序治理 ═══════════════════════════════════════════════
  * 背景：车内近景透明件历史上只设 `depthWrite=false` 却无 `renderOrder` ⇒ three.js
  * 透明队列按相机距离排序 ⇒ 近景玻璃/贴花闪烁、透出关系错乱。本批给它们钉显式
@@ -1798,7 +1808,7 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
     // —— pass 1 · 材质级（先）：material.visible 全量覆盖 ——
     for (const e of matEntries) {
       if (e.rearSeat) e.mat.visible = interior && inRearZone;       // ⑥ seat-rear：仅 cabinRear（双向）
-      else if (e.driverStruct) e.mat.visible = inFrontZone;         // R80 主驾结构件：仅车厢前半
+      else if (e.driverStruct) e.mat.visible = R86_R7_INTERIOR_ON ? interior : inFrontZone; // R86 车厢内常显（#r86r7interior=off 退回 R80 仅前半）
       else if (e.apillar) e.mat.visible = !interior || inRearZone;   // ⑥ A 柱：cabin 隐藏但 cabinRear 豁免（双向）
       else if (e.cabinHidable) e.mat.visible = !interior;           // ①⑤ 座舱遮挡：cabin 隐藏、车外显
       else e.mat.visible = e.kept || !exteriorShellReady;           // ③ 非白名单 ⇒ shell ready 后永久隐藏

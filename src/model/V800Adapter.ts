@@ -244,7 +244,7 @@ const STEER_HARD_HIDE_MARGIN_M = 0.04;
  * 修法（零 tri / 零 DC / 零材质，纯标量门控 + near 标量）：
  *   ① **硬隐藏滞回**：进隐 dist<0.365m（=radius+near+0.04）、退隐 dist>0.42m（+6cm 退出
  *      余量），带内保持上次态 ⇒ 边界抖动不再翻转；
- *   ② **动态 near 推出**：dist<0.60m 时把 camera.near 推到 `dist−radius−0.02`（clamp
+ *   ② **动态 near 推出**：dist<0.30m 时把 camera.near 推到 `dist−radius−0.02`（clamp
  *      [0.1, 0.5]）⇒ near 面恒在包围球外，盘面三角**物理上无法被近裁剪**，即使可见也
  *      不黑。CameraRig 每帧 update() 末尾把 near 无条件写回 POSE.near（0.1），而 Game 帧序
  *      是 rig.update → syncInteriorOcclusion(updateSteeringGate) → render，故本处写 near
@@ -254,17 +254,18 @@ const R83_STEER_HARDEN_ON: boolean =
   typeof window === 'undefined' || !/(?:^|[#&])r83steerharden=off/i.test(window.location.hash);
 /** 硬隐藏退出阈值（m）：比进入阈值 0.365m 宽 6cm，边界抖动不再每帧翻转（滞回）。 */
 const STEER_HARD_HIDE_EXIT_M = 0.42;
-/** 动态 near 推出的触发半径（m）：dist 小于此值即推 near，略宽于硬隐藏阈值 0.365m。 */
-const STEER_NEAR_BOOST_RADIUS_M = 0.60;
+/** 动态 near 推出的触发半径（m）：dist 小于此值即推 near。R86 收窄至 0.30：正常 cabin
+ *  眼点 dist≈0.55-0.65 恒不触发（原先 0.60 覆盖正常眼点导致每帧把 near 推到 0.285-0.5，
+ *  near 面 <0.3m 裁掉仪表台/方向盘/座椅/内壁 = 整屏黑）。仅机位切换阻尼过渡真钻到 0.30
+ *  内才推，此时 fallback dist<r+0.02=0.245 硬隐藏也兜底。 */
+const STEER_NEAR_BOOST_RADIUS_M = 0.30;
 /** 动态 near 推出时 near 面相对包围球表面的再退让（m），防 near 恰贴球面残留切边。 */
 const STEER_NEAR_BOOST_SKIN_M = 0.02;
 /** 动态 near 的下限 / 上限（防 far/near 失真）。
- *  R84 P0 根治：旧值 0.1 (=CABIN_NEAR) 落在盘包围球半径 0.225 **之内** ⇒ 当 dist−r−SKIN
- *  算出负值（dist<0.245）时 Math.max(0.1, 负值) 把 near 钳回 0.1，near 面物理上仍在盘内
- *  ⇒ 盘面大三角被近裁剪面斜切铺满视口 = 整帧黑闪（R83 双保险真机仍失效的根因）。
- *  新值 0.245 = 盘半径 0.225 + 2cm 安全边距 ⇒ near 面恒在包围球**之外**，即使 dist 极近
- *  也不会切穿盘面。回滚：`#r83steerharden=off` 走旧路径（不推 near）。 */
-const STEER_NEAR_BOOST_MIN = 0.245;
+ *  R86 回退 floor 至 0.10（=CABIN_NEAR）：R84 抬高到 0.245 时近裁剪区 dist<0.245 也
+ *  被 near=0.245 切掉，扩大了 global 黑屏范围。收窄触发半径至 0.30 后，dist<0.30 时
+ *  floor 0.10 足够（fallback dist<r+0.02=0.245 硬隐藏同时兜底）。回滚：`#r83steerharden=off`。 */
+const STEER_NEAR_BOOST_MIN = 0.10;
 const STEER_NEAR_BOOST_MAX = 0.5;
 /** 每帧算出的「相机是否在盘包围球近裁剪危险区」（updateSteeringGate 写、applyVisibility 读）*/
 let steerHardHide = false;
@@ -4628,14 +4629,13 @@ const R48_LAMP_TONE: boolean =
     floorExtMat.userData.sculptMaterial = { id: 'carpet' };
     mk(1.86, 0.95, 1.098, 1.52, 'cabin-floor-carpet', 0.012,
        R84_V800_FLOOR_ON ? floorExtMat : carpetMat); // 前段：中控/脚坑上方
-    /* R85：顶棚中段前缘内收 —— R84 放行后中段补片 z 前缘 +0.575 正好压在挡风玻璃上沿线，
-     *   两块 ext-front（z[+0.575,+1.20]）更整段横在玻璃投影区上方；cabin 态 windshield 被
-     *   windshieldHidden 隐藏 ⇒ 主驾前视/抬头视线穿过玻璃位直接撞上这些深色(0x26221f)硬边
-     *   BoxGeometry =「车头玻璃区黑板」。处方：R85 ON 时中段前缘内收到 z=+0.50（玻璃上沿后
-     *   ~75mm），并跳过两块 ext-front（见下）；背向玻璃的 ext-rear 与 R84 中段 roofExtMat
-     *   材质放行收益均不动。回滚 `#r85v800boardz=off` ⇒ 逐位回 R84（前缘 +0.575 + 照建 ext-front）。 */
-    const roofMidD = R85_V800_BOARDZ_ON ? 2.025 : 2.15;  // 前缘 +0.50 : +0.575，后缘恒 -1.525
-    const roofMidZ = R85_V800_BOARDZ_ON ? -0.5125 : -0.45;
+    /* R85+R86：顶棚中段前缘内收 —— R84 放行后中段补片 z 前缘 +0.575 正好压在挡风玻璃上沿线，
+     *   cabin 态 windshield 被隐藏后视线穿玻璃位直接撞上深色(0x26221f)BoxGeometry = 黑板。
+     *   R85 收到 z=+0.50 仍不够（玻璃起点 z≈+0.55）。R86 进一步收到 z=-0.30（玻璃起点后
+     *   ~0.85m），彻底不压玻璃。ext-front 跳过 / ext-rear + roofExtMat 放行均不动。
+     *   回滚 `#r85v800boardz=off` ⇒ 逐位回 R84（前缘 +0.575）。 */
+    const roofMidD = R85_V800_BOARDZ_ON ? 1.225 : 2.15;  // 前缘 -0.30 : +0.575，后缘恒 -1.525
+    const roofMidZ = R85_V800_BOARDZ_ON ? -0.9125 : -0.45; // =(-1.525+(-0.30))/2 : (-1.525+0.575)/2
     mk(1.86, roofMidD, 1.668, roofMidZ, 'cabin-roof-carpet', 0.012,
        (R84_V800_ROOFMID_ON && roofExtMat) ? roofExtMat : carpetMat); // 舱段：凹槽顶面
     /* R82：顶棚补覆盖 —— 补齐 cabin 态被剔朝上外表面(z[-2.609,+1.313]) 相对中段 carpet

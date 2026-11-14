@@ -176,6 +176,20 @@ export interface R7TailWrapResult {
 export function buildR7TailWrap(opts: R7TailWrapOptions): R7TailWrapResult {
   const G = R7_TAIL_WRAP_GEOM;
   const k = opts.shrink ?? G.shrink;
+  /* ── R86 · 病B 回滚开关 ─────────────────────────────────────────────────
+   * 病B-1（遮挡）：三黑模块原为整块 y∈[bandY−0.15, bandY+0.15]=[0.888,1.188]，把 band
+   *   中央（y∈[1.010,1.065]，含 LUXEED 字标 + 中段红带）整块挡住 ⇒ 远看「一条红带」。
+   *   处方 B-1：每块拆成「上/下两半」，让开 band 占据的中央横向槽（槽内由 band 自身
+   *   封闭）；破面仍被 上半块 + band + 下半块 三段连续覆盖（GLB 缺口 y≈[0.951,1.124]
+   *   ⇒ 下半块盖 0.888–1.010、band 盖 1.010–1.065、上半块盖 1.065–1.188，无缝）。
+   *   `#r86r7tail=off` ⇒ 退回 R80 整块布局。
+   * 病B-2（镜像）：band 挂在 rotY(π) 的 body 下 ⇒ atlas 左右互换，LUXEED 读作 DEE XUL。
+   *   处方 B-2：把 band UV 的 u 区间反向 remap（`remapUVToRegion` 支持 u0>u1，线性插值
+   *   `u0+nu*(u1−u0)`），只影响 bandGeo、零几何风险。`#r86r7tailu=off` ⇒ 不翻 u。 */
+  const R86_R7_TAIL_ON: boolean =
+    typeof window === 'undefined' || !/(?:^|[#&])r86r7tail=off/i.test(window.location.hash);
+  const R86_R7_TAIL_U_ON: boolean =
+    typeof window === 'undefined' || !/(?:^|[#&])r86r7tailu=off/i.test(window.location.hash);
   // 修正 B：以「默认路径实际可见尾灯最外层」为基准，而非 R49 分支的 bodyMaxZ+0.010。
   //   bandPlane = 0.5885*s = 2.54409 m；modulePlane = bandPlane − 12mm = 2.53209 m
   //   ⇒ 比尾门 2.51949 外凸 12.6mm（不自遮挡）、比可见 band 内缩 12mm（不前浮）、
@@ -194,8 +208,20 @@ export function buildR7TailWrap(opts: R7TailWrapOptions): R7TailWrapResult {
   //   把 GLB 非流形边（上边缘抖动 20.06mm 世界）也压进黑面之下，不再露锯齿。
   const moduleGeos: THREE.BufferGeometry[] = [];
   const s = G.moduleSize;
+  // R86 B-1：band 占据的中央横向槽半高（= bandHeight/2 = 0.0275）。模块拆上/下两半让开
+  //   这条槽，band（zBand，比模块更靠车尾外侧）在槽内自身封闭 ⇒ 正后方可见 band 中央
+  //   （LUXEED 字标 + 中段红带）；缺口破面由 上半块/band/下半块 三段无缝覆盖（见函数头注）。
+  const slotHalf = G.bandHeight / 2;
   for (const cx of [-s, 0, s]) {
-    moduleGeos.push(tailQuad(cx - s / 2, cx + s / 2, G.bandY - s / 2, G.bandY + s / 2, zModules));
+    if (R86_R7_TAIL_ON) {
+      // 上半块：band 上沿 → 模块上沿
+      moduleGeos.push(tailQuad(cx - s / 2, cx + s / 2, G.bandY + slotHalf, G.bandY + s / 2, zModules));
+      // 下半块：模块下沿 → band 下沿
+      moduleGeos.push(tailQuad(cx - s / 2, cx + s / 2, G.bandY - s / 2, G.bandY - slotHalf, zModules));
+    } else {
+      // #r86r7tail=off：R80 旧整块布局（会挡 band 中央）
+      moduleGeos.push(tailQuad(cx - s / 2, cx + s / 2, G.bandY - s / 2, G.bandY + s / 2, zModules));
+    }
   }
   const moduleGeo = mergeSafe(moduleGeos);
   for (const g of moduleGeos) g.dispose();
@@ -239,7 +265,11 @@ export function buildR7TailWrap(opts: R7TailWrapOptions): R7TailWrapResult {
   if (opts.atlasTex) {
     // 调整 UV 采样 atlas 中央区域（v ∈ [0.42, 0.68]），包含 LUXEED 字标 + 红条 + 饰条
     // atlas 布局：flipY=true，重要细节在 y ∈ [55, 95]（R49 分支），对应 v ∈ [0.448, 0.680]
-    remapUVToRegion(bandGeo, 0, 1, 0.42, 0.68);
+    // R86 B-2：band 挂在 rotY(π) 的 body 下 ⇒ 默认 u 方向与车尾视角「左→右」反向，字标
+    //   左右镜像（读作 DEE XUL）。翻 u（u0=1→u1=0）校正；remapUVToRegion 支持反向区间，
+    //   且只作用于 bandGeo（tailQuad 的 uv 常量不动，不影响其他调用方）。
+    if (R86_R7_TAIL_U_ON) remapUVToRegion(bandGeo, 1, 0, 0.42, 0.68);
+    else remapUVToRegion(bandGeo, 0, 1, 0.42, 0.68);
 
     const atlasBandMat = new THREE.MeshStandardMaterial({
       map: opts.atlasTex,
