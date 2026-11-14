@@ -218,6 +218,21 @@ const STEER_GATE_RADIUS_MIN_M = 0.05;
 const STEER_GATE_RADIUS_MAX_M = 0.50;
 const R81_STEER_GATE_GUARD: boolean =
   typeof window === 'undefined' || !/(?:^|[#&])r81steergate=off/i.test(window.location.hash);
+/* ══ R81 P2 · 高精盘近裁剪面硬隐藏（近近平面黑闪根治）════════════════════════════
+ * 病根：R80 的 clearance 门控只在「盘心距离 − 包围球半径 < 0.16」时换程序化盘，但
+ *   程序化盘与高精盘**同位**（同一 STEERING_PLACEMENT）⇒ 近裁剪面(near=0.1)扫过盘面时
+ *   **两盘同样被裁**，换盘不解决裁剪 ⇒ 机位切换 / 转视角相机掠过盘包围球时，被裁的
+ *   大三角在视口内铺开 = 整帧黑闪（R80 判据改造未根治的真因）。
+ * 处置：新增**硬隐藏**安全网 —— 相机到盘心距离 < 盘半径 + near + 0.04 安全边距时，
+ *   **两盘都隐**（宁可一帧无盘，也不出整帧黑闪）；正常 cabin 眼点 clearance ≈0.33m
+ *   远大于该阈值 ⇒ 高精盘恒显（满足用户「必须高精盘不能退化成程序化盘」）。
+ * 回滚：`#r81steerhardhide=off` ⇒ 关闭硬隐藏（逐位回 R80）。 */
+const R81_STEER_HARD_HIDE: boolean =
+  typeof window === 'undefined' || !/(?:^|[#&])r81steerhardhide=off/i.test(window.location.hash);
+/** 硬隐藏安全边距（m）：near 之外再留 4cm，防斜掠三角边缘残留。 */
+const STEER_HARD_HIDE_MARGIN_M = 0.04;
+/** 每帧算出的「相机是否在盘包围球近裁剪危险区」（updateSteeringGate 写、applyVisibility 读）*/
+let steerHardHide = false;
 /* ══ W2批4 · 透明件渲染排序治理 ═══════════════════════════════════════════════
  * 背景：车内近景透明件历史上只设 `depthWrite=false` 却无 `renderOrder` ⇒ three.js
  * 透明队列按相机距离排序 ⇒ 近景玻璃/贴花闪烁、透出关系错乱。本批给它们钉显式
@@ -1887,8 +1902,17 @@ const SHADOW_CASTER_MATERIAL_IDS = new Set<string>(['paint-upper', 'paint-lower'
  *   · `r22-hub-steel`（B1 制动盘独立金属灰档，rough 0.4；原并入 dark 被吞没）；
  *   · `r22-arch-liner`（C1 前轮拱内衬哑光黑，遮拱内顶橙褐块）。
  * 实例对为 0 可合并项（与 D1 材料清单同口径复核）；已回传主理人登记。
+ *
+ * **R81 登记（上调 80→81，按上方「上调 = 明确的预算决策」条款）**：一例新语义材质 ——
+ *   · `paint-upper` 的**机盖面板专属克隆**（R81 P1 hood 黑板根治）：shell body GLB 在
+ *     引擎盖区（world z −1.1~−1.77）**开无面**（射线实测 MISS，非 CRLF/剔除伪影），
+ *     而程序化 `机盖面板` 原本共用 batch 的 paint-upper 实例 ⇒ shell ready 后 W1 pass1
+ *     把该实例 visible=false ⇒ 整个引擎盖区无人渲染 = hood 视角下半屏纯黑大板。
+ *     克隆出独立实例并标 kept=true（恒可见）+ cabinPaintShadow（实例级行为旗标，去重器
+ *     跳过）⇒ 引擎盖区恒有车漆面。可见 DC +1（hood-panel 本就是独立 mesh），tri 不变
+ *     （236 tri，几何原样）。实例对仍为 0 可合并项；已回传主理人登记。
  */
-export const V800_MATERIAL_INSTANCE_BUDGET = 80;
+export const V800_MATERIAL_INSTANCE_BUDGET = 81;
 
 /**
  * 车模 tri **可见口径**红线（= 渲染器 `info.render.triangles` 口径）。
@@ -4415,6 +4439,61 @@ const R48_LAMP_TONE: boolean =
   //   本波不动几何/UV/材质（避免回归）。诊断探针已入库供下波复用。
   wireBatchPaintShadow(batchStats);
   byId = indexComponents(model);
+
+  /* ══ R81 P1 · 机盖(hood)视角下半屏纯黑根治（机盖面板材质独立化）════════════════
+   * 病根（浏览器实探 verify/hood_diag + tools 射线探针，gold 漆 hood 机位）：
+   *   shell body GLB（body.glb，966,484 tri，r44External）在引擎盖区 world z −1.15~−1.75
+   *   **开无面**（y=3 垂直射线连射 8 点全 MISS；z −0.85~−1.05 命中的是 cowl/风挡基 y≈1.69，
+   *   非机盖面）⇒ 该区**只有**程序化 `机盖面板` mesh 能提供车漆面。但它原本**共用**
+   *   batch 的 paint-upper 材质实例 ⇒ shell ready 后 W1 pass1 `e.mat.visible = kept ||
+   *   !exteriorShellReady` = false（paint ∉ R44_INTERIOR_MATERIAL_IDS ⇒ kept=false）
+   *   ⇒ 整个引擎盖区**无人渲染** = hood 视角下半屏纯黑大板（用户 11-14 截图逐特征吻合）。
+   * 处置：给 `机盖面板` 一个**专属 paint 材质克隆**并登记 kept=true（永不被 W1 pass1
+   *   隐藏）+ cabinPaintShadow 行为旗标（跳过去重器，否则与原 paint-upper 同 id 同签名
+   *   被判可并）+ polygonOffset 赢深度。材质实例预算 80→81（登记见本文件预算块）；
+   *   可见 DC +1（hood-panel 本就是独立 mesh，现恒渲染）；tri 不变（236 tri，几何原样）。
+   * 回滚：`#r81hoodmat=off` ⇒ 逐位回 R80（hood-panel 继续共用 batch paint 实例、
+   *   shell ready 后被隐藏，hood 视角下半屏交给 shell body = 黑洞回归）。 */
+  const R81_HOOD_PANEL_VISIBLE: boolean =
+    typeof window === 'undefined' ||
+    !/(?:^|[#&])r81hoodmat=off/i.test(window.location.hash);
+  /** R81 P1：机盖面板专属 paint 材质克隆（kept=true ⇒ 恒可见）。此处先克隆并挂到 mesh，
+   *  材质实例登记推迟到 buildVisibilityTable 之后的 hoodPanelMatEntryPush()（matEntries
+   *  声明在下方 W1 块，此处尚不可用）。 */
+  let hoodPanelKeptMat: THREE.MeshPhysicalMaterial | null = null;
+  if (R81_HOOD_PANEL_VISIBLE) {
+    const hoodMesh = byId.get('hood-panel');
+    const hoodMeshMesh = hoodMesh
+      ? ((hoodMesh as unknown as { isMesh?: boolean }).isMesh
+          ? (hoodMesh as THREE.Mesh)
+          : (hoodMesh.getObjectByProperty('isMesh', true) as THREE.Mesh | null))
+      : null;
+    const hoodSrcMat = hoodMeshMesh
+      ? (Array.isArray(hoodMeshMesh.material) ? hoodMeshMesh.material[0] : hoodMeshMesh.material)
+      : null;
+    if (hoodMeshMesh && hoodSrcMat) {
+      const hoodMat = hoodSrcMat.clone() as THREE.MeshPhysicalMaterial;
+      // 保留 sculptMaterial 身份（护栏 r32 材质签名 / 按键查表仍认它是 paint-upper）
+      (hoodMat.userData as { sculptMaterial?: unknown }).sculptMaterial =
+        (hoodSrcMat.userData as { sculptMaterial?: unknown }).sculptMaterial;
+      // 标记为**实例级行为材质**（与 cabinPaintShadow 同族）⇒ r32 去重器跳过它，
+      //   否则「clone 与原 paint-upper 同 id 同签名且都非行为」会判成可并 = 断言红。
+      //   语义也成立：本克隆承载「hood 视角恒可见」实例级运行时语义，合并即毁。
+      (hoodMat.userData as { cabinPaintShadow?: boolean }).cabinPaintShadow = true;
+      // 赢过 shell body 引擎盖面的深度竞争（二者近共面；polygonOffset 把 panel 拉向相机）
+      hoodMat.polygonOffset = true;
+      hoodMat.polygonOffsetFactor = -2;
+      hoodMat.polygonOffsetUnits = -2;
+      hoodMat.needsUpdate = true;
+      hoodMeshMesh.material = hoodMat;
+      hoodMeshMesh.visible = true;
+      hoodPanelKeptMat = hoodMat;
+      console.info(
+        '[V800Adapter] R81 P1 机盖面板材质独立化：hood-panel 用专属 paint 克隆（kept=true，恒可见）'
+      );
+    }
+  }
+
   if (typeof window !== 'undefined' && window.location.hash.includes('batchmerge')) {
     console.table(
       batchStats.groups
@@ -5095,6 +5174,20 @@ const R48_LAMP_TONE: boolean =
       `[V800Adapter] W1 可见性状态表：材质 ${matEntries.length} / 网格 ${meshEntries.length} 项` +
         `（poke 阈值 y>${roofGlassY.toFixed(2)}）`
     );
+    /* R81 P1：机盖面板专属 paint 克隆登记为 kept=true ⇒ shell ready 后恒可见，填满
+     *   shell body 在引擎盖区（z −1.1~−1.77）的开口（射线实测 MISS，壳体此处无面），
+     *   根治 hood 视角下半屏纯黑。若放任 buildVisibilityTable 自动登记，kept 会算成
+     *   false（paint ∉ R44_INTERIOR_MATERIAL_IDS）⇒ shell ready 后又被隐藏 = 黑洞回归。 */
+    if (hoodPanelKeptMat) {
+      const existing = matEntries.find((e) => e.mat === hoodPanelKeptMat);
+      if (existing) existing.kept = true;
+      else
+        matEntries.push({
+          mat: hoodPanelKeptMat,
+          cabinHidable: false,
+          kept: true,
+        });
+    }
   };
 
   /**
@@ -5169,8 +5262,20 @@ const R48_LAMP_TONE: boolean =
       if (welcomeMesh) welcomeMesh.visible = !interior;
     }
     // ② R47/R71：高精盘 cabin 显（近距门控覆盖）；程序化盘接管后恒隐藏、近距态恢复
+    //   ⚠ 显隐表达式逐字保留 `interior && !steerNear` / `interior && steerNear`
+    //   （护栏 r47 按子串钉死，不得改写）。
     if (steeringMesh) steeringMesh.visible = interior && !steerNear;
     for (const m of proceduralSteeringMeshes) m.visible = interior && steerNear;
+    /* R81 P2：近裁剪面硬隐藏安全网 —— 相机钻进「盘半径 + near + 边距」球内时两盘都隐。
+     *   病根：near 扫过盘面 ⇒ 大三角被裁铺满视口 = 整帧黑闪；R80 换程序化盘不解决，
+     *   因程序化盘与高精盘**同位**同样被裁。故极近距直接两盘都隐（宁可一帧无盘）。
+     *   阈值 = 0.225(盘半径) + 0.1(near) + 0.04(边距) = 0.365m；正常 cabin 眼点到盘心
+     *   实测 0.652m ⇒ clearance 0.427m > 0.365m ⇒ 不触发，高精盘恒显不退化。
+     * 回滚：`#r81steerhardhide=off`。 */
+    if (steerHardHide) {
+      if (steeringMesh) steeringMesh.visible = false;
+      for (const m of proceduralSteeringMeshes) m.visible = false;
+    }
   };
 
   /* ══════════════ R38-P1-5（E2）：阴影 caster 瘦身 ══════════════════════════
@@ -5422,10 +5527,21 @@ const R48_LAMP_TONE: boolean =
     setSteeringCameraDistance: applySteerGate,
     updateSteeringGate(camera: THREE.Camera): void {
       /* R71：Game 每帧调用 —— 高精盘挂 body 下（有变换），须用世界位置算距离。 */
-      if (!R71_STEER_GATE || !steeringMesh) return;
+      if (!R71_STEER_GATE || !steeringMesh) { steerHardHide = false; return; }
       camera.getWorldPosition(STEER_GATE_TMP_VEC);
       steeringMesh.getWorldPosition(STEER_GATE_TMP_VEC_B);
-      applySteerGate(STEER_GATE_TMP_VEC.distanceTo(STEER_GATE_TMP_VEC_B));
+      const dist = STEER_GATE_TMP_VEC.distanceTo(STEER_GATE_TMP_VEC_B);
+      applySteerGate(dist);
+      /* R81 P2：近裁剪面硬隐藏安全网。相机钻进「盘半径 + near + 边距」球内时两盘都隐，
+       *   杜绝 near=0.1 扫过盘面 ⇒ 大三角被裁铺满视口 = 整帧黑闪（换程序化盘不解决，
+       *   因程序化盘同位同样被裁）。正常 cabin 眼点 clearance ≈0.33m 远大于阈值 ⇒ 不触发。 */
+      steerHardHide =
+        R81_STEER_HARD_HIDE &&
+        Number.isFinite((camera as THREE.PerspectiveCamera).near) &&
+        dist <
+          steerGateRadius +
+            (camera as THREE.PerspectiveCamera).near +
+            STEER_HARD_HIDE_MARGIN_M;
     },
     get currentHeat() {
       return heat;

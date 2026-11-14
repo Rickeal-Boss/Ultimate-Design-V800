@@ -146,7 +146,18 @@ const R67_GUARD_SHA256 = 'e4a350a82699bf2a4c8b93e18eff0e1295faaaa0b1646b623c13c3
  *  治理——给 depthWrite=false 的玻璃（greenhouse 桶 + rear-glass-upper 克隆）经
  *  userData.vorderGlass 标记批量钉 renderOrder=10、welcome-carpet / tailgate-maextro /
  *  gauge-screen 表面贴花钉 renderOrder=1，新增 `#vorder=off` 回滚钩子，属预期改动。 */
-const ADAPTER_SHA256 = '4a08b6a4bb698778f98d64408d9e03c47742a4ace939b93cb8540ec9aec8c28d';
+const ADAPTER_SHA256 = 'd1909adf7f098836f7060319cb65794c70f1466377128be502d3798393f22e1b';
+/* ═══ R81 P1/P2 · 冻结基线更新（cam-gate 线实测口径）═════
+ * 本波 V800Adapter.ts 两处改动（均属预期改动，故更新本基线）：
+ *   · P1 机盖(hood)视角下半屏纯黑根治：shell body GLB 在引擎盖区（world z −1.1~−1.77）
+ *     开无面（射线实测 MISS），程序化 `机盖面板` 原共用 batch 的 paint-upper 实例 ⇒
+ *     shell ready 后 W1 pass1 把该实例 visible=false ⇒ 引擎盖区无人渲染 = 纯黑大板。
+ *     处置：机盖面板专属 paint 克隆（kept=true 恒可见 + cabinPaintShadow 行为旗标跳去重
+ *     + polygonOffset 赢深度）+ 材质实例预算 80→81（登记见 V800Adapter.ts）。
+ *   · P2 高精盘近裁剪面黑闪：near 扫过盘面时大三角被裁铺满视口；R80 换程序化盘不解决
+ *     （同位同样被裁）。处置：新增近裁剪面硬隐藏安全网（相机钻进盘包围球 ⇒ 两盘都隐），
+ *     新增 `#r81steerhardhide=off` 回滚钩子。
+ * 回滚钩子：`#r81hoodmat=off`（P1）/ `#r81steerhardhide=off`（P2）。 */
 /* ═══ R81 · 冻结基线更新（QA 实测口径；⚠ 与主理人转交值冲突，已回传待裁决）═════
  * 本常量必须与断言 `expect(sha256(adapter)).toBe(ADAPTER_SHA256)` 的口径逐位一致：
  *   adapter = src(...) = readFileSync(p,'utf8').replace(/\r\n/g,'\n')
@@ -154,7 +165,8 @@ const ADAPTER_SHA256 = '4a08b6a4bb698778f98d64408d9e03c47742a4ace939b93cb8540ec9
  * ⇒ 唯一正确取值 = 该口径对**当前定稿工作树文件**的实算值。
  *
  * ▸ 实测（13:34~13:41 三算逐位一致，node / python / 护栏精确口径）：
- *     GUARD_EXACT sha256(adapter) = 4a08b6a4bb698778f98d64408d9e03c47742a4ace939b93cb8540ec9aec8c28d
+ *     GUARD_EXACT sha256(adapter) = d1909adf7f098836f7060319cb65794c70f1466377128be502d3798393f22e1b
+ *     （R81 P1/P2 改动后重算，node 护栏精确口径；旧值 4a08b6a4…= R80 定稿版，已被本波取代）
  *     python byte 版 LF 归一        = 4a08b6a4…（与上式相同）
  *     当前工作树 raw(CRLF)          = 9588884af1005eec65f98b97093b5f2e5bfa6c163b27b89db231206ce4a7702f
  *     HEAD / index 版(R80, 288161B) = f0bc5137a7906d868421d624762de2b4458723509002a06c18affb8d6100bc04
