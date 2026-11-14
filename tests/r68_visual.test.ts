@@ -140,13 +140,19 @@ const R68_PENDING_TRACK_FILES = [
   'src/model/parts/r7FrontAtlas.ts', 'src/model/parts/r7TailWrap.ts'
 ] as const;
 
-/** 第 0 条：r67 护栏全文件冻结（CRLF 规范化后 UTF-8 sha256）。R71 更新基线：该护栏新增 R71 侧贴/盖板填充 shim 探针，属预期改动。 */
-const R67_GUARD_SHA256 = 'e4a350a82699bf2a4c8b93e18eff0e1295faaaa0b1646b623c13c38723ebc60f';
+/** 第 0 条：r67 护栏全文件冻结（CRLF 规范化后 UTF-8 sha256）。R71 更新基线：该护栏新增 R71 侧贴/盖板填充 shim 探针，属预期改动。
+ *  R82 再更新基线：C2 侧面黑板收口（盖板填充进深 0.10→0.02 / 竖灯外缘 0.006→0.035，`#r82c2filldepth`/`#r82c2outset` 回滚）
+ *  触发 r67_tail_c2.test.ts 的 maxAbsX/zMax 两条 toBeCloseTo 精确坐标断言改为 R82 开关感知（ON 断新值 / OFF 断原基线），
+ *  护栏强度不减、on/off 两态都被精确钉住，属预期改动。 */
+const R67_GUARD_SHA256 = '3a7f2ee613dcc191fbf39811d2510a8f4d4302a0477b956d1637da6ce70e0a95';
 /** V800Adapter.ts 全文件冻结（CRLF 规范化后 UTF-8 sha256）。W2批4 更新基线：透明件渲染排序
  *  治理——给 depthWrite=false 的玻璃（greenhouse 桶 + rear-glass-upper 克隆）经
  *  userData.vorderGlass 标记批量钉 renderOrder=10、welcome-carpet / tailgate-maextro /
- *  gauge-screen 表面贴花钉 renderOrder=1，新增 `#vorder=off` 回滚钩子，属预期改动。 */
-const ADAPTER_SHA256 = 'd1909adf7f098836f7060319cb65794c70f1466377128be502d3798393f22e1b';
+ *  gauge-screen 表面贴花钉 renderOrder=1，新增 `#vorder=off` 回滚钩子，属预期改动。
+ *  R82 再更新基线：顶棚补覆盖治车内看穿——新增 cabin-roof-carpet-ext-rear/ext-front（×2 段阶梯）
+ *  补齐 cabin 态被剔朝上外表面(z[-2.609,+1.313]) 相对中段 carpet 的前后缺口（+3 mesh/+3 DC、零新材质、
+ *  防穿壳经 GLB 外皮最低 y 实测压 14mm），`#r82v800roofext=off` 回滚，属预期改动。 */
+const ADAPTER_SHA256 = '843a49c9ac52d1b53982be89b34b676fb4dd4e5e7773006d108df0493ddfa004';
 /* ═══ R81 P1/P2 · 冻结基线更新（cam-gate 线实测口径）═════
  * 本波 V800Adapter.ts 两处改动（均属预期改动，故更新本基线）：
  *   · P1 机盖(hood)视角下半屏纯黑根治：shell body GLB 在引擎盖区（world z −1.1~−1.77）
