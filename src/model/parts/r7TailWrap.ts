@@ -44,6 +44,7 @@
  */
 import * as THREE from 'three';
 import { mergeSafe } from '../../util/geo';
+import { remapUVToRegion } from './tailLampC2';
 
 /* ══════════════════════ 1. 对外常量（装配局部 = 世界米）══════════════════════ */
 
@@ -229,11 +230,38 @@ export function buildR7TailWrap(opts: R7TailWrapOptions): R7TailWrapResult {
     new THREE.Mesh(edgeGeo, moduleMat), 'r68_r7_tail_edge', 5
   );
 
-  // ② 缩小尾灯带：复用 lampRearMat ⇒ brakeLevel 联动零改动
+  // ② 缩小尾灯带：R85 升级为贴 atlas（显示官图字标/分段/饰条），通过 onBeforeRender 保持刹车联动
   const bandW = G.bandWidthBase * k;
   const bandGeo = tailQuad(-bandW / 2, bandW / 2, G.bandY - G.bandHeight / 2, G.bandY + G.bandHeight / 2, zBand);
+
+  // R85：若 atlas 可用，贴图显示细节；否则回退纯色 lampRearMat
+  let bandMat: THREE.Material = opts.lampRearMat;
+  if (opts.atlasTex) {
+    // 调整 UV 采样 atlas 中央区域（v ∈ [0.42, 0.68]），包含 LUXEED 字标 + 红条 + 饰条
+    // atlas 布局：flipY=true，重要细节在 y ∈ [55, 95]（R49 分支），对应 v ∈ [0.448, 0.680]
+    remapUVToRegion(bandGeo, 0, 1, 0.42, 0.68);
+
+    const atlasBandMat = new THREE.MeshStandardMaterial({
+      map: opts.atlasTex,
+      emissiveMap: opts.atlasTex, // 红带区域发光，其他区域暗
+      emissive: new THREE.Color(0xffffff), // 白色 emissive 让 emissiveMap 颜色直接显示
+      emissiveIntensity: 0.35, // 初始值，会被 onBeforeRender 覆盖
+      roughness: 0.25,
+      metalness: 0.1,
+      side: THREE.FrontSide
+    });
+
+    // 通过 onBeforeRender 同步 lampRearMat.emissiveIntensity，保持刹车联动
+    atlasBandMat.onBeforeRender = (_renderer, _scene, _camera, _geometry, _mesh) => {
+      const srcMat = opts.lampRearMat as THREE.MeshStandardMaterial;
+      atlasBandMat.emissiveIntensity = srcMat.emissiveIntensity;
+    };
+
+    bandMat = atlasBandMat;
+  }
+
   const bandMesh = marked(
-    new THREE.Mesh(bandGeo, opts.lampRearMat), 'r68_r7_tail_band', 6
+    new THREE.Mesh(bandGeo, bandMat), 'r68_r7_tail_band', 6
   );
 
   // ③ 侧贴（R80 默认**关闭**）
@@ -280,9 +308,13 @@ export function buildR7TailWrap(opts: R7TailWrapOptions): R7TailWrapResult {
   const tri = triOf(moduleGeo) + triOf(edgeGeo) + triOf(bandGeo) +
     (R80_R7_SIDE_ON && sideGeo ? triOf(sideGeo) : 0);
 
+  // R85：收集所有材质（moduleMat + 可能的 atlasBandMat）
+  const allMats: THREE.Material[] = [moduleMat];
+  if (bandMat !== opts.lampRearMat) allMats.push(bandMat);
+
   return {
     meshes,
-    mats: [moduleMat],
+    mats: allMats,
     geos: sideGeo
       ? [moduleGeo, edgeGeo, bandGeo, sideGeo]
       : [moduleGeo, edgeGeo, bandGeo],
@@ -290,7 +322,7 @@ export function buildR7TailWrap(opts: R7TailWrapOptions): R7TailWrapResult {
     budget: {
       dc: meshes.length,
       tri,
-      mat: 1,
+      mat: allMats.length,
       tex: 0
     }
   };

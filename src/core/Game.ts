@@ -402,7 +402,7 @@ export class Game {
     this.tier = quality.tier;
     this.qualityGovernor = new AdaptiveQuality(quality);
 
-    this.rig = new CameraRig(window.innerWidth / window.innerHeight);
+    this.rig = new CameraRig(window.innerWidth / window.innerHeight, this.profile.id === 'r7' ? 'r7' : 'v800');
     this.env = new Environment(this.scene, this.renderer, quality.envMapSize);
     this.lighting = new Lighting(this.scene, quality, this.env.sunDirection);
     this.contactShadow = new ContactShadow(this.scene);

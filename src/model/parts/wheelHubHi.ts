@@ -34,9 +34,13 @@
  *     「spec 米」= 真实米 ÷ manifest.scale（=4.75）。故 mesh.scale = 1 / manifest.scale
  *     （**不用** manifest.scale 放大 —— 那是把「模型单位」放大回米的口径，方向相反）。
  *   · **朝向**：探针证实 GLB 轮轴沿 **Z**（Z 跨度 0.62 ≪ X/Y 跨度 ~1.0）、轮心在
- *     (x≈0, y≈0.52, z≈0)，与现有 wheel-l.glb 同口径（radial X-Y、axle Z）。
- *     wheel spin 枢轴的旋转轴 = 局部 X（车轴）⇒ 挂上后 spin 每帧 rotation.x 自转，
- *     **GLB 自身无需绕 X/Y/Z 额外旋转**（wheel-l 也是 Z 轴直接挂 spin，同律）。
+ *     (x≈0, y≈0.52, z≈0)。**与现有 wheel-l.glb 口径相反**：wheel-l 的 bbox 为
+ *     size=[0.065, 0.174, 0.174]（spec 米，轴向 X 薄、径向 Y/Z），轮轴沿 X（车轴）。
+ *     ⇒ 本 GLB 必须先绕 Y 旋转 -π/2 把 GLB Z 轴映射到车的 X 轴（轮轴），再挂到
+ *     spin（spin 原点 = 轮心，spin.rotation.x 每帧自转 ⇒ 几何绕车轴 X 滚动）。
+ *     不旋转会让轮盘法线沿车前后 Z、spin 让它绕轮盘径向轴打转（错滚）。
+ *     -π/2 方向同时把 GLB 外圈面（原本朝 -Z）转到 -X，匹配 V800 右侧轮 outward=-X；
+ *     左侧轮 outward=+X 时外圈面朝内（不理想但轴向自转观感一致，如反可换 +π/2）。
  *   · **几何重定位**：GLB 轮心不在原点（y≈0.52）⇒ 必须把 geometry **先平移 -center**
  *     把轮心归到原点，再挂到 spin（spin 原点 = 轮心，R8 轮心对轴）。本模块在 load 时
  *     对**共享 geometry** 做一次 translate（×1 几何，4 实例共享），零每帧成本。
@@ -192,8 +196,11 @@ export async function loadWheelHubHi(
       const mesh = new THREE.Mesh(geometry, material);
       mesh.name = 'r83-hub-hi';
       mesh.scale.setScalar(kScale);           // 米 → spec 米
-      // ⚠️ 无需绕 X/Y/Z 旋转：探针证实 GLB 轮轴沿 Z、与 wheel-l.glb 同口径，
-      //    wheel spin 枢轴的旋转轴 = 局部 X（车轴）⇒ 直接挂即可随轮自转（同 wheel-l）。
+      // ⚠️ 必须绕 Y 旋转 -π/2：本 GLB 轮轴沿 Z（探针 bbox size Z=0.62 ≪ X/Y ~1.0），
+      //    而 wheel-l.glb 轮轴沿 X（bbox size X=0.065 ≪ Y/Z ~0.174，spec 米）。spin.rotation.x
+      //    绕局部 X 自转，要求挂上后几何轮轴对齐 X ⇒ rotateY(-π/2) 把 GLB Z 轴映射到 X。
+      //    同时把 GLB 外圈面（原 -Z）转到 -X，匹配 V800 右侧轮 outward=-X（左侧反时改 +π/2）。
+      mesh.rotation.set(0, -Math.PI / 2, 0);
       mesh.position.set(0, 0, 0);             // spin 原点已是轮心（geometry 已重定位）
       mesh.castShadow = false;
       mesh.receiveShadow = false;

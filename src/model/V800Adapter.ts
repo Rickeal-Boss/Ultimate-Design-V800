@@ -272,6 +272,10 @@ let steerHardHide = false;
  *   两块补片（逐位回 R81 仅中段 carpet 态）。模块顶层求值一次，每处只读布尔。 */
 const R82_V800_ROOF_EXT_ON: boolean =
   typeof window === 'undefined' || !/(?:^|[#&])r82v800roofext=off/i.test(window.location.hash);
+/* R85：顶棚补片前缘内收，消除 cabin 态主驾前挡玻璃区「黑板」。`#r85v800boardz=off` ⇒ 逐位回
+ *   R84 态（中段前缘 +0.575、两块 ext-front 照建）。模块顶层求值一次。 */
+const R85_V800_BOARDZ_ON: boolean =
+  typeof window === 'undefined' || !/(?:^|[#&])r85v800boardz=off/i.test(window.location.hash);
 /* ══ W2批4 · 透明件渲染排序治理 ═══════════════════════════════════════════════
  * 背景：车内近景透明件历史上只设 `depthWrite=false` 却无 `renderOrder` ⇒ three.js
  * 透明队列按相机距离排序 ⇒ 近景玻璃/贴花闪烁、透出关系错乱。本批给它们钉显式
@@ -4624,7 +4628,15 @@ const R48_LAMP_TONE: boolean =
     floorExtMat.userData.sculptMaterial = { id: 'carpet' };
     mk(1.86, 0.95, 1.098, 1.52, 'cabin-floor-carpet', 0.012,
        R84_V800_FLOOR_ON ? floorExtMat : carpetMat); // 前段：中控/脚坑上方
-    mk(1.86, 2.15, 1.668, -0.45, 'cabin-roof-carpet', 0.012,
+    /* R85：顶棚中段前缘内收 —— R84 放行后中段补片 z 前缘 +0.575 正好压在挡风玻璃上沿线，
+     *   两块 ext-front（z[+0.575,+1.20]）更整段横在玻璃投影区上方；cabin 态 windshield 被
+     *   windshieldHidden 隐藏 ⇒ 主驾前视/抬头视线穿过玻璃位直接撞上这些深色(0x26221f)硬边
+     *   BoxGeometry =「车头玻璃区黑板」。处方：R85 ON 时中段前缘内收到 z=+0.50（玻璃上沿后
+     *   ~75mm），并跳过两块 ext-front（见下）；背向玻璃的 ext-rear 与 R84 中段 roofExtMat
+     *   材质放行收益均不动。回滚 `#r85v800boardz=off` ⇒ 逐位回 R84（前缘 +0.575 + 照建 ext-front）。 */
+    const roofMidD = R85_V800_BOARDZ_ON ? 2.025 : 2.15;  // 前缘 +0.50 : +0.575，后缘恒 -1.525
+    const roofMidZ = R85_V800_BOARDZ_ON ? -0.5125 : -0.45;
+    mk(1.86, roofMidD, 1.668, roofMidZ, 'cabin-roof-carpet', 0.012,
        (R84_V800_ROOFMID_ON && roofExtMat) ? roofExtMat : carpetMat); // 舱段：凹槽顶面
     /* R82：顶棚补覆盖 —— 补齐 cabin 态被剔朝上外表面(z[-2.609,+1.313]) 相对中段 carpet
      *   (z[-1.525,+0.575]) 的前后两段悬空缺口（前段看穿=主驾抬头见天，后段看穿=cabinRear）。
@@ -4656,9 +4668,13 @@ const R48_LAMP_TONE: boolean =
       roofExtMat.userData.sculptMaterial = { id: 'carpet' };
       // 后段 z[-2.609,-1.525]：外皮近平顶 min 1.662 ⇒ 单块平顶 1.648（1.648+0.006=1.654 < 1.662）
       mk(1.86, 1.084, 1.648 - 0.006, -2.067, 'cabin-roof-carpet-ext-rear', 0.012, roofExtMat);
-      // 前段 z[+0.575,+1.20]：外皮下坡（z+0.575~0.95 min 1.639；z+0.95~1.20 min 1.561）⇒ 两段阶梯
-      mk(1.86, 0.375, 1.630 - 0.006, 0.7625, 'cabin-roof-carpet-ext-front', 0.012, roofExtMat);
-      mk(1.86, 0.25, 1.560 - 0.006, 1.075, 'cabin-roof-carpet-ext-front', 0.012, roofExtMat);
+      // 前段 z[+0.575,+1.20]：整段落在挡风玻璃投影区上方 —— R85 ON 跳过（覆盖玻璃区即主驾前挡
+      //   黑板本身）；R85 off（`#r85v800boardz=off`）回 R84 照建，治前段抬头看穿。
+      if (!R85_V800_BOARDZ_ON) {
+        // 外皮下坡（z+0.575~0.95 min 1.639；z+0.95~1.20 min 1.561）⇒ 两段阶梯
+        mk(1.86, 0.375, 1.630 - 0.006, 0.7625, 'cabin-roof-carpet-ext-front', 0.012, roofExtMat);
+        mk(1.86, 0.25, 1.560 - 0.006, 1.075, 'cabin-roof-carpet-ext-front', 0.012, roofExtMat);
+      }
     }
   }
 

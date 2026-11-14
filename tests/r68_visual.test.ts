@@ -152,8 +152,11 @@ const R67_GUARD_SHA256 = '5f23a4c9227d1f0a8a325128905b617874eabb984f2220bdf5155e
  *  gauge-screen 表面贴花钉 renderOrder=1，新增 `#vorder=off` 回滚钩子，属预期改动。
  *  R82 再更新基线：顶棚补覆盖治车内看穿——新增 cabin-roof-carpet-ext-rear/ext-front（×2 段阶梯）
  *  补齐 cabin 态被剔朝上外表面(z[-2.609,+1.313]) 相对中段 carpet 的前后缺口（+3 mesh/+3 DC、零新材质、
- *  防穿壳经 GLB 外皮最低 y 实测压 14mm），`#r82v800roofext=off` 回滚，属预期改动。 */
-const ADAPTER_SHA256 = '855ec45c3d928c3fa6cab0b7a84be1b0ce5873678d0274ca9e0c0e4402470cd0';
+ *  防穿壳经 GLB 外皮最低 y 实测压 14mm），`#r82v800roofext=off` 回滚，属预期改动。
+ *  R85 再更新基线：治「车内主驾视角车头玻璃区黑色大板」——R84 放行的中段 cabin-roof-carpet 前缘
+ *  z +0.575→+0.50 内收 + 两块 cabin-roof-carpet-ext-front（整段压在挡风玻璃上）R85 默认跳过创建，
+ *  `#r85v800boardz=off` 回 R84 全创建态；ext-rear 与 R84 抬头看穿收益不动，属预期改动。 */
+const ADAPTER_SHA256 = 'f23679400a7d4f6ae577523e16307cf9b8b41ecc157e509d754b2676778e5839';
 /* ═══ R81 P1/P2 · 冻结基线更新（cam-gate 线实测口径）═════
  * 本波 V800Adapter.ts 两处改动（均属预期改动，故更新本基线）：
  *   · P1 机盖(hood)视角下半屏纯黑根治：shell body GLB 在引擎盖区（world z −1.1~−1.77）
