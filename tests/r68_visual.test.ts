@@ -449,9 +449,12 @@ describe('R68 · V800Adapter.ts 逐字冻结 + 本波 diff 不含', () => {
     // 只校验口径正确 + 格式合法 + 与断言实际比较值逐位一致；
     // ⚠ 绝不写 `expect(sha256(raw)).toBe(sha256(lf))`：CRLF 工作副本会假红
     //   （主理人明示历史坑：sha256sum 算 raw 会错），CRLF_LINES / RAW 只做日志诊断。
+    // ⚠ R81-CI 修正：删去 `expect(rawSha).not.toBe(live)` —— 它假设工作副本有 CRLF，
+    //   但 CI（ubuntu + 干净 checkout）是 **LF** ⇒ raw===live ⇒ 该断言在 CI 必红、本地绿
+    //   （本机 CRLF 副本掩盖了它）。RAW 与 CRLF_LINES 只做日志诊断，不作断言；
+    //   sha 冻结契约由下方 `expect(sha256(adapter)).toBe(ADAPTER_SHA256)` 独立承担（恒执行）。
     expect(live).toMatch(/^[0-9a-f]{64}$/);
     expect(live).toBe(sha256(adapter)); // 与顶层 src() 的 LF 归一口径逐位一致
-    expect(rawSha).not.toBe(live);      // 本工作副本确有 CRLF ⇒ raw≠LF（记录历史坑）
     // ⚠ 独立于上面 ★ it 再验一次 sha 冻结值：★ it 的 gitStatus 断言在 commit 前
     //   必然先失败并**短路**，其后的 `expect(sha256(adapter)).toBe(ADAPTER_SHA256)`
     //   根本不会执行 ⇒ 若无本条，就无法证明冻结值写对了。本条恒执行。
