@@ -258,6 +258,28 @@ export function c2SideWindingIndex(side: number): number[] {
     : [0, 1, 2, 1, 3, 2];
 }
 
+/* ── R81 二轮 · P3 根治：侧面 quad 改 DoubleSide（绕序无关，绕开 world 侧映射歧义）────
+ * R81 一轮的 c2SideWindingIndex(side) 绕序修正（叉积实算无误：default ⇒ 局部 −X、
+ *   flipped ⇒ 局部 +X、body rotY(π) 把局部 −X 翻成世界 +X）在几何上成立，但用户 11-14
+ *   真机反馈「左侧依旧没贴」且症状与修前逐位一致（右亮 / 左黑）。绕序翻转**必然**改变
+ *   背面剔除朝向 ⇒ 「完全没变化」只有两种可能：① 真机跑的是旧构建（本线无法证伪）；
+ *   ② 有别的东西让绕序不再是唯一判据（世界侧映射与推演相反 / mesh 被额外翻面）。
+ * 与其继续在推演里打转，改用**对绕序与世界侧映射都免疫**的根治：把承载侧面竖灯大面 /
+ * 盖板侧面黑填充的 faceMat / coverMat 设为 DoubleSide ⇒ GPU 不再做背面剔除，两块侧面
+ * quad 无论几何正面朝局部 ±X、经 body 翻面后朝世界 ±X，**两侧都可见**。
+ * 为什么不会连带正面过曝（派单红线）：正面灯组 quad（makeQuad，局部法线 −Z、朝车尾外）
+ *   的**背面**朝 +Z = 车头方向 = 插进 body 内部 ⇒ 从车外任一机位（前 / 后 / 侧 / 3-4）
+ *   都被 body 车身遮挡，背面永不入射相机；盖板薄盒（BoxGeometry 6 面闭合）同理，内表面
+ *   恒被车身挡住。DoubleSide 只多光栅化这些「藏在车身里」的背面，可见像素零变化、不过曝。
+ *   侧面 quad 的 normal 属性 nx=side 已指向 side·X（外向），DoubleSide 背面由 three 自动
+ *   翻法线打光 ⇒ 左右两侧光照一致，不会一侧亮一侧暗。
+ * 成本：**零 tri / 零 DC / 零新材质 / 零贴图**（改共享 faceMat / coverMat 的 side 标量，
+ *   不 clone ⇒ C2_MAT_BUDGET=2 / C2_TEX_BUDGET=1 不破）。overdraw 只多 8 tri 的背面
+ *   （face 侧 4 + 盖板填充 4），且都在车身内 ⇒ P0 流畅度无感。
+ * 回滚：`#r81c2dsided=off` ⇒ faceMat / coverMat 逐位回 FrontSide（届时只剩绕序修正生效）。
+ */
+export const R81_C2_SIDE_DOUBLE_ON = !r69HookOff('r81c2dsided');
+
 /** 预算上限（护栏消费）。新增 mesh 恒 3；tri = 盖板薄盒 12 + face 4 + 2·(top+bottom)·2。
  *  R69：竖灯缩小（高×0.48/宽×0.40）+ 侧面贴完整尾灯纹理 ⇒ face 并入左右侧壁 +4 ⇒ 默认 40。
  *  `#r69c2lamp=off` ⇒ 无侧壁 ⇒ 回 R68 的 36。 */
@@ -656,6 +678,14 @@ export function buildTailLampC2(opts: C2BuildOptions): C2BuildResult {
     metalness: 0.12,
     side: THREE.FrontSide
   });
+  // R81 二轮 P3 根治：侧面 quad 改绕序无关的 DoubleSide（见 R81_C2_SIDE_DOUBLE_ON 注）。
+  // 只动共享 faceMat / coverMat 的 side 标量 ⇒ 零 tri / 零 DC / 零新材质 / 零贴图。
+  // 正面 quad / 盖板薄盒的背面朝 +Z 插进 body 内部、被车身遮挡 ⇒ DoubleSide 不连带正面
+  // 过曝（可见像素零变化），仅多光栅化藏在车身里的背面（≤8 tri）。
+  if (R81_C2_SIDE_DOUBLE_ON) {
+    coverMat.side = THREE.DoubleSide;
+    faceMat.side = THREE.DoubleSide;
+  }
 
   // Phase 2b-C（侧缘接缝自查）：盖板由单面 2-tri plane 改**薄盒**（BoxGeometry 6 面 = 12 tri）。
   // rear34 后 3/4 视角下，单面 plane 的侧缘会读作一条贴片（z 外凸 body 尾门 10mm 世界）；
