@@ -2651,7 +2651,16 @@ export async function loadExternalShell(
           : (R68_R7_TAIL_ON && car === 'r7')
             ? lampRearMeshes.filter(
               (m) => m.name !== 'lamp_rear' && m.name !== 'lamp_rear_band' &&
-                !(R81_R7_HOUSING_HIDE && R68_R7_TAIL_ON && m.name === 'lamp_rear_housing')
+                !(R81_R7_HOUSING_HIDE && R68_R7_TAIL_ON && m.name === 'lamp_rear_housing') &&
+                /* R83：R7 尾灯中央暗方块 + 深红横带运行时止血 —— 把 R68 程序化包裹的
+                 * 三个纯装饰覆盖 quad 排除出出口（构造于 r7TailWrap.ts，:2563 并入本数组）。
+                 * modules+edge 在中央拼成暗方块、band 横压出深红带 ⇒ 探针定罪根因。
+                 * 不进出口 ⇒ Adapter 不挂 scene、不被 setPaintShadow 复位（同 R81 housing）。
+                 * 米色翼片锯齿是 GLB 资产缺陷，不在此处理（预期残留）。
+                 * `#r83r7tailcenter=off` ⇒ 守卫失效，三件回出口，观感回 R82。 */
+                !(R83_R7_TAILCENTER_HIDE && R68_R7_TAIL_ON &&
+                  (m.name === 'r68_r7_tail_modules' || m.name === 'r68_r7_tail_edge' ||
+                    m.name === 'r68_r7_tail_band'))
             )
             : lampRearMeshes),
         ...lampFrontMeshes
@@ -3065,5 +3074,17 @@ export const R68_GLASS_OPAQUE_ON = !r51HookOff('r68glassopaque');
  * scene、也不遍历 ⇒ 等价永久隐藏且不被复位（同 R67 横带思路）。
  * `#r81r7housing=off` ⇒ 守卫失效，housing 回到出口，R51 观感原样保留。 */
 export const R81_R7_HOUSING_HIDE = !r51HookOff('r81r7housing');
+
+/* R83：R7 尾灯「中央暗方块 + 深红横带」P0 运行时止血 —— 把 R68 程序化包裹的三个
+ * 覆盖件 `r68_r7_tail_modules` / `r68_r7_tail_edge` / `r68_r7_tail_band` 排除出
+ * lampMeshes 出口数组（构造于 r7TailWrap.ts:208/229/236，ExternalShell.ts:2563 并入
+ * lampRearMeshes）。病根（R83 探针定罪）：R68 包裹件 z 平面比 lamp_rear GLB 腔口更靠前，
+ * 三黑方 modules + 四边封边 edge 在中央拼成「中央暗方块」，缩小的 band 又横压出一条
+ * 「深红横带」，与米色翼片锯齿叠成穿帮。三者均为**纯装饰覆盖 quad**（不承担结构 / 不封
+ * GLB 洞，只是盖在腔口前），不进出口 ⇒ Adapter 不挂 scene、也不遍历 ⇒ 等价永久隐藏且
+ * 不被 setPaintShadow 的 `sm.visible=!interior` 复位（同 R67 横带 / R81 housing 思路）。
+ * ⚠ 米色翼片锯齿是 lamp_rear.glb 资产缺陷，运行时不可修，本波**不处理**（预期残留）。
+ * `#r83r7tailcenter=off` ⇒ 守卫失效，三覆盖件回到出口，R82 观感原样保留。 */
+export const R83_R7_TAILCENTER_HIDE = !r51HookOff('r83r7tailcenter');
 export const R68_WHEEL_ON = !r51HookOff('r68wheel');
 export const R68_GLDIAG_ON = !r51HookOff('r68gldiag');

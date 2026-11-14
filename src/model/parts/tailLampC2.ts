@@ -260,6 +260,31 @@ export const R82_C2_FILLDEPTH_ON = !r69HookOff('r82c2filldepth');
 /** R82 侧面竖灯外缘外推贴 body 开关（默认 ON，`#r82c2outset=off` 回 0.006）。 */
 export const R82_C2_OUTSET_ON = !r69HookOff('r82c2outset');
 
+/* ── R83 · C2 尾灯侧面接缝三段定罪收口（probe 实测 + 用户 11-14 真机反馈）──────────
+ * 症状与定罪（审查线 probe 逐点实测）：
+ *   S1 z-gap 4mm：侧面竖灯大面 quad 从 G.faceZ 起向 +z 进深 sideDepth，外缘（faceZ）
+ *     与正面 face quad 只共点不重叠 ⇒ 侧视读到 4mm z 向缝隙透出 body。
+ *     收口：把 side quad 的 z 外端向车尾外再延伸 ZTAIL=0.008 local（≈0.038m 世界），
+ *     与正面 face quad 形成重叠带。零 tri / 零 DC，DoubleSide 下重叠不 z-fight。
+ *   S2 x-outset 过外推 + 顶高不足：R82 把 effSideOutset 抬到 0.035 ⇒ xWall 外悬空
+ *     1.3cm；C2_LAMP_SIDE_HALF_H=0.0373 盖不住顶部 0.85cm 缺口。收口：R83 默认把
+ *     outset 拉回 R71 的 0.006（护栏符号 C2_LAMP_SIDE_OUTSET=0.006 的声明基线）、
+ *     半高抬到 SIDE_HALF_H_R83=0.0408。`#r83c2xfix=off` 逐位回 R82 的 0.035。
+ *   S3 正面两件居中漂移 5-9mm：lampCenterX 0.155 略偏外 ⇒ 正面 face quad 与红条整体
+ *     向中央漂 5-9mm；盖板半宽 0.170（R70 对齐竖灯外缘）在 xfix 收窄 xWall 后比侧面
+ *     竖灯外缘多出约 0.009 ⇒ 收窄盖板与盖板侧面填充 x 到 0.163 与 xfix 后的外缘平齐。
+ * 回滚：`#r83c2ztail=off` / `#r83c2xfix=off` / `#r83c2sym=off` 三段各自独立逐位回 R82。 */
+/** R83 S1 侧面竖灯 z 向前延伸重叠量（GLB 局部 m）：盖住 side quad 外缘与 face 的 4mm z 缝。 */
+export const R83_C2_ZTAIL_ON = !r69HookOff('r83c2ztail');
+/** R83 S2 x-outset 回 R71 基线 + 顶高补偿开关（默认 ON，`#r83c2xfix=off` 回 R82 的 0.035）。 */
+export const R83_C2_XFIX_ON = !r69HookOff('r83c2xfix');
+/** R83 S3 正面居中漂移 + 盖板/盖板侧面填充宽度收口开关（默认 ON，`#r83c2sym=off` 回 R82）。 */
+export const R83_C2_SYM_ON = !r69HookOff('r83c2sym');
+/** R83 S2 侧面竖灯半高（GLB 局部 m）：R80 的 0.0373 → 0.0408，盖住顶部 0.85cm 缺口。 */
+export const C2_LAMP_SIDE_HALF_H_R83 = 0.0408;
+/** R83 S3 正面两件向外拨回量（GLB 局部 m）：抵消用户实测的 5-9mm 向中央漂移。 */
+export const C2_LAMP_CENTER_NUDGE_R83 = 0.005;
+
 /* ── R81 P0-2 · 侧面 quad 绕序左右对称修正（用户「只贴了右侧，左侧依旧没有贴」）────
  * 定罪（叉积实算，常量 C2_LAMP_SIDE_DEPTH=0.03 / C2_COVER_FILL_DEPTH=0.10 均为正）：
  *   R71 两处循环（盖板侧面黑填充 / 侧面竖灯大面）共用同一顶点序
@@ -683,7 +708,19 @@ export function buildTailLampC2(opts: C2BuildOptions): C2BuildResult {
   // R82 两标量收口：护栏按符号读 C2_COVER_FILL_DEPTH / C2_LAMP_SIDE_OUTSET（值不变），
   // 运行时在此按开关选「生效值」。`#r82c2filldepth=off` / `#r82c2outset=off` 各自回 R81。
   const effCoverFillDepth = R82_C2_FILLDEPTH_ON ? 0.02 : C2_COVER_FILL_DEPTH;
-  const effSideOutset = R82_C2_OUTSET_ON ? 0.035 : C2_LAMP_SIDE_OUTSET;
+  // R83 S2：xfix ON 时把 effSideOutset 拉回护栏符号基线 0.006（治 R82 的 xWall 外悬空
+  // 1.3cm）；xfix off 回 R82 的 0.035；R82 outset off 再回 0.006（三段独立逐位回滚）。
+  const effSideOutset = R83_C2_XFIX_ON
+    ? C2_LAMP_SIDE_OUTSET
+    : (R82_C2_OUTSET_ON ? 0.035 : C2_LAMP_SIDE_OUTSET);
+  // R83 S2：xfix ON 时侧面竖灯半高抬到 0.0408，盖住顶部 0.85cm 缺口；off 回 R80 的 0.0373。
+  const effSideHalfH = R83_C2_XFIX_ON ? C2_LAMP_SIDE_HALF_H_R83 : C2_LAMP_SIDE_HALF_H;
+  // R83 S1：ztail ON 时把侧面 quad 的 z 外端向车尾外延伸 0.008 local（≈0.038m 世界），
+  // 与正面 face quad 形成重叠带、盖住 4mm z-gap；off 回 R82 的零延伸（z 外端 = G.faceZ）。
+  const effZTail = R83_C2_ZTAIL_ON ? 0.008 : 0;
+  // R83 S3：sym ON 时正面两件（face / 红条）中心向外拨 C2_LAMP_CENTER_NUDGE_R83=0.005、
+  // 盖板与盖板侧面填充半宽收到 0.163（与 xfix 后侧面竖灯外缘 0.176 平齐，去掉 R70 的 0.009 余量）。
+  const effCenterNudge = R83_C2_SYM_ON ? C2_LAMP_CENTER_NUDGE_R83 : 0;
   const tex = makeC2AtlasTexture(tweak);
   const texList: THREE.Texture[] = tex ? [tex] : [];
 
@@ -731,15 +768,21 @@ export function buildTailLampC2(opts: C2BuildOptions): C2BuildResult {
   // 两灯之间中央区可能露 body 残留红带 ⇒ 目检，露则迭代。`#r70c2align=off` 回 R68 全宽。
   const effLampHalfW = r69 ? G.lampHalfW * C2_LAMP_SHRINK_WIDTH : G.lampHalfW;
   const coverHalfW = r70Align ? G.lampCenterX + effLampHalfW : G.coverHalfW;
+  // R83 S3：sym ON 时盖板半宽收到 0.163（0.170 − 0.007），与 xfix 后的侧面竖灯外缘
+  // （lampCenterX 0.155 + effLampHalfW 0.015 + effSideOutset 0.006 = 0.176）之间留 0.013
+  // 内收，去掉 R70「盖板与竖灯外缘平齐」在 xfix 收窄后多余外露的 7mm。
+  const effCoverHalfW = R83_C2_SYM_ON ? 0.163 : coverHalfW;
   const coverBox = new THREE.BoxGeometry(
-    coverHalfW * 2, G.coverYHi - G.coverYLo, coverDepth
+    effCoverHalfW * 2, G.coverYHi - G.coverYLo, coverDepth
   );
   // BoxGeometry 原点在盒心 ⇒ 平移使「外表面 = coverZ、内表面嵌到 body 尾门面」
   coverBox.translate(0, (G.coverYLo + G.coverYHi) / 2, G.coverZ + coverDepth / 2);
-  // R71 盖板侧面黑填充：左右端各加一个 quad（x=±coverHalfW、法线 ±X、z 从 coverZ
+  // R71 盖板侧面黑填充：左右端各加一个 quad（x=±effCoverHalfW、法线 ±X、z 从 coverZ
   // 向内 effCoverFillDepth（R82 收口 0.10→0.02，世界 0.475m→0.095m，黑板面积 −80%），
   // coverYLo..coverYHi 全高），复用 coverMat 纯色零新材质，
   // 掩盖薄盒 ±x 端面斜视角缝隙/漏洞。合并进 coverGeo ⇒ 恒 3 mesh / 零 DC / 零新材质。
+  // ⚠ R83 S3：填充 quad 的 x 跟随 effCoverHalfW（盖板端面）而非原 coverHalfW ⇒ sym ON
+  // 时同步收到 0.163，否则盖板端面（0.163）与端面填充（0.170）错位 7mm 露缝。
   let coverGeo: THREE.BufferGeometry = coverBox;
   if (R71_C2_COVERFILL_ON) {
     const fillQuads: THREE.BufferGeometry[] = [];
@@ -748,10 +791,10 @@ export function buildTailLampC2(opts: C2BuildOptions): C2BuildResult {
       const nx = side < 0 ? -1 : 1;
       // 顶点：yLo/zIn、yHi/zIn、yLo/coverZ、yHi/coverZ（绕序同侧壁 quad，法线 ±X）
       fq.setAttribute('position', new THREE.Float32BufferAttribute([
-        side * coverHalfW, G.coverYLo, G.coverZ + effCoverFillDepth,
-        side * coverHalfW, G.coverYHi, G.coverZ + effCoverFillDepth,
-        side * coverHalfW, G.coverYLo, G.coverZ,
-        side * coverHalfW, G.coverYHi, G.coverZ
+        side * effCoverHalfW, G.coverYLo, G.coverZ + effCoverFillDepth,
+        side * effCoverHalfW, G.coverYHi, G.coverZ + effCoverFillDepth,
+        side * effCoverHalfW, G.coverYLo, G.coverZ,
+        side * effCoverHalfW, G.coverYHi, G.coverZ
       ], 3));
       fq.setAttribute('normal', new THREE.Float32BufferAttribute([
         nx, 0, 0, nx, 0, 0, nx, 0, 0, nx, 0, 0
@@ -782,33 +825,40 @@ export function buildTailLampC2(opts: C2BuildOptions): C2BuildResult {
   const lampYLo = lampCy - lampHalfH;
   const lampYHi = lampCy + lampHalfH;
   const sideDepth = r69 ? C2_LAMP_SIDE_DEPTH : 0;
-  // R71 重做：侧面竖灯大面的 y 范围固定为 lampCy ∓ C2_LAMP_SIDE_HALF_H（高 0.20），
-  // **比正面竖灯**（R69 缩小后高 0.0648）大，覆盖车尾侧面那段光秃黑柱。
-  const sideYLo = lampCy - C2_LAMP_SIDE_HALF_H;
-  const sideYHi = lampCy + C2_LAMP_SIDE_HALF_H;
+  // R71 重做：侧面竖灯大面的 y 范围固定为 lampCy ∓ 生效半高（R83 xfix ON ⇒ 0.0408，
+  // off ⇒ 0.0373），**比正面竖灯**（R69 缩小后高 0.0648）大，覆盖车尾侧面那段光秃黑柱。
+  const sideYLo = lampCy - effSideHalfH;
+  const sideYHi = lampCy + effSideHalfH;
 
   // face：左右各 1 quad（竖灯正面）+ 左右各 1 侧壁 quad（贴完整 atlas 纹理，掩侧看金竖条）
+  // R83 S3：sym ON 时正面两件（face / 红条）中心向外拨 effCenterNudge（0.005 local ≈
+  // 0.024m 世界），抵消用户实测的 5-9mm 向中央漂移；off ⇒ 逐位回 R82 的 G.lampCenterX。
   const faceQuads: THREE.BufferGeometry[] = [];
   for (const side of [-1, 1]) {
-    const cx = side * G.lampCenterX;
+    const cx = side * (G.lampCenterX + effCenterNudge);
     const xOut = cx + side * lampHalfW; // 外侧棱
     const q = makeQuad(cx - lampHalfW, cx + lampHalfW, lampYLo, lampYHi, G.faceZ);
     // 局部 −x 用左半幅、+x 用右半幅；body rotY(π) 会翻世界 x，最终朝向待 A/B 目检
     remapUVToRegion(q, side < 0 ? 0 : 0.5, side < 0 ? 0.5 : 1, 0, 1);
     faceQuads.push(q);
     if (sideDepth > 0) {
-      // 侧面竖灯大面（R71 重做）：x=xWall 平面、沿 z 从 faceZ（外）到 faceZ+sideDepth（内）、
+      // 侧面竖灯大面（R71 重做）：x=xWall 平面、沿 z 从 zOut（外）到 zIn=faceZ+sideDepth（内）、
       // y 用 sideYLo..sideYHi（高 0.20，比正面大）；显式外向法线（±X）+ atlas 半幅 UV
       // （凤凰点阵完整居中，与正面同款）。makeQuad 会退化（x0=x1 ⇒ normal 坏/UV 除零），故手写。
+      // R83 S1（ztail ON）：外端 zOut = faceZ − effZTail（再向车尾外延伸 0.008 local
+      // ≈0.038m 世界），与正面 face quad 形成 8mm 重叠带、盖住 probe 实测的 4mm z-gap；
+      // DoubleSide（R81 二轮）下重叠带两侧都可见，不会因共面/穿插闪面。ztail off ⇒ zOut=faceZ 回 R82。
+      const zOut = G.faceZ - effZTail;
       const zIn = G.faceZ + sideDepth;
       const sq = new THREE.BufferGeometry();
-      // 顶点：sideYLo/zIn、sideYHi/zIn、sideYLo/faceZ、sideYHi/faceZ
+      // 顶点：sideYLo/zIn、sideYHi/zIn、sideYLo/zOut、sideYHi/zOut
       // R71：外缘再外推 effSideOutset（R82 收口 0.006→0.035，xWall 逼近 body 半宽内
       // 2.3cm，遮住 sq 与 body 间透出 GLB 非流形破面的缝隙）⇒ 侧面竖灯比正面外缘更外凸
+      // ⚠ R83 S2（xfix ON）：effSideOutset 回 0.006（护栏符号基线），治 R82 的 xWall 外悬空 1.3cm。
       const xWall = R71_C2_SIDE_ON ? xOut + side * effSideOutset : xOut;
       sq.setAttribute('position', new THREE.Float32BufferAttribute([
         xWall, sideYLo, zIn, xWall, sideYHi, zIn,
-        xWall, sideYLo, G.faceZ, xWall, sideYHi, G.faceZ
+        xWall, sideYLo, zOut, xWall, sideYHi, zOut
       ], 3));
       const nx = side < 0 ? -1 : 1;
       sq.setAttribute('normal', new THREE.Float32BufferAttribute([
@@ -842,7 +892,8 @@ export function buildTailLampC2(opts: C2BuildOptions): C2BuildResult {
   for (let i = 0; i < counts.top; i += 1) ys.push(lampYHi - (i + 1) * gap);
   for (let i = 0; i < counts.bottom; i += 1) ys.push(lampYLo + (i + 1) * gap);
   for (const side of [-1, 1]) {
-    const cx = side * G.lampCenterX;
+    // R83 S3：红条中心随正面 face 同步外拨 effCenterNudge，保持与 face 的相对位置
+    const cx = side * (G.lampCenterX + effCenterNudge);
     for (const cy of ys) {
       stripQuads.push(makeQuad(
         cx - stripHalfW, cx + stripHalfW,

@@ -144,7 +144,7 @@ const R68_PENDING_TRACK_FILES = [
  *  R82 再更新基线：C2 侧面黑板收口（盖板填充进深 0.10→0.02 / 竖灯外缘 0.006→0.035，`#r82c2filldepth`/`#r82c2outset` 回滚）
  *  触发 r67_tail_c2.test.ts 的 maxAbsX/zMax 两条 toBeCloseTo 精确坐标断言改为 R82 开关感知（ON 断新值 / OFF 断原基线），
  *  护栏强度不减、on/off 两态都被精确钉住，属预期改动。 */
-const R67_GUARD_SHA256 = '3a7f2ee613dcc191fbf39811d2510a8f4d4302a0477b956d1637da6ce70e0a95';
+const R67_GUARD_SHA256 = '97738054c0f9517fc3c96045d3fd2a7f30fe0b769db1c2ba48b5a87e160872d9';
 /** V800Adapter.ts 全文件冻结（CRLF 规范化后 UTF-8 sha256）。W2批4 更新基线：透明件渲染排序
  *  治理——给 depthWrite=false 的玻璃（greenhouse 桶 + rear-glass-upper 克隆）经
  *  userData.vorderGlass 标记批量钉 renderOrder=10、welcome-carpet / tailgate-maextro /
@@ -152,7 +152,7 @@ const R67_GUARD_SHA256 = '3a7f2ee613dcc191fbf39811d2510a8f4d4302a0477b956d1637da
  *  R82 再更新基线：顶棚补覆盖治车内看穿——新增 cabin-roof-carpet-ext-rear/ext-front（×2 段阶梯）
  *  补齐 cabin 态被剔朝上外表面(z[-2.609,+1.313]) 相对中段 carpet 的前后缺口（+3 mesh/+3 DC、零新材质、
  *  防穿壳经 GLB 外皮最低 y 实测压 14mm），`#r82v800roofext=off` 回滚，属预期改动。 */
-const ADAPTER_SHA256 = '843a49c9ac52d1b53982be89b34b676fb4dd4e5e7773006d108df0493ddfa004';
+const ADAPTER_SHA256 = '7be2a03283bfb13a4cb43606580e63051b6f1d15be29c8cc3c681ea09e764fec';
 /* ═══ R81 P1/P2 · 冻结基线更新（cam-gate 线实测口径）═════
  * 本波 V800Adapter.ts 两处改动（均属预期改动，故更新本基线）：
  *   · P1 机盖(hood)视角下半屏纯黑根治：shell body GLB 在引擎盖区（world z −1.1~−1.77）

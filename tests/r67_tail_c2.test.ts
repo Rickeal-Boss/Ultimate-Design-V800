@@ -45,6 +45,9 @@ import {
   R71_C2_SIDE_ON,
   R82_C2_FILLDEPTH_ON,
   R82_C2_OUTSET_ON,
+  R83_C2_XFIX_ON,
+  R83_C2_SYM_ON,
+  C2_LAMP_CENTER_NUDGE_R83,
   remapUVToRegion,
   resolveC2StripCounts,
   type C2Painter
@@ -484,9 +487,13 @@ describe('R67 · 三段式装配与预算（实测，不沿用旧估算）', () 
         for (let i = 0; i < facePos.count; i += 1) {
           maxAbsX = Math.max(maxAbsX, Math.abs(facePos.getX(i)));
         }
-        const outset = R82_C2_OUTSET_ON ? 0.035 : C2_LAMP_SIDE_OUTSET;
+        const outset = R83_C2_XFIX_ON
+          ? C2_LAMP_SIDE_OUTSET
+          : (R82_C2_OUTSET_ON ? 0.035 : C2_LAMP_SIDE_OUTSET);
+        const centerNudge = R83_C2_SYM_ON ? C2_LAMP_CENTER_NUDGE_R83 : 0;
         expect(maxAbsX).toBeCloseTo(
-          C2_GEOM.lampCenterX + C2_GEOM.lampHalfW * C2_LAMP_SHRINK_WIDTH + outset, 4
+          C2_GEOM.lampCenterX + centerNudge
+            + C2_GEOM.lampHalfW * C2_LAMP_SHRINK_WIDTH + outset, 4
         );
       }
     } else {

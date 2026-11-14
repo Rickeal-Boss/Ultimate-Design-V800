@@ -51,6 +51,8 @@ import {
   createGlassBandMaterial
 } from './parts/windowTrim';
 import { createWheelHub, createWheelHubMaterials, type WheelHubSide, WHEEL_HUB_CENTERS } from './parts/wheelHub';
+// R83 · 高精度轮毂 GLB（默认 OFF，`#r83wheelhub=on` 启用）：开关真源 + 装载器在 wheelHubHi.ts
+import { R83_WHEELHUB_HI_ON, loadWheelHubHi } from './parts/wheelHubHi';
 import { createWheelArchLiner, WHEEL_ARCH_LINER_MATERIAL_ID } from './parts/wheelArchLiner';
 import {
   createRoofPod,
@@ -231,6 +233,34 @@ const R81_STEER_HARD_HIDE: boolean =
   typeof window === 'undefined' || !/(?:^|[#&])r81steerhardhide=off/i.test(window.location.hash);
 /** 硬隐藏安全边距（m）：near 之外再留 4cm，防斜掠三角边缘残留。 */
 const STEER_HARD_HIDE_MARGIN_M = 0.04;
+/* ══ R83 · 硬隐藏滞回 + 动态 near 推出（R81 P2 残留黑帧根治）══════════════════
+ * R83 定罪：R81 P2 的硬隐藏是**无滞回的单阈值**（dist < radius+near+0.04 = 0.365m），
+ *   且**只隐盘、不推 near**。cabin↔外景机位切换期间 CameraRig 用指数阻尼平滑插值
+ *   （~0.4-0.6s），相机连续多帧扫过盘包围球（世界半径 ≈0.225m）：
+ *     · 阈值边界处 dist 在 0.365m 上下抖动 ⇒ steerHardHide 每帧翻转 ⇒ 大三角在「隐/
+ *       显」之间反复横跳 = 用户 11-14 录屏的整帧黑闪（R81 P2 只把「恒裁」降为「边界闪」）；
+ *     · 即使硬隐藏命中那一帧，若下一帧相机已越过阈值而 near 仍 = 0.1（CameraRig.update
+ *       末尾无条件写回 POSE.near），盘面大三角仍被 near 面斜切铺满视口。
+ * 修法（零 tri / 零 DC / 零材质，纯标量门控 + near 标量）：
+ *   ① **硬隐藏滞回**：进隐 dist<0.365m（=radius+near+0.04）、退隐 dist>0.42m（+6cm 退出
+ *      余量），带内保持上次态 ⇒ 边界抖动不再翻转；
+ *   ② **动态 near 推出**：dist<0.60m 时把 camera.near 推到 `dist−radius−0.02`（clamp
+ *      [0.1, 0.5]）⇒ near 面恒在包围球外，盘面三角**物理上无法被近裁剪**，即使可见也
+ *      不黑。CameraRig 每帧 update() 末尾把 near 无条件写回 POSE.near（0.1），而 Game 帧序
+ *      是 rig.update → syncInteriorOcclusion(updateSteeringGate) → render，故本处写 near
+ *      在其后、渲染前 ⇒ 当帧生效（下一帧 rig 又写回 0.1、本处再推出，稳态即「每帧推出」）。
+ * 回滚：`#r83steerharden=off` ⇒ 硬隐藏退回 R81 单阈值 + 不推 near（逐位回 R81 P2）。 */
+const R83_STEER_HARDEN_ON: boolean =
+  typeof window === 'undefined' || !/(?:^|[#&])r83steerharden=off/i.test(window.location.hash);
+/** 硬隐藏退出阈值（m）：比进入阈值 0.365m 宽 6cm，边界抖动不再每帧翻转（滞回）。 */
+const STEER_HARD_HIDE_EXIT_M = 0.42;
+/** 动态 near 推出的触发半径（m）：dist 小于此值即推 near，略宽于硬隐藏阈值 0.365m。 */
+const STEER_NEAR_BOOST_RADIUS_M = 0.60;
+/** 动态 near 推出时 near 面相对包围球表面的再退让（m），防 near 恰贴球面残留切边。 */
+const STEER_NEAR_BOOST_SKIN_M = 0.02;
+/** 动态 near 的下限（=CABIN_NEAR，不越权把 near 推得比正常态更近）/ 上限（防 far/near 失真）。 */
+const STEER_NEAR_BOOST_MIN = 0.1;
+const STEER_NEAR_BOOST_MAX = 0.5;
 /** 每帧算出的「相机是否在盘包围球近裁剪危险区」（updateSteeringGate 写、applyVisibility 读）*/
 let steerHardHide = false;
 /* R82：程序化顶棚补覆盖（cabin-roof-carpet 前后缺口）。`#r82v800roofext=off` ⇒ 关闭
@@ -1915,8 +1945,20 @@ const SHADOW_CASTER_MATERIAL_IDS = new Set<string>(['paint-upper', 'paint-lower'
  *     克隆出独立实例并标 kept=true（恒可见）+ cabinPaintShadow（实例级行为旗标，去重器
  *     跳过）⇒ 引擎盖区恒有车漆面。可见 DC +1（hood-panel 本就是独立 mesh），tri 不变
  *     （236 tri，几何原样）。实例对仍为 0 可合并项；已回传主理人登记。
+ *
+ * **R83 登记（上调 81→82，同 R81「上调 = 明确的预算决策」条款）**：一例新语义材质 ——
+ *   · `cabin-roof-carpet-ext-*` 的**专属 carpet 克隆 roofExtMat**（R83 P0 顶棚补片 0 px 根治，
+ *     外部审查报告 §3 定罪）：R82 三块补片复用共享 carpetMat，但 carpetMat 无
+ *     userData.sculptMaterial.id ⇒ 建表 kept=false ⇒ W1 pass1 每帧 mat.visible=false
+ *     ⇒ 补片 mesh 虽 keepByName 显但零三角光栅化 = 车内看穿 0 px 生效（第 5 次同坑复发）。
+ *     克隆独立实例打 userData.sculptMaterial={id:'carpet'}（'carpet' ∈ R44_INTERIOR_
+ *     MATERIAL_IDS）⇒ kept=true 放行，主驾抬头看穿 397k→130k（−67%）。**不复用共享
+ *     carpetMat**：它同被 cabin-floor-carpet / cabin-roof-carpet 两旧件共用，直接打 id
+ *     会连带唤醒（审查实测 +14.55% 画面变化）= 车内地板观感回归，故必须专属实例隔离。
+ *     可见 DC +1（3 补片本就是独立 mesh，+1 材质桶），tri 不变（36 tri BoxGeometry）。
+ *     实例对仍为 0 可合并项（carpet 无同参可并对象）；已回传主理人登记。
  */
-export const V800_MATERIAL_INSTANCE_BUDGET = 81;
+export const V800_MATERIAL_INSTANCE_BUDGET = 82;
 
 /**
  * 车模 tri **可见口径**红线（= 渲染器 `info.render.triangles` 口径）。
@@ -4539,8 +4581,8 @@ const R48_LAMP_TONE: boolean =
     // R19 凹槽后：壳顶分两段 —— 前段（z>1.05）仍 1.090，舱段（z 1.05..-1.52）顶面 1.66。
     // 衬毯铺在**舱段凹槽顶面**（=新的「地板」高度 1.66+8mm），把凹槽顶盖成深色内饰面；
     // 前段保留旧毯，衔接中控。两块毯子均合批后新增，+2 DC。
-    const mk = (w: number, d: number, y: number, z: number, name: string, th = 0.012): void => {
-      const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, th, d), carpetMat);
+    const mk = (w: number, d: number, y: number, z: number, name: string, th = 0.012, mat: THREE.Material = carpetMat): void => {
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, th, d), mat);
       const wp = new THREE.Vector3(0, y, z);
       body.worldToLocal(wp);
       mesh.position.copy(wp);
@@ -4556,13 +4598,34 @@ const R48_LAMP_TONE: boolean =
      *   命名 cabin-roof-carpet-ext-* ⇒ 前缀匹配进 R44_KEEP_MESH_NAMES + isPoke，无需动状态表。
      *   防穿壳：补片顶面(y+th/2) 逐段压在该段**车顶外皮最低 world y** 之下 14mm（GLB 实测），
      *   绝不高于壳面 ⇒ 外景顶视不穿出；cabin 态外皮已被 roofCull 剔除，补片即舱内顶棚。
-     *   深色材质复用 carpetMat，零新材质；低密度 BoxGeometry，+3 mesh / +3 DC。 */
+     *   低密度 BoxGeometry，+3 mesh / +3 DC。
+     *
+     * R83 P0 根治（外部审查报告 §3「补片 0 px」定罪）：R82 复用共享 carpetMat，但它
+     *   **无 userData.sculptMaterial.id** ⇒ 建表 kept=false（V800Adapter:5143
+     *   `kept = id != null && R44_INTERIOR_MATERIAL_IDS.has(id)`）⇒ pass 1（:5233）每帧
+     *   `mat.visible = kept || !exteriorShellReady = false`，补片 mesh 虽 keepByName 显
+     *   但材质已被关、零三角光栅化 = 0 px。**这是 R57/R58/R65/R66/R82 同一坑第 5 次复发**
+     *   （新增件只登记 mesh 级白名单，漏材质级 kept）。
+     * 处方：给 3 补片**专属材质实例** roofExtMat，打 userData.sculptMaterial={id:'carpet'}
+     *   ⇒ kept=true（'carpet' ∈ R44_INTERIOR_MATERIAL_IDS:5345）⇒ pass 1 放行。
+     *   外景安全性不变：补片 keepByName+isBlock+isPoke(bbox顶 1.674>roofGlassY) ⇒ pass 2
+     *   `v = interior && (interior || r47CabinFix)` ⇒ cabin 显 / 外景藏。
+     * ⚠ 不复用共享 carpetMat：它同时被 cabin-floor-carpet / cabin-roof-carpet 两旧件共用，
+     *   直接打 id 会把它们一起唤醒（审查实测 +14.55% 画面变化），车内地板观感回归需单独验收。
+     *   专属实例只放行 3 补片（审查强制实验：主驾抬头 seeThrough 397k→130k，−67%）。
+     *   代价：+1 材质实例 / +1 DC（低密度 BoxGeometry）。 */
     if (R82_V800_ROOF_EXT_ON) {
+      const roofExtMat = new THREE.MeshStandardMaterial({
+        color: 0x26221f,
+        roughness: 0.96,
+        metalness: 0.0
+      });
+      roofExtMat.userData.sculptMaterial = { id: 'carpet' };
       // 后段 z[-2.609,-1.525]：外皮近平顶 min 1.662 ⇒ 单块平顶 1.648（1.648+0.006=1.654 < 1.662）
-      mk(1.86, 1.084, 1.648 - 0.006, -2.067, 'cabin-roof-carpet-ext-rear');
+      mk(1.86, 1.084, 1.648 - 0.006, -2.067, 'cabin-roof-carpet-ext-rear', 0.012, roofExtMat);
       // 前段 z[+0.575,+1.20]：外皮下坡（z+0.575~0.95 min 1.639；z+0.95~1.20 min 1.561）⇒ 两段阶梯
-      mk(1.86, 0.375, 1.630 - 0.006, 0.7625, 'cabin-roof-carpet-ext-front');
-      mk(1.86, 0.25, 1.560 - 0.006, 1.075, 'cabin-roof-carpet-ext-front');
+      mk(1.86, 0.375, 1.630 - 0.006, 0.7625, 'cabin-roof-carpet-ext-front', 0.012, roofExtMat);
+      mk(1.86, 0.25, 1.560 - 0.006, 1.075, 'cabin-roof-carpet-ext-front', 0.012, roofExtMat);
     }
   }
 
@@ -5176,6 +5239,35 @@ const R48_LAMP_TONE: boolean =
         const box = new THREE.Box3().setFromObject(mesh);
         if (box.max.y > roofGlassY) isPoke = true;
       }
+      /* R83 P0 · 装配期材质级逃逸断言（外部审查报告 §7 建议固化，治第 5 次复发）：
+       *   R57（child 未打 r44External）→ R58（traverse 语义误判）→ R65/R66（改在回退树
+       *   默认路径 0 px）→ R82（材质级 kept 未登记）——五轮同一坑：新增 mesh 只登记了
+       *   mesh 级白名单（keepByName），漏了材质级 kept，⇒ pass 1（:5233
+       *   `mat.visible = kept || !exteriorShellReady`）每帧把材质关掉 ⇒ 0 px，
+       *   而三类源码契约断言（mesh 数 / 名字登记 / isPoke）一律全绿、毫无区分能力。
+       * 判据：keepByName=true（已进 R44_KEEP_MESH_NAMES，被当内饰保留）但——
+       *   · 材质无 cabinHidable，且
+       *   · 材质无 sculptMaterial.id ∈ R44_INTERIOR_MATERIAL_IDS（⇒ kept=false），且
+       *   · mesh 未打 r44External（不是外部壳本体，本就不入表）
+       * ⇒ 该 mesh 车内态 mesh.visible=true 但材质被关 = 0 px 逃逸候选，即刻告警。
+       * 用 console.warn（**不硬抛**）：CI 不能因此红灯卡交付（历史护栏语义「不测画面」），
+       *   但落地审查/#perfhud 一眼可见。真值判定仍交像素断言（见 tests/r83 下一波）。
+       * R82 顶棚补片若漏打 roofExtMat 的 userData.sculptMaterial.id 即在此被当场点名。 */
+      if (
+        keepByName &&
+        !cabinHidableMesh &&
+        !hasId &&
+        (mesh.userData as { r44External?: boolean }).r44External !== true
+      ) {
+        console.warn(
+          `[V800Adapter] ⚠ 材质级逃逸候选：mesh "${mesh.name}" 已进 R44_KEEP_MESH_NAMES` +
+            `（keepByName）但其材质无 sculptMaterial.id ∈ R44_INTERIOR_MATERIAL_IDS、` +
+            `无 cabinHidable、未打 r44External ⇒ 车内态将被 pass 1 关材质 = 0 px。` +
+            `修法：给其专属材质打 userData.sculptMaterial={id:'<内饰id>'}（id ∈ ` +
+            `R44_INTERIOR_MATERIAL_IDS），或改用 cabinHidable，或打 r44External。` +
+            `——R57/58/65/66/82 同坑第 5 次复发预警，勿忽略。`
+        );
+      }
       meshEntries.push({
         mesh,
         hasId,
@@ -5496,6 +5588,47 @@ const R48_LAMP_TONE: boolean =
       // （等价旧 setExteriorHidden(false)），body/语义件保持上面显式隐藏。
       applyVisibility({ interior: false });
     }
+
+    // ═══ R83 · 高精度轮毂 GLB（默认 OFF，`#r83wheelhub=on` 启用）══════════════════
+    // 开关真源 / 装载器在 parts/wheelHubHi.ts（默认 OFF 是「反向开关」，与多数开关默认 ON
+    // 相反 —— 因为高模 GLB ×4 = +1.15M tri 会撞穿 1.65M 预算，见 wheelHubHi.ts 头注）。
+    // 挂载时机：外部轮 mountExternalWheel 完成**之后**（覆盖其轮毂观感），且失败时程序化
+    // 轮毂保持完整（游戏零感知，与 InteriorSteering / ExternalShell 同纪律）。
+    // ⚠️ 只在 shell 装载成功 + 4 外部轮全挂上时执行；shell 回滚（mountedWheels<4）时不动
+    //    程序化轮毂（本块位于回滚 early-return 之后，天然跳过）。
+    if (R83_WHEELHUB_HI_ON) {
+      void (async () => {
+        const hiMeshes = await loadWheelHubHi(shell.manifest.scale);
+        if (!hiMeshes || hiMeshes.length !== wheels.length) {
+          console.warn(`[V800Adapter] R83 高精轮毂装载失败/数量不符，保持程序化轮毂`);
+          return;
+        }
+        let swapped = 0;
+        for (let i = 0; i < wheels.length; i++) {
+          const spin = wheels[i]?.spin;
+          const hi = hiMeshes[i];
+          if (!spin || !hi) continue;
+          // 隐程序化轮毂：按 userData.sculptMaterial.id 前缀 r22-hub- 精确命中
+          //   （程序化 hub group 挂在 spin 下，见 R22-B 块 createWheelHub + spin.add(hub)）。
+          //   不隐轮胎/刹车盘（wheel-l.glb 本体 / r62-brake-*），只换轮毂观感。
+          spin.traverse((o) => {
+            const mesh = o as THREE.Mesh;
+            if (!mesh.isMesh) return;
+            const ids = (mesh.material as THREE.MeshStandardMaterial)?.userData?.sculptMaterial;
+            const id = (ids as { id?: string } | undefined)?.id;
+            if (typeof id === 'string' && id.startsWith('r22-hub-')) mesh.visible = false;
+          });
+          // 挂高模 mesh：position 恒 (0,0,0)（spin 原点=轮心，wheelHubHi 已把 GLB 轮心
+          //   归原点 + scale 压回 spec 米）；spin 每帧 rotation.x 自转 ⇒ 高模自动随轮滚。
+          //   标 r44External ⇒ 免疫 setExteriorHidden；spin 子树在 wheelKeep 集合内 ⇒
+          //   免疫 batchMergeStatic（保高光/刹车联动）；shadow proxy 按同一子树计 ⇒ 不进
+          //   shadow pass（castShadow 已 false，见 wheelHubHi）。
+          spin.add(hi);
+          swapped++;
+        }
+        console.info(`[V800Adapter] R83 高精轮毂挂载完成：${swapped}/${wheels.length} 轮（#r83wheelhub=on）`);
+      })();
+    }
     wheelSpinRadius = shell.wheelRadius;
     setFxWheelOffsets(wheelOffsetsWorldXZ(shell.manifest));
     console.info(
@@ -5547,22 +5680,48 @@ const R48_LAMP_TONE: boolean =
     applyVisibility,
     setSteeringCameraDistance: applySteerGate,
     updateSteeringGate(camera: THREE.Camera): void {
-      /* R71：Game 每帧调用 —— 高精盘挂 body 下（有变换），须用世界位置算距离。 */
-      if (!R71_STEER_GATE || !steeringMesh) { steerHardHide = false; return; }
+      /* R71：Game 每帧调用 —— 高精盘挂 body 下（有变换），须用世界位置算距离。
+       * R83：camera.getWorldPosition 强制走 updateMatrixWorld（three 内部有 dirty 位则重算
+       *   矩阵），杜绝 cabin↔外景过渡期 camera.matrixWorld 尚未刷新导致的 1 帧滞后
+       *   （Game.ts:1291 rig.update 刚写完 position，本帧矩阵可能仍标 dirty）。 */
+      if (!R71_STEER_GATE || !steeringMesh) {
+        steerHardHide = false;
+        return;
+      }
+      camera.updateMatrixWorld();
       camera.getWorldPosition(STEER_GATE_TMP_VEC);
       steeringMesh.getWorldPosition(STEER_GATE_TMP_VEC_B);
       const dist = STEER_GATE_TMP_VEC.distanceTo(STEER_GATE_TMP_VEC_B);
       applySteerGate(dist);
-      /* R81 P2：近裁剪面硬隐藏安全网。相机钻进「盘半径 + near + 边距」球内时两盘都隐，
-       *   杜绝 near=0.1 扫过盘面 ⇒ 大三角被裁铺满视口 = 整帧黑闪（换程序化盘不解决，
-       *   因程序化盘同位同样被裁）。正常 cabin 眼点 clearance ≈0.33m 远大于阈值 ⇒ 不触发。 */
-      steerHardHide =
-        R81_STEER_HARD_HIDE &&
-        Number.isFinite((camera as THREE.PerspectiveCamera).near) &&
-        dist <
-          steerGateRadius +
-            (camera as THREE.PerspectiveCamera).near +
-            STEER_HARD_HIDE_MARGIN_M;
+      const near = (camera as THREE.PerspectiveCamera).near;
+      /* R81 P2 → R83：近裁剪面硬隐藏安全网（滞回版）。相机钻进「盘半径 + near + 边距」
+       *   球内时两盘都隐，杜绝 near 扫过盘面 ⇒ 大三角被裁铺满视口 = 整帧黑闪（换程序化盘
+       *   不解决，因程序化盘同位同样被裁）。R83 加滞回：进隐 dist<0.365m、退隐 dist>0.42m，
+       *   带内保持上次态 ⇒ 阈值边界 dist 抖动不再每帧翻转（R81 P2 单阈值的边界黑闪根因）。
+       *   `#r83steerharden=off` ⇒ 退回 R81 单阈值无滞回（进=退=0.365m）。 */
+      const hideEnter =
+        steerGateRadius + (Number.isFinite(near) ? near : STEER_NEAR_BOOST_MIN) +
+        STEER_HARD_HIDE_MARGIN_M;
+      const hideExit = R83_STEER_HARDEN_ON ? STEER_HARD_HIDE_EXIT_M : hideEnter;
+      steerHardHide = R81_STEER_HARD_HIDE &&
+        Number.isFinite(dist) &&
+        (steerHardHide ? dist < hideExit : dist < hideEnter);
+      /* R83 · 动态 near 推出：dist<0.60m 时把 near 推到「包围球外」，near 面物理上切不到
+       *   盘面大三角 ⇒ 即使硬隐藏因某帧未命中，渲染也不会黑。CameraRig 每帧 update() 末尾
+       *   把 near 无条件写回 POSE.near（0.1），而 Game 帧序 = rig.update → 本函数 → render，
+       *   故本处写 near 在其后、渲染前 ⇒ 当帧生效。clamp[0.1,0.5] 防把 near 推到比 cabin
+       *   正常态更近 / 防近区过宽导致 far/near 深度精度崩。`#r83steerharden=off` ⇒ 不推。 */
+      if (R83_STEER_HARDEN_ON && Number.isFinite(dist) && Number.isFinite(near) &&
+          dist < STEER_NEAR_BOOST_RADIUS_M) {
+        const boosted = Math.min(
+          STEER_NEAR_BOOST_MAX,
+          Math.max(STEER_NEAR_BOOST_MIN, dist - steerGateRadius - STEER_NEAR_BOOST_SKIN_M)
+        );
+        if (near < boosted) {
+          (camera as THREE.PerspectiveCamera).near = boosted;
+          (camera as THREE.PerspectiveCamera).updateProjectionMatrix();
+        }
+      }
     },
     get currentHeat() {
       return heat;
