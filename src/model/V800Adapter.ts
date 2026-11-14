@@ -233,6 +233,10 @@ const R81_STEER_HARD_HIDE: boolean =
 const STEER_HARD_HIDE_MARGIN_M = 0.04;
 /** 每帧算出的「相机是否在盘包围球近裁剪危险区」（updateSteeringGate 写、applyVisibility 读）*/
 let steerHardHide = false;
+/* R82：程序化顶棚补覆盖（cabin-roof-carpet 前后缺口）。`#r82v800roofext=off` ⇒ 关闭
+ *   两块补片（逐位回 R81 仅中段 carpet 态）。模块顶层求值一次，每处只读布尔。 */
+const R82_V800_ROOF_EXT_ON: boolean =
+  typeof window === 'undefined' || !/(?:^|[#&])r82v800roofext=off/i.test(window.location.hash);
 /* ══ W2批4 · 透明件渲染排序治理 ═══════════════════════════════════════════════
  * 背景：车内近景透明件历史上只设 `depthWrite=false` 却无 `renderOrder` ⇒ three.js
  * 透明队列按相机距离排序 ⇒ 近景玻璃/贴花闪烁、透出关系错乱。本批给它们钉显式
@@ -4535,8 +4539,8 @@ const R48_LAMP_TONE: boolean =
     // R19 凹槽后：壳顶分两段 —— 前段（z>1.05）仍 1.090，舱段（z 1.05..-1.52）顶面 1.66。
     // 衬毯铺在**舱段凹槽顶面**（=新的「地板」高度 1.66+8mm），把凹槽顶盖成深色内饰面；
     // 前段保留旧毯，衔接中控。两块毯子均合批后新增，+2 DC。
-    const mk = (w: number, d: number, y: number, z: number, name: string): void => {
-      const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, 0.012, d), carpetMat);
+    const mk = (w: number, d: number, y: number, z: number, name: string, th = 0.012): void => {
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, th, d), carpetMat);
       const wp = new THREE.Vector3(0, y, z);
       body.worldToLocal(wp);
       mesh.position.copy(wp);
@@ -4547,6 +4551,19 @@ const R48_LAMP_TONE: boolean =
     };
     mk(1.86, 0.95, 1.098, 1.52, 'cabin-floor-carpet'); // 前段：中控/脚坑上方
     mk(1.86, 2.15, 1.668, -0.45, 'cabin-roof-carpet'); // 舱段：凹槽顶面（z 0.575..-1.525，避开前坡转角）
+    /* R82：顶棚补覆盖 —— 补齐 cabin 态被剔朝上外表面(z[-2.609,+1.313]) 相对中段 carpet
+     *   (z[-1.525,+0.575]) 的前后两段悬空缺口（前段看穿=主驾抬头见天，后段看穿=cabinRear）。
+     *   命名 cabin-roof-carpet-ext-* ⇒ 前缀匹配进 R44_KEEP_MESH_NAMES + isPoke，无需动状态表。
+     *   防穿壳：补片顶面(y+th/2) 逐段压在该段**车顶外皮最低 world y** 之下 14mm（GLB 实测），
+     *   绝不高于壳面 ⇒ 外景顶视不穿出；cabin 态外皮已被 roofCull 剔除，补片即舱内顶棚。
+     *   深色材质复用 carpetMat，零新材质；低密度 BoxGeometry，+3 mesh / +3 DC。 */
+    if (R82_V800_ROOF_EXT_ON) {
+      // 后段 z[-2.609,-1.525]：外皮近平顶 min 1.662 ⇒ 单块平顶 1.648（1.648+0.006=1.654 < 1.662）
+      mk(1.86, 1.084, 1.648 - 0.006, -2.067, 'cabin-roof-carpet-ext-rear');
+      // 前段 z[+0.575,+1.20]：外皮下坡（z+0.575~0.95 min 1.639；z+0.95~1.20 min 1.561）⇒ 两段阶梯
+      mk(1.86, 0.375, 1.630 - 0.006, 0.7625, 'cabin-roof-carpet-ext-front');
+      mk(1.86, 0.25, 1.560 - 0.006, 1.075, 'cabin-roof-carpet-ext-front');
+    }
   }
 
   // ---- R29（外部审查 O1）：阴影 caster 白名单 ----
@@ -5328,9 +5345,13 @@ const R48_LAMP_TONE: boolean =
     'carpet', 'curtain', 'crystal', 'gauge-ui', 'headliner-suede', 'leather-dark',
     'leather-ivory', 'leather-warm', 'pillar-trim', 'screen-ui', 'starlight', 'wood'
   ]);
-  // id-less 材质 mesh 的名字白名单（集成层内饰件：踏板/舱内衬毯/地面光毯）
+  // id-less 材质 mesh 的名字白名单（集成层内饰件：踏板/舱内衬毯/地面光毯/顶棚补片）
+  // ⚠ 建表按 `R44_KEEP_MESH_NAMES.has(mesh.name)` **精确名**匹配（非前缀），新增件须显式列入。
   const R44_KEEP_MESH_NAMES = new Set<string>([
-    'brake-pedal', 'cabin-floor-carpet', 'cabin-roof-carpet', 'welcome-carpet'
+    'brake-pedal', 'cabin-floor-carpet', 'cabin-roof-carpet', 'welcome-carpet',
+    // R82 顶棚补覆盖（cabin-roof-carpet-ext-*）：cabin 态补齐被剔车顶的前后缺口；
+    // 与 cabin-roof-carpet 同语义 —— keepByName ⇒ isPoke(bbox顶>roofGlassY) ⇒ cabin 显/外景藏。
+    'cabin-roof-carpet-ext-rear', 'cabin-roof-carpet-ext-front'
   ]);
   /* W1：旧「程序化方块内饰外景隐藏」（r47BlockHidden / setCabinBlocksHidden）、
    * 「程序化外观隐藏」（r44HiddenMaterials / r44HiddenMeshes / setExteriorHidden /
