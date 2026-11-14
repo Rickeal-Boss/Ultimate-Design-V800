@@ -325,8 +325,8 @@ describe('R81 · 2. P0-2 C2 左右对称：quad 几何法线分别朝局部 ±X'
     expect(c2).toContain('? [0, 2, 1, 1, 2, 3]');
     expect(c2).toContain(': [0, 1, 2, 1, 3, 2];');
     expect(c2).toContain('r81c2side=off');
-    // 两处调用点（盖板侧面填充 / 侧面竖灯大面），一处都不能漏
-    expect(c2.match(/setIndex\(c2SideWindingIndex\(side\)\)/g) ?? []).toHaveLength(2);
+    // 三处调用点（盖板侧面填充 / 侧面竖灯大面 / R84 上半区黑填充），一处都不能漏
+    expect(c2.match(/setIndex\(c2SideWindingIndex\(side\)\)/g) ?? []).toHaveLength(3);
     const fill = slice(c2, 'if (R71_C2_COVERFILL_ON) {', 'const coverMesh =');
     const side = slice(c2, 'const faceQuads: THREE.BufferGeometry[] = [];', 'const faceGeo =');
     expect(fill).toContain('for (const side of [-1, 1])');
@@ -610,7 +610,8 @@ describe('R81 · 4. 机盖机位：默认 −1.45 / 显式开关 −1.30 / #hood
     expect(decl).toContain('r81hood=on');
     expect(decl).toContain('r80hood=off');
     expect(decl).not.toContain("typeof window === 'undefined' ||"); // R80 旧默认 true 已撤销
-    expect(rig).toContain('POSE.offset.set(0, HOOD_Y, HOOD_Z);');
+    // R84：hood() 改 hy/hz 分支（V800 走 HOOD_Y/Z，R7 走 R84_R7_HOOD_ON 独立机位）
+    expect(rig).toContain('POSE.offset.set(0, hy, hz);');
   });
 
   it('【弱】#hoodcam 扫参正则与 #hoodcam=off 回滚机位未被破坏', () => {
@@ -618,7 +619,8 @@ describe('R81 · 4. 机盖机位：默认 −1.45 / 显式开关 −1.30 / #hood
     expect(rig).toContain('return { y: 1.55, z: 1.4, lookY: 0.9 };');
     // 逐字钉扫参正则本体（含三参可选组），避免正则套正则的转义歧义
     expect(rig).toContain('/[#&]hoodcam=(-?[\\d.]+),(-?[\\d.]+)(?:,(-?[\\d.]+))?/.exec(window.location.hash)');
-    expect(rig).toContain('POSE.look.set(0, HOOD_LOOK_Y, -16);');
+    // R84：look.y 也改 hly 分支（V800 走 HOOD_LOOK_Y，R7 走 override ?? 0.95）
+    expect(rig).toContain('POSE.look.set(0, hly, -16);');
   });
 });
 

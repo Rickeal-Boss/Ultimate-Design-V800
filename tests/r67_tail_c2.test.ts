@@ -30,6 +30,7 @@ import {
   C2_GEOM,
   C2_LAMP_SIDE_OUTSET,
   C2_COVER_FILL_DEPTH,
+  C2_COVER_FILL_DEPTH_R84,
   C2_LAMP_SHRINK_WIDTH,
   C2_MAT_BUDGET,
   C2_PHOENIX_PANEL,
@@ -47,6 +48,10 @@ import {
   R82_C2_OUTSET_ON,
   R83_C2_XFIX_ON,
   R83_C2_SYM_ON,
+  R84_C2_SIDE_EXTEND_ON,
+  R84_C2_SIDE_UP_ON,
+  R84_C2_FILLDEEP_ON,
+  C2_LAMP_SIDE_DEPTH_R84,
   C2_LAMP_CENTER_NUDGE_R83,
   remapUVToRegion,
   resolveC2StripCounts,
@@ -404,7 +409,8 @@ describe('R67 · 三段式装配与预算（实测，不沿用旧估算）', () 
     // R69 默认：竖灯缩小 + 侧面贴完整尾灯纹理 ⇒ face 并入左右侧壁(4+4) ⇒ 40；
     // #r69c2lamp=off ⇒ 无侧壁 ⇒ 回 R68 的 36（盖板12+face4+红条20）。
     // R71：盖板侧面黑填充 +2 quad(4 tri) 并入盖板 ⇒ +4。
-    const faceTri = R69_C2_LAMP_ON ? 8 : 4;
+    // R84：上半区黑填充（左右各 1 quad，并入 face 侧壁）⇒ +4（`#r84c2sideup=off` 回 44）。
+    const faceTri = (R69_C2_LAMP_ON ? 8 : 4) + (R84_C2_SIDE_UP_ON ? 4 : 0);
     const coverTri = R71_C2_COVERFILL_ON ? 16 : 12;
     expect(r.budget.tri).toBe(coverTri + faceTri + 20);
     expect(r.budget.mat).toBe(2);
@@ -437,12 +443,12 @@ describe('R67 · 三段式装配与预算（实测，不沿用旧估算）', () 
 
   it('预算常量上限、条数扫参后 tri 仍 ≤ 上限', () => {
     expect(C2_DC_BUDGET).toBe(3);
-    expect(C2_TRI_BUDGET).toBe(36 + (R69_C2_LAMP_ON ? 4 : 0) + (R71_C2_COVERFILL_ON ? 4 : 0));
+    expect(C2_TRI_BUDGET).toBe(36 + (R69_C2_LAMP_ON ? 4 : 0) + (R71_C2_COVERFILL_ON ? 4 : 0) + (R84_C2_SIDE_UP_ON ? 4 : 0));
     expect(C2_MAT_BUDGET).toBe(2);
     expect(C2_TEX_BUDGET).toBe(1);
     const lampRearMat = new THREE.MeshStandardMaterial();
     const r = buildTailLampC2({ scale, lampRearMat, stripTop: 2, stripBottom: 2 });
-    const faceTri2 = R69_C2_LAMP_ON ? 8 : 4;
+    const faceTri2 = (R69_C2_LAMP_ON ? 8 : 4) + (R84_C2_SIDE_UP_ON ? 4 : 0);
     expect(r.budget.tri).toBe((R71_C2_COVERFILL_ON ? 16 : 12) + faceTri2 + (2 + 2) * 2 * 2);
     expect(r.budget.tri).toBeLessThanOrEqual(C2_TRI_BUDGET);
     expect(r.budget.dc).toBeLessThanOrEqual(C2_DC_BUDGET);
@@ -455,7 +461,7 @@ describe('R67 · 三段式装配与预算（实测，不沿用旧估算）', () 
     const r = buildTailLampC2({ scale, lampRearMat, stripTop: 0, stripBottom: 0 });
     expect(r.redStripMesh.geometry.getAttribute('position')).toBeDefined();
     expect(r.redStripMesh.geometry.getAttribute('position').count).toBe(0);
-    expect(r.budget.tri).toBe((R71_C2_COVERFILL_ON ? 16 : 12) + (R69_C2_LAMP_ON ? 8 : 4)); // 盖板薄盒 12(+R71填充4) + face(4|R69侧壁8)
+    expect(r.budget.tri).toBe((R71_C2_COVERFILL_ON ? 16 : 12) + (R69_C2_LAMP_ON ? 8 : 4) + (R84_C2_SIDE_UP_ON ? 4 : 0)); // 盖板薄盒 12(+R71填充4) + face(4|R69侧壁8) + R84上填充4
     expect(r.meshes).toHaveLength(3);
   });
 
@@ -502,14 +508,17 @@ describe('R67 · 三段式装配与预算（实测，不沿用旧估算）', () 
     if (R71_C2_COVERFILL_ON) {
       // 盖板：BoxGeometry 12 tri(36 顶点 non-indexed) + 左右填充各 4 顶点 = 44
       expect(coverPos.count).toBe(48);
-      // 填充 z 从 coverZ 向内（R82 收口 0.10→0.02，开关感知）⇒ z 跨度含 [coverZ, coverZ+depth]
+      // 填充 z 从 coverZ 向内（生效进深按开关选：R84 filldeep 0.06 → R82 0.02 → baseline 0.10，
+      // 与源码 effCoverFillDepth 三段优先级逐位一致；C2_COVER_FILL_DEPTH 符号常量本身不变）
       let zMin = Infinity;
       let zMax = -Infinity;
       for (let i = 0; i < coverPos.count; i += 1) {
         zMin = Math.min(zMin, coverPos.getZ(i));
         zMax = Math.max(zMax, coverPos.getZ(i));
       }
-      const fillDepth = R82_C2_FILLDEPTH_ON ? 0.02 : C2_COVER_FILL_DEPTH;
+      const fillDepth = R84_C2_FILLDEEP_ON
+        ? C2_COVER_FILL_DEPTH_R84
+        : (R82_C2_FILLDEPTH_ON ? 0.02 : C2_COVER_FILL_DEPTH);
       expect(zMin).toBeCloseTo(C2_GEOM.coverZ, 5);
       expect(zMax).toBeCloseTo(C2_GEOM.coverZ + fillDepth, 5);
     } else {

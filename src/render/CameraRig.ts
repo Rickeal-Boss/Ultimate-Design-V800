@@ -168,6 +168,9 @@ const R80_HOOD_BACK: boolean =
 const HOOD_Y = HOOD_POSE_OVERRIDE?.y ?? 1.45;
 const HOOD_Z = HOOD_POSE_OVERRIDE?.z ?? (R80_HOOD_BACK ? -1.30 : -1.45);
 const HOOD_LOOK_Y = HOOD_POSE_OVERRIDE?.lookY ?? 0.95;
+/* R84 · R7 独立机盖机位开关（默认 ON，`#r84r7hood=off` 回共用 HOOD_Z/Y）。 */
+const R84_R7_HOOD_ON: boolean =
+  typeof window === 'undefined' || !/(?:^|[#&])r84r7hood=off/i.test(window.location.hash);
 
 /**
  * R71 · 照片模式自由飞行回滚钩子：`#r71freefly=off` 逐位回 R70 绕车轨道。
@@ -178,6 +181,11 @@ const FREE_FLY_DISABLED = (() => {
   if (typeof window === 'undefined') return false;
   return /(?:^|[#&])r71freefly=off/i.test(window.location.hash);
 })();
+
+/* R84 · 当前车型标记（模块级可变，由 CameraRig constructor 写入）。
+ *  MODES 表是模块级常量、箭头函数无 this ⇒ 用模块级 let 让 hood() 读当前车型。
+ *  进程内只有一个 rig 实例（Game.ts:405）⇒ 单标记安全，不串。 */
+let ACTIVE_IS_R7 = false;
 
 const MODES: Record<CameraMode, (speed: number, portrait: boolean, time: number) => void> = {
   orbit: (_speed, portrait, time) => {
@@ -216,8 +224,15 @@ const MODES: Record<CameraMode, (speed: number, portrait: boolean, time: number)
     //   ⇒ 下半纯黑**不是** cabin 态 DoubleSide 内壁。R80 的 HOOD_Z=−1.30 是该视角
     //   唯一变化量，R81 已恢复用户真机基线 −1.45；若仍黑，`#r81hood=on` 逐位回
     //   R80 机位做 A/B，`#hoodcam=y,z,ly` 扫参供真机定案（不臆断黑面归属）。
-    POSE.offset.set(0, HOOD_Y, HOOD_Z);
-    POSE.look.set(0, HOOD_LOOK_Y, -16);
+    // R84 · R7 独立机盖机位：两车共用绝对 HOOD_Z=−1.45 时，R7 车头比 V800 短 0.47m
+    //   ⇒ 相机相对贴前 0.47m，用户读作「机盖后移 / 不入画」。按「相机距车头等距」补偿：
+    //   R7_HOOD_Z = −(R7_front − HOOD_FRONT_SETBACK) = −(2.52 − 1.12) = −1.40。
+    //   `#r84r7hood=off` ⇒ 回共用 HOOD_Z=−1.45（R84 之前基线）。
+    const hy = ACTIVE_IS_R7 ? (HOOD_POSE_OVERRIDE?.y ?? (R84_R7_HOOD_ON ? 1.35 : HOOD_Y)) : HOOD_Y;
+    const hz = ACTIVE_IS_R7 ? (HOOD_POSE_OVERRIDE?.z ?? (R84_R7_HOOD_ON ? -1.40 : HOOD_Z)) : HOOD_Z;
+    const hly = ACTIVE_IS_R7 ? (HOOD_POSE_OVERRIDE?.lookY ?? 0.95) : HOOD_LOOK_Y;
+    POSE.offset.set(0, hy, hz);
+    POSE.look.set(0, hly, -16);
     POSE.fov = 66;
     POSE.k = 4;
     POSE.near = 0.1;
@@ -338,6 +353,10 @@ const FREE_CAM_MARGIN = 0.8;
 export class CameraRig {
   camera: THREE.PerspectiveCamera;
   mode: CameraMode = 'orbit';
+  /** R84 · 车型标记：R7 车身比 V800 短 0.47m ⇒ hood 机位需独立 z/y（见 R7_HOOD_Z 注）。
+   *  Game.ts 现有 `new CameraRig(aspect)` 不传第 2 参 ⇒ 默认 v800 ⇒ 不破 V800 行为。
+   *  R7 接线：Game.ts 需在 R7 模式下传 `new CameraRig(aspect, 'r7')`（主理人兜底接线）。 */
+  private isR7: boolean;
   private shake = 0;
   private time = 0;
   private offset = new THREE.Vector3(6, 1.6, 6);
@@ -376,7 +395,9 @@ export class CameraRig {
    */
   private snapPose = false;
 
-  constructor(aspect: number) {
+  constructor(aspect: number, carType: 'v800' | 'r7' = 'v800') {
+    this.isR7 = carType === 'r7';
+    ACTIVE_IS_R7 = this.isR7; // 同步到模块级标记（MODES.hood 读）
     this.camera = new THREE.PerspectiveCamera(55, aspect, 0.1, 12000);
     this.camera.position.copy(this.offset);
   }

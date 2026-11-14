@@ -2652,15 +2652,19 @@ export async function loadExternalShell(
             ? lampRearMeshes.filter(
               (m) => m.name !== 'lamp_rear' && m.name !== 'lamp_rear_band' &&
                 !(R81_R7_HOUSING_HIDE && R68_R7_TAIL_ON && m.name === 'lamp_rear_housing') &&
-                /* R83：R7 尾灯中央暗方块 + 深红横带运行时止血 —— 把 R68 程序化包裹的
-                 * 三个纯装饰覆盖 quad 排除出出口（构造于 r7TailWrap.ts，:2563 并入本数组）。
-                 * modules+edge 在中央拼成暗方块、band 横压出深红带 ⇒ 探针定罪根因。
+                /* R83→R84：R7 尾灯中央暗方块运行时止血 —— 把 R68 程序化包裹的
+                 * `r68_r7_tail_modules` / `r68_r7_tail_edge` 两个纯装饰覆盖 quad 排除出出口
+                 * （构造于 r7TailWrap.ts，:2563 并入本数组）。
+                 * 【R84 裁决】band 是中央唯一红条供给，R83 一并排除后 GLB `lamp_rear`
+                 * 中央缺口（x∈[-0.418,+0.416]，22 桶零顶点）直接露出 body 白漆 =
+                 * 用户读作「尾灯贴图消失 / 中央一块白」的真因。modules/edge 才是暗方块
+                 * 主犯，保留排除。band 复用 lampRearMat ⇒ 刹车联动不受影响。
                  * 不进出口 ⇒ Adapter 不挂 scene、不被 setPaintShadow 复位（同 R81 housing）。
-                 * 米色翼片锯齿是 GLB 资产缺陷，不在此处理（预期残留）。
-                 * `#r83r7tailcenter=off` ⇒ 守卫失效，三件回出口，观感回 R82。 */
+                 * 米色翼片锯齿是 GLB 资产缺陷（非流形），转资产线处理，不在此修。
+                 * `#r83r7tailcenter=off` ⇒ 守卫失效，modules/edge 回出口，观感回 R82；
+                 * band 始终在出口，不受此开关影响。 */
                 !(R83_R7_TAILCENTER_HIDE && R68_R7_TAIL_ON &&
-                  (m.name === 'r68_r7_tail_modules' || m.name === 'r68_r7_tail_edge' ||
-                    m.name === 'r68_r7_tail_band'))
+                  (m.name === 'r68_r7_tail_modules' || m.name === 'r68_r7_tail_edge'))
             )
             : lampRearMeshes),
         ...lampFrontMeshes

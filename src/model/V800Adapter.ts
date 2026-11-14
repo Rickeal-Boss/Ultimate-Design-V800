@@ -258,8 +258,13 @@ const STEER_HARD_HIDE_EXIT_M = 0.42;
 const STEER_NEAR_BOOST_RADIUS_M = 0.60;
 /** 动态 near 推出时 near 面相对包围球表面的再退让（m），防 near 恰贴球面残留切边。 */
 const STEER_NEAR_BOOST_SKIN_M = 0.02;
-/** 动态 near 的下限（=CABIN_NEAR，不越权把 near 推得比正常态更近）/ 上限（防 far/near 失真）。 */
-const STEER_NEAR_BOOST_MIN = 0.1;
+/** 动态 near 的下限 / 上限（防 far/near 失真）。
+ *  R84 P0 根治：旧值 0.1 (=CABIN_NEAR) 落在盘包围球半径 0.225 **之内** ⇒ 当 dist−r−SKIN
+ *  算出负值（dist<0.245）时 Math.max(0.1, 负值) 把 near 钳回 0.1，near 面物理上仍在盘内
+ *  ⇒ 盘面大三角被近裁剪面斜切铺满视口 = 整帧黑闪（R83 双保险真机仍失效的根因）。
+ *  新值 0.245 = 盘半径 0.225 + 2cm 安全边距 ⇒ near 面恒在包围球**之外**，即使 dist 极近
+ *  也不会切穿盘面。回滚：`#r83steerharden=off` 走旧路径（不推 near）。 */
+const STEER_NEAR_BOOST_MIN = 0.245;
 const STEER_NEAR_BOOST_MAX = 0.5;
 /** 每帧算出的「相机是否在盘包围球近裁剪危险区」（updateSteeringGate 写、applyVisibility 读）*/
 let steerHardHide = false;
@@ -1957,8 +1962,11 @@ const SHADOW_CASTER_MATERIAL_IDS = new Set<string>(['paint-upper', 'paint-lower'
  *     会连带唤醒（审查实测 +14.55% 画面变化）= 车内地板观感回归，故必须专属实例隔离。
  *     可见 DC +1（3 补片本就是独立 mesh，+1 材质桶），tri 不变（36 tri BoxGeometry）。
  *     实例对仍为 0 可合并项（carpet 无同参可并对象）；已回传主理人登记。
+ *   · R84 P0：顶棚中段**复用 R82 roofExtMat 同一实例**（同色同签名 ⇒ r32 去重合并，
+ *     零新实例）+ 地板**独立 floorExtMat**（0x1f1c19 打 id:'carpet'）。**82→83**（+1）。
+ *     brake-pedal 是断裂动画件有意初始隐藏，已在逃逸 warn 判据加白名单跳过，不占材质预算。
  */
-export const V800_MATERIAL_INSTANCE_BUDGET = 82;
+export const V800_MATERIAL_INSTANCE_BUDGET = 83;
 
 /**
  * 车模 tri **可见口径**红线（= 渲染器 `info.render.triangles` 口径）。
@@ -4591,8 +4599,33 @@ const R48_LAMP_TONE: boolean =
       mesh.receiveShadow = false;
       body.add(mesh);
     };
-    mk(1.86, 0.95, 1.098, 1.52, 'cabin-floor-carpet'); // 前段：中控/脚坑上方
-    mk(1.86, 2.15, 1.668, -0.45, 'cabin-roof-carpet'); // 舱段：凹槽顶面（z 0.575..-1.525，避开前坡转角）
+    /* R84 P0 · 3 逃逸候选收口（审查人 R83 报告 §2.3 + §3）：
+     *  旧 cabin-floor-carpet / cabin-roof-carpet 复用共享 carpetMat，但 carpetMat **无
+     *  userData.sculptMaterial.id** ⇒ 建表 kept=false ⇒ pass1 每帧 mat.visible=false ⇒ 车内
+     *  0 px（地板露底盘 / 顶棚中段看穿）。审查人 R82 全强制实验证明放行中段能再降
+     *  141,549 px（主驾抬头看穿 −31.7% → −67%）。
+     *  处方：顶棚中段**复用 R82 的 roofExtMat 同一实例**（同色 0x26221f，签名相同可合并
+     *  ⇒ 不增实例）；地板建**独立 floorExtMat**（0x1f1c19 稍深区分）打 id:'carpet'。
+     *  不复用共享 carpetMat（它同时被其他件共用，直接打 id 会连带唤醒）。
+     *  brake-pedal 是断裂动画件有意初始隐藏，不在此处理（在逃逸 warn 判据里加白名单跳过）。
+     *  材质实例预算 82→83（+floorExtMat；roofMid 复用 roofExtMat 零增量）。
+     *  回滚：`#r84v800roofmid=off` / `#r84v800floorcarpet=off` 各自独立回共享 carpetMat。 */
+    const R84_V800_ROOFMID_ON: boolean =
+      typeof window === 'undefined' || !/(?:^|[#&])r84v800roofmid=off/i.test(window.location.hash);
+    const R84_V800_FLOOR_ON: boolean =
+      typeof window === 'undefined' || !/(?:^|[#&])r84v800floorcarpet=off/i.test(window.location.hash);
+    /* R84：顶棚中段**复用 R82 的 roofExtMat 同一实例**（在下方 R82 块内创建，此处先声明
+     *  let 占位，R82 块内赋值）。同色同签名 ⇒ r32 去重通道合并成 1 个实例（预算零增量）。
+     *  R82 off ⇒ roofExtMat 为 null，顶棚中段回退共享 carpetMat（逃逸态，A/B 对照用）。 */
+    let roofExtMat: THREE.MeshStandardMaterial | null = null;
+    const floorExtMat = new THREE.MeshStandardMaterial({
+      color: 0x1f1c19, roughness: 0.96, metalness: 0.0  // 地板比顶棚稍深一档区分
+    });
+    floorExtMat.userData.sculptMaterial = { id: 'carpet' };
+    mk(1.86, 0.95, 1.098, 1.52, 'cabin-floor-carpet', 0.012,
+       R84_V800_FLOOR_ON ? floorExtMat : carpetMat); // 前段：中控/脚坑上方
+    mk(1.86, 2.15, 1.668, -0.45, 'cabin-roof-carpet', 0.012,
+       (R84_V800_ROOFMID_ON && roofExtMat) ? roofExtMat : carpetMat); // 舱段：凹槽顶面
     /* R82：顶棚补覆盖 —— 补齐 cabin 态被剔朝上外表面(z[-2.609,+1.313]) 相对中段 carpet
      *   (z[-1.525,+0.575]) 的前后两段悬空缺口（前段看穿=主驾抬头见天，后段看穿=cabinRear）。
      *   命名 cabin-roof-carpet-ext-* ⇒ 前缀匹配进 R44_KEEP_MESH_NAMES + isPoke，无需动状态表。
@@ -4615,7 +4648,7 @@ const R48_LAMP_TONE: boolean =
      *   专属实例只放行 3 补片（审查强制实验：主驾抬头 seeThrough 397k→130k，−67%）。
      *   代价：+1 材质实例 / +1 DC（低密度 BoxGeometry）。 */
     if (R82_V800_ROOF_EXT_ON) {
-      const roofExtMat = new THREE.MeshStandardMaterial({
+      roofExtMat = new THREE.MeshStandardMaterial({
         color: 0x26221f,
         roughness: 0.96,
         metalness: 0.0
@@ -5252,9 +5285,12 @@ const R48_LAMP_TONE: boolean =
        * ⇒ 该 mesh 车内态 mesh.visible=true 但材质被关 = 0 px 逃逸候选，即刻告警。
        * 用 console.warn（**不硬抛**）：CI 不能因此红灯卡交付（历史护栏语义「不测画面」），
        *   但落地审查/#perfhud 一眼可见。真值判定仍交像素断言（见 tests/r83 下一波）。
-       * R82 顶棚补片若漏打 roofExtMat 的 userData.sculptMaterial.id 即在此被当场点名。 */
+       * R82 顶棚补片若漏打 roofExtMat 的 userData.sculptMaterial.id 即在此被当场点名。
+       * R84：brake-pedal 是断裂动画件（pedal.visible=false 初始态，由 snapPedal() 触发才显），
+       *   **有意隐藏**不是逃逸 ⇒ 加白名单跳过，避免长期挂在控制台变噪声。 */
       if (
         keepByName &&
+        mesh.name !== 'brake-pedal' && // R84：断裂动画件有意初始隐藏，非逃逸
         !cabinHidableMesh &&
         !hasId &&
         (mesh.userData as { r44External?: boolean }).r44External !== true
@@ -5694,18 +5730,25 @@ const R48_LAMP_TONE: boolean =
       const dist = STEER_GATE_TMP_VEC.distanceTo(STEER_GATE_TMP_VEC_B);
       applySteerGate(dist);
       const near = (camera as THREE.PerspectiveCamera).near;
-      /* R81 P2 → R83：近裁剪面硬隐藏安全网（滞回版）。相机钻进「盘半径 + near + 边距」
+      /* R81 P2 → R83 → R84：近裁剪面硬隐藏安全网（滞回版）。相机钻进「盘半径 + near + 边距」
        *   球内时两盘都隐，杜绝 near 扫过盘面 ⇒ 大三角被裁铺满视口 = 整帧黑闪（换程序化盘
        *   不解决，因程序化盘同位同样被裁）。R83 加滞回：进隐 dist<0.365m、退隐 dist>0.42m，
        *   带内保持上次态 ⇒ 阈值边界 dist 抖动不再每帧翻转（R81 P2 单阈值的边界黑闪根因）。
+       *   R84 P0 修正：hideEnter 用**固定 0.02** 而非 camera.near —— 旧写法在 near 被推到
+       *   0.5 时 hideEnter 涨到 0.745 过早隐藏（正常 cabin 眼点 dist≈0.55 也触发）。固定
+       *   0.02 ⇒ hideEnter = 0.225+0.02+0.04 = 0.285 恒定，正常眼点不触发。
        *   `#r83steerharden=off` ⇒ 退回 R81 单阈值无滞回（进=退=0.365m）。 */
       const hideEnter =
-        steerGateRadius + (Number.isFinite(near) ? near : STEER_NEAR_BOOST_MIN) +
-        STEER_HARD_HIDE_MARGIN_M;
+        steerGateRadius + 0.02 + STEER_HARD_HIDE_MARGIN_M;
       const hideExit = R83_STEER_HARDEN_ON ? STEER_HARD_HIDE_EXIT_M : hideEnter;
       steerHardHide = R81_STEER_HARD_HIDE &&
         Number.isFinite(dist) &&
         (steerHardHide ? dist < hideExit : dist < hideEnter);
+      /* R84 P0 fallback：相机钻进包围球内（dist < r+0.02）时无条件硬隐藏，不管滞回态。
+       *  这是滞回来不及进隐时的最后防线（指数阻尼过渡期可瞬穿 dist<0.245）。 */
+      if (Number.isFinite(dist) && dist < steerGateRadius + 0.02) {
+        steerHardHide = true;
+      }
       /* R83 · 动态 near 推出：dist<0.60m 时把 near 推到「包围球外」，near 面物理上切不到
        *   盘面大三角 ⇒ 即使硬隐藏因某帧未命中，渲染也不会黑。CameraRig 每帧 update() 末尾
        *   把 near 无条件写回 POSE.near（0.1），而 Game 帧序 = rig.update → 本函数 → render，
