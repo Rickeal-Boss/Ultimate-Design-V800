@@ -80,18 +80,38 @@ describe('R65 R7 轮拱内衬接线', () => {
   });
 });
 
-/** 机盖机位 R65-G8 回退到最初已知正确态（1.45/-1.45）。护栏钉常量。 */
-describe('R65 机盖机位（hood）回退', () => {
-  it('CameraRig hood 默认 offset 回最初正确机盖态（y1.45/z 基线 -1.45，R80 回退 0.15）', () => {
+/**
+ * 机盖机位 R65-G8 用户真机确认基线（1.45/-1.45）。护栏钉常量。
+ * R81：撤销 R80 的 −1.30 默认，恢复 −1.45；−1.30 改由显式 `#r81hood=on` 启用。
+ * ⚠ HOOD_Z 三元式**逐字未变**（常量名 R80_HOOD_BACK 按落盘保留，护栏按符号引用），
+ *   变的是 R80_HOOD_BACK 的定义语义（R80 默认 true ⇒ R81 默认 false）。
+ *   ⇒ 既有三元正则继续成立、不放宽；新增断言单独钉「新开关名 + 默认态反转」。
+ */
+describe('R65 / R81 机盖机位（hood）回退', () => {
+  it('CameraRig hood 默认 offset 回用户真机基线（y1.45 / z −1.45；R81 撤销 R80 回退）', () => {
     const src = readSrc('render/CameraRig.ts');
     expect(src).toMatch(/HOOD_Y = HOOD_POSE_OVERRIDE\?\.y \?\? 1\.45/);
-    // R80：默认值改为 R80_HOOD_BACK 三元式 —— on=-1.30（回退 0.15）/ off=-1.45（R65-G8 逐位）
+    // 三元式逐字保留（R80 引入、R81 沿用）：true=−1.30（回退 0.15）/ false=−1.45（R65-G8 逐位）
     expect(src).toMatch(
       /HOOD_Z = HOOD_POSE_OVERRIDE\?\.z \?\? \(R80_HOOD_BACK \? -1\.30 : -1\.45\)/,
     );
     // #hoodcam=off 回滚态（R65-F 值）保留
     expect(src).toContain('hoodcam=off');
     expect(src).toContain('1.55, z: 1.4');
+  });
+
+  it('R81 新开关名 #r81hood=on：R80_HOOD_BACK 默认 false，−1.30 仅显式启用', () => {
+    const src = readSrc('render/CameraRig.ts');
+    expect(src).toContain('const R80_HOOD_BACK: boolean =');
+    // R80 是「默认 true（无 window 或没有 =off）」；R81 反转为「默认 false（必须有 window 且有 =on）」
+    const decl = src.slice(
+      src.indexOf('const R80_HOOD_BACK: boolean ='),
+      src.indexOf('const HOOD_Y =')
+    );
+    expect(decl).toContain("typeof window !== 'undefined' &&");
+    expect(decl).toContain('r81hood=on');
+    expect(decl).toContain('r80hood=off'); // 旧 off 钩子仍强制回 −1.45
+    expect(decl).not.toContain("typeof window === 'undefined' ||"); // R80 旧默认 true 已撤销
   });
 
   it('hood cam 扫参钩子 #hoodcam=y,z,ly 存在（真机 A/B）', () => {

@@ -233,6 +233,31 @@ export const R71_C2_SIDE_ON = !r69HookOff('r71c2side');
 /** R71 盖板侧面黑填充开关（默认 ON，`#r71c2coverfill=off` 回 R70）。 */
 export const R71_C2_COVERFILL_ON = !r69HookOff('r71c2coverfill');
 
+/* ── R81 P0-2 · 侧面 quad 绕序左右对称修正（用户「只贴了右侧，左侧依旧没有贴」）────
+ * 定罪（叉积实算，常量 C2_LAMP_SIDE_DEPTH=0.03 / C2_COVER_FILL_DEPTH=0.10 均为正）：
+ *   R71 两处循环（盖板侧面黑填充 / 侧面竖灯大面）共用同一顶点序
+ *   v0=(x,yLo,zIn) v1=(x,yHi,zIn) v2=(x,yLo,zOut) + index [0,1,2,1,3,2]，
+ *   且 zIn = zOut + depth ⇒ (v1−v0)×(v2−v0) = (0,Δy,0)×(0,0,−depth)
+ *   = (−Δy·depth, 0, 0) ⇒ 几何正面**恒指局部 −X**，与 side 无关。
+ *   normal 属性虽写 nx=side，但 GPU 背面剔除只看几何绕序、不读 normal；
+ *   body 组 rotY(π) 把局部 −X 翻成世界 +X ⇒ 两块 quad 的可见朝向都朝车右，
+ *   位于世界左侧（side=+1）那块从车外看是背面 ⇒ 被整块剔除，只剩右侧可见。
+ * 正解（仿 r7TailWrap.ts::sideQuad 的 side·X 语义）：局部 +x 侧（side>0）翻 index 到
+ *   [0,2,1,1,2,3] ⇒ 几何法线 +X；局部 −x 侧（side<0）保持 [0,1,2,1,3,2] ⇒ −X。
+ *   于是 normal 属性 nx=side 与几何一致；body 翻 x 后两侧各自朝车外、均可见。
+ *   ⚠ 只翻 index、position/uv/normal 顶点数据逐位不动 ⇒ remapUVToRegion 按 mesh 自身
+ *   UV bbox 归一的结果不变，凤凰点阵不镜像、不错乱；正面灯组（faceZ 面 / makeQuad）不受影响。
+ *   两处循环共用同一 helper ⇒ 严格左右对称的同参构造，零 tri / 零 DC / 零材质 / 零贴图。
+ * 回滚：`#r81c2side=off` ⇒ 两侧逐位回 R71 旧绕序（A/B 复现单侧可见）。
+ */
+export const R81_C2_SIDE_WINDING_ON = !r69HookOff('r81c2side');
+/** side·X 外向绕序：side>0 翻成 +X 法线，side<0 保持 −X 法线（纯函数，供护栏直接断言）。 */
+export function c2SideWindingIndex(side: number): number[] {
+  return R81_C2_SIDE_WINDING_ON && side > 0
+    ? [0, 2, 1, 1, 2, 3]
+    : [0, 1, 2, 1, 3, 2];
+}
+
 /** 预算上限（护栏消费）。新增 mesh 恒 3；tri = 盖板薄盒 12 + face 4 + 2·(top+bottom)·2。
  *  R69：竖灯缩小（高×0.48/宽×0.40）+ 侧面贴完整尾灯纹理 ⇒ face 并入左右侧壁 +4 ⇒ 默认 40。
  *  `#r69c2lamp=off` ⇒ 无侧壁 ⇒ 回 R68 的 36。 */
@@ -672,7 +697,8 @@ export function buildTailLampC2(opts: C2BuildOptions): C2BuildResult {
       fq.setAttribute('uv', new THREE.Float32BufferAttribute([
         0, 0, 0, 1, 1, 0, 1, 1
       ], 2));
-      fq.setIndex([0, 1, 2, 1, 3, 2]);
+      // R81 P0-2：按 side 翻绕序 ⇒ 几何法线真正指向 side·X（否则两侧都被剔到只剩右侧）
+      fq.setIndex(c2SideWindingIndex(side));
       fillQuads.push(fq);
     }
     coverGeo = mergeSafe([coverBox, ...fillQuads]);
@@ -728,7 +754,8 @@ export function buildTailLampC2(opts: C2BuildOptions): C2BuildResult {
       sq.setAttribute('uv', new THREE.Float32BufferAttribute([
         0, 0, 0, 1, 1, 0, 1, 1
       ], 2));
-      sq.setIndex([0, 1, 2, 1, 3, 2]);
+      // R81 P0-2：按 side 翻绕序 ⇒ 几何法线真正指向 side·X；UV 数据逐位不动，凤凰点阵不镜像
+      sq.setIndex(c2SideWindingIndex(side));
       // UV 按 bbox 归一后映射到 atlas 半幅（同正面：−x 左半幅 / +x 右半幅），凤凰点阵居中
       remapUVToRegion(sq, side < 0 ? 0 : 0.5, side < 0 ? 0.5 : 1, 0, 1);
       faceQuads.push(sq);

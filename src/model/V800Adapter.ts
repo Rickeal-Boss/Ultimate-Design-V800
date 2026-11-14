@@ -29,7 +29,7 @@ import {
   type ExternalShellHandle
 } from './external/ExternalShell';
 import { loadInteriorSteering } from './external/InteriorSteering';
-import { buildRoofCulledIndex } from './roofCull';
+import { buildRoofCulledIndex, type RoofCullMode } from './roofCull';
 import { setFxWheelOffsets } from '../fx';
 import { DEFAULT_VARIANT } from '../config/vehiclePaint';
 import { applyReferenceTextures } from './refTextures';
@@ -177,6 +177,47 @@ const STEER_GATE_FAR_M = 0.26;
 /** `#r71steergate=off` ⇒ 恒显示高精盘（模块顶层求值一次，每帧只读布尔） */
 const R71_STEER_GATE: boolean =
   typeof window === 'undefined' || !/(?:^|[#&])r71steergate=off/i.test(window.location.hash);
+
+/* ── R81 P1-5 · 门控有限性保护（**防御性加固，非黑帧靶点**；二轮定罪，撤回一轮结论）──
+ * 二轮定罪依据（主理人像素级视觉分析 + 本线代码级复核）：
+ *  · 图1 = image#16「机盖」视角（UI 高亮机盖），下半 ~50% 近似纯黑、无任何车漆纹理；
+ *    图2 = image#17「车内」视角，几乎整屏黑/深灰 + 画面最右 x≈90~100% 一条竖直
+ *    残留带（白色建筑墙面 + 橙棕条纹 = 场景几何侧面切片残留）。二者均为**持续态**，
+ *    不是闪一帧，也不是高精盘扫 near 的黑闪。
+ *  · 主理人独立复核：`applySteerGate` 滞回写法正确；若 steerGateRadius 为 NaN ⇒
+ *    clearance=NaN ⇒ `NaN < 0.16/0.26` 恒 false ⇒ 门控恒「远态」= 恒显高精盘，
+ *    **不会造成整屏黑**。盘世界直径 0.45m（`InteriorSteering.ts:130` scale=4.75，
+ *    局部直径 0.094737）、眼点到盘心 ≈0.65m >> CABIN_NEAR=0.1 ⇒ 盘本身不可能包住
+ *    相机。⇒ **门控不是靶点**；本线一轮把黑面归因于「门控失效 ⇒ near 区裁剪三角
+ *    铺满视口」的定罪错误，此处撤回。
+ *  · 真凶（代码级 + R7 历史 A/B 实证）：cabin 态 `shellHandle.bodyMesh.material.side`
+ *    走 `THREE.DoubleSide`（R47 有意设计；R7Adapter:212-223 的 A/B 实测
+ *    base 1.85% FAIL / `#r47cabin=off` 整壳隐藏 23.86% PASS ⇒ 就是 bodyMesh 内壁）。
+ *    R7 靠 R50 精确剔车顶区三角治；V800 直到 R80 才移植 roofCull，却用
+ *    `maxY>1.45` **一刀切剔 142,282 tri（14.72% 全车）**，把朝上外表面 73,262 +
+ *    骨架/A柱上段/侧窗上框 59,824 + 朝下内壁 9,196 全部退化 ⇒ 车内视野失去全部
+ *    车顶结构，只剩大面积深色内壁与 `cabin-roof-carpet`（深色 0x26221f 板，y=1.668，
+ *    相机 CABIN_EYE y=1.34 正下方 0.328m，1.86×2.15 覆盖 z[-1.525,0.575]）⇒
+ *    「几乎整屏黑 + 窗洞透出外景形成右侧竖带」。与 P0-3「骨架消失」同源同因。
+ *  · 根治 = P0-3 把 roofCull 收窄为「车顶区(maxY) && ny>0.5 朝上外表面」（剔 73,262、
+ *    保回 69,020 骨架/内壁）。**不动 bodyMesh.side**（改回 FrontSide 会重蹈 R19c
+ *    「看穿进壳体、满屏暗色」），**不改 applyVisibility**（无第六套显隐账本）。
+ *  · hood 模式：`INTERIOR_MODES` 只含 cabin* ⇒ `isInteriorMode('hood')=false` ⇒
+ *    applyVisibility 收 interior=false、bodyMesh FrontSide / visible=true、
+ *    applyRoofCull(false) 恢复 full index ⇒ 图1 下半纯黑**不是** cabin 内壁；
+ *    R80 的 HOOD_Z=−1.30 是唯一变化量，R81 已恢复用户真机基线 −1.45，留真机 A/B。
+ * 本处保留的三条保护（radius 有限性 + clearance 有限性 + 防两盘都隐）降级为
+ *   **防御性加固**（零 DC / 零材质 / 零贴图 / 零每帧开销），不是黑帧根治；滞回
+ *   NEAR=0.16 / FAR=0.26 与三态语义逐位不变。
+ * 回滚：`#r81steergate=off` ⇒ 三处逐位回 R80。
+ * 真机 A/B：`#r80v800roof=off`（关 roofCull）/ `#r81roofcull=off`（回 R80 判据）/
+ *   `#r47cabin=off`（整壳隐藏，R7 历史 PASS 态）/ `#r81hood=on`（回 R80 机位）。
+ */
+/** R81：盘世界半径物理区间（m），异常 GLB 包围球一律 clamp 回来，防 clearance 恒负 / NaN。 */
+const STEER_GATE_RADIUS_MIN_M = 0.05;
+const STEER_GATE_RADIUS_MAX_M = 0.50;
+const R81_STEER_GATE_GUARD: boolean =
+  typeof window === 'undefined' || !/(?:^|[#&])r81steergate=off/i.test(window.location.hash);
 /* ══ W2批4 · 透明件渲染排序治理 ═══════════════════════════════════════════════
  * 背景：车内近景透明件历史上只设 `depthWrite=false` 却无 `renderOrder` ⇒ three.js
  * 透明队列按相机距离排序 ⇒ 近景玻璃/贴花闪烁、透出关系错乱。本批给它们钉显式
@@ -4858,8 +4899,18 @@ const R48_LAMP_TONE: boolean =
   let roofCullActive = false;
   const R80_V800_ROOF_CULL: boolean =
     typeof window === 'undefined' || !/(?:^|[#&])r80v800roof=off/i.test(window.location.hash);
-  /** R80 车顶剔除阈值（世界 y）——见上方注释 */
+  /** R80 车顶剔除阈值（世界 y）——见上方注释。
+   *  R81 P0-3 二轮 **不调整**：车顶区仍沿用 R80 的 maxY 口径（roofLocal=0.305263），
+   *  误伤源是「无差别剔全部车顶区」而非阈值本身；改阈值会引入第二变量、不利 A/B 定罪。 */
   const V800_ROOF_CLIP_WORLD_Y = 1.45;
+  /** R81 P0-3 二轮：判据模式 A/B。`#r81roofcull=off` ⇒ 逐位回 R80 的 maxY 判据。
+   *  默认 'r81' = 「车顶区(maxY) && ny>0.5 朝上外表面」：剔 73,262 tri、保回
+   *  59,824 竖直骨架 + 9,196 朝下内壁。R7Adapter 两处 3 参数调用取默认 ⇒ 两车同改
+   *  （R7 body.glb 车顶区朝上占 85.11%，与 V800 同构）。 */
+  const R81_ROOF_CULL_MODE: RoofCullMode =
+    typeof window === 'undefined' || !/(?:^|[#&])r81roofcull=off/i.test(window.location.hash)
+      ? 'r81'
+      : 'r80';
   const applyRoofCull = (active: boolean): void => {
     if (!R80_V800_ROOF_CULL || !shellHandle) return;
     const idx = shellHandle.bodyMesh.geometry.getIndex();
@@ -4869,12 +4920,13 @@ const R48_LAMP_TONE: boolean =
         shellHandle.bodyMesh.geometry,
         shellHandle.manifest.scale,
         V800_ROOF_CLIP_WORLD_Y,
+        R81_ROOF_CULL_MODE,
       );
       if (!built) return;
       roofCullFull = built.full;
       roofCullCulled = built.culled;
       console.info(
-        `[V800Adapter] R80 车顶内壁剔除索引就绪：${built.roofTris}/${built.totalTris} tri 剔除（y>${V800_ROOF_CLIP_WORLD_Y}）`,
+        `[V800Adapter] R81 车顶外表面剔除索引就绪：${built.roofTris}/${built.totalTris} tri 剔除（车顶区 y>${V800_ROOF_CLIP_WORLD_Y} && ny>0.5, mode=${R81_ROOF_CULL_MODE}）`,
       );
     }
     if (active === roofCullActive) return;
@@ -5055,7 +5107,13 @@ const R48_LAMP_TONE: boolean =
   const applyVisibility = (state: CarVisibilityState): void => {
     const interior = state.interior;
     const exteriorShellReady = shellHandle != null;
-    const steerNear = R71_STEER_GATE && steerNearCam;
+    /* R81 P1-5（状态表单一写入点兜底，定罪见 STEER_GATE 注释）：程序化盘由异步
+     *   traverse 按名收集，一个都没收集到时禁止进入近态 ⇒ 否则下面会把高精盘也隐掉，
+     *   cabin 态「两盘都隐」出现方向盘空窗。两行 visible 仍用同一 steerNear 取反，
+     *   恒互斥、不双显；不新增第五套显隐账本。
+     *   `#r81steergate=off` ⇒ 逐位回 R80 的 `R71_STEER_GATE && steerNearCam`。 */
+    const steerNear = R71_STEER_GATE && steerNearCam &&
+      (!R81_STEER_GATE_GUARD || proceduralSteeringMeshes.length > 0);
 
     model.visible = true; // ②：外部壳在场时程序化树整体保留（透明玻璃透出座舱 = 官图观感）
 
@@ -5091,7 +5149,17 @@ const R48_LAMP_TONE: boolean =
       const bm = shellHandle.bodyMesh.material as THREE.MeshPhysicalMaterial;
       const wantSide = interior && r47CabinFix ? THREE.DoubleSide : THREE.FrontSide;
       if (bm.side !== wantSide) { bm.side = wantSide; bm.needsUpdate = true; }
-      // R80：cabin 态剔除外壳车顶内壁（治主驾抬头「黑亮弧形面板 + 锯齿白边」）
+      // R80/R81：cabin 态剔除外壳车顶「朝上外表面」（其 DoubleSide 背面 = 黑亮弧形面板）
+      // R81 二轮 · W1 状态表单一写入点显隐核对（**不新增第六套账本、不新增任何写入**）：
+      //   · bodyMesh 保持 DoubleSide（R47 有意设计；改回 FrontSide 会重蹈 R19c
+      //     「看穿进壳体、满屏暗色」，R7Adapter:212-223 A/B 实证整壳隐藏才 PASS）；
+      //   · `cabin-roof-carpet` ∈ R44_KEEP_MESH_NAMES 且 bbox 顶 y≈1.674 > roofGlassY
+      //     ⇒ 建表打 isPoke ⇒ pass 2 `v = v && interior` ⇒ cabin 显 / 外景藏。它是深色
+      //     0x26221f 顶棚衬毯，位于 CABIN_EYE(y=1.34) 上方 0.328m；主驾视线
+      //     CABIN_TARGET(y=0.98) 水平略向下 ⇒ 只占视野上缘、不会完全遮视野，
+      //     隐藏反而露空洞 ⇒ 保留现状，不加显隐覆盖。
+      //   · 图2「整屏黑 + 右侧竖带」根因是 R80 一刀切剔 142,282 tri（含 59,824 骨架），
+      //     根治在 roofCull 判据（剔 73,262 / 保回 69,020），不在本写入点。
       applyRoofCull(interior && r47CabinFix);
       // ②：glass/lamp 语义件与外壳同显隐
       for (const sm of [...shellHandle.glassMeshes, ...shellHandle.lampMeshes]) {
@@ -5235,9 +5303,18 @@ const R48_LAMP_TONE: boolean =
       steeringMesh = wheel;
       /* R80：算一次盘包围球半径（世界米）。⚠ rotateY(π) 之后 boundingSphere 可能为空/
        *   未更新 ⇒ 必须显式 computeBoundingSphere() 再乘 scale（scale 只缩顶点，不改半径
-       *   的几何口径：radius × scale.x 即世界半径）。 */
+       *   的几何口径：radius × scale.x 即世界半径）。
+       * R81 P1-5：`?? 0.225` 只兜 null 不兜 NaN/0/Infinity ⇒ 加有限性 + 物理区间 clamp
+       *   （定罪见本文件 STEER_GATE 注释）；`#r81steergate=off` ⇒ 逐位回 R80 原式。 */
       wheel.geometry.computeBoundingSphere();
-      steerGateRadius = (wheel.geometry.boundingSphere?.radius ?? 0.225) * Math.abs(wheel.scale.x);
+      const bsRadius = wheel.geometry.boundingSphere?.radius;
+      const scaledRadius = (bsRadius ?? 0.225) * Math.abs(wheel.scale.x);
+      const finiteRadius = Number.isFinite(scaledRadius) && scaledRadius > 0
+        ? scaledRadius
+        : 0.225;
+      steerGateRadius = R81_STEER_GATE_GUARD
+        ? Math.min(STEER_GATE_RADIUS_MAX_M, Math.max(STEER_GATE_RADIUS_MIN_M, finiteRadius))
+        : scaledRadius;
       // W1：初值 exterior（隐藏，不透车外 / 零 DC）；此后每帧 applyVisibility 全量覆盖
       // （cabin 显高精盘、近距门控切程序化盘），不再读「上次内舱态」差量。
       wheel.visible = false;
@@ -5312,7 +5389,16 @@ const R48_LAMP_TONE: boolean =
     if (!R71_STEER_GATE || !steeringMesh) return;
     /* R80：clearance = 盘心距离 − 盘包围球半径（到盘表面的最近距离）。 */
     const clearance = dist - steerGateRadius;
-    const next = steerNearCam ? clearance < STEER_GATE_FAR_M : clearance < STEER_GATE_NEAR_M;
+    /* R81 P1-5：dist / clearance 非有限时门控不许翻转（NaN 比较恒 false 会把门控
+     * 永久冻结在远态、高精盘恒显 ⇒ 近平面黑面）。有限性保护 + clamp 到 >= 0；
+     * 滞回 NEAR/FAR 与三态语义逐位不变。steerGateRadius 已在装载时 clamp 过。 */
+    const c = R81_STEER_GATE_GUARD
+      ? (Number.isFinite(dist) && Number.isFinite(clearance)
+          ? Math.max(0, clearance)
+          : null)
+      : clearance;
+    if (c === null) return; // 非有限 ⇒ 保持当前态，不抖动
+    const next = steerNearCam ? c < STEER_GATE_FAR_M : c < STEER_GATE_NEAR_M;
     if (next === steerNearCam) return;
     steerNearCam = next; // visible 写交给 applyVisibility（每帧全量覆盖）
   };

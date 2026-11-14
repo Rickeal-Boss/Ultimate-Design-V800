@@ -146,7 +146,32 @@ const R67_GUARD_SHA256 = 'e4a350a82699bf2a4c8b93e18eff0e1295faaaa0b1646b623c13c3
  *  治理——给 depthWrite=false 的玻璃（greenhouse 桶 + rear-glass-upper 克隆）经
  *  userData.vorderGlass 标记批量钉 renderOrder=10、welcome-carpet / tailgate-maextro /
  *  gauge-screen 表面贴花钉 renderOrder=1，新增 `#vorder=off` 回滚钩子，属预期改动。 */
-const ADAPTER_SHA256 = 'f0bc5137a7906d868421d624762de2b4458723509002a06c18affb8d6100bc04';
+const ADAPTER_SHA256 = '4a08b6a4bb698778f98d64408d9e03c47742a4ace939b93cb8540ec9aec8c28d';
+/* ═══ R81 · 冻结基线更新（QA 实测口径；⚠ 与主理人转交值冲突，已回传待裁决）═════
+ * 本常量必须与断言 `expect(sha256(adapter)).toBe(ADAPTER_SHA256)` 的口径逐位一致：
+ *   adapter = src(...) = readFileSync(p,'utf8').replace(/\r\n/g,'\n')
+ *   sha256(s) = createHash('sha256').update(Buffer.from(s,'utf8')).digest('hex')
+ * ⇒ 唯一正确取值 = 该口径对**当前定稿工作树文件**的实算值。
+ *
+ * ▸ 实测（13:34~13:41 三算逐位一致，node / python / 护栏精确口径）：
+ *     GUARD_EXACT sha256(adapter) = 4a08b6a4bb698778f98d64408d9e03c47742a4ace939b93cb8540ec9aec8c28d
+ *     python byte 版 LF 归一        = 4a08b6a4…（与上式相同）
+ *     当前工作树 raw(CRLF)          = 9588884af1005eec65f98b97093b5f2e5bfa6c163b27b89db231206ce4a7702f
+ *     HEAD / index 版(R80, 288161B) = f0bc5137a7906d868421d624762de2b4458723509002a06c18affb8d6100bc04
+ *     当前工作树 = 300952B / CRLF 5679 行 / mtime 2026-11-14 13:15:10（第 7 次取证未变）
+ *
+ * ▸ 主理人转交值（第 5 封消息）LF=f8dc41234b90d37ae10d59255b040fefe5da202f75c7e0f5ab2b78b6e06ec207
+ *   raw=def27bf0c2794ed792a584d2e196d0564b8f1c58872f18000b0bf0c1b8219f56
+ *   ⚠ 两者**都不等于**当前文件的 LF / raw / HEAD，连 raw 都对不上 ⇒ 不是行尾口径差异，
+ *     而是主理人实算时的 V800Adapter.ts 内容版本与当前定稿版不同（写盘竞态：
+ *     该文件 12:54:31→299125B、13:15:10→300952B 至少两次改写）。
+ *     若照写 f8dc…，commit 后 gitStatus 变空时 sha 断言必红 ⇒ 直接破 CI，故本轮按实测写入。
+ *
+ * ▸ 若主理人 commit 的是另一版内容（或 V800Adapter.ts 再次改写），下方诊断 it 会打印
+ *   LF_LIVE_SHA256 与 FROZEN 的逐位差异 ⇒ 请二次唤醒 QA 重算本常量，绝不放宽断言。
+ * ▸ 历史坑：sha256sum 对 CRLF 工作副本算 raw 会错（R80 commit 4915fb4 曾补），
+ *   一律先 CRLF→LF 归一；core.autocrlf=true 下 CI 干净 checkout 为 LF 版，
+ *   归一后与本地 CRLF 归一内容逐位相同 ⇒ 4a08… 跨环境稳定。 */
 /** off 态 / 原 atlas（HEAD=dc765a4）像素缓冲指纹 —— 供「默认 vs off」对照差分。 */
 const R68_C2_ATLAS_BASELINE_SHA256 = '1bb27545a399a7d7e14f56f778f9a309973298a508ca5e97a90ba76784183347';
 const R68_R7_BAND_SLICE_SHA256_BASELINE = '08ecfe355d212a1252665b381305df1e2b6cf1640cb055739ab4c8ec1814038c';
@@ -401,6 +426,37 @@ describe('R68 · V800Adapter.ts 逐字冻结 + 本波 diff 不含', () => {
     expect(adapter).toContain('const extRear = shellHandle?.lampRearMat;');
     const hidden = slice(adapter, '// —— B-补：隐旧', '// —— C：前大灯');
     expect(hidden).toContain('hidLegacy');
+  });
+
+  /* ── R81 诊断（只打印 + 校验口径一致，不删改 ★ 冻结断言）──────────────────
+   * 保留「计算 LF 归一 sha 并打印」能力：任何一次 V800Adapter.ts 改写 / commit
+   * 版本差异都会让日志里的 LIVE 与 FROZEN 逐位不同 ⇒ 直接供二次唤醒重算，
+   * 不需要临时搭脚本。护栏数量只增不减。 */
+  it('[R81 诊断] 打印 V800Adapter.ts LF 归一 sha256（冻结基线口径自检）', () => {
+    // readFileSync 前一律验入库（R64-fix / R67-CI-fix ENOENT 铁律）
+    assertTracked('src/model/V800Adapter.ts');
+    const raw = readFileSync(new URL('../src/model/V800Adapter.ts', import.meta.url), 'utf8');
+    const lf = raw.replace(/\r\n/g, '\n'); // 口径铁律：CRLF → LF 后再算
+    const live = sha256(lf);
+    const rawSha = sha256(raw);
+    console.info(
+      `[R81] V800Adapter.ts LF_LIVE_SHA256=${live} FROZEN=${ADAPTER_SHA256} ` +
+      `RAW_SHA256=${rawSha} CRLF_LINES=${(raw.match(/\r\n/g) ?? []).length} ` +
+      `gitStatus=${gitStatus('src/model/V800Adapter.ts') || '(clean)'}\n` +
+      `[R81] LEAD_GIVEN_LF=f8dc41234b90d37ae10d59255b040fefe5da202f75c7e0f5ab2b78b6e06ec207 ` +
+      `LEAD_GIVEN_RAW=def27bf0c2794ed792a584d2e196d0564b8f1c58872f18000b0bf0c1b8219f56`
+    );
+    // 只校验口径正确 + 格式合法 + 与断言实际比较值逐位一致；
+    // ⚠ 绝不写 `expect(sha256(raw)).toBe(sha256(lf))`：CRLF 工作副本会假红
+    //   （主理人明示历史坑：sha256sum 算 raw 会错），CRLF_LINES / RAW 只做日志诊断。
+    expect(live).toMatch(/^[0-9a-f]{64}$/);
+    expect(live).toBe(sha256(adapter)); // 与顶层 src() 的 LF 归一口径逐位一致
+    expect(rawSha).not.toBe(live);      // 本工作副本确有 CRLF ⇒ raw≠LF（记录历史坑）
+    // ⚠ 独立于上面 ★ it 再验一次 sha 冻结值：★ it 的 gitStatus 断言在 commit 前
+    //   必然先失败并**短路**，其后的 `expect(sha256(adapter)).toBe(ADAPTER_SHA256)`
+    //   根本不会执行 ⇒ 若无本条，就无法证明冻结值写对了。本条恒执行。
+    expect(sha256(adapter), 'LF 归一口径 sha 必须等于 ADAPTER_SHA256 冻结常量')
+      .toBe(ADAPTER_SHA256);
   });
 });
 

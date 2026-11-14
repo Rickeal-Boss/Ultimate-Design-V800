@@ -103,11 +103,17 @@ describe('R50 · cabin 车顶内壁剔除（真修 R47 DoubleSide 回归）', ()
   });
 
   it('剔除不新建材质实例、不连带轮（body 与 4 轮各自独立 geometry）', () => {
-    // R80：函数体已迁至 roofCull.ts；断言改读该文件（语义与旧断言逐条等价）。
+    // R81 二轮：函数体仍在 roofCull.ts；判据按主理人 GLB 逐三角定量复核**重新定罪**为
+    //   「车顶区(maxY 口径) && ny>0.5 朝上外表面」⇒ 只剔朝上车顶外表面，
+    //   骨架(|ny|<0.5) 与朝下内壁(ny<−0.5) 全部保留。
+    //   ⚠ 派单一轮处方「minY 全过线 + 法线朝下」已被推翻：GLB 是单层薄壳，
+    //     黑亮面板 = 朝上外表面的背面（cabin DoubleSide），只剔内壁会 100% 复发。
+    //   下列**只读 index / 不动材质**的结构不变量逐条等价保留
+    //   （旧断言一条不删、不放宽，仅语义注释更新 + 追加新判据断言）。
     const c = src('src/model/roofCull.ts');
     expect(c).toContain('const full = new Uint32Array(src);');
     expect(c).toContain('const culled = new Uint32Array(src);');
-    // 抽出 buildRoofCulledIndex 函数体，确认它只碰 index/position，不碰材质 side/visible
+    // 抽出 buildRoofCulledIndex 函数体，确认它只碰 index/position/normal，不碰材质 side/visible
     const fnStart = c.indexOf('export function buildRoofCulledIndex(');
     expect(fnStart, 'buildRoofCulledIndex 缺失').toBeGreaterThanOrEqual(0);
     const fnBody = c.slice(fnStart, c.indexOf('\n}', fnStart) + 2);
@@ -115,6 +121,54 @@ describe('R50 · cabin 车顶内壁剔除（真修 R47 DoubleSide 回归）', ()
     expect(fnBody).not.toContain('.side');
     expect(fnBody).not.toContain('.visible');
     expect(fnBody).not.toContain('.material');
+    // ── R81 二轮新语义逐条钉死（追加，不替换上面的既有断言）──────────────
+    // ① 车顶区用 maxY 口径（region），不是一轮的 minY 收窄
+    expect(fnBody).toContain('const region = Math.max(y0, y1, y2) > roofLocal;');
+    // ② 只剔朝上外表面：ny > 阈值；水平判据 |ny| >= 阈值 同时成立
+    expect(fnBody).toContain('const upward = ny > ROOF_CULL_HORIZONTAL_NY;');
+    expect(fnBody).toContain('horizontal = Math.abs(ny) >= ROOF_CULL_HORIZONTAL_NY;');
+    expect(fnBody).toContain('hit = region && upward && horizontal;');
+    expect(fnBody).toContain("const nrm = geometry.getAttribute('normal');");
+    // ③ mode 分支：'r80' 逐位回 R80 maxY 一刀切（A/B 回滚），默认 'r81'
+    expect(fnBody).toContain("if (mode === 'r80') {");
+    expect(fnBody).toContain('hit = Math.max(y0, y1, y2) > roofLocal;');
+    // ④ 缺省 normal 优雅退化：不抛错、不返回 null，退化为只按 minY 的保守窄带
+    expect(fnBody).toContain('const allAbove = Math.min(y0, y1, y2) > roofLocal;');
+    expect(fnBody).toContain('else if (!useNormal) {');
+    expect(fnBody).toContain('hit = allAbove && horizontal;');
+    expect(fnBody).toContain('const useNormal = mode === \'r81\' && !!nrm && nrm.itemSize >= 3;');
+    expect(c).toContain('export const ROOF_CULL_HORIZONTAL_NY = 0.5;');
+    expect(c).toContain("export type RoofCullMode = 'r81' | 'r80';");
+    // ⑤ 4 参签名：R7Adapter 两处 3 参调用继承默认 mode；默认态由模块级常量
+    //    R81_ROOF_CULL_DEFAULT_MODE 给出（13:39:57 第 4 次落盘，取代字面量 'r81'），
+    //    `#r81r7roofcull=off` ⇒ 'r80' 让 R7 逐位回 R50 已验证的 maxY 判据。
+    //    node/SSR 无 window ⇒ 恒 'r81'（护栏可复现）；V800Adapter 显式传 mode 不受影响。
+    expect(c).toContain('mode: RoofCullMode = R81_ROOF_CULL_DEFAULT_MODE');
+    expect(c).toContain('const R81_ROOF_CULL_DEFAULT_MODE: RoofCullMode =');
+    expect(c).toContain('r81r7roofcull=off');
+    // 显式 mode='r80' 逐位回 R80（A/B 回滚契约），运行时逐位验证见 r81_regression §3
+    expect(fnBody).toContain("if (mode === 'r80') {");
+  });
+
+  it('R81 二轮判据语义：只剔「车顶区朝上外表面」，骨架 / 朝下内壁逐位保留', () => {
+    // 源码级等价性（弱）；真·运行时逐位验证见 tests/r81_regression.test.ts §3
+    // （手工 Uint32 index + position + normal 小几何，断言骨架 / 内壁 culled 逐位保留）。
+    const c = src('src/model/roofCull.ts');
+    // full 恒为原 index 逐位拷贝 ⇒ 外部机位逐位恢复不变
+    expect(c).toContain('const full = new Uint32Array(src);');
+    // culled 只把命中三角的三索引置 0，其余照抄 ⇒ 未命中三角逐位保留
+    expect(c).toContain('const culled = new Uint32Array(src);');
+    expect(c).toContain('culled[t * 3] = 0;');
+    expect(c).toContain('culled[t * 3 + 1] = 0;');
+    expect(c).toContain('culled[t * 3 + 2] = 0;');
+    // roofTris 只在命中时自增 ⇒ 计数 == 被剔三角数
+    expect(c).toContain('roofTris++;');
+    expect(c).toContain('return { full, culled, roofTris, totalTris };');
+    // 二轮定量定罪口径（注释里的 GLB 实测量，供后人核对判据来源）
+    expect(c).toContain('966,484 tri');
+    expect(c).toContain('73,262 tri'); // 朝上车顶外表面 = 唯一应剔靶点
+    expect(c).toContain('59,824 tri'); // 骨架 = 必须保留
+    expect(c).toContain('9,196 tri');  // 朝下内壁 = 必须保留
   });
 });
 

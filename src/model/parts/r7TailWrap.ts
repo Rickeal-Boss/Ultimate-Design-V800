@@ -242,33 +242,50 @@ export function buildR7TailWrap(opts: R7TailWrapOptions): R7TailWrapResult {
   //   `lamp_rear_band` 遮掉了一截 ⇒ 侧贴这个补丁本身制造了新的穿帮。
   //   裁决：默认不建侧贴（尾灯包裹交给 ①/①b 的封闭矩形框）。`#r80r7side=on` 可恢复
   //   R69 旧侧贴供 A/B 对照。
+  /* ── R81 P0-1 · 默认分支彻底不建 sideMesh / sideGeo ─────────────────────────
+   * R80 虽然把侧贴从 meshes 里摘掉，但仍无条件 `mergeSafe(sideQuads)`（空数组）、
+   * 无条件 `new Mesh(空 geometry)` 并把空 geometry 塞进 geos ⇒ mergeGeometries([]) 抛
+   * TypeError ⇒ loadExternalShell catch 把 r44ShellStatus 置 failed ⇒ R66-D 原子回滚
+   * ⇒ 默认路径只剩 82 件程序化低模（用户「R7 无法进入」）。
+   * 修：默认分支不创建 sideQuads / sideGeo / sideMesh，geos 只放 module/edge/band；
+   *   tri 与 dc 沿用现有三元式（与 R80 交接文档「撤侧贴后少 1 DC、少 4 tri」对齐）。
+   * 与 src/util/geo.ts 的 mergeSafe 空数组防御构成双保险（别的 parts 也可能踩）。
+   * 回滚：`#r81r7sideskip=off` ⇒ 逐位回 R80 旧路径（仍建空 sideGeo 并入 geos，A/B
+   *   验证「空 geometry 是否入账本」这一唯一变量）。 */
+  const R81_R7_SIDE_SKIP: boolean =
+    typeof window === 'undefined' || !/(?:^|[#&])r81r7sideskip=off/i.test(window.location.hash);
   const R80_R7_SIDE_ON =
     typeof window !== 'undefined' && /(?:^|[#&])r80r7side=on/i.test(window.location.hash);
-  const sideQuads: THREE.BufferGeometry[] = [];
-  if (R80_R7_SIDE_ON) {
-    for (const side of [-1, 1] as const) {
-      const x = side * (opts.bodyHalfWidth - 0.06);
-      const q = sideQuad(
-        side, x, G.sideZ - G.sideW / 2, G.sideZ + G.sideW / 2,
-        G.bandY - G.sideH / 2, G.bandY + G.sideH / 2
-      );
-      sideQuads.push(q);
+  let sideGeo: THREE.BufferGeometry | null = null;
+  let sideMesh: THREE.Mesh | null = null;
+  if (R80_R7_SIDE_ON || !R81_R7_SIDE_SKIP) {
+    const sideQuads: THREE.BufferGeometry[] = [];
+    if (R80_R7_SIDE_ON) {
+      for (const side of [-1, 1] as const) {
+        const x = side * (opts.bodyHalfWidth - 0.06);
+        const q = sideQuad(
+          side, x, G.sideZ - G.sideW / 2, G.sideZ + G.sideW / 2,
+          G.bandY - G.sideH / 2, G.bandY + G.sideH / 2
+        );
+        sideQuads.push(q);
+      }
     }
+    sideGeo = mergeSafe(sideQuads);
+    for (const q of sideQuads) q.dispose();
+    sideMesh = marked(new THREE.Mesh(sideGeo, moduleMat), 'r68_r7_tail_side', 4);
   }
-  const sideGeo = mergeSafe(sideQuads);
-  for (const q of sideQuads) q.dispose();
-  const sideMesh = marked(new THREE.Mesh(sideGeo, moduleMat), 'r68_r7_tail_side', 4);
 
-  const meshes = R80_R7_SIDE_ON
-    ? [moduleMesh, edgeMesh, bandMesh, sideMesh]
-    : [moduleMesh, edgeMesh, bandMesh];
+  const meshes: THREE.Mesh[] = [moduleMesh, edgeMesh, bandMesh];
+  if (R80_R7_SIDE_ON && sideMesh) meshes.push(sideMesh);
   const tri = triOf(moduleGeo) + triOf(edgeGeo) + triOf(bandGeo) +
-    (R80_R7_SIDE_ON ? triOf(sideGeo) : 0);
+    (R80_R7_SIDE_ON && sideGeo ? triOf(sideGeo) : 0);
 
   return {
     meshes,
     mats: [moduleMat],
-    geos: [moduleGeo, edgeGeo, bandGeo, sideGeo],
+    geos: sideGeo
+      ? [moduleGeo, edgeGeo, bandGeo, sideGeo]
+      : [moduleGeo, edgeGeo, bandGeo],
     tex: [],
     budget: {
       dc: meshes.length,

@@ -150,13 +150,21 @@ const HOOD_POSE_OVERRIDE: { y: number; z: number; lookY: number } | null = (() =
   if (!m) return null;
   return { y: Number(m[1]), z: Number(m[2]), lookY: m[3] !== undefined ? Number(m[3]) : 0.95 };
 })();
-/* ── R80 · 机盖机位回退 0.15（用户 11-13：R7「机盖视角又前移了」）──────────────────
- * R65-G8 定案的 (0,1.45,−1.45) 是「真机确认机盖正确入画」的基线；此后多轮改的是车身
- * 几何与内饰，机盖在画面里的占比变化被读作「视角前移」。按用户诉求把相机沿车头方向
- * **回退 0.15m**（−1.45 → −1.30），机盖前缘在画面里下移、车头占比变小。
- * 回滚：`#r80hood=off` ⇒ 逐位回 R65-G8 基线 −1.45。 */
+/* ── R81 · 撤销 R80 机盖回退，恢复 R65-G8 用户真机确认基线 −1.45 ──────────────
+ * R80 曾把 HOOD_Z 由 −1.45 改 −1.30（`#r80hood=off` 回 −1.45）；用户 11-13 真机
+ * 读作「机盖后移 / 机盖不入画」。R65-G8 的 (0,1.45,−1.45)→look(0,0.95,−16) 是
+ * **用户真机确认机盖正确入画**的唯一基线，优先于外部审查组的几何探针结论
+ * （该组按 greenhouse-glass Z=4.43m 推断 −1.45/−1.30/−2.45 全在玻璃舱内，建议
+ *  `#hoodcam=1.2,-2.9,0.8`；该结论与真机基线矛盾，审查人亦建议重截屏核对）。
+ * ⇒ R81 默认恢复 −1.45；−1.30 改由显式开关 `#r81hood=on` 才启用；`#r80hood=off`
+ *   仍强制回 −1.45（「回退基线」语义保留，现与默认一致）；几何探针分歧留
+ *   `#hoodcam=y,z,ly` 扫参钩子原样保留供真机定案，`#hoodcam=off` 语义不变。
+ * 回滚：`#r81hood=on` ⇒ R80 的 −1.30；不带任何钩子 ⇒ R65-G8 的 −1.45。
+ * ⚠ 常量名 R80_HOOD_BACK 保留（护栏三元正则按符号引用），语义反转为默认 false。 */
 const R80_HOOD_BACK: boolean =
-  typeof window === 'undefined' || !/(?:^|[#&])r80hood=off/i.test(window.location.hash);
+  typeof window !== 'undefined' &&
+  /(?:^|[#&])r81hood=on/i.test(window.location.hash) &&
+  !/(?:^|[#&])r80hood=off/i.test(window.location.hash);
 const HOOD_Y = HOOD_POSE_OVERRIDE?.y ?? 1.45;
 const HOOD_Z = HOOD_POSE_OVERRIDE?.z ?? (R80_HOOD_BACK ? -1.30 : -1.45);
 const HOOD_LOOK_Y = HOOD_POSE_OVERRIDE?.lookY ?? 0.95;
@@ -202,6 +210,12 @@ const MODES: Record<CameraMode, (speed: number, portrait: boolean, time: number)
     // 引擎盖正上方（R65：前移到机盖中段、抬过车顶 ~1.6 ⇒ 车顶内壁几何上落到相机背后，
     // V800 headliner-suede / R7 suede-ivory 顶棚不再悬挂入画；机盖面在画面下半铺开）。
     // `#hoodcam=y,z,ly` 扫参 / `#hoodcam=off` 回旧机位 (0,1.45,-1.45)→look(0,0.95,-16)。
+    // R81 二轮 · 图1（image#16「机盖」下半纯黑）诊断留痕：`hood` ∉ INTERIOR_MODES
+    //   ⇒ applyVisibility 收 interior=false ⇒ bodyMesh FrontSide / visible=true、
+    //   applyRoofCull(false) 恢复 full index、cabin 专属件（isPoke/isBlock）全隐
+    //   ⇒ 下半纯黑**不是** cabin 态 DoubleSide 内壁。R80 的 HOOD_Z=−1.30 是该视角
+    //   唯一变化量，R81 已恢复用户真机基线 −1.45；若仍黑，`#r81hood=on` 逐位回
+    //   R80 机位做 A/B，`#hoodcam=y,z,ly` 扫参供真机定案（不臆断黑面归属）。
     POSE.offset.set(0, HOOD_Y, HOOD_Z);
     POSE.look.set(0, HOOD_LOOK_Y, -16);
     POSE.fov = 66;
