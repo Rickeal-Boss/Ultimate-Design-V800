@@ -2650,7 +2650,8 @@ export async function loadExternalShell(
           ? lampRearMeshes.filter((m) => m.name !== 'lamp_rear')
           : (R68_R7_TAIL_ON && car === 'r7')
             ? lampRearMeshes.filter(
-              (m) => m.name !== 'lamp_rear' && m.name !== 'lamp_rear_band'
+              (m) => m.name !== 'lamp_rear' && m.name !== 'lamp_rear_band' &&
+                !(R81_R7_HOUSING_HIDE && R68_R7_TAIL_ON && m.name === 'lamp_rear_housing')
             )
             : lampRearMeshes),
         ...lampFrontMeshes
@@ -3055,5 +3056,14 @@ export const R68_R7_TAIL_ON = !r51HookOff('r68r7tail');
 export const R68_R7_LAMP_ON = !r51HookOff('r68r7lamp');
 export const R68_C2_COVER_ON = !r51HookOff('r68c2cover');
 export const R68_GLASS_OPAQUE_ON = !r51HookOff('r68glassopaque');
+
+/* R81：R7 尾灯「横贯黑大板 + 中央黑方块」P0 修复 —— 把 `lamp_rear_housing`
+ * （2 tri / 1.818m 宽黑平板，构造于 :2493-2506）排除出 lampMeshes 出口数组。
+ * 病根：R7Adapter.ts:1836-1837 每帧 `sm.visible=!interior` 会把壳侧隐藏复位，
+ * 且 housing(z 2.52949) 比 R68 包裹件 modules/edge(2.53209) 更靠前 2.6mm，
+ * 横压红带中央+三黑方中段 ⇒ 中央黑方块第二来源。不进出口 ⇒ Adapter 不挂
+ * scene、也不遍历 ⇒ 等价永久隐藏且不被复位（同 R67 横带思路）。
+ * `#r81r7housing=off` ⇒ 守卫失效，housing 回到出口，R51 观感原样保留。 */
+export const R81_R7_HOUSING_HIDE = !r51HookOff('r81r7housing');
 export const R68_WHEEL_ON = !r51HookOff('r68wheel');
 export const R68_GLDIAG_ON = !r51HookOff('r68gldiag');
