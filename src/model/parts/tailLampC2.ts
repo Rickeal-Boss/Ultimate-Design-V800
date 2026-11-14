@@ -213,7 +213,10 @@ export const C2_ATLAS_SURROUND_COLOR = '#101016';
  *    C2_COVER_FILL_DEPTH、coverYLo..coverYHi 全高），复用 coverMat。本波进深 2cm→6cm（≥0.05）
  *    真正遮住端面斜视角缝隙。+2 quad = +4 tri。
  * 两处各自 `#r71c2side=off` / `#r71c2coverfill=off` ⇒ 逐位回 R70。 */
-/** R71 侧壁外扩量（GLB 局部 m）：侧壁外缘比正面外缘更外凸。 */
+/** R71 侧壁外扩量（GLB 局部 m）：侧壁外缘比正面外缘更外凸。
+ *  ⚠ R82 起此声明值仅作护栏符号基线（保持 0.006），运行时生效值由 R82_C2_OUTSET_ON
+ *  在 builder 内选 0.035（外缘 xWall 0.176→0.205 local = 0.974 world，逼近 body 半宽
+ *  0.997 内 2.3cm，遮住 sq 与 body 间透出 lamp_rear.glb 非流形破面的缝隙）。 */
 export const C2_LAMP_SIDE_OUTSET = 0.006;
 /* ── R80 重定标（用户 11-13 真机：侧面读作「一根黑柱」，不像正面竖灯）────────────
  * R71 把侧面竖灯撑到半高 0.10 local（世界 0.475 → 总高 0.95m），是正面竖灯
@@ -226,12 +229,36 @@ export const C2_LAMP_SIDE_OUTSET = 0.006;
 export const C2_LAMP_SIDE_HALF_H = 0.0373;
 /** R71 盖板侧面填充深度（GLB 局部 m）：沿 +z 从 coverZ 向内，掩端面缝隙。
  *  R71 0.06（世界 0.285m）；R80 再加深到 0.10（世界 0.475m）——用户 11-13 反馈侧面
- *  竖灯周边仍有漏洞/锯齿，加深填充把端面斜视角缝隙整段盖住（零 tri / 零预算变化）。 */
+ *  竖灯周边仍有漏洞/锯齿，加深填充把端面斜视角缝隙整段盖住（零 tri / 零预算变化）。
+ *  ⚠ R82 起此声明值仅作护栏符号基线（保持 0.10），运行时生效值由 R82_C2_FILLDEPTH_ON
+ *  在 builder 内选 0.02（世界 0.095m，黑板面积 −80%）——0.10 的深进深是 B 层悬空主犯，
+ *  平竖面 vs body 曲面失配 ⇒ 前缘浮于车身之上 = 黑板。 */
 export const C2_COVER_FILL_DEPTH = 0.10;
 /** R71 竖灯侧面外扩开关（默认 ON，`#r71c2side=off` 回 R70）。 */
 export const R71_C2_SIDE_ON = !r69HookOff('r71c2side');
 /** R71 盖板侧面黑填充开关（默认 ON，`#r71c2coverfill=off` 回 R70）。 */
 export const R71_C2_COVERFILL_ON = !r69HookOff('r71c2coverfill');
+
+/* ── R82 · C2 尾灯侧面黑盖板 + 锯齿双侧收口（两标量 P0）────────────────────────
+ * 病根（诊断线三层定罪）：R81 绕序 + DoubleSide 只解决可见性(A层)，形状失配(B层)与
+ * GLB 破面(C层)未收口：
+ *   B层悬空主犯 = 盖板侧面黑填充进深过深（0.10 local = 世界 0.475m 的纯色平竖面）
+ *     + 侧面竖灯外缘内缩（xWall 0.176 local = 0.836 world，比 body 半宽 0.997 内缩
+ *     0.161m）。两者都是「平竖面 vs body 曲面失配」⇒ 前缘/边缘浮于车身之上 = 黑板。
+ *   C层锯齿 = sq 与 body 之间缝隙透出 lamp_rear.glb 的 25.84mm 非流形破面。
+ * 收口（零 tri / 零 DC / 零材质 / 零贴图，纯两标量）：
+ *   P1 盖板侧面填充进深 0.10 → 0.02（世界 0.475m→0.095m，黑板面积 −80%）；
+ *   P2 侧面竖灯外缘外推 0.006 → 0.035（xWall 0.176→0.205 local = 0.974 world，
+ *     逼近 body 半宽 0.997 内 2.3cm，遮住 GLB 破面缝隙）。
+ * ⚠ C2_COVER_FILL_DEPTH / C2_LAMP_SIDE_OUTSET 是模块级 export const，被护栏
+ *   （r67_tail_c2 / r68_visual / r81_regression）按符号引用 ⇒ 声明值保持 0.10/0.006
+ *   不动；改为 builder 内用下方开关选「生效值」，护栏读符号值不变、运行时按开关生效。
+ * 回滚：`#r82c2filldepth=off` / `#r82c2outset=off` 各自独立逐位回 R81。
+ */
+/** R82 盖板侧面填充进深收口开关（默认 ON，`#r82c2filldepth=off` 回 0.10）。 */
+export const R82_C2_FILLDEPTH_ON = !r69HookOff('r82c2filldepth');
+/** R82 侧面竖灯外缘外推贴 body 开关（默认 ON，`#r82c2outset=off` 回 0.006）。 */
+export const R82_C2_OUTSET_ON = !r69HookOff('r82c2outset');
 
 /* ── R81 P0-2 · 侧面 quad 绕序左右对称修正（用户「只贴了右侧，左侧依旧没有贴」）────
  * 定罪（叉积实算，常量 C2_LAMP_SIDE_DEPTH=0.03 / C2_COVER_FILL_DEPTH=0.10 均为正）：
@@ -653,6 +680,10 @@ export function buildTailLampC2(opts: C2BuildOptions): C2BuildResult {
   // `C2_GEOM` 逐字不动（r68_visual:247 toEqual 钉死）；`#r69c2lamp=off` ⇒ 全部回 R68 基线。
   const r69 = R69_C2_LAMP_ON;
   const r70Align = R70_C2_ALIGN_ON;
+  // R82 两标量收口：护栏按符号读 C2_COVER_FILL_DEPTH / C2_LAMP_SIDE_OUTSET（值不变），
+  // 运行时在此按开关选「生效值」。`#r82c2filldepth=off` / `#r82c2outset=off` 各自回 R81。
+  const effCoverFillDepth = R82_C2_FILLDEPTH_ON ? 0.02 : C2_COVER_FILL_DEPTH;
+  const effSideOutset = R82_C2_OUTSET_ON ? 0.035 : C2_LAMP_SIDE_OUTSET;
   const tex = makeC2AtlasTexture(tweak);
   const texList: THREE.Texture[] = tex ? [tex] : [];
 
@@ -706,7 +737,8 @@ export function buildTailLampC2(opts: C2BuildOptions): C2BuildResult {
   // BoxGeometry 原点在盒心 ⇒ 平移使「外表面 = coverZ、内表面嵌到 body 尾门面」
   coverBox.translate(0, (G.coverYLo + G.coverYHi) / 2, G.coverZ + coverDepth / 2);
   // R71 盖板侧面黑填充：左右端各加一个 quad（x=±coverHalfW、法线 ±X、z 从 coverZ
-  // 向内 C2_COVER_FILL_DEPTH、coverYLo..coverYHi 全高），复用 coverMat 纯色零新材质，
+  // 向内 effCoverFillDepth（R82 收口 0.10→0.02，世界 0.475m→0.095m，黑板面积 −80%），
+  // coverYLo..coverYHi 全高），复用 coverMat 纯色零新材质，
   // 掩盖薄盒 ±x 端面斜视角缝隙/漏洞。合并进 coverGeo ⇒ 恒 3 mesh / 零 DC / 零新材质。
   let coverGeo: THREE.BufferGeometry = coverBox;
   if (R71_C2_COVERFILL_ON) {
@@ -716,8 +748,8 @@ export function buildTailLampC2(opts: C2BuildOptions): C2BuildResult {
       const nx = side < 0 ? -1 : 1;
       // 顶点：yLo/zIn、yHi/zIn、yLo/coverZ、yHi/coverZ（绕序同侧壁 quad，法线 ±X）
       fq.setAttribute('position', new THREE.Float32BufferAttribute([
-        side * coverHalfW, G.coverYLo, G.coverZ + C2_COVER_FILL_DEPTH,
-        side * coverHalfW, G.coverYHi, G.coverZ + C2_COVER_FILL_DEPTH,
+        side * coverHalfW, G.coverYLo, G.coverZ + effCoverFillDepth,
+        side * coverHalfW, G.coverYHi, G.coverZ + effCoverFillDepth,
         side * coverHalfW, G.coverYLo, G.coverZ,
         side * coverHalfW, G.coverYHi, G.coverZ
       ], 3));
@@ -771,8 +803,9 @@ export function buildTailLampC2(opts: C2BuildOptions): C2BuildResult {
       const zIn = G.faceZ + sideDepth;
       const sq = new THREE.BufferGeometry();
       // 顶点：sideYLo/zIn、sideYHi/zIn、sideYLo/faceZ、sideYHi/faceZ
-      // R71：外缘再外推 C2_LAMP_SIDE_OUTSET ⇒ 侧面竖灯比正面外缘更外凸
-      const xWall = R71_C2_SIDE_ON ? xOut + side * C2_LAMP_SIDE_OUTSET : xOut;
+      // R71：外缘再外推 effSideOutset（R82 收口 0.006→0.035，xWall 逼近 body 半宽内
+      // 2.3cm，遮住 sq 与 body 间透出 GLB 非流形破面的缝隙）⇒ 侧面竖灯比正面外缘更外凸
+      const xWall = R71_C2_SIDE_ON ? xOut + side * effSideOutset : xOut;
       sq.setAttribute('position', new THREE.Float32BufferAttribute([
         xWall, sideYLo, zIn, xWall, sideYHi, zIn,
         xWall, sideYLo, G.faceZ, xWall, sideYHi, G.faceZ

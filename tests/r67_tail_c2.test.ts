@@ -43,6 +43,8 @@ import {
   R69_C2_LAMP_ON,
   R71_C2_COVERFILL_ON,
   R71_C2_SIDE_ON,
+  R82_C2_FILLDEPTH_ON,
+  R82_C2_OUTSET_ON,
   remapUVToRegion,
   resolveC2StripCounts,
   type C2Painter
@@ -476,14 +478,15 @@ describe('R67 · 三段式装配与预算（实测，不沿用旧估算）', () 
       // 侧壁：正面左右各 1 quad(6) + 左右侧壁各 1 quad(6) = 24 顶点（mergeSafe 把 indexed
       // quad 转 non-indexed ⇒ 4 顶点扩成 6；下同）
       expect(facePos.count).toBe(24);
-      // 侧壁 x 外缘比正面外缘更外凸 C2_LAMP_SIDE_OUTSET（读作「侧面竖灯比正面大」）
+      // 侧壁 x 外缘比正面外缘更外凸（R82 收口 0.006→0.035，开关感知，读作「侧面竖灯比正面大」）
       if (R71_C2_SIDE_ON) {
         let maxAbsX = 0;
         for (let i = 0; i < facePos.count; i += 1) {
           maxAbsX = Math.max(maxAbsX, Math.abs(facePos.getX(i)));
         }
+        const outset = R82_C2_OUTSET_ON ? 0.035 : C2_LAMP_SIDE_OUTSET;
         expect(maxAbsX).toBeCloseTo(
-          C2_GEOM.lampCenterX + C2_GEOM.lampHalfW * C2_LAMP_SHRINK_WIDTH + C2_LAMP_SIDE_OUTSET, 4
+          C2_GEOM.lampCenterX + C2_GEOM.lampHalfW * C2_LAMP_SHRINK_WIDTH + outset, 4
         );
       }
     } else {
@@ -492,15 +495,16 @@ describe('R67 · 三段式装配与预算（实测，不沿用旧估算）', () 
     if (R71_C2_COVERFILL_ON) {
       // 盖板：BoxGeometry 12 tri(36 顶点 non-indexed) + 左右填充各 4 顶点 = 44
       expect(coverPos.count).toBe(48);
-      // 填充 z 从 coverZ 向内 C2_COVER_FILL_DEPTH ⇒ z 跨度含 [coverZ, coverZ+depth]
+      // 填充 z 从 coverZ 向内（R82 收口 0.10→0.02，开关感知）⇒ z 跨度含 [coverZ, coverZ+depth]
       let zMin = Infinity;
       let zMax = -Infinity;
       for (let i = 0; i < coverPos.count; i += 1) {
         zMin = Math.min(zMin, coverPos.getZ(i));
         zMax = Math.max(zMax, coverPos.getZ(i));
       }
+      const fillDepth = R82_C2_FILLDEPTH_ON ? 0.02 : C2_COVER_FILL_DEPTH;
       expect(zMin).toBeCloseTo(C2_GEOM.coverZ, 5);
-      expect(zMax).toBeCloseTo(C2_GEOM.coverZ + C2_COVER_FILL_DEPTH, 5);
+      expect(zMax).toBeCloseTo(C2_GEOM.coverZ + fillDepth, 5);
     } else {
       // off：盖板仍为 indexed BoxGeometry（24 顶点 / 12 tri），未与填充 quad 合并
       expect(coverPos.count).toBe(24);
