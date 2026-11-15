@@ -334,6 +334,29 @@ export const C2_UPPEROUTER_XLO_R86 = 0.188;
 /** R86 外上填充上沿 x（GLB 局部 m，|x|）：y=0.366 处，body 0.770w 内收 0.010w 防外凸。 */
 export const C2_UPPEROUTER_XHI_R86 = 0.160;
 
+/* ── R87 · C2 尾灯正面 FRONT 填充收窄贴曲面（治 R86 平竖面悬空黑板）────────────
+ * 主理人定罪（用户 11-15 真机 + 视觉模型）：R86 正面 FRONT quad 是**平竖面** z=faceZ
+ *   (-0.57022)、y∈[0.266,0.346]、x±effCoverHalfW(0.163) —— 但 body 尾门上段是
+ *   **tumblehome 内收曲面**（探针 .qa/r87_c2_front_probe2.py 实测：y=0.266 后向面最外
+ *   z≈-0.5573 → y=0.335 最外 z≈-0.5256，线性内收）。平竖面 z=faceZ 比 body 最外还靠外
+ *   0.013~0.045 local（世界 0.06~0.21m）⇒「从车尾横伸的巨大黑板」盖住 MAEXTRO 字标与
+ *   尾门上半；视觉模型实测锯齿状白边 = 背景透出。
+ * 处方：FRONT quad 改**跟随曲面的倾斜面**——z 与 x 都随 y 内收（下沿 y=coverYHi=0.266、
+ *   上沿 y=0.346），z 不越 faceZ（贴 GLB 灯体/body，不悬空）、x 收窄到漏洞实际宽度、
+ *   不向上撑高（y 顶仍 0.346，封到镀铬带底不压带）。
+ * ⚠ 零 tri 增量（仍左右各一 quad = 4 tri）、恒 3 mesh / 3 DC / 零新材质贴图。
+ * 回滚：沿用 `#r86c2upperouter=off` 逐位回 R84 态（本波不新增开关）。
+ */
+/** R87 正面 FRONT 填充下沿 z（GLB 局部 m）：y=coverYHi=0.266，body 中央区后向面最外
+ *  z=-0.5614（.qa/r87_c2_front_probe3.py 实测）⇒ 外凸 0.0005 local（2.4mm 世界）贴曲面不悬空。 */
+export const C2_FRONT_ZLO_R87 = -0.5619;
+/** R87 正面 FRONT 填充上沿 z（GLB 局部 m）：y=0.346，body 中央区后向面最外 z≈-0.5320
+ *  （y[0.330,0.340] 实测 -0.5315、线性外推 0.346）⇒ 外凸 0.0005 local（2.4mm 世界）贴曲面。 */
+export const C2_FRONT_ZHI_R87 = -0.5325;
+/** R87 正面 FRONT 填充上沿相对下沿的 x 内收量（GLB 局部 m）：跟随 tumblehome 收坡，
+ *  下沿 x=effCoverHalfW(0.163)、上沿 x=effCoverHalfW-0.005=0.158（body 半宽 0.167 内）。 */
+export const C2_FRONT_XIN_R87 = 0.005;
+
 /* ── R84 · C2 尾灯盖板侧面黑填充进深加深（缓解 GLB 锯齿破面露头）────────────────
  * 病根：用户 11-14 C2 尾灯特写截图 —— 凤凰点阵正常，但右侧车身有锯齿破面
  *   （lamp_rear.glb 非流形，按 x 分 48 桶上边缘抖动 25.84mm）。R83 三段收口解决的是
@@ -1032,18 +1055,48 @@ export function buildTailLampC2(opts: C2BuildOptions): C2BuildResult {
   }
 
   // R86 正面 FRONT 填充（补上方侧面外上 quad 漏掉的真实漏洞——正面法线 −Z 那段）：
-  //   z = G.faceZ（−0.57022，与 C2 face 同平面、车身外 2.7mm、不 z-fight）、
   //   y ∈ [G.coverYHi 0.266, 0.346]（封到镀铬带底，不压带）、x ∈ [−effCoverHalfW 0.163,
   //   +effCoverHalfW 0.163]（与正横杆同宽，封住 x±0.155 外侧空缺）。
-  //   法线 −Z 用 makeQuad 索引 [0,1,2,1,3,2]（与现有 face quad 同）；左右各半 quad（分 x≤0 / x≥0）
-  //   共 +4 tri（tri 52 ⇒ 56）。复用 coverMat（DoubleSide 已开不会过曝），merge 进 coverGeo 同桶。
+  // ⚠ R87 主理人定罪修复：原 R86 版是**平竖面** z=G.faceZ(−0.57022)，但 body 尾门上段
+  //   是 tumblehome 内收曲面（探针实测 y=0.266 后向面最外 z=−0.5614 → y=0.346 ≈−0.5320），
+  //   平竖面 z=faceZ 比 body 最外还靠外 0.009~0.038 local ⇒「从车尾横伸的巨大黑板」盖住
+  //   MAEXTRO 字标与尾门上半。本波改**跟随曲面的倾斜面**：
+  //   · z 随 y 内收（下沿 z=C2_FRONT_ZLO_R87=−0.5619、上沿 z=C2_FRONT_ZHI_R87=−0.5325，
+  //     各比 body 最外外凸 0.0005 local = 2.4mm 世界，贴曲面不悬空）；
+  //   · x 随 y 内收（下沿 ±effCoverHalfW、上沿 ±(effCoverHalfW−C2_FRONT_XIN_R87)=±0.158，
+  //     跟随 body 半宽 0.191→0.168 的 tumblehome 收坡，不越 body）；
+  //   · y 顶仍 0.346（不向上撑高，封到镀铬带底不压带）。
+  //   法线 −Z 用 makeQuad 索引 [0,1,2,1,3,2]；左右各半 quad（分 x≤0 / x≥0）
+  //   共 +4 tri（tri 52 ⇒ 56，不变）。复用 coverMat（DoubleSide 已开不会过曝）。
   // ⚠ 保留已生效的侧面外上 quad（用户已确认侧面填了）；本段只补正面缺失。
   if (R86_C2_UPPEROUTER_ON) {
+    const frontYLo = G.coverYHi;
     const frontYHi = 0.346;
-    const frontQuads: THREE.BufferGeometry[] = [
-      makeQuad(-effCoverHalfW, 0, G.coverYHi, frontYHi, G.faceZ),
-      makeQuad(0, effCoverHalfW, G.coverYHi, frontYHi, G.faceZ)
-    ];
+    const xLoF = effCoverHalfW;
+    const xHiF = effCoverHalfW - C2_FRONT_XIN_R87;
+    // 倾斜面 4 顶点：下沿(xLoF, frontYLo, zLo) / 上沿(xHiF, frontYHi, zHi)，
+    // 左右各半（side=−1 用 x≤0、side=+1 用 x≥0），z 随 y 内收贴 body tumblehome。
+    const frontQuads: THREE.BufferGeometry[] = [];
+    for (const side of [-1, 1]) {
+      const fq = new THREE.BufferGeometry();
+      const x0 = side < 0 ? -xLoF : 0;  // 下沿内 x（靠车中）
+      const x1 = side < 0 ? 0 : xLoF;   // 下沿外 x（靠外侧）
+      const xt0 = side < 0 ? -xHiF : 0; // 上沿内 x（靠车中）
+      const xt1 = side < 0 ? 0 : xHiF;  // 上沿外 x（靠外侧）
+      fq.setAttribute('position', new THREE.Float32BufferAttribute([
+        x0, frontYLo, C2_FRONT_ZLO_R87,
+        x1, frontYLo, C2_FRONT_ZLO_R87,
+        xt0, frontYHi, C2_FRONT_ZHI_R87,
+        xt1, frontYHi, C2_FRONT_ZHI_R87
+      ], 3));
+      // 倾斜面法线（−Z 主向 + 上倾）：z 随 y 内收 ⇒ 法线略向 +y 倾，近似 (0,0.28,−0.96)
+      fq.setAttribute('normal', new THREE.Float32BufferAttribute([
+        0, 0.28, -0.96, 0, 0.28, -0.96, 0, 0.28, -0.96, 0, 0.28, -0.96
+      ], 3));
+      fq.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 0, 1, 1, 1], 2));
+      fq.setIndex([0, 1, 2, 1, 3, 2]);
+      frontQuads.push(fq);
+    }
     coverGeo = mergeSafe([coverGeo, ...frontQuads]);
     for (const q of frontQuads) q.dispose();
   }

@@ -277,6 +277,24 @@ const R82_V800_ROOF_EXT_ON: boolean =
  *   R84 态（中段前缘 +0.575、两块 ext-front 照建）。模块顶层求值一次。 */
 const R85_V800_BOARDZ_ON: boolean =
   typeof window === 'undefined' || !/(?:^|[#&])r85v800boardz=off/i.test(window.location.hash);
+/* R88：顶棚黑板根治（主驾前视上缘「深色硬边矩形板」）。
+ * 几何定论（dev-v800-cabin，基于 r81_review_capture 实拍 + 审查消去法 bbox）：
+ *   · 主驾机位 CABIN_EYE=[-0.40,1.34,-0.72]、CABIN_TARGET=[-0.30,0.98,-9] ⇒ 视线朝 **世界 -z**；
+ *   · 顶棚板 mk() 坐标即世界坐标（mk 内部 worldToLocal），故中段 cabin-roof-carpet
+ *     (z[-1.525,-0.30]) + ext-rear (z[-2.609,-1.525]) 全部位于主驾视线 **-z 前方**；
+ *   · 前伸量：中段前缘 z=-1.525 超前眼点 0.805m（仰角 atan(0.328/0.805)≈22° ⇒ 屏高
+ *     y≈139），ext-rear 前缘 z=-2.609 超前 1.89m（仰角≈10° ⇒ y≈284）—— 消去法 bbox
+ *     y[134,267] 与此吻合，即「黑板」= 中段前伸 + ext-rear 前伸两件深色板的上视投影。
+ *   · R85/R86 只收了中段 **+z** 端（+0.575→-0.30），那是主驾 **后方** 缘（背向视线），
+ *     对前伸遮挡无效 ⇒ 用户 11-14 仍见黑板（与 R87 交接「R85 收错边」一致）。
+ * 处方（默认 ON）：① 中段前缘（-z 端）z=-1.525 → -1.00，前伸 0.805m→0.28m，仰角
+ *   49.5°>视框上缘 31.5° ⇒ 完全退出主驾前视画面；② ext-rear（-z 最前伸、主犯板）不建。
+ *   代价：前挡上方顶棚留透空（主驾抬头见天，优于黑板遮挡前挡视野；R82 的透空本就要靠
+ *   ext 件补，但补片即黑板，二者不可兼得，按用户投诉优先取「不遮视野」）。
+ *   后段（+z）与 ext-front（R85 ON 跳过）行为不变。
+ * 回滚：`#r88cabinroof=off` ⇒ 逐位回 R87（中段 z[-1.525,-0.30]、ext-rear 照建）。 */
+const R88_V800_CABINROOF_ON: boolean =
+  typeof window === 'undefined' || !/(?:^|[#&])r88cabinroof=off/i.test(window.location.hash);
 /* ══ W2批4 · 透明件渲染排序治理 ═══════════════════════════════════════════════
  * 背景：车内近景透明件历史上只设 `depthWrite=false` 却无 `renderOrder` ⇒ three.js
  * 透明队列按相机距离排序 ⇒ 近景玻璃/贴花闪烁、透出关系错乱。本批给它们钉显式
@@ -4633,9 +4651,15 @@ const R48_LAMP_TONE: boolean =
      *   cabin 态 windshield 被隐藏后视线穿玻璃位直接撞上深色(0x26221f)BoxGeometry = 黑板。
      *   R85 收到 z=+0.50 仍不够（玻璃起点 z≈+0.55）。R86 进一步收到 z=-0.30（玻璃起点后
      *   ~0.85m），彻底不压玻璃。ext-front 跳过 / ext-rear + roofExtMat 放行均不动。
-     *   回滚 `#r85v800boardz=off` ⇒ 逐位回 R84（前缘 +0.575）。 */
-    const roofMidD = R85_V800_BOARDZ_ON ? 1.225 : 2.15;  // 前缘 -0.30 : +0.575，后缘恒 -1.525
-    const roofMidZ = R85_V800_BOARDZ_ON ? -0.9125 : -0.45; // =(-1.525+(-0.30))/2 : (-1.525+0.575)/2
+     *   回滚 `#r85v800boardz=off` ⇒ 逐位回 R84（前缘 +0.575）。
+     *   ⚠ R85/R86 收的是 **+z** 端 = 主驾背向视线侧，对前伸遮挡无效（见 R88 块注）。
+     * R88：再收 **-z** 端（主驾前方/前挡侧）前缘 —— z=-1.525 → -1.00，把前伸量
+     *   0.805m→0.28m，使中段板彻底退出主驾前视画面（仰角 49.5° > 视框上缘 31.5°）。
+     *   回滚 `#r88cabinroof=off` ⇒ 回 R87（-z 前缘 -1.525）。 */
+    const roofMidD = R85_V800_BOARDZ_ON ? (R88_V800_CABINROOF_ON ? 0.70 : 1.225) : 2.15;
+    //  前缘 -1.00(R88) : -0.30(R87)，后缘恒 -0.30 —— z[-1.00,-0.30] : z[-1.525,-0.30] : z[-1.525,+0.575]
+    const roofMidZ = R85_V800_BOARDZ_ON ? (R88_V800_CABINROOF_ON ? -0.65 : -0.9125) : -0.45;
+    //  =(-1.00+-0.30)/2 : (-1.525+-0.30)/2 : (-1.525+0.575)/2
     mk(1.86, roofMidD, 1.668, roofMidZ, 'cabin-roof-carpet', 0.012,
        (R84_V800_ROOFMID_ON && roofExtMat) ? roofExtMat : carpetMat); // 舱段：凹槽顶面
     /* R82：顶棚补覆盖 —— 补齐 cabin 态被剔朝上外表面(z[-2.609,+1.313]) 相对中段 carpet
@@ -4667,7 +4691,11 @@ const R48_LAMP_TONE: boolean =
       });
       roofExtMat.userData.sculptMaterial = { id: 'carpet' };
       // 后段 z[-2.609,-1.525]：外皮近平顶 min 1.662 ⇒ 单块平顶 1.648（1.648+0.006=1.654 < 1.662）
-      mk(1.86, 1.084, 1.648 - 0.006, -2.067, 'cabin-roof-carpet-ext-rear', 0.012, roofExtMat);
+      // R88：ext-rear 是主驾前视上缘「黑板」主犯板（-z 最前伸 1.89m，见 R88 块注），默认不建；
+      //   `#r88cabinroof=off` ⇒ 回 R87 照建。z[-2.609,-1.525] 留透空（优于黑板遮前挡）。
+      if (!R88_V800_CABINROOF_ON) {
+        mk(1.86, 1.084, 1.648 - 0.006, -2.067, 'cabin-roof-carpet-ext-rear', 0.012, roofExtMat);
+      }
       // 前段 z[+0.575,+1.20]：整段落在挡风玻璃投影区上方 —— R85 ON 跳过（覆盖玻璃区即主驾前挡
       //   黑板本身）；R85 off（`#r85v800boardz=off`）回 R84 照建，治前段抬头看穿。
       if (!R85_V800_BOARDZ_ON) {

@@ -327,15 +327,23 @@ describe('R81 · 2. P0-2 C2 左右对称：quad 几何法线分别朝局部 ±X'
     expect(c2).toContain('r81c2side=off');
     // 四处调用点（盖板侧面填充 / 侧面竖灯大面 / R84 上半区黑填充 / R86 外上填充），一处都不能漏
     expect(c2.match(/setIndex\(c2SideWindingIndex\(side\)\)/g) ?? []).toHaveLength(4);
-    const fill = slice(c2, 'if (R71_C2_COVERFILL_ON) {', 'const coverMesh =');
+    // R88：fill 切片收窄到 R71 端面侧壁循环体本身（890→912），因 R88 新增正面填充 quad
+    //   （1072→1102，front-facing 法线 −Z 主向）合法使用硬编码 index [0,1,2,1,3,2]，
+    //   若仍以 `const coverMesh =` 为界会把该 front 块包进 fill ⇒ 误报硬编码。
+    const fill = slice(c2, 'if (R71_C2_COVERFILL_ON) {', 'coverGeo = mergeSafe([coverBox, ...fillQuads])');
     const side = slice(c2, 'const faceQuads: THREE.BufferGeometry[] = [];', 'const faceGeo =');
     expect(fill).toContain('for (const side of [-1, 1])');
     expect(fill).toContain('setIndex(c2SideWindingIndex(side))');
     expect(side).toContain('for (const side of [-1, 1])');
     expect(side).toContain('setIndex(c2SideWindingIndex(side))');
-    // 两处循环体内不得残留写死 index（正面 makeQuad 的写死 index 不在此切片内）
+    // 两处侧壁循环体内不得残留写死 index（正面 makeQuad 的写死 index 不在此切片内）
     expect(fill).not.toContain('setIndex([0, 1, 2, 1, 3, 2])');
     expect(side).not.toContain('setIndex([0, 1, 2, 1, 3, 2])');
+    // R88：正面填充 quad 合法锁定（front-facing 硬编码绕序 = 正确，非 ±X side 面）
+    const front = slice(c2, 'const frontQuads: THREE.BufferGeometry[] = [];', 'coverGeo = mergeSafe([coverGeo, ...frontQuads])');
+    expect(front).toContain('setIndex([0, 1, 2, 1, 3, 2])');
+    expect(front).toContain('C2_FRONT_ZLO_R87');
+    expect(front).toContain('C2_FRONT_ZHI_R87');
     // 只翻 index ⇒ position/uv/normal 数据逐位不动（凤凰点阵不镜像）
     expect(c2).toContain('remapUVToRegion(sq, side < 0 ? 0 : 0.5, side < 0 ? 0.5 : 1, 0, 1);');
     expect(C2_GEOM.faceZ).toBeLessThan(C2_GEOM.coverZ); // C2_GEOM 全字段未被本波改动

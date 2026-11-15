@@ -56,8 +56,10 @@ export const R7_TAIL_WRAP_GEOM = {
   moduleSize: 0.30,
   /** 尾灯带中心高（世界 m）：R7 默认 coverY = 0.240 × 4.323 = 1.0375 */
   bandY: 1.0375,
-  /** R7 既有 `lamp_rear_band` 高（世界 m），缩小版沿用 */
-  bandHeight: 0.055,
+  /** R7 既有 `lamp_rear_band` 高（世界 m），缩小版沿用。
+   *  R87 视觉修复：红带被 modules 挤压成细线（用户「红带过细」），加宽至
+   *  0.075 = 面板高(0.30) 的 1/4，让「红—黑（LUXEED）—红」三段式有视觉重量。 */
+  bandHeight: 0.075,
   /** R7 既有 `lamp_rear_band` 宽（世界 m） */
   bandWidthBase: 1.86,
   /** 用户「稍微缩小」基准（主理人官图标定 1:4.5–5 竖灯比例后取 0.75） */
@@ -78,8 +80,11 @@ export const R7_TAIL_WRAP_GEOM = {
  * ⇒ 本波以 2.54409 为唯一 z 基准，不再用 bodyMaxZ+0.010。
  */
 export const R7_TAIL_BAND_Z_COEFF = 0.5885;
-/** 三黑模块相对默认可见最外层的内缩量（m）：读作灯罩内构件，不「前浮」。 */
-export const R7_WRAP_MODULE_INSET_M = 0.012;
+/** 三黑模块相对默认可见最外层的内缩量（m）：读作灯罩内构件，不「前浮」。
+ *  R87 视觉修复：原 0.012 ⇒ 模块落 2.53209（距车身 12.6mm），四边平贴曲面
+ *  时读作「面板与车身有缝隙 / 两侧露底」。收紧至 0.019 ⇒ modulePlane 落到
+ *  minOut 地板 2.5254（距车身仅 6mm，R7_WRAP_MIN_OUT_M 下限），贴面无缝隙。 */
+export const R7_WRAP_MODULE_INSET_M = 0.019;
 /** 相对尾门基准面（bodyMaxZ）的最小外凸量（m），防被 body 自遮挡（R49 教训②）。 */
 export const R7_WRAP_MIN_OUT_M = 0.006;
 
@@ -208,9 +213,10 @@ export function buildR7TailWrap(opts: R7TailWrapOptions): R7TailWrapResult {
   //   把 GLB 非流形边（上边缘抖动 20.06mm 世界）也压进黑面之下，不再露锯齿。
   const moduleGeos: THREE.BufferGeometry[] = [];
   const s = G.moduleSize;
-  // R86 B-1：band 占据的中央横向槽半高（= bandHeight/2 = 0.0275）。模块拆上/下两半让开
-  //   这条槽，band（zBand，比模块更靠车尾外侧）在槽内自身封闭 ⇒ 正后方可见 band 中央
-  //   （LUXEED 字标 + 中段红带）；缺口破面由 上半块/band/下半块 三段无缝覆盖（见函数头注）。
+  // R86 B-1：band 占据的中央横向槽半高（= bandHeight/2，R87 加宽后 = 0.0375）。
+  //   模块拆上/下两半让开这条槽，band（zBand，比模块更靠车尾外侧）在槽内自身封闭 ⇒
+  //   正后方可见 band 中央（LUXEED 字标 + 中段红带）；缺口破面由 上半块/band/下半块
+  //   三段无缝覆盖（见函数头注）。band 位于上黑模块「下缘」，水平呈 红—黑(LUXEED)—红。
   const slotHalf = G.bandHeight / 2;
   for (const cx of [-s, 0, s]) {
     if (R86_R7_TAIL_ON) {

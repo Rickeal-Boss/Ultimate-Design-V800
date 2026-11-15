@@ -162,7 +162,7 @@ const R67_GUARD_SHA256 = '506f00f5a0b813c2afb0ea1ad0ef63ac76a44c1cf57f8c40d1b666
  *  动态 near 推出触发半径 STEER_NEAR_BOOST_RADIUS_M 0.60→0.30 + 下限 STEER_NEAR_BOOST_MIN
  *  0.245→0.10（旧 0.60 触发半径覆盖正常 cabin 眼点 0.55-0.65 ⇒ 每帧把 near 推到 0.285-0.5 裁掉
  *  整个座舱近景 = 整屏黑），`#r83steerharden=off` 回滚语义不变，属预期改动。 */
-const ADAPTER_SHA256 = '1ab356b2181ea698e0aaf14339475670b72d8804783be0fbc63351e0e566c11d';
+const ADAPTER_SHA256 = '5867cae9824d308b3f6a3a48d85811dac68601c2bcf66fef681f98b4b64e8f94';
 /* ═══ R81 P1/P2 · 冻结基线更新（cam-gate 线实测口径）═════
  * 本波 V800Adapter.ts 两处改动（均属预期改动，故更新本基线）：
  *   · P1 机盖(hood)视角下半屏纯黑根治：shell body GLB 在引擎盖区（world z −1.1~−1.77）
