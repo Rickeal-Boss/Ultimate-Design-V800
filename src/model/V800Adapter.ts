@@ -5385,7 +5385,9 @@ const R48_LAMP_TONE: boolean =
       let v = true;
       if (e.isPoke) v = v && interior;                       // ④ poke：cabin 显、外景藏
       if (e.isBlock) v = v && (interior || !r47CabinFix);    // cabin 方块：外景藏（#r47cabin=off 不藏）
-      if (e.windshield) v = v && !interior;                  // ① 风挡：cabin 藏（R14）
+      // ① 风挡：R87 撤销 cabin 硬隐藏 —— 保留透射玻璃（最终可见的风挡是 shell glass，
+      //   cabin 态由 setGlassOpaque 置 transparent），配合 scene.background 看穿到天空/道路，
+      //   根治「前挡黑板」。程序化 glass-clear 材质本就被 pass-1 按 kept=false 关掉，无需再隐藏。
       if (e.pair) {                                          // ② 内舱暗面：换材质 + 显隐
         e.mesh.material = interior ? e.pair.interior : e.pair.exterior; // 存「用哪支克隆」
         v = interior ? false : !exteriorShellReady;          // 外景：外部壳接手 ⇒ 程序化外壳隐藏
@@ -5415,10 +5417,13 @@ const R48_LAMP_TONE: boolean =
       //   · 图2「整屏黑 + 右侧竖带」根因是 R80 一刀切剔 142,282 tri（含 59,824 骨架），
       //     根治在 roofCull 判据（剔 73,262 / 保回 69,020），不在本写入点。
       applyRoofCull(interior && r47CabinFix);
-      // ②：glass/lamp 语义件与外壳同显隐
-      for (const sm of [...shellHandle.glassMeshes, ...shellHandle.lampMeshes]) {
-        sm.visible = !interior;
-      }
+      // ②：glass/lamp 语义件显隐分离（R87 根治「前挡黑板」）
+      //   · 玻璃（greenhouse/sunroof/风挡，glass-dark）保留可见：cabin 态由 setGlassOpaque
+      //     置 transparent，transmission 采样天空球/背景 ⇒ 看穿到天空/道路，杜绝风挡/车顶
+      //     玻璃区域露黑底；外景态仍按 setGlassOpaque 走隐私玻璃(opacity=1)。
+      //   · 灯组仍仅外景显（cabin 看不到车外灯组，避免内透）。
+      for (const sm of shellHandle.glassMeshes) sm.visible = true;
+      for (const sm of shellHandle.lampMeshes) sm.visible = !interior;
       // V800 独有：迎宾光毯 base 显隐（外景显）。update() 随后按速度门控逐帧覆盖。
       if (welcomeMesh) welcomeMesh.visible = !interior;
     }

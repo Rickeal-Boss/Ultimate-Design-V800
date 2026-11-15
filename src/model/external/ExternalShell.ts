@@ -2652,17 +2652,14 @@ export async function loadExternalShell(
             ? lampRearMeshes.filter(
               (m) => m.name !== 'lamp_rear' && m.name !== 'lamp_rear_band' &&
                 !(R81_R7_HOUSING_HIDE && R68_R7_TAIL_ON && m.name === 'lamp_rear_housing') &&
-                /* R83→R84：R7 尾灯中央暗方块运行时止血 —— 把 R68 程序化包裹的
-                 * `r68_r7_tail_modules` / `r68_r7_tail_edge` 两个纯装饰覆盖 quad 排除出出口
-                 * （构造于 r7TailWrap.ts，:2563 并入本数组）。
-                 * 【R84 裁决】band 是中央唯一红条供给，R83 一并排除后 GLB `lamp_rear`
-                 * 中央缺口（x∈[-0.418,+0.416]，22 桶零顶点）直接露出 body 白漆 =
-                 * 用户读作「尾灯贴图消失 / 中央一块白」的真因。modules/edge 才是暗方块
-                 * 主犯，保留排除。band 复用 lampRearMat ⇒ 刹车联动不受影响。
-                 * 不进出口 ⇒ Adapter 不挂 scene、不被 setPaintShadow 复位（同 R81 housing）。
-                 * 米色翼片锯齿是 GLB 资产缺陷（非流形），转资产线处理，不在此修。
-                 * `#r83r7tailcenter=off` ⇒ 守卫失效，modules/edge 回出口，观感回 R82；
-                 * band 始终在出口，不受此开关影响。 */
+                /* R83→R86：R7 尾灯中央覆盖件出口门控。
+                 * `r68_r7_tail_modules` / `r68_r7_tail_edge`（构造于 r7TailWrap.ts，并入本数组）
+                 * 与 `r68_r7_tail_band` 三段并存 = 「黑面板+红带+LUXEED」。
+                 * 【R86 · 病B 修复】R83 曾把 modules/edge 排除出出口 ⇒ 只剩 band 浮在破面缺口 =
+                 * 用户读作「一条红带」。现 R83_R7_TAILCENTER_HIDE 默认 false（见 :3092），
+                 * modules/edge **默认回到出口**；仅 `#r83r7tailcenter=off` 才排除（回滚对照）。
+                 * band 复用 lampRearMat ⇒ 刹车联动不受影响。
+                 * 米色翼片锯齿是 GLB 资产缺陷（非流形），转资产线处理，不在此修。 */
                 !(R83_R7_TAILCENTER_HIDE && R68_R7_TAIL_ON &&
                   (m.name === 'r68_r7_tail_modules' || m.name === 'r68_r7_tail_edge'))
             )
@@ -3088,7 +3085,10 @@ export const R81_R7_HOUSING_HIDE = !r51HookOff('r81r7housing');
  * GLB 洞，只是盖在腔口前），不进出口 ⇒ Adapter 不挂 scene、也不遍历 ⇒ 等价永久隐藏且
  * 不被 setPaintShadow 的 `sm.visible=!interior` 复位（同 R67 横带 / R81 housing 思路）。
  * ⚠ 米色翼片锯齿是 lamp_rear.glb 资产缺陷，运行时不可修，本波**不处理**（预期残留）。
- * `#r83r7tailcenter=off` ⇒ 守卫失效，三覆盖件回到出口，R82 观感原样保留。 */
-export const R83_R7_TAILCENTER_HIDE = !r51HookOff('r83r7tailcenter');
+ * 【R86 · 病B 修复】默认改为 **false**（模块/封边**默认回到出口**，与 band 三段并存 =
+ *   「黑面板+红带+LUXEED」）；开关语义保留：`#r83r7tailcenter=off` ⇒ r51HookOff=true ⇒
+ *   置 true ⇒ 把 `r68_r7_tail_modules`/`r68_r7_tail_edge` 排除出出口（仅剩 band 浮破面 =
+ *   旧红带穿帮），供回滚对照；无 hash / `#r83r7tailcenter=on` 均不隐藏。 */
+export const R83_R7_TAILCENTER_HIDE = r51HookOff('r83r7tailcenter');
 export const R68_WHEEL_ON = !r51HookOff('r68wheel');
 export const R68_GLDIAG_ON = !r51HookOff('r68gldiag');

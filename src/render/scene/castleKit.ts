@@ -147,6 +147,35 @@ export function isLowDetail(): boolean {
 const R86_CITY_TRIM_ON =
   typeof window === 'undefined' || !/(?:^|[#&])r86citytrim=off/i.test(window.location.hash);
 
+/**
+ * R86 深化 · **城内后排塔体「基段截断」遮挡线**（前排殿/连墙顶高 ~17.3m）。
+ * `makeInnerCity` 内后排塔体（②~⑤ 排 + 院落）把 box 基段从 0 抬到 OCC，仅留
+ * OCC 以上残段；y_max ≤ OCC 整删、y_min ≥ OCC 整保、跨 OCC 截到 OCC。
+ * 折进现有 R86_CITY_TRIM_ON（**不另开开关**：R86 关 ⇒ 原样全高；开 ⇒ 截断），
+ * 不开单一开关面之外的新开关。box 几何固定 12 tri，截断本身不省 tri，省的是整段
+ * 落在 OCC 以下被删的 box；目的在去掉前排遮挡后仍露出的「悬空塔基」，并修正 R86
+ * 一刀切把可见中段(17~44m)也删掉导致的「悬空帽」天际线（如奇数块第四排塔身）。
+ */
+const R86_OCC_LINE = 17.3;
+/** 后排塔体 box 基段截断：返回截断后几何，或 null（整段被前排遮挡 ⇒ 整删）。 */
+function truncCityBox(
+  kind: CastleKind | 'dark',
+  w: number,
+  h: number,
+  d: number,
+  cx: number,
+  cy: number,
+  cz: number
+): THREE.BufferGeometry | null {
+  if (!R86_CITY_TRIM_ON) return box(kind, w, h, d, cx, cy, cz); // 回滚：原样全高
+  const yMin = cy - h / 2;
+  const yMax = cy + h / 2;
+  if (yMax <= R86_OCC_LINE) return null; // 整段落在 OCC 以下 ⇒ 整删
+  if (yMin >= R86_OCC_LINE) return box(kind, w, h, d, cx, cy, cz); // 整段在 OCC 以上 ⇒ 整保
+  const nh = yMax - R86_OCC_LINE; // 跨 OCC ⇒ 仅留 OCC 以上残段
+  return box(kind, w, nh, d, cx, R86_OCC_LINE + nh / 2, cz);
+}
+
 const TILE: Record<StoneKind, number> = { ...STONE_TILE_METERS };
 
 /** castleKit 形体族的贴图口径（ashlar / wall / gold 均属 StoneKind） */
@@ -3389,8 +3418,15 @@ export function makeInnerCity(): StoneBuckets {
           );
         }
         for (const [oz, th] of r1.towers) {
-          b.ashlar.push(put(box('ashlar', r1w + 2, 1.4, 13, r1x, 0.7, oz)));
-          b.ashlar.push(put(box('ashlar', r1w, th - 1.4 - th * 0.2, 11, r1x, 1.4 + (th - 1.4 - th * 0.2) / 2, oz)));
+          // R86 深化：后排 4 塔基段截到 OCC（基段 0→1.4 整删、塔身 1.4→th*0.8 截到 17.3）
+          {
+            const g0 = truncCityBox('ashlar', r1w + 2, 1.4, 13, r1x, 0.7, oz);
+            if (g0) b.ashlar.push(put(g0));
+          }
+          {
+            const g1 = truncCityBox('ashlar', r1w, th - 1.4 - th * 0.2, 11, r1x, 1.4 + (th - 1.4 - th * 0.2) / 2, oz);
+            if (g1) b.ashlar.push(put(g1));
+          }
           b.ashlar.push(put(box('ashlar', r1w + 1.6, 1, 12.6, r1x, th - th * 0.2 + 0.1, oz)));
           // R32-A2：后排塔尖披顶 → roof 桶（瓦顶）
           extra(b, 'roof', put(spire('roof', 5.4, 0, th * 0.2, 8, r1x, th - th * 0.2 + 0.6, oz, Math.PI / 8)));
@@ -3503,20 +3539,28 @@ export function makeInnerCity(): StoneBuckets {
 
           if (motif === 0) {
             // ① 后殿半圆室（apex 朝街）+ 圣器室侧殿
+            // R86 深化：后殿半圆室基段截到 OCC（减高 OCC 并上移 OCC；roofRise 保留原值
+            // ⇒ 锥顶仍落在原高 cy.apse.h + rise，仅 0→OCC 鼓身与基座被前排遮挡段整删）
             pour(
               b,
               mapParts(
-                apseDrum({ r: cy.apse.r, h: cy.apse.h, segs: 12, roofRise: cy.apse.h * 0.26 }),
-                (g) => put(g.translate(cy.apse.x, 0, 0))
+                apseDrum({
+                  r: cy.apse.r,
+                  h: R86_CITY_TRIM_ON ? cy.apse.h - R86_OCC_LINE : cy.apse.h,
+                  segs: 12,
+                  roofRise: cy.apse.h * 0.26
+                }),
+                (g) => put(g.translate(cy.apse.x, R86_CITY_TRIM_ON ? R86_OCC_LINE : 0, 0))
               )
             );
             annex(R33.annexX, blockLen * 0.32, variant * 1.1);
           } else if (motif === 1) {
             // ② 钟楼 + 章室（低坡侧殿，与钟楼形成「高塔-低屋」层次）
+            // R86 深化：钟楼基段截到 OCC（减高 OCC 并上移 OCC；顶部四坡瓦顶仍落原高）
             pour(
               b,
-              mapParts(bellTower({ w: cy.bell.w, totalH: cy.bell.h }), (g) =>
-                put(g.translate(cy.bell.x, 0, 0))
+              mapParts(bellTower({ w: cy.bell.w, totalH: R86_CITY_TRIM_ON ? cy.bell.h - R86_OCC_LINE : cy.bell.h }), (g) =>
+                put(g.translate(cy.bell.x, R86_CITY_TRIM_ON ? R86_OCC_LINE : 0, 0))
               )
             );
             annex(R33.annexX, -blockLen * 0.32, variant * 1.2);
@@ -3572,8 +3616,15 @@ export function makeInnerCity(): StoneBuckets {
             {
               const tx = cy.xIn + 5.0;
               const tz = blockLen * 0.3;
-              extra(b, 'marble', put(box('marble', 5.0, 1.0, 5.0, tx, 0.5, tz)));
-              b.ashlar.push(put(box('ashlar', 4.2, 48, 4.2, tx, 24, tz)));
+              // R86 深化：院内楼梯塔基段截到 OCC（marble 基座 0→1.0 整删、塔身 0→48 截到 17.3）
+              {
+                const g0 = truncCityBox('marble', 5.0, 1.0, 5.0, tx, 0.5, tz);
+                if (g0) extra(b, 'marble', put(g0));
+              }
+              {
+                const g1 = truncCityBox('ashlar', 4.2, 48, 4.2, tx, 24, tz);
+                if (g1) b.ashlar.push(put(g1));
+              }
               extra(b, 'roof', put(spire('roof', 3.4, 0, 5.4, 8, tx, 48, tz, Math.PI / 8)));
               for (const wy of [14, 30]) {
                 const pane = new THREE.PlaneGeometry(1.6, 4.2);
@@ -3629,8 +3680,15 @@ export function makeInnerCity(): StoneBuckets {
             } // end R86 trim guard (motif3 twin)
             // 中央烟囱/灯笼塔：高 22m，顶部小瓦帽 + 3 条 glass 光缝
             const sx = R33.annexX + 1.2;
-            extra(b, 'marble', put(box('marble', R33.stackW + 0.8, 1.0, R33.stackW + 0.8, sx, 0.5, 0)));
-            b.ashlar.push(put(box('ashlar', R33.stackW, R33.stackH, R33.stackW, sx, R33.stackH / 2, 0)));
+            // R86 深化：中央烟囱/灯笼塔基段截到 OCC（marble 基座 0→1.0 整删、塔身 0→46 截到 17.3）
+            {
+              const g0 = truncCityBox('marble', R33.stackW + 0.8, 1.0, R33.stackW + 0.8, sx, 0.5, 0);
+              if (g0) extra(b, 'marble', put(g0));
+            }
+            {
+              const g1 = truncCityBox('ashlar', R33.stackW, R33.stackH, R33.stackW, sx, R33.stackH / 2, 0);
+              if (g1) b.ashlar.push(put(g1));
+            }
             extra(b, 'roof', put(spire('roof', R33.stackW * 0.8, 0, 5.6, 8, sx, R33.stackH, 0, Math.PI / 8)));
             b.gold.push(put(spire('gold', 0.24, 0, 1.2, 4, sx, R33.stackH + 5.5, 0)));
             for (const wz of [-1.5, 0, 1.5]) {
@@ -3652,7 +3710,11 @@ export function makeInnerCity(): StoneBuckets {
           b.wall.push(put(box('wall', r2w, r2.wallH, blockLen, r2x, r2.wallH / 2, 0)));
         }
         for (const oz of [-11, 11]) {
-          b.ashlar.push(put(box('ashlar', r2w, r2.towerH, 14, r2x, r2.towerH / 2, oz)));
+          // R86 深化：第三排双塔塔身(0→82)基段截到 OCC（顶盖 82→83.2 在 OCC 以上整保，不动）
+          {
+            const g = truncCityBox('ashlar', r2w, r2.towerH, 14, r2x, r2.towerH / 2, oz);
+            if (g) b.ashlar.push(put(g));
+          }
           b.ashlar.push(put(box('ashlar', r2w + 2, 1.2, 16, r2x, r2.towerH + 0.6, oz)));
           // R32-A2 桶位纪律：第三排（远景）塔尖披顶**保留 ashlar**（同上，不入不可剔除桶）
           b.ashlar.push(put(spire('ashlar', 6.5, 0, 15, 8, r2x, r2.towerH + 1.2, oz, Math.PI / 8)));
@@ -3734,7 +3796,11 @@ export function makeInnerCity(): StoneBuckets {
             b.wall.push(put(box('wall', r4w, R31_ROW4.wallH, blockLen, r4x, R31_ROW4.wallH / 2, 0)));
           }
           for (const oz of [-14, 14]) {
-            b.ashlar.push(put(box('ashlar', r4w, R31_ROW4.towerH, 16, r4x, R31_ROW4.towerH / 2, oz)));
+            // R86 深化：第四排偶块双塔塔身(0→88)基段截到 OCC（顶盖在 OCC 以上整保，不动）
+            {
+              const g = truncCityBox('ashlar', r4w, R31_ROW4.towerH, 16, r4x, R31_ROW4.towerH / 2, oz);
+              if (g) b.ashlar.push(put(g));
+            }
             b.ashlar.push(put(box('ashlar', r4w + 2, 1.2, 18, r4x, R31_ROW4.towerH + 0.6, oz)));
             // R32-A2 桶位纪律：第四排（远景）塔尖披顶**保留 ashlar**
             b.ashlar.push(put(spire('ashlar', 6.5, 0, 14, 8, r4x, R31_ROW4.towerH + 1.2, oz, Math.PI / 8)));
@@ -3756,9 +3822,15 @@ export function makeInnerCity(): StoneBuckets {
           // 塔身顶盖，正面被前排遮挡。下方 spire/窗玻璃塔冠保留。
           if (!R86_CITY_TRIM_ON) {
             b.wall.push(put(box('wall', r4w, R31_ROW4.wallH - 8, blockLen, r4x, (R31_ROW4.wallH - 8) / 2, 0)));
-            b.ashlar.push(put(box('ashlar', r4w, 58, 12, r4x, 29, 0)));
-            b.ashlar.push(put(box('ashlar', r4w + 2, 1.2, 14, r4x, 58.6, 0)));
           }
+          // R86 深化：奇数块第四排塔身(0→58)不再整删（否则 spire 悬空成「悬空帽」）；
+          // 改为基段截到 OCC，仅留 17.3→58 可见中段+冠基。塔身顶盖(58→59.2)在 OCC
+          // 以上始终可见，移出守卫保留（与偶块第四排顶盖同口径）。wall(32)仍随 R86 删。
+          {
+            const g = truncCityBox('ashlar', r4w, 58, 12, r4x, 29, 0);
+            if (g) b.ashlar.push(put(g));
+          }
+          b.ashlar.push(put(box('ashlar', r4w + 2, 1.2, 14, r4x, 58.6, 0)));
           // R32-A2 桶位纪律：奇数块第四排（远景）塔尖披顶**保留 ashlar**
           b.ashlar.push(put(spire('ashlar', 5.5, 0, 12, 8, r4x, 59.2, 0, Math.PI / 8)));
           b.dark.push(put(box('dark', 0.6, 5, 2.4, R31_ROW4.xIn + 0.05, 40, 0)));

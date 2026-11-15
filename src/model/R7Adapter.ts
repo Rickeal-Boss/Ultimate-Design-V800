@@ -132,6 +132,10 @@ const R71_REAR_ROOF: boolean =
  * 回滚：`#r80r7seat=off` ⇒ 这批件退回 cabinHidable（逐位回 R79）。 */
 const R80_R7_DRIVER_VIEW: boolean =
   typeof window === 'undefined' || !/(?:^|[#&])r80r7seat=off/i.test(window.location.hash);
+/* R86 · 病A 修复：driverStruct 判定移到 mesh-id 正则，由 buildVisibilityTable 复用，
+ * 与 R80 克隆处（约 L1274）同源。下游 R30-C4 去重会把带 r80DriverStruct 标签的克隆并回源、
+ * 剥离 userData 标签 ⇒ 读材质 userData 会漏登记整批内饰；改读 mesh-id 纯函数则免疫。 */
+const R80_DRIVER_STRUCT_RE = /^(seat-driver-|apillar-inner|door-card|door-trim|door-speaker)/;
 /* ── R86 · 病A 修复：driverStruct 车厢内常显 ─────────────────────────────────
  * 病根（probe-r7-interior-tail §二）：driverStruct（主驾座椅/门板/A·B 柱内衬等一整批
  *   内饰结构件）的可见性绑在 cameraInRearZone（相机 body 局部 z < -0.56）二值开关上，
@@ -1259,8 +1263,8 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
     );
     const cloneBySrc = new Map<THREE.MeshPhysicalMaterial, THREE.MeshPhysicalMaterial>();
     /* R80：主驾结构件（座椅/A·B 柱/门内饰）走「driverStruct」通道，不进 cabinOccluderMats。
-     * 与 cabinHidable 克隆分两张 map（同一源材质可能同时被结构件与非结构件共享）。 */
-    const R80_DRIVER_STRUCT_RE = /^(seat-driver-|apillar-inner|door-card|door-trim|door-speaker)/;
+     * 与 cabinHidable 克隆分两张 map（同一源材质可能同时被结构件与非结构件共享）。
+     * R80_DRIVER_STRUCT_RE 已提升为模块级常量，与本处及 buildVisibilityTable 同源。 */
     const driverCloneBySrc = new Map<THREE.MeshPhysicalMaterial, THREE.MeshPhysicalMaterial>();
     let swept = 0;
     let driverSwept = 0;
@@ -1438,8 +1442,11 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
           cabinHidable?: boolean;
           cabinPaintShadow?: boolean;
           refTexture?: unknown;
+          r80DriverStruct?: boolean;
         };
-        if (ud.cabinHidable || ud.cabinPaintShadow || ud.refTexture) continue;
+        // R86 · 病A 修复①：带 r80DriverStruct 标签的克隆也跳过——否则会被同参去重并回源、
+        // 剥离 r80DriverStruct 标签，导致 buildVisibilityTable 读不到 ⇒ 内饰整批永久隐藏。
+        if (ud.cabinHidable || ud.cabinPaintShadow || ud.refTexture || ud.r80DriverStruct) continue;
         const id = ud.sculptMaterial?.id;
         if (!id) continue; // 无 id 材质不并（贴花/车牌各承载不同贴图）
         const key = `${id}|${signatureOf(mt)}`;
@@ -1709,6 +1716,7 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
     for (const p of paintShadowPairs) pairByMesh.set(p.mesh, { exterior: p.exterior, interior: p.interior });
     const rearSeatMeshSet = new Set<THREE.Mesh>(rearSeatMeshes);
     const matSeen = new Set<THREE.Material>();
+    const matEntryByMat = new Map<THREE.Material, MatEntry>();
     root.updateWorldMatrix(true, true);
     root.traverse((o) => {
       const mesh = o as THREE.Mesh;
@@ -1723,20 +1731,36 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
         const ud = mt.userData as {
           sculptMaterial?: { id?: string };
           cabinHidable?: boolean;
-          r80DriverStruct?: boolean;
         };
         const id = ud?.sculptMaterial?.id ?? null;
-        matEntries.push({
+        // R86 · 病A 修复②：driverStruct 初始 false，改由下方「网格级 mesh-id 正则」命中后 OR 置真
+        // （不再读材质 userData.r80DriverStruct，免疫下游去重/合批改材质对标签的剥离）。
+        const entry: MatEntry = {
           mat: mt,
           rearSeat: mt === rearSeatMat,
           apillar: mt === apillarClone,
           cabinHidable: ud?.cabinHidable === true,
-          driverStruct: ud?.r80DriverStruct === true,
+          driverStruct: false,
           kept: id != null && R44_INTERIOR_MATERIAL_IDS.has(id),
-        });
+        };
+        matEntries.push(entry);
+        matEntryByMat.set(mt, entry);
       }
       // —— 网格级 tag ——
       const keepByName = R44_KEEP_MESH_NAMES.has(mesh.name);
+      // R86 · 病A 修复②：driverStruct 判定改由 mesh-id 正则（与 R80 克隆处同源），
+      //   命中即把该 mesh 全部材质的 MatEntry.driverStruct OR 置真 ⇒ 标签变 mesh-id 纯函数，
+      //   下游 R30-C4 去重/合批改材质也影响不到（W1 对齐、免疫未来任何材质重指派）。
+      const meshId = mesh.userData?.sculptComponent?.id as string | undefined;
+      const isDriverStruct =
+        !!meshId && R80_R7_DRIVER_VIEW && R80_DRIVER_STRUCT_RE.test(meshId);
+      if (isDriverStruct) {
+        for (const mt of mats) {
+          if (!mt) continue;
+          const e = matEntryByMat.get(mt);
+          if (e) e.driverStruct = true;
+        }
+      }
       let hasId = false;
       let cabinHidableMesh = false;
       let isBlock = false;

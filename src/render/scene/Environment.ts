@@ -426,6 +426,10 @@ export class Environment {
     this.scene.add(this.sky);
     this.scene.environment = bakeEnvironment(renderer, sunDir, envMapSize, preset);
     this.scene.fog = new FogExp2(preset.fog.color, preset.fog.density);
+    // R87：游戏场景设背景色，根治 cabin 风挡/车顶玻璃区域露出纯黑清屏（渲染器默认清屏为黑）。
+    // 取值与雾色(0x9c9384)/地平线暖晕(0xd8c9b2)同族暖灰，内外协调；天空球(半径5000)仍覆盖
+    // 直接视野，背景色主要兜住透射 pass 与任何几何缺口，确保风挡开口透出天空/道路而非黑底。
+    this.scene.background = new THREE.Color(0xa89c8e);
   }
 
   /** 天空球跟着相机平移（避免走到球边缘） */

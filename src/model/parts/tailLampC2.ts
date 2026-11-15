@@ -407,14 +407,15 @@ export const R81_C2_SIDE_DOUBLE_ON = !r69HookOff('r81c2dsided');
  *  `#r69c2lamp=off` ⇒ 无侧壁 ⇒ 回 R68 的 36。 */
 export const C2_DC_BUDGET = 3;
 /** tri 上限：base 40（盖板12 + face4/侧壁8 + 红条20），R71 盖板侧面填充 +4 ⇒ 44，
- *  R84 上半区黑填充（左右各一 quad）+4 ⇒ 48，R86 外上填充（左右各一 quad）+4 ⇒ 52。
- *  `#r86c2upperouter=off` ⇒ 回 48；`#r84c2sideup=off` ⇒ 回 44；`#r71c2coverfill=off` ⇒ 回 40；
- *  `#r69c2lamp=off` ⇒ 回 36 基线。 */
+ *  R84 上半区黑填充（左右各一 quad）+4 ⇒ 48，R86 外上填充（左右各一 quad）+4 与
+ *  正面 FRONT 填充（左右各半 quad）+4 共 +8 ⇒ 56（即 48→56）。
+ *  `#r86c2upperouter=off` ⇒ 回 48（外上 + 正面 FRONT 同时撤）；`#r84c2sideup=off` ⇒ 回 44；
+ *  `#r71c2coverfill=off` ⇒ 回 40；`#r69c2lamp=off` ⇒ 回 36 基线。 */
 export const C2_TRI_BUDGET = 36
   + (R69_C2_LAMP_ON ? 4 : 0)
   + (R71_C2_COVERFILL_ON ? 4 : 0)
   + (R84_C2_SIDE_UP_ON ? 4 : 0)
-  + (R86_C2_UPPEROUTER_ON ? 4 : 0);
+  + (R86_C2_UPPEROUTER_ON ? 8 : 0);
 export const C2_MAT_BUDGET = 2;
 export const C2_TEX_BUDGET = 1;
 
@@ -1028,6 +1029,23 @@ export function buildTailLampC2(opts: C2BuildOptions): C2BuildResult {
     }
     coverGeo = mergeSafe([coverGeo, ...outerQuads]);
     for (const q of outerQuads) q.dispose();
+  }
+
+  // R86 正面 FRONT 填充（补上方侧面外上 quad 漏掉的真实漏洞——正面法线 −Z 那段）：
+  //   z = G.faceZ（−0.57022，与 C2 face 同平面、车身外 2.7mm、不 z-fight）、
+  //   y ∈ [G.coverYHi 0.266, 0.346]（封到镀铬带底，不压带）、x ∈ [−effCoverHalfW 0.163,
+  //   +effCoverHalfW 0.163]（与正横杆同宽，封住 x±0.155 外侧空缺）。
+  //   法线 −Z 用 makeQuad 索引 [0,1,2,1,3,2]（与现有 face quad 同）；左右各半 quad（分 x≤0 / x≥0）
+  //   共 +4 tri（tri 52 ⇒ 56）。复用 coverMat（DoubleSide 已开不会过曝），merge 进 coverGeo 同桶。
+  // ⚠ 保留已生效的侧面外上 quad（用户已确认侧面填了）；本段只补正面缺失。
+  if (R86_C2_UPPEROUTER_ON) {
+    const frontYHi = 0.346;
+    const frontQuads: THREE.BufferGeometry[] = [
+      makeQuad(-effCoverHalfW, 0, G.coverYHi, frontYHi, G.faceZ),
+      makeQuad(0, effCoverHalfW, G.coverYHi, frontYHi, G.faceZ)
+    ];
+    coverGeo = mergeSafe([coverGeo, ...frontQuads]);
+    for (const q of frontQuads) q.dispose();
   }
   // coverMesh 在全部 coverGeo merge（R71 端面填充 + R84 上填充 + R86 外上填充）之后创建，
   //   确保 Mesh 捕获的是**最终**合并几何 ⇒ 填充 quad 真正渲染（见上方 coverMesh 下移注）。
