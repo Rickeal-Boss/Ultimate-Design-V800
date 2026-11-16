@@ -163,8 +163,11 @@ const R67_GUARD_SHA256 = 'be2d435eac75fa425792ca1382d98bdc5745b1fe3c5d0244be4eec
  *  态视线穿玻璃位撞深色 box = 黑板复发），`#r85v800boardz=off` 回滚语义不变；②方向盘黑帧根治——
  *  动态 near 推出触发半径 STEER_NEAR_BOOST_RADIUS_M 0.60→0.30 + 下限 STEER_NEAR_BOOST_MIN
  *  0.245→0.10（旧 0.60 触发半径覆盖正常 cabin 眼点 0.55-0.65 ⇒ 每帧把 near 推到 0.285-0.5 裁掉
- *  整个座舱近景 = 整屏黑），`#r83steerharden=off` 回滚语义不变，属预期改动。 */
-const ADAPTER_SHA256 = '5867cae9824d308b3f6a3a48d85811dac68601c2bcf66fef681f98b4b64e8f94';
+ *  整个座舱近景 = 整屏黑），`#r83steerharden=off` 回滚语义不变，属预期改动。
+ *  R91 再更新基线：高精度方向盘主开关 R91_STEER_MASTER_ON（默认 OFF）—— 高精盘默认不加载
+ *   （黑裂材质缺陷 + 近裁黑闪根治），程序化盘全程接管 cabin 盘，门控/近裁防护（硬隐藏 +
+ *   动态 near 推出）改对程序化盘世界包围球保活，`#r91steermaster=on` 回滚，属预期改动。 */
+const ADAPTER_SHA256 = '9ea20fbe82cba27ef057f408a99b67d2f4ca84a181938f1dada046ceb7795265';
 /* ═══ R81 P1/P2 · 冻结基线更新（cam-gate 线实测口径）═════
  * 本波 V800Adapter.ts 两处改动（均属预期改动，故更新本基线）：
  *   · P1 机盖(hood)视角下半屏纯黑根治：shell body GLB 在引擎盖区（world z −1.1~−1.77）

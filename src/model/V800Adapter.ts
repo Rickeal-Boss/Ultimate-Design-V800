@@ -295,6 +295,16 @@ const R85_V800_BOARDZ_ON: boolean =
  * 回滚：`#r88cabinroof=off` ⇒ 逐位回 R87（中段 z[-1.525,-0.30]、ext-rear 照建）。 */
 const R88_V800_CABINROOF_ON: boolean =
   typeof window === 'undefined' || !/(?:^|[#&])r88cabinroof=off/i.test(window.location.hash);
+/* ══ R91 · 高精度方向盘主开关（默认 OFF = 高精盘不加载）════════════════════════
+ * 背景：用户投诉高精盘「黑裂材质缺陷」+ 近裁剪面黑闪帧（R81 P2/R83/R84 已尽力治黑闪，
+ *   但高精盘本体黑裂材质是资产缺陷，治标不治本）⇒ 主理人裁决「干脆去除，直接使用
+ *   普通方向盘改进版」。本开关默认 OFF：完全不调用 loadInteriorSteering，程序化（普通）
+ *   方向盘全程接管 cabin 盘；`#r91steermaster=on` ⇒ 回滚到加载高精盘（保留 R47 管线）。
+ * 极性说明：本文件其余 R8x 旗标均默认 ON（`=off` 关闭），本开关默认 OFF（`=on` 开启）
+ *   —— 与 `FLAG('r91steermaster', false)` 语义一致（默认 false，显式 `=on` 才 true）。
+ * 模块顶层求值一次，每帧只读布尔。 */
+export const R91_STEER_MASTER_ON: boolean =
+  typeof window !== 'undefined' && /(?:^|[#&])r91steermaster=on/i.test(window.location.hash);
 /* ══ W2批4 · 透明件渲染排序治理 ═══════════════════════════════════════════════
  * 背景：车内近景透明件历史上只设 `depthWrite=false` 却无 `renderOrder` ⇒ three.js
  * 透明队列按相机距离排序 ⇒ 近景玻璃/贴花闪烁、透出关系错乱。本批给它们钉显式
@@ -5179,6 +5189,13 @@ const R48_LAMP_TONE: boolean =
   /** R80：高精盘包围球半径（世界米）= geometry.boundingSphere.radius × scale，装载后算一次。
    *  门控判据用它把「盘心距离」换成「到盘面的 clearance」（见 STEER_GATE 注释）。 */
   let steerGateRadius = 0.225;
+  /** R91：master off（高精盘不加载）时程序化盘接管 —— 世界包围球中心（世界米）。
+   *  门控/近裁防护（applySteerGate / updateSteeringGate / 硬隐藏 / 动态 near 推出）
+   *  对 steeringMesh 为 null 的 master-off 态改用此中心对程序化盘保活（防黑闪）。 */
+  let masterOffWheelCenter: THREE.Vector3 | null = null;
+  /** R91：master off 时程序化盘包围球半径（世界米），build 后由程序化盘世界 bbox 算一次，
+   *  作为 master-off 态 steerGateRadius 的真源（与 R80 高精盘 boundingSphere 口径同源）。 */
+  let masterOffWheelRadius = 0.225;
   // W1 删除旧账本：`proceduralExteriorHidden` / `lastInteriorState` —— 改由 applyVisibility
   // 每帧从 state + shellHandle 现算，不再持「上次态」差量（差量登记是雪崩根因）。
   /** spinWheels 弧长→角度换算半径；外部壳装载成功后取 manifest.wheelRadius */
@@ -5460,6 +5477,13 @@ const R48_LAMP_TONE: boolean =
     //   （护栏 r47 按子串钉死，不得改写）。
     if (steeringMesh) steeringMesh.visible = interior && !steerNear;
     for (const m of proceduralSteeringMeshes) m.visible = interior && steerNear;
+    /* R91：master off（高精盘不加载）⇒ 程序化盘全程接管 cabin 盘，覆盖上面 steerNear
+     *   门控（单一盘，cabin 恒显、外景恒藏）；仍位于 steerHardHide 块之前 ⇒ 近裁剪面
+     *   硬隐藏仍最后生效（近 clip 黑闪防护不因覆盖而失效）。⚠ 不删/不改上面两行的
+     *   `interior && !steerNear` / `interior && steerNear` 子串（r47 护栏按子串钉死）。 */
+    if (!R91_STEER_MASTER_ON && !steeringMesh) {
+      for (const m of proceduralSteeringMeshes) m.visible = interior;
+    }
     /* R81 P2：近裁剪面硬隐藏安全网 —— 相机钻进「盘半径 + near + 边距」球内时两盘都隐。
      *   病根：near 扫过盘面 ⇒ 大三角被裁铺满视口 = 整帧黑闪；R80 换程序化盘不解决，
      *   因程序化盘与高精盘**同位**同样被裁。故极近距直接两盘都隐（宁可一帧无盘）。
@@ -5592,36 +5616,65 @@ const R48_LAMP_TONE: boolean =
     // 主理人裁决：契约 §2.3 的 scale=[1,1,1] 不成立 —— body 组无 scale，
     // 外部壳件都在各自 mesh 上乘 manifest.scale ⇒ 这里同样传 scale（见 InteriorSteering.ts 头注）。
     void (async () => {
-      const wheel = await loadInteriorSteering('v800', shell.manifest.scale);
-      if (!wheel) return; // 失败：保持程序化方向盘，游戏零感知
-      body.add(wheel);
-      // 程序化方向盘（三辐双色盘 / 气囊盖+盾标 / steering-spokes）整组交给高精度盘，
-      // 组件 id 精确匹配 + 全树正则（R40 铁律）；失败路径不执行 ⇒ 程序化盘保持完整。
+      /* R91：高精度方向盘主开关（默认 OFF）。master off ⇒ 完全跳过 loadInteriorSteering，
+       *   steeringMesh 保持 null，程序化盘全程接管 cabin 盘（无黑裂材质缺陷 / 无近裁黑闪
+       *   根源）；`#r91steermaster=on` ⇒ 走原 R47 管线（装载高精盘 + 隐程序化盘）。 */
+      if (R91_STEER_MASTER_ON) {
+        const wheel = await loadInteriorSteering('v800', shell.manifest.scale);
+        if (!wheel) return; // 失败：保持程序化方向盘，游戏零感知
+        body.add(wheel);
+        steeringMesh = wheel;
+        /* R80：算一次盘包围球半径（世界米）。⚠ rotateY(π) 之后 boundingSphere 可能为空/
+         *   未更新 ⇒ 必须显式 computeBoundingSphere() 再乘 scale（scale 只缩顶点，不改半径
+         *   的几何口径：radius × scale.x 即世界半径）。
+         * R81 P1-5：`?? 0.225` 只兜 null 不兜 NaN/0/Infinity ⇒ 加有限性 + 物理区间 clamp
+         *   （定罪见本文件 STEER_GATE 注释）；`#r81steergate=off` ⇒ 逐位回 R80 原式。 */
+        wheel.geometry.computeBoundingSphere();
+        const bsRadius = wheel.geometry.boundingSphere?.radius;
+        const scaledRadius = (bsRadius ?? 0.225) * Math.abs(wheel.scale.x);
+        const finiteRadius = Number.isFinite(scaledRadius) && scaledRadius > 0
+          ? scaledRadius
+          : 0.225;
+        steerGateRadius = R81_STEER_GATE_GUARD
+          ? Math.min(STEER_GATE_RADIUS_MAX_M, Math.max(STEER_GATE_RADIUS_MIN_M, finiteRadius))
+          : scaledRadius;
+        // W1：初值 exterior（隐藏，不透车外 / 零 DC）；此后每帧 applyVisibility 全量覆盖
+        // （cabin 显高精盘、近距门控切程序化盘），不再读「上次内舱态」差量。
+        wheel.visible = false;
+      }
+      // 程序化方向盘（三辐双色盘 / 气囊盖+盾标 / steering-spokes）：master off 时整组接管
+      // cabin 盘，master on 时整组交给高精度盘。R91 起 traverse 无条件执行（移出加载成功
+      // 路径）—— 否则 master off 不加载高精盘 ⇒ 本数组恒空 ⇒ 门控/近裁防护无盘可保活。
+      // 组件 id 精确匹配 + 全树正则（R40 铁律）；master on 装载失败路径不执行 ⇒ 保持原状。
       root.traverse((o) => {
         const m = o as THREE.Mesh;
         if (!m.isMesh) return;
         if ((m.userData as { r44External?: boolean }).r44External === true) return;
         if (/方向盘|steering/i.test(m.name)) proceduralSteeringMeshes.push(m);
       });
-      steeringMesh = wheel;
-      /* R80：算一次盘包围球半径（世界米）。⚠ rotateY(π) 之后 boundingSphere 可能为空/
-       *   未更新 ⇒ 必须显式 computeBoundingSphere() 再乘 scale（scale 只缩顶点，不改半径
-       *   的几何口径：radius × scale.x 即世界半径）。
-       * R81 P1-5：`?? 0.225` 只兜 null 不兜 NaN/0/Infinity ⇒ 加有限性 + 物理区间 clamp
-       *   （定罪见本文件 STEER_GATE 注释）；`#r81steergate=off` ⇒ 逐位回 R80 原式。 */
-      wheel.geometry.computeBoundingSphere();
-      const bsRadius = wheel.geometry.boundingSphere?.radius;
-      const scaledRadius = (bsRadius ?? 0.225) * Math.abs(wheel.scale.x);
-      const finiteRadius = Number.isFinite(scaledRadius) && scaledRadius > 0
-        ? scaledRadius
-        : 0.225;
-      steerGateRadius = R81_STEER_GATE_GUARD
-        ? Math.min(STEER_GATE_RADIUS_MAX_M, Math.max(STEER_GATE_RADIUS_MIN_M, finiteRadius))
-        : scaledRadius;
-      // W1：初值 exterior（隐藏，不透车外 / 零 DC）；此后每帧 applyVisibility 全量覆盖
-      // （cabin 显高精盘、近距门控切程序化盘），不再读「上次内舱态」差量。
-      wheel.visible = false;
       for (const m of proceduralSteeringMeshes) m.visible = false;
+      /* R91：master off ⇒ 程序化盘接管。算一次程序化盘世界包围球中心/半径交给门控 +
+       *   近裁防护（硬隐藏/动态 near 推出）保活；steerNearCam=true 使 `interior && steerNear`
+       *   显示程序化盘（applyVisibility 的 R91 覆盖再兜一层，双保险）。 */
+      if (!R91_STEER_MASTER_ON) {
+        if (proceduralSteeringMeshes.length > 0) {
+          root.updateWorldMatrix(true, true); // 保证程序化盘世界矩阵新鲜（bbox 世界口径）
+          const box = new THREE.Box3();
+          for (const m of proceduralSteeringMeshes) box.expandByObject(m);
+          if (!box.isEmpty()) {
+            const sphere = box.getBoundingSphere(new THREE.Sphere());
+            masterOffWheelCenter = sphere.center;
+            const finiteR = Number.isFinite(sphere.radius) && sphere.radius > 0
+              ? sphere.radius
+              : 0.225;
+            masterOffWheelRadius = R81_STEER_GATE_GUARD
+              ? Math.min(STEER_GATE_RADIUS_MAX_M, Math.max(STEER_GATE_RADIUS_MIN_M, finiteR))
+              : finiteR;
+            steerGateRadius = masterOffWheelRadius; // 门控/近裁防护复用同源半径
+          }
+        }
+        steerNearCam = true;
+      }
     })();
     const hubTags = ['fl', 'fr', 'rl', 'rr'] as const;
     const usedSpin = new Set<THREE.Object3D>();
@@ -5730,7 +5783,11 @@ const R48_LAMP_TONE: boolean =
    * mesh.visible 统一交 applyVisibility 每帧全量覆盖（消除旧「applySteerGate 写一次 +
    * setPaintShadow 写一次」双写竞态）。GLB 未装载 / 门控关闭则空操作。 */
   const applySteerGate = (dist: number): void => {
-    if (!R71_STEER_GATE || !steeringMesh) return;
+    if (!R71_STEER_GATE) return;
+    // R91：master off 且高精盘未加载 ⇒ 门控对程序化盘保活（masterOffWheelCenter 已算好，
+    //   steerGateRadius = masterOffWheelRadius）；master on 但高精盘未装载（失败）⇒ 保持
+    //   原 R71 空操作（程序化盘自行走模型可见性，门控无盘可保活）。
+    if (!steeringMesh && !(!R91_STEER_MASTER_ON && masterOffWheelCenter)) return;
     /* R80：clearance = 盘心距离 − 盘包围球半径（到盘表面的最近距离）。 */
     const clearance = dist - steerGateRadius;
     /* R81 P1-5：dist / clearance 非有限时门控不许翻转（NaN 比较恒 false 会把门控
@@ -5768,14 +5825,27 @@ const R48_LAMP_TONE: boolean =
       /* R71：Game 每帧调用 —— 高精盘挂 body 下（有变换），须用世界位置算距离。
        * R83：camera.getWorldPosition 强制走 updateMatrixWorld（three 内部有 dirty 位则重算
        *   矩阵），杜绝 cabin↔外景过渡期 camera.matrixWorld 尚未刷新导致的 1 帧滞后
-       *   （Game.ts:1291 rig.update 刚写完 position，本帧矩阵可能仍标 dirty）。 */
-      if (!R71_STEER_GATE || !steeringMesh) {
+       *   （Game.ts:1291 rig.update 刚写完 position，本帧矩阵可能仍标 dirty）。
+       * R91：master off 且高精盘未加载 ⇒ 改用程序化盘世界包围球中心（masterOffWheelCenter）
+       *   算距离，硬隐藏/动态 near 推出照常对程序化盘保活（防近裁黑闪）。 */
+      if (!R71_STEER_GATE) {
+        steerHardHide = false;
+        return;
+      }
+      if (!steeringMesh && !(!R91_STEER_MASTER_ON && masterOffWheelCenter)) {
         steerHardHide = false;
         return;
       }
       camera.updateMatrixWorld();
       camera.getWorldPosition(STEER_GATE_TMP_VEC);
-      steeringMesh.getWorldPosition(STEER_GATE_TMP_VEC_B);
+      if (steeringMesh) {
+        steeringMesh.getWorldPosition(STEER_GATE_TMP_VEC_B);
+      } else if (masterOffWheelCenter) {
+        STEER_GATE_TMP_VEC_B.copy(masterOffWheelCenter); // R91 master off：程序化盘世界中心
+      } else {
+        steerHardHide = false; // 无盘可保活（防御，理论不可达）
+        return;
+      }
       const dist = STEER_GATE_TMP_VEC.distanceTo(STEER_GATE_TMP_VEC_B);
       applySteerGate(dist);
       const near = (camera as THREE.PerspectiveCamera).near;
