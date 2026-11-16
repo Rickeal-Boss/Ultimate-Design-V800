@@ -161,6 +161,13 @@ const R80_DRIVER_STRUCT_RE = /^(seat-driver-|apillar-inner|door-card|door-trim|d
  *   走不进 driverStruct 分支（退回 cabinHidable 的 !interior），与本开关正交。 */
 const R86_R7_INTERIOR_ON: boolean =
   typeof window === 'undefined' || !/(?:^|[#&])r86r7interior=off/i.test(window.location.hash);
+/** R91-3：全景天幕玻璃（roof-glass）黑带根治开关。
+ *  默认 ON：天幕材质从 `glass-dark`（深色透明 opacity 0.62，R90 期读作「实心黑板」）
+ *  切到共享车身漆 `materialMap["paint-green"]` 同实例 ⇒ 车顶读作连续米白漆面，消除
+ *  「左右两条锯齿黑带」（低模拱弧线从米白车顶壳边缘下方探出所致）。
+ *  回滚：`#r91r7roofglass=off` ⇒ 逐位回 R90 深色玻璃天幕（黑弧带，A/B 对照）。 */
+const R91_R7_ROOFGLASS_ON: boolean =
+  typeof window === 'undefined' || !/(?:^|[#&])r91r7roofglass=off/i.test(window.location.hash);
 /* ══ W2批4 · 透明件渲染排序治理 ═══════════════════════════════════════════════
  * 背景：车内近景透明件历史上只设 `depthWrite=false` 却无 `renderOrder` ⇒ three.js
  * 透明队列按相机距离排序 ⇒ 近景玻璃/贴花闪烁、透出关系错乱。本批给它们钉显式
@@ -701,6 +708,38 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
       if (!mesh.isMesh) return;
       const id = (mesh.userData as { sculptComponent?: { id?: string } }).sculptComponent?.id;
       if (id === containerId) mesh.visible = false;
+    });
+  }
+
+  /* ══ R91-3 · 全景天幕玻璃（roof-glass）黑带根治 ═════════════════════════════
+   * 定罪（.qa/r91-lead/r91_rc.mjs 染色 A/B）：R7 天幕是 extrude(侧视拱形 profile,
+   * depth 1.78) 的整幅拱弧片（world bbox x±0.89 y1.45-1.63 z-0.34~1.55），材质
+   * glass-dark（#141a22 transparent opacity 0.74 读作实心黑板）；米白车顶壳（y 顶
+   * 1.64）比天幕高 1cm，盖住天幕中央，只让天幕拱线两侧圆弧从车顶边缘下方探出 ⇒
+   * 左右两条锯齿黑带（用户「黑板块拼贴」）。
+   * 处方：天幕材质切到共享车身漆 `materialMap["paint-green"]` 同实例（matById 已按
+   * sculptMaterial.id 建表，零色差、variant 切换 applyProcPaintTweaks/setVariant 自动
+   * 跟随；外部壳装载态天幕随程序化外饰一并隐藏 ⇒ 车顶读作连续米白漆面）。
+   * 零几何/零 tri 增量，纯材质引用替换（不被 applyVisibility 每帧 visible 覆盖）。
+   * 回滚：`#r91r7roofglass=off` ⇒ 不执行本块，逐位回 R90 深色玻璃天幕（黑弧带）。 */
+  if (R91_R7_ROOFGLASS_ON) {
+    const roofPaint = matById.get('paint-green');
+    model.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      const id = (mesh.userData as { sculptComponent?: { id?: string } }).sculptComponent?.id;
+      if (id !== 'roof-glass') return;
+      if (roofPaint) {
+        mesh.material = roofPaint;
+      } else {
+        // 兜底：拿不到共享车身漆实例时用实心漆色（Node/无 matById 场景）
+        const m = (Array.isArray(mesh.material) ? mesh.material[0] : mesh.material) as THREE.MeshPhysicalMaterial | undefined;
+        if (m) {
+          m.color = new THREE.Color(0xd6d2cb);
+          m.transparent = false;
+          m.opacity = 1;
+        }
+      }
     });
   }
 
