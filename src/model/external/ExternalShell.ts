@@ -1806,6 +1806,42 @@ export function makeR7LowerReflectorAtlas(): THREE.Texture | null {
 }
 
 /**
+ * R90-3 · 尾灯中央缺口「车身漆色 + 黑色 LUXEED 字标」灰阶贴图（1024×172，零外部资产）。
+ * ⚠ 位置刻意放在 makeR7LowerReflectorAtlas 之后：r68_visual.test.ts 用
+ *   slice('function makeR7RearBandAtlas(', '/**\n * R49-P2b · R7 下缘红反光条 atlas')
+ *   冻结 band atlas 源码 sha，夹在两者之间会改指纹。
+ * 机制：map 白底 × material.color(=车身漆色) = 漆色；黑字 × 漆色 = 黑字。一张不透明
+ * 贴图同时给出两种观感，无透明排序、无第二块 quad（DC 恒定）。字标 y 复用 R49
+ * yRow(1.015) 公式，与 R89 mask 的 UV 切片 v∈[0.40,0.68] 对齐 ⇒ A/B 不跳位。
+ * Node/vitest 无 document ⇒ null 优雅降级。
+ */
+function makeR7TailPaintBadgeAtlas(): THREE.Texture | null {
+  if (typeof document === 'undefined') return null;
+  const W = 1024, H = 172;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const g = c.getContext('2d');
+  if (!g) return null;
+  g.fillStyle = '#ffffff';           // 中性白：× body.color 恒等 = 漆色
+  g.fillRect(0, 0, W, H);
+  g.fillStyle = '#000000';           // 纯黑：× body.color = 黑字
+  g.font = '600 34px system-ui, -apple-system, Arial, sans-serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  const yRow = (worldY: number): number => Math.round((1.185 - worldY) / 0.34 * (H - 1));
+  g.fillText('L U X E E D', W / 2, yRow(1.015));
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/** R90-3：`#r90tailpaint=off` ⇒ 回 R89 深墨底 mask（A/B 对照）。默认 ON。 */
+export const R90_TAIL_PAINT_ON =
+  typeof window === 'undefined' || !/[#&]r90tailpaint=off/i.test(window.location.hash);
+
+/**
  * 门禁优先级（不可倒置，REPORT_PHASE1B.md §2.6）：
  *   ① inTestEnv()            —— vitest/Node 硬隔离，绝不发 fetch、绝不读 localStorage
  *   ② #r44ext=off            —— QA A/B，state:'failed' 原样不动（覆盖用户偏好）
@@ -2626,9 +2662,27 @@ export async function loadExternalShell(
           ], 2));
           maskGeo.setIndex([0, 1, 2, 1, 3, 2]);
           remapUVToRegion(maskGeo, 0.336, 0.664, 0.40, 0.68);
-          const maskAtlas = makeR7RearBandAtlas();
+          const maskAtlas = R90_TAIL_PAINT_ON ? null : makeR7RearBandAtlas();
           let maskMat: THREE.Material;
-          if (maskAtlas) {
+          if (R90_TAIL_PAINT_ON) {
+            /* R90-3 根治：官图尾灯中央是车身漆面同色 + 黑 LUXEED 字标（非黑板块）。
+             * badge 灰阶图（白底+黑字）× material.color(共享 body 漆色实例) ⇒ 漆色底+黑字，
+             * 一张不透明贴图搞定、零透明排序、几何/UV 逐位不动。body material.color 在
+             * proc 路径 setVariant/applyProcPaintTweaks 原地改色 ⇒ mask 零同步跟随变体。
+             * 无 emissive：中央是漆面非灯组，刹车联动仍由两侧 lamp_rear / band 承担。
+             * `#r90tailpaint=off` ⇒ 逐位回 R89 深墨 atlas 分支。 */
+            const badge = makeR7TailPaintBadgeAtlas();
+            const pm = new THREE.MeshStandardMaterial({
+              color: 0xffffff,
+              map: badge ?? undefined,
+              roughness: material.roughness,
+              metalness: material.metalness,
+              side: THREE.FrontSide
+            });
+            pm.color = material.color; // 共享实例：变体切换自动同步
+            if (badge) r68TailWrapTex.push(badge);
+            maskMat = pm;
+          } else if (maskAtlas) {
             const m = new THREE.MeshStandardMaterial({
               map: maskAtlas,
               emissiveMap: maskAtlas,

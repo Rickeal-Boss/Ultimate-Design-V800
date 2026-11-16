@@ -61,6 +61,33 @@ export const R89_CABIN_SCALE = 4.323;
 /** 装配平移（米，body-local）—— 主理人探测四朝向扫参后的定值。 */
 export const R89_CABIN_TRANSLATE: readonly [number, number, number] = [0.2, -0.25, -0.3];
 
+/* ══════════ R90 根治：保留整车尺度 4.323，重标定 translate ══════════════
+ * ⚠ 首版假设「scale 4.323 把座舱放大成整车」**已被实锤推翻**：源 GLB 本身就是
+ *   带车身外壳/车门/车轮的**整车扫描**（1,499,982 tri 单 mesh），相机落在车内
+ *   属正常（distToCenter=0.84m 是车内地合理值）。误缩到 s=2.20 反把整车变成
+ *   玩具壳包在相机外（实测 distToCenter=0.61m 仍在内部且门板更贴脸）。
+ *   ⇒ R90 保留 scale=4.323（与 manifest 同源），只重标定 translate。
+ *
+ * 真机定点（dev-cabin 射线 + 截图实证）：R89 translate (0.2,-0.25,-0.3) 让
+ * 座舱地板沉到 y=-0.25、整车中心偏后，主驾眼点 world≈(-0.3,1.29,0.09) 前方
+ * 正对的是副驾侧围/门板（浅棕大块贴脸 45-50%）。改用 [0.2,0.2,-0.1]：地板抬到
+ * y≈0.2 对齐车内地毯、z 前移 0.2m 让仪表台落在眼点前方 ≈1.0m（可辨识而非贴脸），
+ * 副驾座椅落在 0.4-0.9m 侧前方。
+ *   `#r90cabinscale=off` ⇒ 逐位回 R89 的 4.323 / (0.2,-0.25,-0.3)。 */
+export const R90_CABIN_SCALE_ON: boolean =
+  typeof window === 'undefined' || !/(?:^|[#&])r90cabinscale=off/i.test(window.location.hash);
+export const R90_CABIN_SCALE = 4.323;
+export const R90_CABIN_TRANSLATE: readonly [number, number, number] = [0.2, 0.2, -0.1];
+/** 实际生效值（A/B 开关感知）。 */
+export const CABIN_SCALE = R90_CABIN_SCALE_ON ? R90_CABIN_SCALE : R89_CABIN_SCALE;
+export const CABIN_TRANSLATE: readonly [number, number, number] =
+  R90_CABIN_SCALE_ON ? R90_CABIN_TRANSLATE : R89_CABIN_TRANSLATE;
+
+/* R90-VIS：`#r90mastervis=off` ⇒ 回退到只写 root.visible（复现 mesh.visible 恒 false 的 bug
+ * 供 A/B 对照）。默认 ON = root + mesh 双写唯一真源。 */
+export const R90_MASTER_VIS_ON: boolean =
+  typeof window === 'undefined' || !/(?:^|[#&])r90mastervis=off/i.test(window.location.hash);
+
 /* ── R89 A/B 回滚开关（默认 ON，解析口径与 V800Adapter R88_V800_CABINROOF_ON 同构）──
  * `#r89r7master=off` 是总闸：完全不装配母版，且 B 项三处外部壳改动全部逐位回 R88。
  * `#r89r7glass=off` / `#r89r7roofcull=off` / `#r89r7side=off` 可单独回退 B 的
@@ -173,9 +200,10 @@ export function getMasterCabinAudit(
  */
 export function assembleMasterCabin(geometry: THREE.BufferGeometry): MasterCabinHandle {
   // ① 变换链：yaw → scale → translate（对 position / normal 同步生效）
+  // R90：scale/translate 改走 A/B 感知常量（`#r90cabinscale=off` 回 R89 整车尺寸）
   geometry.rotateY(R89_CABIN_YAW);
-  geometry.scale(R89_CABIN_SCALE, R89_CABIN_SCALE, R89_CABIN_SCALE);
-  geometry.translate(R89_CABIN_TRANSLATE[0], R89_CABIN_TRANSLATE[1], R89_CABIN_TRANSLATE[2]);
+  geometry.scale(CABIN_SCALE, CABIN_SCALE, CABIN_SCALE);
+  geometry.translate(CABIN_TRANSLATE[0], CABIN_TRANSLATE[1], CABIN_TRANSLATE[2]);
   // ② 源无 NORMAL：不补会全黑；GLTFLoader 若已自动补过则跳过（rotateY 已同步旋转法线）
   if (!geometry.getAttribute('normal')) geometry.computeVertexNormals();
 
@@ -222,7 +250,12 @@ export function assembleMasterCabin(geometry: THREE.BufferGeometry): MasterCabin
   mesh.castShadow = false;   // 内饰不投影，省 shadow DC
   mesh.receiveShadow = false;
   mesh.frustumCulled = true;
-  mesh.visible = false;      // 装配初值 exterior；此后只由 applyVisibility 覆盖
+  /* R90-VIS 根治：R89 这里写 `mesh.visible=false` 并注释「此后只由 applyVisibility
+   * 覆盖」，但 R7Adapter.applyVisibility 只写 root.visible ⇒ mesh 恒 false、母版永不
+   * 渲染（真机 A/B 隐藏母版零像素差定罪）。现改为 mesh 恒 true：显隐唯一真源是
+   * root.visible（applyVisibility 末尾），mesh 不再持有第二份可漂移状态。
+   * `#r90mastervis=off` ⇒ 恢复 R89 的 mesh.visible=false 供 A/B 对照。 */
+  mesh.visible = R90_MASTER_VIS_ON;
   (mesh.userData as { r44External?: boolean }).r44External = true;
 
   const root = new THREE.Group();
@@ -269,7 +302,8 @@ export async function loadMasterCabin(): Promise<MasterCabinHandle | null> {
     console.info(
       `[InteriorCabinMaster] ready tri=${handle.tri} mesh=${handle.audit.meshCount} ` +
       `mat=${handle.audit.materialCount} sculptId=${handle.audit.hasSculptId} ` +
-      `external=${handle.audit.isExternal} yaw=${R89_CABIN_YAW.toFixed(4)} scale=${R89_CABIN_SCALE}`
+      `external=${handle.audit.isExternal} yaw=${R89_CABIN_YAW.toFixed(4)} scale=${CABIN_SCALE} ` +
+      `trans=[${CABIN_TRANSLATE.join(',')}] vis=${R90_MASTER_VIS_ON}`
     );
     return handle;
   } catch (err) {

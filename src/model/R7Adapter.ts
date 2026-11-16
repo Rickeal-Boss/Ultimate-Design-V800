@@ -44,7 +44,11 @@ import {
   R89_R7_GLASS_ON,
   R89_R7_NO_ROOFCULL_ON,
   R89_R7_FRONTSIDE_ON,
-  R89_MASTER_TRI
+  R89_MASTER_TRI,
+  R90_MASTER_VIS_ON,
+  CABIN_SCALE,
+  CABIN_TRANSLATE,
+  type MasterCabinHandle
 } from './external/InteriorCabinMaster';
 import { setFxWheelOffsets } from '../fx';
 import { DEFAULT_VARIANT } from '../config/vehiclePaint';
@@ -1585,8 +1589,10 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
    */
   // ---- R44 状态：外部壳句柄 / 程序化外观隐藏标记 / 最近一次内舱态 ----
   let shellHandle: ExternalShellHandle | null = null;
-  /** R89：1.5M-tri 主驾座舱母版容器（r44External 免纳管；visible 只由 applyVisibility 末尾一行写） */
-  let masterCabin: THREE.Object3D | null = null;
+  /** R89/R90：1.5M-tri 主驾座舱母版句柄（r44External 免纳管；visible 只由 applyVisibility 末尾写）。
+   *  R90：类型从 Object3D 升为 MasterCabinHandle ⇒ applyVisibility 可同时写 root + mesh，
+   *  根治 R89 的 mesh.visible 恒 false（只写 root 导致母版永不渲染）。 */
+  let masterCabin: MasterCabinHandle | null = null;
   /** R47：高精度方向盘（仅 cabin 态可见；外景态零 DC / 不透车外） */
   let steeringMesh: THREE.Mesh | null = null;
   /** R47：高精度盘装配成功后要恒隐藏的程序化盘（防双盘重叠 / z-fighting） */
@@ -1913,10 +1919,16 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
     // ② R47/R71：高精盘 cabin 显（近距门控覆盖）；程序化盘接管后恒隐藏、近距态恢复
     if (steeringMesh) steeringMesh.visible = interior && !steerNear;
     for (const m of proceduralSteeringMeshes) m.visible = interior && steerNear;
-    /* R89 · 1.5M 母版唯一显隐真源：整棵子树 r44External 免纳管（不进 W1 状态表、
-     * 不进 cabinOccluderMats / pokeList），只有这一行写 visible。外景态 false ⇒
-     * 零 tri / 零 DC / 零材质开销，P0 运行时流畅度不受 1.5M 面数影响。 */
-    if (masterCabin) masterCabin.visible = interior;
+    /* R89/R90 · 1.5M 母版唯一显隐真源：整棵子树 r44External 免纳管（不进 W1 状态表、
+     * 不进 cabinOccluderMats / pokeList）。R90 根治：R89 只写 root.visible，而装配时
+     * mesh.visible=false 且无人覆盖 ⇒ 母版恒不渲染（真机 A/B 零像素差定罪）。现 root +
+     * mesh 双写（同一 interior 真源，无差量、无第二份状态）；外景态两者 false ⇒
+     * 零 tri / 零 DC / 零材质开销，P0 流畅度不受影响。
+     * `#r90mastervis=off` ⇒ 只写 root（逐位回 R89 bug 供对照）。 */
+    if (masterCabin) {
+      masterCabin.root.visible = interior;
+      if (R90_MASTER_VIS_ON) masterCabin.mesh.visible = interior;
+    }
   };
 
   /* ══════════════ R44 外部壳（外观 GLB 资产化）══════════════
@@ -2033,13 +2045,15 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
         const master = await loadMasterCabin();
         if (!master) return; // 失败：程序化座舱保持完整，游戏零感知
         body.add(master.root);
-        masterCabin = master.root;
+        masterCabin = master;
         master.root.visible = false;
+        master.mesh.visible = R90_MASTER_VIS_ON; // R90：与装配工厂同口径（真源在 root）
         const audit = getMasterCabinAudit(master.root);
         console.info(
-          `[R7Adapter] R89 母版就绪 tri=${audit.tri}/${R89_MASTER_TRI} ` +
+          `[R7Adapter] R90 母版就绪 tri=${audit.tri}/${R89_MASTER_TRI} ` +
           `mesh=${audit.meshCount} mat=${audit.materialCount} ` +
-          `sculptId=${audit.hasSculptId} external=${audit.isExternal}`
+          `sculptId=${audit.hasSculptId} external=${audit.isExternal} ` +
+          `scale=${CABIN_SCALE} trans=[${CABIN_TRANSLATE.join(',')}] vis=${R90_MASTER_VIS_ON}`
         );
       })();
     }
