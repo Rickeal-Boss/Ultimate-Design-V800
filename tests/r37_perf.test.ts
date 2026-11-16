@@ -265,9 +265,12 @@ describe('R37 金桶 tri 护栏（tri 口径，非表面积口径）', () => {
       const R37_ALL_TRI_BASE = 312_022;
       expect(gold / R37_ALL_TRI_BASE * 100).toBeLessThanOrEqual(30);
       expect(gold, '金桶绝对 tri 不得回退到 R37 基线之上').toBeLessThanOrEqual(84_732);
-      expect(gold, 'R89 沿 z 街区删除后金桶应同步下降').toBeLessThanOrEqual(60_000);
+      // R91：恢复中段街区（keep=6）后 gold 实测 69,420、全显 tri ≈195.5k；上限按
+      //   keep=6 场景取 ~13% 余量（80k / 220k），仍显著低于 R37 基线（84,732 / 312,022），
+      //   证明「街区删除生效」语义不因恢复而回退。
+      expect(gold, 'R89 沿 z 街区删除后金桶应同步下降').toBeLessThanOrEqual(80_000);
       expect(all, 'R89 全显 tri 必须显著低于 R37 基线（钉住 19/20 街区删除生效）')
-        .toBeLessThanOrEqual(160_000);
+        .toBeLessThanOrEqual(220_000);
       // 结构不变量：金必须仍是「分区提交」（否则包围球横跨走廊 ⇒ 永不被剔除）
       /* R89：沿 z 删 19/20 街区后 gold 实测在场 z0a/z0b/z1/z4 四区（z2/z3 城内归零），
        * 结构不变量「金分区提交」按开关分支：on 态 ≥4 区（塔冠保住 z4），off 态回 R88 的 ≥5。 */

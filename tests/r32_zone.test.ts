@@ -18,7 +18,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import * as THREE from 'three';
 import { Castle, zoneIndexOf } from '../src/render/scene/castle';
-import { setDetailLevel, R89_CITY_TRIM_ON } from '../src/render/scene/castleKit';
+import { setDetailLevel, R89_CITY_TRIM_ON, R91_CITY_RESTORE_ON } from '../src/render/scene/castleKit';
 import { disposeStoneCache } from '../src/render/scene/stoneTexture';
 import type { QualitySettings } from '../src/config/quality';
 import { R31_BUDGET } from '../src/render/scene/r31Budget';
@@ -180,8 +180,10 @@ describe('R32 C-4 · 建桶结构与 DC 设计公式', () => {
       expect(castleMesh(scene, 'castle-gold-z0b'), 'castle-gold-z0b 缺失').toBeDefined();
       expectZone('ashlar', 1, true);
       expectZone('gold', 1, true);
-      // z2/z3：R89 on ⇒ 城内街区体量归零；off ⇒ 回 R88 在场
-      expectZone('ashlar', 2, !R89_CITY_TRIM_ON);
+      // z2/z3：R89 on ⇒ 城内街区体量归零；off ⇒ 回 R88 在场。
+      // R91：恢复中段街区（keep=6）使 k=1..5 落入 z2(−460..−760)，z2 重新在场；
+      //   z3(−760..−1060) 仍不达（keep=6 最远块中心 −664.5 ⇒ 归 z2），谓词保持。
+      expectZone('ashlar', 2, !R89_CITY_TRIM_ON || R91_CITY_RESTORE_ON);
       expectZone('ashlar', 3, !R89_CITY_TRIM_ON);
       // z4/z5：天际线塔冠/火盆保留（k 循环外），两态都在场
       expectZone('ashlar', 4, false); // 实测缺失：塔冠走 z5 桶
