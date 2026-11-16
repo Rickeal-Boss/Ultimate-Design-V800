@@ -27,6 +27,14 @@ type SculptMaterialSpec = Record<string, any>;
 
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
+/** R91-3：全景天幕玻璃（roof-glass）黑带根治开关。
+ *  默认 ON：天幕材质从 `glass-dark`（深色透明 opacity 0.62，R90 期读作「实心黑板」）切到
+ *  共享车身漆 `materialMap["paint-green"]` 同实例 ⇒ 车顶读作连续米白漆面，消除
+ *  「左右两条锯齿黑带」（低模拱弧线从米白车顶壳边缘下方探出所致）。
+ *  回滚：`#r91r7roofglass=off` ⇒ 逐位回 R90 深色玻璃天幕（黑弧带，A/B 对照）。 */
+const R91_R7_ROOFGLASS_ON: boolean =
+  typeof window === 'undefined' || !/(?:^|[#&])r91r7roofglass=off/i.test(window.location.hash);
+
 // R9 平滑焊接：ExtrudeGeometry 非索引 + 逐面法线 = 全平面着色（积木棱角感）。
 // 先删法线 → mergeVertices 按「位置+UV」等值焊接（UV 不同处天然保留硬边，
 // 端面/侧壁的真实折痕不受影响）→ 重算顶点法线得到平滑过渡。
@@ -2588,7 +2596,12 @@ export function createLuxeedR7Model(options: ProceduralModelOptions = {}): THREE
   }
   const mesh_roof_glass_43 = new THREE.Mesh(
     mesh_roof_glass_43Geometry,
-    materialMap["glass-dark"] ?? new THREE.MeshStandardMaterial({ color: 0x888888 })
+    /* R91-3：全景天幕玻璃黑带根治 —— 默认切共享车身漆材质实例（零色差，variant 切换
+     * applyProcPaintTweaks/setVariant 原地改色时天幕自动跟随），车顶读作连续漆面。
+     * `#r91r7roofglass=off` ⇒ 回 R90 深色玻璃天幕（黑弧带，A/B 对照）。 */
+    R91_R7_ROOFGLASS_ON
+      ? (materialMap["paint-green"] ?? new THREE.MeshStandardMaterial({ color: 0x888888 }))
+      : (materialMap["glass-dark"] ?? new THREE.MeshStandardMaterial({ color: 0x888888 }))
   );
   mesh_roof_glass_43.name = "\u5168\u666f\u5929\u5e55\u73bb\u7483";
   if (endpoint_roof_glass_43) {
