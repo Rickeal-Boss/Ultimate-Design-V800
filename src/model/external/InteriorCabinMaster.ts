@@ -94,6 +94,16 @@ export const R90_MASTER_VIS_ON: boolean =
  * 玻璃恒显 / 不剔顶 / FrontSide 三个子项（总闸关闭时一律回 R88）。 */
 export const R89_R7_MASTER_ON: boolean =
   typeof window === 'undefined' || !/(?:^|[#&])r89r7master=off/i.test(window.location.hash);
+
+/* ── R91 · R7 母版去除异常（用户「R7 内饰需要去除异常」）────────────────────
+ * 默认 false：1.5M 母版不装配、不加载，R7 回程序化内饰（去掉巨型模糊座椅）。
+ * `#r91r7master=on` ⇒ 重新启用母版（逐位回 R89/R90 行为，A/B 回滚）。
+ * 与 R89_R7_MASTER_ON 正交：本开关**只管母版本身**，不触碰 R89 三处外部壳
+ * 黑板根治（GLASS / NO_ROOFCULL / FRONTSIDE）——那些是独立修复，母版移除后
+ * 仍须保持生效（R7Adapter 经 r89Master=R89_R7_MASTER_ON 消费，不接本开关）。
+ * 解析口径与 R89 同构（inline regex，无 FLAG helper）。 */
+export const R91_R7_MASTER_ON: boolean =
+  typeof window !== 'undefined' && /(?:^|[#&])r91r7master=on/i.test(window.location.hash);
 export const R89_R7_GLASS_ON: boolean =
   typeof window === 'undefined' || !/(?:^|[#&])r89r7glass=off/i.test(window.location.hash);
 export const R89_R7_NO_ROOFCULL_ON: boolean =
@@ -277,8 +287,10 @@ export async function loadMasterCabin(): Promise<MasterCabinHandle | null> {
     console.info('[InteriorCabinMaster] skipped in test env');
     return null;
   }
-  if (!R89_R7_MASTER_ON) {
-    console.info('[InteriorCabinMaster] force-OFF (#r89r7master=off); procedural cabin stays');
+  if (!R89_R7_MASTER_ON || !R91_R7_MASTER_ON) {
+    console.info(
+      '[InteriorCabinMaster] force-OFF (R89 #r89r7master=off or R91 default-off); procedural cabin stays'
+    );
     return null;
   }
   try {

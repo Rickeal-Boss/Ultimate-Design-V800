@@ -41,6 +41,7 @@ import {
   loadMasterCabin,
   getMasterCabinAudit,
   R89_R7_MASTER_ON,
+  R91_R7_MASTER_ON,
   R89_R7_GLASS_ON,
   R89_R7_NO_ROOFCULL_ON,
   R89_R7_FRONTSIDE_ON,
@@ -1888,7 +1889,9 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
      *      的巨大暗面黑板消失，座舱交给母版接管。R47 的 DoubleSide 是「外模包裹观感」
      *      旧机制，本波撤机制而非叠补丁（⚠ 车内黑板图 836Z 经紫像素判据 0.00% 证实是
      *      V800 而非 R7，本波不据此改 V800）。
-     * 总闸 `#r89r7master=off` ⇒ 三处逐位回 R88；三个子项各自 =off 可单独回退。 */
+     * 总闸 `#r89r7master=off` ⇒ 三处逐位回 R88；三个子项各自 =off 可单独回退。
+     * R91 `R91_R7_MASTER_ON`（默认 off）只管 1.5M 母版装配，**故意不**接进 r89Master：
+     * 三处黑板根治是独立修复，母版移除后仍须保持生效（CRITICAL 护栏）。 */
     const r89Master = R89_R7_MASTER_ON;
     if (shellHandle) {
       // ②：R47 不再整壳隐藏（FrontSide 背面剔除天然不遮挡座舱视线）
@@ -2040,7 +2043,7 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
      * 整棵子树 r44External ⇒ 建表已在此之前完成、不纳管；材质无 sculptMaterial.id
      * ⇒ 不进 cabinOccluderMats / pokeList。visible 唯一写入点 = applyVisibility 末尾
      * 一行（装配初值 exterior=false ⇒ 外景态零 tri / 零 DC）。 */
-    if (R89_R7_MASTER_ON) {
+    if (R89_R7_MASTER_ON && R91_R7_MASTER_ON) {
       void (async () => {
         const master = await loadMasterCabin();
         if (!master) return; // 失败：程序化座舱保持完整，游戏零感知
