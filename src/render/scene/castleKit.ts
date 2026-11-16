@@ -171,6 +171,23 @@ export const R89_CITY_TRIM_ON =
   typeof window === 'undefined' || !/(?:^|[#&])r89city=off/i.test(window.location.hash);
 
 /**
+ * R91 · **城内中段街区「恢复 + 逐块高度递减」开关**（A/B 回滚，用户黄框「中段建筑
+ * 完全消失」根治）。
+ * 病根（本波）：R89 把沿 z 的 20 个重复街区削到只留 k=0 第一排（keep=1），中/远城
+ * 完全空掉。R91 恢复默认 **6 个街区**（keep=1→6，~72.6k tri），并对块 k=1..5 做
+ * **确定性逐块高度递减**（Y × (1−0.03k)）—— 不再生成「排排同高白色密集楼房」的
+ * 均匀剪影，读作自然进深/透视衰减（近高远低、破均质重复）。
+ * `#r91city=off` ⇒ 逐位回 R89（keep=1）；`#r91city=full` ⇒ 全 20 街区（R88 满量，
+ * 逐位回滚口径）。默认（无 hash）= keep=6。
+ * 导出供护栏（r32_zone / r37_perf）与探针按开关分支断言。
+ */
+export const R91_CITY_RESTORE_ON =
+  typeof window === 'undefined' || !/(?:^|[#&])r91city=off/i.test(window.location.hash);
+export const R91_CITY_FULL_ON =
+  typeof window !== 'undefined' && /(?:^|[#&])r91city=full/i.test(window.location.hash);
+export const R91_CITY_KEEP_BLOCKS = 6;
+
+/**
  * R86 深化 · **城内后排塔体「基段截断」遮挡线**（前排殿/连墙顶高 ~17.3m）。
  * `makeInnerCity` 内后排塔体（②~⑤ 排 + 院落）把 box 基段从 0 抬到 OCC，仅留
  * OCC 以上残段；y_max ≤ OCC 整删、y_min ≥ OCC 整保、跨 OCC 截到 OCC。
@@ -2956,9 +2973,23 @@ export function makeInnerCity(): StoneBuckets {
    * `if (!far && k < 8)` 会执行，R36-A2 `castle-pave` 契约桶仍在场。
    * 禁止循环首 continue / 空循环 / setDeepFar 后 continue（DEEP_FAR 会泄漏给
    * 循环外连廊段，且空循环会打掉 pave 桶）。#r89city=off ⇒ 上界回 blocks=20。 */
-  const R89_CITY_KEEP_BLOCKS = R89_CITY_TRIM_ON ? 1 : blocks;
-  for (let k = 0; k < Math.min(blocks, R89_CITY_KEEP_BLOCKS); k += 1) {
+  const R89_CITY_KEEP_BLOCKS = R89_CITY_TRIM_ON ? 1 : blocks; // ← .qa 探针 esbuild 锚点（勿改该行字面）
+  /* R91：中段恢复 —— 默认 keep=6；#r91city=full ⇒ 全 20 街区；#r91city=off ⇒ 回 R89。
+   * .qa/r91-probe-city 探针经 esbuild 把上一行锚点替换为
+   * `(globalThis.__R91_KEEP_BLOCKS ?? …)` 并注入 __R91_KEEP_BLOCKS 逐档量测 ⇒ 探针优先；
+   * 浏览器里该全局恒 undefined ⇒ 落 R91 默认 6（A/B 开关语义见 R91_CITY_RESTORE_ON）。 */
+  const r91Keep = R91_CITY_FULL_ON ? blocks : R91_CITY_RESTORE_ON ? R91_CITY_KEEP_BLOCKS : R89_CITY_KEEP_BLOCKS;
+  const keep = (globalThis as unknown as { __R91_KEEP_BLOCKS?: number }).__R91_KEEP_BLOCKS ?? r91Keep;
+  for (let k = 0; k < Math.min(blocks, keep); k += 1) {
     const zc = zNear - blockLen / 2 - k * blockLen; // 块中心
+    // R91：逐块高度递减 —— 记录本块开始前各桶几何数（块 k=1..5 缩 Y×(1−0.03k)，
+    // k=0 不缩作近景基准；只记录 k>0，省掉 k=0 的空表）。
+    const blockStartLen: Record<string, number> = {};
+    if (k > 0) {
+      for (const key of Object.keys(b) as (keyof StoneBuckets)[]) {
+        blockStartLen[key] = (b[key] as unknown as THREE.BufferGeometry[]).length;
+      }
+    }
     // A 线 ⑦ 远区 LOD 减法：最远 1/3 街区（最深 z 区）置 DEEP_FAR —— 跳过卷叶 /
     // 子拱 / 窗棂 / 壁龛立像 / 瓶柱加密等纯装饰密度（几何长度不变，铁律 33）。
     const far = k >= blocks - Math.floor(blocks / 3);
@@ -3895,6 +3926,25 @@ export function makeInnerCity(): StoneBuckets {
         b.gold.push(put(spire('gold', 0.24, 0.4, 0.85, 8, -0.7, 0.75, bz2)));
         b.gold.push(put(spire('gold', 0.44, 0.44, 0.11, 8, -0.7, 1.6, bz2)));
         b.flame.push(put(flame(0.28, 0.46, -0.7, 1.71, bz2)));
+      }
+    }
+
+    /* ── R91 · 逐块高度递减（破「排排白楼」均质剪影）──────────────────────────
+     * 只缩 Y、绕原点（即地面）⇒ 建筑高度向地面收、近高远低，读作自然进深/透视
+     * 衰减；**不动 X/Z**（街区纵向/侧向间距不变，z 中值不变 ⇒ 探针 z 分片稳定）。
+     * 只对 k>0 块做（k=0 保持 1.0 作近景基准）；**跳过 pave/地面桶**（水平地坪
+     * 缩 Y 无意义且会破坏 R36-A2 pave 契约的 y 面位）。缩放量确定性 `1 − 0.03k`：
+     *   k=1→0.97、k=2→0.94、k=3→0.91、k=4→0.88、k=5→0.85（≤15%，读作进深而不
+     *   是变形）。块内每件新几何恰好缩一次（startLen 快照按桶记）。 */
+    if (k > 0) {
+      const jitterY = 1 - 0.03 * k;
+      for (const key of Object.keys(b) as (keyof StoneBuckets)[]) {
+        if (String(key) === 'pave') continue; // 地面桶不动（pave 是 extra 动态变体桶，不在 keyof）
+        const arr = b[key] as unknown as THREE.BufferGeometry[];
+        const from = blockStartLen[key] ?? 0;
+        for (let i = from; i < arr.length; i += 1) {
+          arr[i].scale(1, jitterY, 1);
+        }
       }
     }
   }
