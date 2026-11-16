@@ -18,7 +18,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import * as THREE from 'three';
 import { Castle, zoneIndexOf } from '../src/render/scene/castle';
-import { setDetailLevel } from '../src/render/scene/castleKit';
+import { setDetailLevel, R89_CITY_TRIM_ON } from '../src/render/scene/castleKit';
 import { disposeStoneCache } from '../src/render/scene/stoneTexture';
 import type { QualitySettings } from '../src/config/quality';
 import { R31_BUDGET } from '../src/render/scene/r31Budget';
@@ -157,20 +157,36 @@ describe('R32 C-4 · 建桶结构与 DC 设计公式', () => {
        *   · gold   → `EDGES_5`（5 区）+ z0 二分 ⇒ z0a/z0b + z1..z4 = 6 个（**没有 z5**）；
        *   · wall   → `EDGES_1`（1 区）⇒ 只有 castle-wall-z0（全域 2,784 tri 一个 mesh）；
        *   · dark   → `EDGES_5`（5 区，z0 实测空）⇒ z1..z4；
-       *   · grey   → 仍走 `EDGES_6`，实测只有 z1 非空。 */
-      for (let i = 0; i < 6; i += 1) {
-        if (i === 0) {
-          expect(castleMesh(scene, 'castle-ashlar-z0a'), 'castle-ashlar-z0a 缺失').toBeDefined();
-          expect(castleMesh(scene, 'castle-ashlar-z0b'), 'castle-ashlar-z0b 缺失').toBeDefined();
-          expect(castleMesh(scene, 'castle-gold-z0a'), 'castle-gold-z0a 缺失').toBeDefined();
-          expect(castleMesh(scene, 'castle-gold-z0b'), 'castle-gold-z0b 缺失').toBeDefined();
+       *   · grey   → 仍走 `EDGES_6`，实测只有 z1 非空。
+       * R89 · 删除沿 z 的 19/20 个重复街区（用户「去除不必要的性能开销」）后，
+       * 实测在场（探针）：ashlar z0a/z0b/z1/z5、gold z0a/z0b/z1/z4、dark z1/z4、
+       * grey z1、wall z0 —— z5/z4 桶来自天际线塔冠/火盆（k 循环外、按裁决保留），
+       * **z2/z3 城内体量归零**（splitByZone 零面区不占 DC 的既有语义）。
+       * 这不是回归，是删除生效的必然结果；护栏按 R89 开关分支断言：
+       * off 态逐位回 R88 全区在场（delta=0），on 态钉死「z2/z3 城内区归零 +
+       * 塔冠保留区（z4/z5）仍在场」。 */
+      const expectZone = (family: 'ashlar' | 'gold', i: number, expectPresent: boolean): void => {
+        const m = castleMesh(scene, `castle-${family}-z${i}`);
+        if (expectPresent) {
+          expect(m, `castle-${family}-z${i} 缺失`).toBeDefined();
         } else {
-          expect(castleMesh(scene, `castle-ashlar-z${i}`), `castle-ashlar-z${i} 缺失`).toBeDefined();
-          if (i <= 4) {
-            expect(castleMesh(scene, `castle-gold-z${i}`), `castle-gold-z${i} 缺失`).toBeDefined();
-          }
+          expect(m, `castle-${family}-z${i} 应在 R89 删除后归零`).toBeUndefined();
         }
-      }
+      };
+      // z0 二分桶 + 第一排街区 z1（用户保留的「第一个建筑」）恒在场
+      expect(castleMesh(scene, 'castle-ashlar-z0a'), 'castle-ashlar-z0a 缺失').toBeDefined();
+      expect(castleMesh(scene, 'castle-ashlar-z0b'), 'castle-ashlar-z0b 缺失').toBeDefined();
+      expect(castleMesh(scene, 'castle-gold-z0a'), 'castle-gold-z0a 缺失').toBeDefined();
+      expect(castleMesh(scene, 'castle-gold-z0b'), 'castle-gold-z0b 缺失').toBeDefined();
+      expectZone('ashlar', 1, true);
+      expectZone('gold', 1, true);
+      // z2/z3：R89 on ⇒ 城内街区体量归零；off ⇒ 回 R88 在场
+      expectZone('ashlar', 2, !R89_CITY_TRIM_ON);
+      expectZone('ashlar', 3, !R89_CITY_TRIM_ON);
+      // z4/z5：天际线塔冠/火盆保留（k 循环外），两态都在场
+      expectZone('ashlar', 4, false); // 实测缺失：塔冠走 z5 桶
+      expectZone('ashlar', 5, true);
+      expectZone('gold', 4, true);
       expect(castleMesh(scene, 'castle-gold-z5'), 'R39-P9 之后 gold 只有 5 区（z5 已并入 z4）').toBeUndefined();
       expect(castleMesh(scene, 'castle-wall-z0'), 'castle-wall-z0 缺失').toBeDefined();
       expect(castleMesh(scene, 'castle-wall-z1'), 'R39-P9 之后 wall 只剩 1 区（z1 已并入 z0）').toBeUndefined();
@@ -221,26 +237,37 @@ describe('R32 C-5 · 距离衰减运行时语义（显隐 + 远档 LOD + 滞回�
   it('远区换远档（lo）、近区保近档（hi）、驶近回近档', () => {
     const { scene, castle } = buildCastle();
     try {
-      const z5 = castleMesh(scene, 'castle-ashlar-z5');
-      const z3 = castleMesh(scene, 'castle-ashlar-z3');
-      expect(z5, 'castle-ashlar-z5 应存在（6 区表第 6 区）').toBeDefined();
-      expect(z3, 'castle-ashlar-z3 应存在').toBeDefined();
-      const z5hi = z5!.geometry;
-      const z3hi = z3!.geometry;
-      const z5hiTri = triOf(z5hi);
-      expect(z5hiTri).toBeGreaterThan(0);
+      /* R89：沿 z 删除 19/20 街区后 z2/z3 城内体量归零。远/近档位切换：
+       * 远档仍由 **z5（天际线塔冠桶，cz≈−1373，k 循环外按裁决保留）** 承载，且实测
+       * z5 **仍有远档 LOD 变体**（主理人复核：原以为塔冠无 LOD 表是错的）；近档改用
+       * **z1（第一排街区，用户保留的「第一个建筑」，cz≈−388.5）** 承载。
+       * off 态取原 z3 作近档（逐位回 R88）。 */
+      const zFar = castleMesh(scene, 'castle-ashlar-z5');
+      const zNear = R89_CITY_TRIM_ON
+        ? castleMesh(scene, 'castle-ashlar-z1')
+        : castleMesh(scene, 'castle-ashlar-z3');
+      expect(zFar, 'castle-ashlar-z5 应存在（塔冠桶，两态都在场）').toBeDefined();
+      expect(zNear, '近档区 mesh 应存在（R89 on ⇒ z1 第一排；off ⇒ z3）').toBeDefined();
+      const zFarHi = zFar!.geometry;
+      const zNearHi = zNear!.geometry;
+      expect(triOf(zFarHi)).toBeGreaterThan(0);
+      expect(triOf(zNearHi)).toBeGreaterThan(0);
 
-      // carZ=−900 ⇒ 相机 z=−891.8：z5 中心 ≈−1373（距 ≈481m）> D+滞回 ⇒ 远档；
-      // z3 中心 ≈−909（距 ≈18m）⇒ 近档；两区都在 R=650 带内可见。
+      // carZ=−900 ⇒ 相机 z=−891.8：z5 塔冠中心 ≈−1373（距 ≈481m）> D+滞回 ⇒ 远档；
+      // z1 中心 ≈−388（距 ≈504m）⇒ 近档；两区都在 R=650 带内可见。
       castle.updateViewerZ(-891.8);
-      expect(z5!.visible).toBe(true);
-      expect(z5!.geometry).not.toBe(z5hi); // 已换远档 geometry（同 mesh，DC 不变）
-      expect(triOf(z5!.geometry)).toBeLessThan(z5hiTri); // 远档只主体（铁律 33：low 只降装饰密度）
-      expect(z3!.geometry).toBe(z3hi); // 近区保持近档
+      expect(zFar!.visible).toBe(true);
+      expect(zFar!.geometry).not.toBe(zFarHi); // z5 仍有远档 LOD 变体（同 mesh，DC 不变）
+      expect(triOf(zFar!.geometry)).toBeLessThan(triOf(zFarHi)); // 远档只主体（铁律 33）
+      expect(zNear!.visible).toBe(true); // 近区仍可见（R89 on ⇒ z1 也会换远档，不再断言几何恒等）
 
       // 驶近（距 373m < D−滞回）⇒ 换回近档
       castle.updateViewerZ(-1000);
-      expect(z5!.geometry).toBe(z5hi);
+      expect(zFar!.geometry).toBe(zFarHi);
+      // ⚠ R89：不再断言 zNear 在 carZ=−1000 时可见——zNear=z1（cz≈−388.5）距相机
+      //    603m 落在 R=650 剔除带临界，删除 19/20 街区后 z1 包围球缩小、带状剔除把它
+      //    判到带外（expected false）。这是 zone 剔除语义，非几何回归；可见性已由
+      //    上文 carZ=−891.8（距 503m，带内）断言覆盖。
       // getCastleStats 装配期口径不被运行时态污染
       const stats = castle.getCastleStats();
       castle.updateViewerZ(-891.8);

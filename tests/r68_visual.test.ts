@@ -89,6 +89,8 @@ import {
   C2_STRIP_COUNTS,
   C2_TEX_BUDGET,
   C2_TRI_BUDGET,
+  R89_C2_BLACKPANEL_ON,
+  R89_C2_SLANT_ROLLBACK,
   R69_C2_LAMP_ON,
   R71_C2_COVERFILL_ON,
   R71_C2_SIDE_ON,
@@ -146,7 +148,7 @@ const R68_PENDING_TRACK_FILES = [
  *  R82 再更新基线：C2 侧面黑板收口（盖板填充进深 0.10→0.02 / 竖灯外缘 0.006→0.035，`#r82c2filldepth`/`#r82c2outset` 回滚）
  *  触发 r67_tail_c2.test.ts 的 maxAbsX/zMax 两条 toBeCloseTo 精确坐标断言改为 R82 开关感知（ON 断新值 / OFF 断原基线），
  *  护栏强度不减、on/off 两态都被精确钉住，属预期改动。 */
-const R67_GUARD_SHA256 = '506f00f5a0b813c2afb0ea1ad0ef63ac76a44c1cf57f8c40d1b666f31f1ed5a9';
+const R67_GUARD_SHA256 = 'be2d435eac75fa425792ca1382d98bdc5745b1fe3c5d0244be4eec7a6912d839';
 /** V800Adapter.ts 全文件冻结（CRLF 规范化后 UTF-8 sha256）。W2批4 更新基线：透明件渲染排序
  *  治理——给 depthWrite=false 的玻璃（greenhouse 桶 + rear-glass-upper 克隆）经
  *  userData.vorderGlass 标记批量钉 renderOrder=10、welcome-carpet / tailgate-maextro /
@@ -302,7 +304,9 @@ describe('R68 · 第 0 条：零护栏改动契约', () => {
     expect(r67Guard).toContain("for (const needle of ['r67', 'tailLampC2', 'R67_TAIL_C2_ON', 'r67_tail_'])");
     // R84：faceTri 补入上半区黑填充项（原 `R69_C2_LAMP_ON ? 8 : 4` → 追加 R84_C2_SIDE_UP_ON ? 4 : 0）
     // R86：再追加外上填充 + 正面 FRONT 填充项（R86_C2_UPPEROUTER_ON ? 8 : 0），faceTri 折成两行。
-    expect(r67Guard).toContain('const faceTri = (R69_C2_LAMP_ON ? 8 : 4) + (R84_C2_SIDE_UP_ON ? 4 : 0)\n      + (R86_C2_UPPEROUTER_ON ? 8 : 0);');
+    // R89：faceTri 改逐开关累加（楔板/FRONT 两半默认删、整幅面板 +2）。
+    expect(r67Guard).toContain('const r86Outer = R86_C2_UPPEROUTER_ON && (!R89_C2_BLACKPANEL_ON || R89_C2_SLANT_ROLLBACK);');
+    expect(r67Guard).toContain('+ (r86Outer ? 4 : 0) + (r86Front ? 4 : 0) + (R89_C2_BLACKPANEL_ON ? 2 : 0);');
     expect(r67Guard).toContain('Math.abs(C2_GEOM.coverZ - -0.56751) * 4.75');
   });
 
@@ -321,13 +325,13 @@ describe('R68 · 第 0 条：零护栏改动契约', () => {
   });
 
   it('★ 几何拓扑恒等：C2_TRI_BUDGET(56|R86外上填充+正面·48|R84上填充·44|R71填充·40|R69·36)/cover/face/默认调用 3 mesh', () => {
-    expect(C2_TRI_BUDGET).toBe(36 + (R69_C2_LAMP_ON ? 4 : 0) + (R71_C2_COVERFILL_ON ? 4 : 0) + (R84_C2_SIDE_UP_ON ? 4 : 0) + (R86_C2_UPPEROUTER_ON ? 8 : 0));
+    expect(C2_TRI_BUDGET).toBe(36 + (R69_C2_LAMP_ON ? 4 : 0) + (R71_C2_COVERFILL_ON ? 4 : 0) + (R84_C2_SIDE_UP_ON ? 4 : 0) + (R86_C2_UPPEROUTER_ON && (!R89_C2_BLACKPANEL_ON || R89_C2_SLANT_ROLLBACK) ? 4 : 0) + (R86_C2_UPPEROUTER_ON && !R89_C2_BLACKPANEL_ON ? 4 : 0) + (R89_C2_BLACKPANEL_ON ? 2 : 0));
     expect(C2_DC_BUDGET).toBe(3);
     expect(C2_MAT_BUDGET).toBe(2);
     expect(C2_TEX_BUDGET).toBe(1);
     // R71 盖板侧面黑填充 + R84 上半区黑填充 + R86 外上填充把预算改为表达式（base 36 + R69 侧壁 4 + R71 填充 4 + R84 上填充 4 + R86 外上填充 4）
     expect(c2src).toContain('export const C2_TRI_BUDGET = 36');
-    expect(c2src).toContain('+ (R86_C2_UPPEROUTER_ON ? 8 : 0);');
+    expect(c2src).toContain('+ (R89_C2_BLACKPANEL_ON ? 2 : 0);');
     const triOf = (m: THREE.Mesh): number => {
       const g = m.geometry;
       return (g.index ? g.index.count : g.getAttribute('position').count) / 3;
@@ -338,9 +342,9 @@ describe('R68 · 第 0 条：零护栏改动契约', () => {
     // R86 修正：coverMesh 已下移到全部 mergeSafe 之后创建 ⇒ R71 侧面填充 / R84 上填充 / R86
     // 外上填充都真正进 coverMesh.geometry（旧写法 coverMesh 指向 merge 前的孤儿几何、这两块
     // 填充从未渲染）。故 coverMesh = base 12 + R71 4 + R84 4 + R86 4。
-    expect(triOf(r.coverMesh)).toBe((R71_C2_COVERFILL_ON ? 16 : 12) + (R84_C2_SIDE_UP_ON ? 4 : 0) + (R86_C2_UPPEROUTER_ON ? 8 : 0)); // 盖板薄盒+三块填充全并入
+    expect(triOf(r.coverMesh)).toBe((R71_C2_COVERFILL_ON ? 16 : 12) + (R84_C2_SIDE_UP_ON ? 4 : 0) + (R86_C2_UPPEROUTER_ON && (!R89_C2_BLACKPANEL_ON || R89_C2_SLANT_ROLLBACK) ? 4 : 0) + (R86_C2_UPPEROUTER_ON && !R89_C2_BLACKPANEL_ON ? 4 : 0) + (R89_C2_BLACKPANEL_ON ? 2 : 0)); // 盖板薄盒+三块填充全并入
     expect(triOf(r.faceMesh)).toBe(R69_C2_LAMP_ON ? 8 : 4); // R69 侧壁 +4
-    expect(r.budget.tri).toBe(36 + (R69_C2_LAMP_ON ? 4 : 0) + (R71_C2_COVERFILL_ON ? 4 : 0) + (R84_C2_SIDE_UP_ON ? 4 : 0) + (R86_C2_UPPEROUTER_ON ? 8 : 0));
+    expect(r.budget.tri).toBe(36 + (R69_C2_LAMP_ON ? 4 : 0) + (R71_C2_COVERFILL_ON ? 4 : 0) + (R84_C2_SIDE_UP_ON ? 4 : 0) + (R86_C2_UPPEROUTER_ON && (!R89_C2_BLACKPANEL_ON || R89_C2_SLANT_ROLLBACK) ? 4 : 0) + (R86_C2_UPPEROUTER_ON && !R89_C2_BLACKPANEL_ON ? 4 : 0) + (R89_C2_BLACKPANEL_ON ? 2 : 0));
     // coverMesh 已含全部填充 ⇒ 三 mesh 几何和 = budget.tri（无需再外加 R84/R86 项）。
     expect(triOf(r.coverMesh) + triOf(r.faceMesh) + triOf(r.redStripMesh)).toBe(r.budget.tri);
   });
@@ -356,13 +360,13 @@ describe('R68 · 第 0 条：零护栏改动契约', () => {
       });
       expect(r.meshes, `coverTweak=${tweak} mesh 数`).toHaveLength(3);
       expect(r.budget.dc).toBe(3);
-      expect(r.budget.tri).toBe(36 + (R69_C2_LAMP_ON ? 4 : 0) + (R71_C2_COVERFILL_ON ? 4 : 0) + (R84_C2_SIDE_UP_ON ? 4 : 0) + (R86_C2_UPPEROUTER_ON ? 8 : 0));
+      expect(r.budget.tri).toBe(36 + (R69_C2_LAMP_ON ? 4 : 0) + (R71_C2_COVERFILL_ON ? 4 : 0) + (R84_C2_SIDE_UP_ON ? 4 : 0) + (R86_C2_UPPEROUTER_ON && (!R89_C2_BLACKPANEL_ON || R89_C2_SLANT_ROLLBACK) ? 4 : 0) + (R86_C2_UPPEROUTER_ON && !R89_C2_BLACKPANEL_ON ? 4 : 0) + (R89_C2_BLACKPANEL_ON ? 2 : 0));
       expect(r.budget.mat).toBe(2);
       // node 无 document ⇒ makeC2AtlasTexture 返回 null、贴图降级为 0（r67:395 同口径）；
       // 浏览器态为 1，故只钉 ≤ C2_TEX_BUDGET，不把 node 降级误当契约。
       expect(r.budget.tex).toBeLessThanOrEqual(C2_TEX_BUDGET);
       // R86 修正：coverMesh 下移到全部 merge 后 ⇒ R71/R84/R86 三块填充都进 coverMesh.geometry。
-      expect(triOf(r.coverMesh)).toBe((R71_C2_COVERFILL_ON ? 16 : 12) + (R84_C2_SIDE_UP_ON ? 4 : 0) + (R86_C2_UPPEROUTER_ON ? 8 : 0)); // 盖板薄盒+三块填充
+      expect(triOf(r.coverMesh)).toBe((R71_C2_COVERFILL_ON ? 16 : 12) + (R84_C2_SIDE_UP_ON ? 4 : 0) + (R86_C2_UPPEROUTER_ON && (!R89_C2_BLACKPANEL_ON || R89_C2_SLANT_ROLLBACK) ? 4 : 0) + (R86_C2_UPPEROUTER_ON && !R89_C2_BLACKPANEL_ON ? 4 : 0) + (R89_C2_BLACKPANEL_ON ? 2 : 0)); // 盖板薄盒+三块填充
       expect(triOf(r.faceMesh)).toBe(R69_C2_LAMP_ON ? 8 : 4); // R69 侧壁 +4
       // coverMesh 已含全部填充 ⇒ 三 mesh 几何和 = budget.tri（无需再外加填充项）。
       expect(triOf(r.coverMesh) + triOf(r.faceMesh) + triOf(r.redStripMesh)).toBe(r.budget.tri);
@@ -546,7 +550,12 @@ describe('R68 · 7 行逐字表（禁别名）与 r51HookOff 实证', () => {
   it('★ 7 个常量逐字钉死（以开发线实际落盘名，主理人 14:06 裁决不再回头改名）', () => {
     // 常量名 ↔ hook key 的映射逐字钉在声明行上；7 个全在 ExternalShell.ts 模块顶层。
     for (const s of R68_SWITCHES) {
-      expect(shell).toContain(`export const ${s.name} = !r51HookOff('${s.key}');`);
+      // R89：R68_R7_TAIL_ON 被 R89 主开关包装（默认态回 R65 半成品尾灯），
+      // 逐字断言同步为**精确新形态**，不放宽：仍要求 r51HookOff('r68r7tail') 原键名在行内。
+      const exact = s.name === 'R68_R7_TAIL_ON'
+        ? `export const R68_R7_TAIL_ON = !R89_R7_TAIL65_ON && !r51HookOff('r68r7tail');`
+        : `export const ${s.name} = !r51HookOff('${s.key}');`;
+      expect(shell).toContain(exact);
     }
     expect(shell.match(/export const R68_[A-Z0-9_]+\s*=/g) ?? []).toHaveLength(7);
     // 禁别名（B4 / 审查线初稿）
@@ -554,6 +563,35 @@ describe('R68 · 7 行逐字表（禁别名）与 r51HookOff 实证', () => {
     expect(shell).not.toContain('R68_R7LAMP_ON');
     expect(shell).not.toContain('R68_C2COVER_ON');
     expect(shell).not.toContain('R68_GLASSOPAQUE_ON');
+  });
+
+  /* ═══ R89 · R7 尾灯回 R65 半成品态 —— 正锁断言（新增，只加严不放宽）═══════════
+   * 定罪：R88 把 R68_R7_TAIL_ON 默认取真 ⇒ 外部壳 lamp_rear.glb 分段图案被整组
+   * 从 lampMeshes 出口过滤，尾灯退化成「一条红带」。R89 用主开关把默认值翻转回
+   * R65（CI run #84 / 5c78c9e 期）装配态，且不依赖任何 URL 钩子。
+   * 断言覆盖：①两开关存在且默认 ON ②声明顺序（R89 在 R68/R81 之前，防 TDZ）
+   * ③两个旧常量都被主开关包装 ④历史 off 口令逐字保留 ⑤补洞 UV 只取中段切片。 */
+  it('★ R89 主开关默认 ON 且声明早于被包装常量（防 TDZ）', () => {
+    expect(shell).toContain("export const R89_R7_TAIL65_ON = !r51HookOff('r89r7tail65');");
+    expect(shell).toContain("export const R89_R7_TAILMASK_ON = !r51HookOff('r89r7tailmask');");
+    const i89 = shell.indexOf('export const R89_R7_TAIL65_ON');
+    const i68 = shell.indexOf('export const R68_R7_TAIL_ON');
+    const i81 = shell.indexOf('export const R81_R7_HOUSING_HIDE');
+    expect(i89).toBeGreaterThanOrEqual(0);
+    expect(i89).toBeLessThan(i68);
+    expect(i89).toBeLessThan(i81);
+    // 两个旧常量必须都被主开关包装（缺一即「只翻一半」，R88 同类漏改）
+    expect(shell).toContain("export const R81_R7_HOUSING_HIDE = !R89_R7_TAIL65_ON && !r51HookOff('r81r7housing');");
+    // 历史回滚口令语义不动
+    expect(shell).toContain("r51HookOff('r68r7tail')");
+    expect(shell).toContain("r51HookOff('r81r7housing')");
+  });
+
+  it('★ R89 补洞遮罩取 atlas 中段切片（严禁 u∈[0,1] 整张铺满）', () => {
+    expect(shell).toContain('R89_R7_TAILMASK_ON');
+    expect(shell).toContain('makeR7RearBandAtlas');
+    // 中段 LUXEED 切片：u∈[0.336,0.664]，不得整幅 0..1
+    expect(shell).toMatch(/remapUVToRegion\([^)]*0\.336[^)]*0\.664/);
   });
 
   it('★ B5-2 独立文件同源：Renderer 复用模块顶层常量 / R7Adapter 本地同语义 RegExp', () => {

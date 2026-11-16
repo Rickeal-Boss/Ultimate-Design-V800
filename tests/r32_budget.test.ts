@@ -293,8 +293,20 @@ describe('R32 C-5 · zone-visible 治理（真消费 R31_BUDGET.visibleTri）', 
         .toBeLessThanOrEqual(R32_SPHERE_BASE['-200'] * TREND_KEEP['-200']);
       expect(mid500.tri, `中段 −500 相对 R32 sphere 快照降幅不足 20%（基线 ${R32_SPHERE_BASE['-500']}，现值 ${Math.round(mid500.tri)}）`)
         .toBeLessThanOrEqual(R32_SPHERE_BASE['-500'] * TREND_KEEP['-500']);
-      // 入口/终点 sanity：起点被 R=650 摘掉远区 ⇒ 应显著低于中段（sphere 口径）
-      expect(samples[0].tri).toBeLessThan(mid200.tri);
+      /* R89 · 方向性 sanity 的几何前提失效，改为「治理有效性」加严判据（主理人裁决）
+       * 旧断言「起点 < 中段」依赖「起点被 R=650 摘掉远区」：R89 删除沿 z 的 19/20
+       * 个重复街区后，起点(carZ=60) 只剩第一排近区(78,290 tri)，中段(carZ=-200)
+       * 反被距离剔除摘到 66,226 ⇒ 方向反转是治理生效的结果，不是回归。
+       * ⇒ 不保留方向判据、不放宽任何绝对预算键，改为三条更硬的判据：
+       *   ① 全场逐帧峰值 ≤ visibleTri（R31 硬约束，独立重算）
+       *   ② −200 相对 R32 sphere 快照降幅 ≥20%（原趋势仅 ≥5%）
+       *   ③ −500 相对 R32 sphere 快照降幅 ≥40%（原趋势仅 ≥20%）
+       * 实测 66,226/198,474 = 33.4%（−66.6%）、36,230/250,202 = 14.5%（−85.5%）。 */
+      const peakSphereTri = Math.max(...samples.map((s) => s.tri));
+      expect(peakSphereTri, `R89 全场逐帧峰值 ${Math.round(peakSphereTri)} 超 visibleTri`)
+        .toBeLessThanOrEqual(R31_BUDGET.visibleTri);
+      expect(mid200.tri, 'R89 −200 降幅须 ≥20%').toBeLessThanOrEqual(R32_SPHERE_BASE['-200'] * 0.8);
+      expect(mid500.tri, 'R89 −500 降幅须 ≥40%').toBeLessThanOrEqual(R32_SPHERE_BASE['-500'] * 0.6);
     } finally {
       castle.dispose();
     }

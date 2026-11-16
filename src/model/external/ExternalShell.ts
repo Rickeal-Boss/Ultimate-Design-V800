@@ -33,7 +33,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { mergeSafe } from '../../util/geo';
-import { buildTailLampC2, resolveC2StripCounts } from '../parts/tailLampC2';
+import { buildTailLampC2, resolveC2StripCounts, remapUVToRegion } from '../parts/tailLampC2';
 import { buildR7TailWrap } from '../parts/r7TailWrap';
 import { r68BuildR7FrontLamp } from '../parts/r7FrontAtlas';
 import {
@@ -2564,6 +2564,105 @@ export async function loadExternalShell(
           for (const mat of wrap.mats) r68TailWrapMats.push(mat);
           if (wrapAtlas) r68TailWrapTex.push(wrapAtlas);
         }
+
+        /* ══ R89 · 中央 0.834m 缺口补洞遮罩（默认 ON，回滚 `#r89r7tailmask=off`）══
+         * 【git 考证 · 主理人 R89 定稿，写在此避免下轮再错】用户口述 5c78c9e 经
+         * 考证为 R65，本波按 **CI run #84 = R65 期** 定位（用户要「先回退再补洞」，
+         * 禁止在当前一条红带上叠补丁）。`git show` 核实：5c78c9e = 2026-11-10 R65
+         * （曜日车标 + preview.html 修复）；523cfe7 = 2026-11-14 @R84 波（含「R7
+         * 尾灯 band 回填」），两者**不是同一时点**。R64-fix(07e4afe) 提交信息写
+         * 「修 CI run81」⇒ CI run #84 确实落在 R65 期，与口述 5c78c9e 自洽
+         * ⇒ 本波锚点 = R65 期 R48/R49/R51 装配态：
+         * 外部壳 lamp_rear.glb 分段图案**未被过滤**、R49 band/housing/盖板都在、
+         * 盖板不贴 atlas。退化链：R68 起过滤 lamp_rear → R81 藏 housing →
+         * R83/R85/R86/R87/R88 逐步压成「一条红带 + 中央黑方块」。
+         * ⚠ 本波只撤销默认值，历史 `=off` 回滚分支逐字保留 ⇒ A/B 可回滚；
+         *   不新增第 14 组显隐补丁，不动 R49 三件套与 r49Hole=false 默认。
+         *
+         * 【几何口径 · 探测 v5 定稿，全部由既有 band / atlas 常量推导，零臆造】
+         *  · 宽 0.834 = 2 × gapHalfW(0.417)（r7TailWrap.ts 头注 GLB 实测缺口
+         *    x∈[−0.418,+0.416]，22 桶零顶点）；
+         *  · y∈[0.98,1.08]（高 0.10）：与下方 v∈[0.40,0.68] 切片按 flipY 换算
+         *    出的 atlas 原始世界高度 worldY[0.9802,1.0756] 逐位对齐 ⇒ LUXEED 字标
+         *    纵向零拉伸（残余 1.046× 来自上界 1.08 的 4.4mm 余量）；中心 1.03 与
+         *    R48 band 中心 0.240*s=1.0375 / GLB 缺口中心仅差 7.5mm；
+         *  · z = -(0.5885*s + 0.002) = −2.54609：0.5885*s = 2.54409 是 R48 band
+         *    唯一 z 基准（R7_TAIL_BAND_Z_COEFF），仅外凸 2mm 防共面 z-fight
+         *    （同 r7TailWrap MIN_OUT 口径，仍贴灯罩表面不前浮）；
+         *  · renderOrder = 3：沿用本文件既有「绘在 lamp 面之上」口径（:1223 等
+         *    lamp renderOrder=2 ⇒ 装饰件 3），高于 R65 态最高件 R48 band(2)/
+         *    housing(1)；r7TailWrap band 的 6 属 R68 包裹态，默认态不建该件故不取。
+         *
+         * 【UV 局部切片 · 严禁 u∈[0,1] 整张铺满】
+         *  u∈[0.336,0.664]：atlas 三段视觉分区 0.336/0.328/0.336 的**中段**，
+         *   LUXEED 由 `fillText(..., W/2, ...)` 居中在该段；R49/R51 两分支的左右
+         *   分段图案由 drawUnit(0,seg)/drawUnit(W−seg,seg) 绘制，seg=round(1024×
+         *   0.336)=344 ⇒ 左段 u∈[0,0.336]、右段 u∈[0.664,1] 全在切片之外。
+         *  v∈[0.40,0.68]：CanvasTexture flipY=true ⇒ v = 1 − row/171，对应
+         *   row∈[55,103]，覆盖 LUXEED(R49 row 86 / v≈0.497；R51 row 62 / v≈0.638)、
+         *   白细条(row 55)、深红条(row 91)、红条下阴影(row 96)，**不含**上下深色
+         *   饰条(row 5 / 164)。整张铺满会把左右白-红-白分段一起带进来 = 退回一条红带。
+         *  ⇒ 双重不遮挡论证：① 几何 x∈[−0.417,+0.417] 恰落在 GLB 零顶点缺口区，
+         *   左右分段图案在 |x|>0.417，空间不重叠；② 采样只取 atlas 中段，左右段
+         *   绘制根本没进这张 quad。LUXEED 字标由本遮罩中段承载，回退不丢字标。
+         * 回滚：`#r89r7tail65=off` ⇒ 本件不建且两个旧默认值回 R88，逐位回 R88 现状。 */
+        if (R89_R7_TAIL65_ON && R89_R7_TAILMASK_ON && lampRearMat) {
+          const maskW = 0.834;
+          const maskY0 = 0.98;
+          const maskY1 = 1.08;
+          const maskZ = -(0.5885 * s + 0.002);
+          const maskGeo = new THREE.BufferGeometry();
+          maskGeo.setAttribute('position', new THREE.Float32BufferAttribute([
+            -maskW / 2, maskY1, maskZ,
+            maskW / 2, maskY1, maskZ,
+            -maskW / 2, maskY0, maskZ,
+            maskW / 2, maskY0, maskZ
+          ], 3));
+          maskGeo.setAttribute('normal', new THREE.Float32BufferAttribute([
+            0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1
+          ], 3));
+          maskGeo.setAttribute('uv', new THREE.Float32BufferAttribute([
+            0, 1, 1, 1, 0, 0, 1, 0
+          ], 2));
+          maskGeo.setIndex([0, 1, 2, 1, 3, 2]);
+          remapUVToRegion(maskGeo, 0.336, 0.664, 0.40, 0.68);
+          const maskAtlas = makeR7RearBandAtlas();
+          let maskMat: THREE.Material;
+          if (maskAtlas) {
+            const m = new THREE.MeshStandardMaterial({
+              map: maskAtlas,
+              emissiveMap: maskAtlas,
+              emissive: new THREE.Color(0xffffff),
+              emissiveIntensity: 0.35,
+              roughness: 0.25,
+              metalness: 0.1,
+              side: THREE.FrontSide
+            });
+            // 沿用 r7TailWrap.ts atlasBandMat 口径：逐帧同步 lampRearMat 保持刹车联动
+            const brakeSrc: THREE.MeshStandardMaterial = lampRearMat;
+            m.onBeforeRender = () => {
+              m.emissiveIntensity = brakeSrc.emissiveIntensity;
+            };
+            maskMat = m;
+            r68TailWrapTex.push(maskAtlas);
+          } else {
+            // Node / 无 document ⇒ atlas 为 null，优雅降级为深墨底板（canvas 同色）
+            maskMat = new THREE.MeshStandardMaterial({
+              color: 0x14141a,
+              roughness: 0.70,
+              metalness: 0.06,
+              side: THREE.FrontSide
+            });
+          }
+          r68TailWrapMats.push(maskMat);
+          const mask = new THREE.Mesh(maskGeo, maskMat);
+          mask.name = 'r89_r7_tail_mask';
+          (mask.userData as { r44External?: boolean }).r44External = true;
+          mask.castShadow = false;
+          mask.receiveShadow = false;
+          mask.renderOrder = 3;
+          lampRearMeshes.push(mask);
+        }
       }
     }
     if (lfGltf) {
@@ -3042,6 +3141,29 @@ export function r64WriteTireBands(
 export const R67_TAIL_C2_ON = !r51HookOff('r67tail');
 
 /* ══════════════════════════════════════════════════════════════════════════════
+ * R89 · R7 尾灯回 R65（CI run #84）半成品态 —— A/B 主开关 + 补洞开关
+ *
+ * ⚠ 声明必须位于 R68_R7_TAIL_ON / R81_R7_HOUSING_HIDE **之前**：模块顶层 const 按
+ *   顺序求值，两者初始化时读 R89_R7_TAIL65_ON ⇒ 后置会触发 TDZ（R64 末尾追加纪律
+ *   只说明「使用点在异步函数体内无 TDZ」，不适用于常量之间互相引用）。
+ * ⚠ 键名不含 `noprewarm` 子串（Game.ts 入口守卫）；解析口径与 r51HookOff /
+ *   r51HookOn 同构：`=off` 逐位回滚、无 hash 与 `=on` 均取默认，避免误伤。
+ * ⚠ Node / vitest 无 window ⇒ r51HookOff 恒 false ⇒ 两常量恒 true（零副作用）。
+ *
+ * 主开关 R89_R7_TAIL65_ON（默认 ON）：
+ *   · 无 hash / `#r89r7tail65=on` ⇒ R65 态：R68_R7_TAIL_ON=false（外部壳
+ *     lamp_rear 分段图案重新进出口）、R81_R7_HOUSING_HIDE=false（housing 重新可见），
+ *     r49Hole 保持默认 false，另建中央缺口补洞遮罩 ⇒ 默认态即正确观感，零 URL 依赖。
+ *   · `#r89r7tail65=off` ⇒ 两个旧常量逐位回 R88 取真、不建补洞遮罩 ⇒ 逐位回 R88 现状。
+ * 历史口令 `#r68r7tail=off` / `#r81r7housing=off` 语义不动（仍分别回 R65 基线 /
+ * housing 可见），只撤销默认值；历史回滚分支逐字保留。
+ * 补洞开关 R89_R7_TAILMASK_ON（默认 ON，`#r89r7tailmask=off` 单独回滚补洞 quad，
+ * 供 A/B 验证遮罩与 LUXEED 中段承载）。git 考证详见装配区 :2566 后注释。
+ * ══════════════════════════════════════════════════════════════════════════════ */
+export const R89_R7_TAIL65_ON = !r51HookOff('r89r7tail65');
+export const R89_R7_TAILMASK_ON = !r51HookOff('r89r7tailmask');
+
+/* ══════════════════════════════════════════════════════════════════════════════
  * R68 · 七项视觉主理开关（**单一真源**，默认全 ON、`#r68xxx=off` 逐位回基线）
  *
  * ⚠ 全部声明后置到文件末尾（必须在 R67_TAIL_C2_ON 之后）：R64 护栏用
@@ -3062,7 +3184,11 @@ export const R67_TAIL_C2_ON = !r51HookOff('r67tail');
  * P1-7 `#r68gldiag=off`      WebGL 上下文丢失 / renderer.info 真机定标钩子
  * ══════════════════════════════════════════════════════════════════════════════ */
 export const R68_ARCH_ON = !r51HookOff('r68arch');
-export const R68_R7_TAIL_ON = !r51HookOff('r68r7tail');
+/* R89：默认态回 R65（半成品尾灯）。默认 ON 的 R89_R7_TAIL65_ON 把本项压成 false
+ * ⇒ lampMeshes 出口走 `: lampRearMeshes` 三元 else ⇒ 外部壳 lamp_rear 分段图案与
+ * R49 三件套全部进出口；`#r89r7tail65=off` ⇒ 逐位回 R88（R68 包裹重新启用）。
+ * `#r68r7tail=off` 历史语义不动：仍强制回 R65 基线（本项恒 false）。 */
+export const R68_R7_TAIL_ON = !R89_R7_TAIL65_ON && !r51HookOff('r68r7tail');
 export const R68_R7_LAMP_ON = !r51HookOff('r68r7lamp');
 export const R68_C2_COVER_ON = !r51HookOff('r68c2cover');
 export const R68_GLASS_OPAQUE_ON = !r51HookOff('r68glassopaque');
@@ -3073,8 +3199,11 @@ export const R68_GLASS_OPAQUE_ON = !r51HookOff('r68glassopaque');
  * 且 housing(z 2.52949) 比 R68 包裹件 modules/edge(2.53209) 更靠前 2.6mm，
  * 横压红带中央+三黑方中段 ⇒ 中央黑方块第二来源。不进出口 ⇒ Adapter 不挂
  * scene、也不遍历 ⇒ 等价永久隐藏且不被复位（同 R67 横带思路）。
- * `#r81r7housing=off` ⇒ 守卫失效，housing 回到出口，R51 观感原样保留。 */
-export const R81_R7_HOUSING_HIDE = !r51HookOff('r81r7housing');
+ * `#r81r7housing=off` ⇒ 守卫失效，housing 回到出口，R51 观感原样保留。
+ * 【R89 默认值回退】R89_R7_TAIL65_ON 默认 ON ⇒ 本项默认 false ⇒ 不排除 housing
+ * ⇒ R65 装配态 housing 重新可见；`#r89r7tail65=off` ⇒ 逐位回 R88（重新隐藏）。
+ * `#r81r7housing=off` 历史语义不动（恒不隐藏，与下式同为 false）。 */
+export const R81_R7_HOUSING_HIDE = !R89_R7_TAIL65_ON && !r51HookOff('r81r7housing');
 
 /* R83：R7 尾灯「中央暗方块 + 深红横带」P0 运行时止血 —— 把 R68 程序化包裹的三个
  * 覆盖件 `r68_r7_tail_modules` / `r68_r7_tail_edge` / `r68_r7_tail_band` 排除出

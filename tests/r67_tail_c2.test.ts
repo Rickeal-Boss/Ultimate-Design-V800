@@ -52,6 +52,8 @@ import {
   R84_C2_SIDE_UP_ON,
   R84_C2_FILLDEEP_ON,
   R86_C2_UPPEROUTER_ON,
+  R89_C2_BLACKPANEL_ON,
+  R89_C2_SLANT_ROLLBACK,
   C2_LAMP_SIDE_DEPTH_R84,
   C2_LAMP_CENTER_NUDGE_R83,
   remapUVToRegion,
@@ -412,8 +414,14 @@ describe('R67 · 三段式装配与预算（实测，不沿用旧估算）', () 
     // R71：盖板侧面黑填充 +2 quad(4 tri) 并入盖板 ⇒ +4。
     // R84：上半区黑填充（左右各 1 quad，并入 cover）⇒ +4（`#r84c2sideup=off` 回 44）。
     // R86：上半区外上填充（左右各 1 quad，并入 cover）⇒ +4（`#r86c2upperouter=off` 回 48）。
+    // R89（终裁）：删「两个黑色玻璃」——R86 外上楔板 2quad 与 FRONT 两半 2quad 默认不
+    //   生成（`#r89c2blackpanel=off` 逐位回 R88 四块齐现 56；`#r89c2slant=off` 单回
+    //   楔板 54），改由**一整块**跟随 tumblehome 的倾斜黑面板 1quad(+2) 取代 ⇒
+    //   逐开关累加（与 tailLampC2.ts `C2_TRI_BUDGET` 公式逐字同源，9 态实测全匹配）。
+    const r86Outer = R86_C2_UPPEROUTER_ON && (!R89_C2_BLACKPANEL_ON || R89_C2_SLANT_ROLLBACK);
+    const r86Front = R86_C2_UPPEROUTER_ON && !R89_C2_BLACKPANEL_ON;
     const faceTri = (R69_C2_LAMP_ON ? 8 : 4) + (R84_C2_SIDE_UP_ON ? 4 : 0)
-      + (R86_C2_UPPEROUTER_ON ? 8 : 0);
+      + (r86Outer ? 4 : 0) + (r86Front ? 4 : 0) + (R89_C2_BLACKPANEL_ON ? 2 : 0);
     const coverTri = R71_C2_COVERFILL_ON ? 16 : 12;
     expect(r.budget.tri).toBe(coverTri + faceTri + 20);
     expect(r.budget.mat).toBe(2);
@@ -446,13 +454,14 @@ describe('R67 · 三段式装配与预算（实测，不沿用旧估算）', () 
 
   it('预算常量上限、条数扫参后 tri 仍 ≤ 上限', () => {
     expect(C2_DC_BUDGET).toBe(3);
-    expect(C2_TRI_BUDGET).toBe(36 + (R69_C2_LAMP_ON ? 4 : 0) + (R71_C2_COVERFILL_ON ? 4 : 0) + (R84_C2_SIDE_UP_ON ? 4 : 0) + (R86_C2_UPPEROUTER_ON ? 8 : 0));
+    expect(C2_TRI_BUDGET).toBe(36 + (R69_C2_LAMP_ON ? 4 : 0) + (R71_C2_COVERFILL_ON ? 4 : 0) + (R84_C2_SIDE_UP_ON ? 4 : 0) + (R86_C2_UPPEROUTER_ON && (!R89_C2_BLACKPANEL_ON || R89_C2_SLANT_ROLLBACK) ? 4 : 0) + (R86_C2_UPPEROUTER_ON && !R89_C2_BLACKPANEL_ON ? 4 : 0) + (R89_C2_BLACKPANEL_ON ? 2 : 0));
     expect(C2_MAT_BUDGET).toBe(2);
     expect(C2_TEX_BUDGET).toBe(1);
     const lampRearMat = new THREE.MeshStandardMaterial();
     const r = buildTailLampC2({ scale, lampRearMat, stripTop: 2, stripBottom: 2 });
     const faceTri2 = (R69_C2_LAMP_ON ? 8 : 4) + (R84_C2_SIDE_UP_ON ? 4 : 0)
-      + (R86_C2_UPPEROUTER_ON ? 8 : 0);
+      + (R86_C2_UPPEROUTER_ON && (!R89_C2_BLACKPANEL_ON || R89_C2_SLANT_ROLLBACK) ? 4 : 0)
+      + (R86_C2_UPPEROUTER_ON && !R89_C2_BLACKPANEL_ON ? 4 : 0) + (R89_C2_BLACKPANEL_ON ? 2 : 0);
     expect(r.budget.tri).toBe((R71_C2_COVERFILL_ON ? 16 : 12) + faceTri2 + (2 + 2) * 2 * 2);
     expect(r.budget.tri).toBeLessThanOrEqual(C2_TRI_BUDGET);
     expect(r.budget.dc).toBeLessThanOrEqual(C2_DC_BUDGET);
@@ -465,7 +474,7 @@ describe('R67 · 三段式装配与预算（实测，不沿用旧估算）', () 
     const r = buildTailLampC2({ scale, lampRearMat, stripTop: 0, stripBottom: 0 });
     expect(r.redStripMesh.geometry.getAttribute('position')).toBeDefined();
     expect(r.redStripMesh.geometry.getAttribute('position').count).toBe(0);
-    expect(r.budget.tri).toBe((R71_C2_COVERFILL_ON ? 16 : 12) + (R69_C2_LAMP_ON ? 8 : 4) + (R84_C2_SIDE_UP_ON ? 4 : 0) + (R86_C2_UPPEROUTER_ON ? 8 : 0)); // 盖板薄盒 12(+R71填充4) + face(4|R69侧壁8) + R84上填充4 + R86外上填充4
+    expect(r.budget.tri).toBe((R71_C2_COVERFILL_ON ? 16 : 12) + (R69_C2_LAMP_ON ? 8 : 4) + (R84_C2_SIDE_UP_ON ? 4 : 0) + (R86_C2_UPPEROUTER_ON && (!R89_C2_BLACKPANEL_ON || R89_C2_SLANT_ROLLBACK) ? 4 : 0) + (R86_C2_UPPEROUTER_ON && !R89_C2_BLACKPANEL_ON ? 4 : 0) + (R89_C2_BLACKPANEL_ON ? 2 : 0)); // 盖板薄盒 12(+R71填充4) + face(4|R69侧壁8) + R84上填充4 + R86楔板/FRONT(R89 分支) + R89整幅面板
     expect(r.meshes).toHaveLength(3);
   });
 
@@ -513,8 +522,11 @@ describe('R67 · 三段式装配与预算（实测，不沿用旧估算）', () 
       // 盖板：BoxGeometry 12 tri(36 顶点 non-indexed) + 左右端面填充各 6 顶点(mergeSafe 转
       // non-indexed) = 48；R84 上填充 / R86 外上填充各再 +左右 2 quad(各 6 顶点) ⇒ +12 each。
       // （coverMesh 已下移到全部 merge 之后创建 ⇒ 这两块填充 quad 真正进 coverMesh.geometry。）
+      const r86OuterVerts = R86_C2_UPPEROUTER_ON && (!R89_C2_BLACKPANEL_ON || R89_C2_SLANT_ROLLBACK);
+      const r86FrontVerts = R86_C2_UPPEROUTER_ON && !R89_C2_BLACKPANEL_ON;
       expect(coverPos.count).toBe(
-        48 + (R84_C2_SIDE_UP_ON ? 12 : 0) + (R86_C2_UPPEROUTER_ON ? 24 : 0)
+        48 + (R84_C2_SIDE_UP_ON ? 12 : 0) + (r86OuterVerts ? 12 : 0) + (r86FrontVerts ? 12 : 0)
+          + (R89_C2_BLACKPANEL_ON ? 6 : 0)
       );
       // 盖板端面填充 z 从 coverZ 向内（生效进深按开关选：R84 filldeep 0.06 → R82 0.02 →
       // baseline 0.10，与源码 effCoverFillDepth 三段优先级逐位一致；符号常量本身不变）。

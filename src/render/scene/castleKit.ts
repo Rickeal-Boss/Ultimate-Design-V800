@@ -148,19 +148,27 @@ const R86_CITY_TRIM_ON =
   typeof window === 'undefined' || !/(?:^|[#&])r86citytrim=off/i.test(window.location.hash);
 
 /**
- * R88 · **城内纵深「整排删除」根治开关**（用户真机反馈：R86 基段截断没生效，正面
- * gameplay 视角下第一排之后的 4-5 排深建筑仍透过前排间隙清晰可见，视觉模型建议删除
- * 75-90%）。
- * 默认 ON：makeInnerCity 内**第一排之后的所有后排体量整排跳过生成** ——
- *   R29_REAR_ROW（后排连墙+4塔+墙顶敞廊）/ R33 二进院落（annex·apse·bell·stack +
- *   中景体量 + 院内楼梯塔）/ 第三排 r2（连墙+双塔+中央高塔）/ 第四排（连墙+双塔），
- * 只留第一排殿身+沿街立面装饰+前排塔+拱廊，以及 R36-A2 契约 `castle-pave` 桶
- * （floor 地坪板，无条件生成，勿剔）。
- * 加 `#r88citydeep=off` 回到 R87 行为（R86 逐位截断守卫仍在位）。R88 在 R86 外层叠加
- * （R88 on ⇒ 整块不进；R88 off ⇒ R86 守卫照旧生效）。
- */
-const R88_CITY_DEEP_ON =
-  typeof window === 'undefined' || !/(?:^|[#&])r88citydeep=off/i.test(window.location.hash);
+ * R89 · **城内沿 z 重复街区「彻底删除」根治开关**（A/B 回滚）。
+ * 定罪（本波）：`makeInnerCity` 的 `for (k < blocks)` 沿道路纵向 z 生成 **20** 个
+ * 重复街区（用户黄框里排排白色密集楼房），才是真凶；blocks=20（floor(920/46)），
+ * 旧注释「21」是错的。R88 两重失效：① 把 R87 的无条件裸块 `{` 换成
+ * `if (R88_CITY_DEEP_ON) {`，而该开关默认 ON ⇒ **默认态反而全量生成**（极性反，
+ * R87/R88 默认态 delta=0）；② guard 落在 k 循环内部、削的是 x 方向第 2/3/4 排，
+ * **从未削减沿 z 的街区数量**（维度错：`x` 向外排 vs `z` 纵向街区）⇒ 上次
+ * 「没有正确生效」字面成立。
+ * 处方（本波最终口径）：① 循环上界 `Math.min(blocks, R89_CITY_KEEP_BLOCKS=1)` 只留
+ * k=0（Math.min 保证至少跑一次 ⇒ `castle-pave` 契约桶在场，禁止空循环、禁止在
+ * `setDeepFar(far)` 之后 continue）；② **删除** R88 极性反开关、guard 改回 R87
+ * **无条件裸块**（R89 只在 z 维度动刀，x 方向后排体量逐位保留 ⇒ 用户「第一个
+ * 建筑」完整留下，默认 22,048 tri / pave 4 口径）；③ 裁决 a 连廊只留 z=-427.5
+ * 一座 + 两端补最小承托柱；④ 裁决 b `R29_SKYLINE` 每侧只留 k=0 一组塔冠剪影，
+ * 其余 10 组/侧不生成（用户黄框里的灰色六角孔塔楼）。所有删除体量**真的不进
+ * 几何/材质桶**，不是生成后再 `visible=false`。
+ * `#r89city=off` ⇒ 逐位回 R88 全 20 街区 + 全量连廊/塔冠（裸块 ≡ R88 默认态
+ * guard，delta=0）。历史 `#r88citydeep=off` 随极性反开关一并作废。
+ * 导出供护栏（r32_zone / r37_perf）按开关分支断言，on/off 两态都钉死。 */
+export const R89_CITY_TRIM_ON =
+  typeof window === 'undefined' || !/(?:^|[#&])r89city=off/i.test(window.location.hash);
 
 /**
  * R86 深化 · **城内后排塔体「基段截断」遮挡线**（前排殿/连墙顶高 ~17.3m）。
@@ -2940,10 +2948,16 @@ export function makeMainHall(): StoneBuckets {
 export function makeInnerCity(): StoneBuckets {
   const b = emptyBuckets();
   const { zNear, zFar, faceHalf, blockLen } = INNER;
-  const blocks = Math.floor((zNear - zFar) / blockLen); // 21
+  // ⚠ blocks 实际 = 20（floor(920/46)=20，见 r28Layout.ts:426）；R88 旧注释「21」是错的。
+  const blocks = Math.floor((zNear - zFar) / blockLen); // 20
   const depth = 8;
-
-  for (let k = 0; k < blocks; k += 1) {
+  /* R89：沿 z 的 20 个重复街区是用户黄框真凶（定罪见 R89_CITY_TRIM_ON）。
+   * 默认只保留 k=0 第一排；Math.min 保证循环至少跑一次 ⇒ 3383 的
+   * `if (!far && k < 8)` 会执行，R36-A2 `castle-pave` 契约桶仍在场。
+   * 禁止循环首 continue / 空循环 / setDeepFar 后 continue（DEEP_FAR 会泄漏给
+   * 循环外连廊段，且空循环会打掉 pave 桶）。#r89city=off ⇒ 上界回 blocks=20。 */
+  const R89_CITY_KEEP_BLOCKS = R89_CITY_TRIM_ON ? 1 : blocks;
+  for (let k = 0; k < Math.min(blocks, R89_CITY_KEEP_BLOCKS); k += 1) {
     const zc = zNear - blockLen / 2 - k * blockLen; // 块中心
     // A 线 ⑦ 远区 LOD 减法：最远 1/3 街区（最深 z 区）置 DEEP_FAR —— 跳过卷叶 /
     // 子拱 / 窗棂 / 壁龛立像 / 瓶柱加密等纯装饰密度（几何长度不变，铁律 33）。
@@ -3379,7 +3393,8 @@ export function makeInnerCity(): StoneBuckets {
        * （r32_castle_r36 契约要求该桶在场）。故 floor/pave 无条件生成，R86 只剔
        * 院落里**高大的墙/annex/中景盒**（见下 motif / R86 guard）。
        * R88 深化：二进院建筑体量随后排整排删除，但此 floor/pave 地坪板属 R36-A2
-       * `castle-pave` 契约桶、无条件生成，**不随 R88 剔**（见 R88_CITY_DEEP_ON）。 */
+       * `castle-pave` 契约桶、无条件生成；R89 上界削到 k=0 后本段仍执行
+       * （k=0 < 8 且 far=false），桶在场，**不随 R88/R89 剔**（见 R89_CITY_TRIM_ON）。 */
       if (!far && k < 8) {
         extra(b, 'pave', put(box('floor', 18, 0.05, blockLen - 4, 19, 0.055, 0)));
         /* ── R37-A 内庭地坪**拼花带**（内部材料丰富度深化①）──────────────────
@@ -3407,11 +3422,10 @@ export function makeInnerCity(): StoneBuckets {
        *   ③ 第三排外移 27..42 → 46..61（给院落让位），塔 78→82、中央塔 84→88；
        *   ④ 第四排外移 43..58 → 63..78。
        * 走廊纪律：全部 |x| ≥ 15.5+9 = 24.5。 */
-      /* R88 根治：默认 ON —— 第一排之后的全部后排体量**整排跳过生成**（R29_REAR_ROW /
-       * R33 二进院落 / 第三排 r2 / 第四排），只留第一排殿身+沿街立面+前排塔+拱廊，
-       * 以及上方无条件生成的 pave 桶。R86 逐位截断守卫保留在位，R88 在其外层叠加
-       * （R88 on ⇒ 整块不进；R88 off ⇒ 回 R87，R86 守卫照旧生效）。 */
-      if (R88_CITY_DEEP_ON) {
+      /* R89：撤销 R88 极性反 guard —— 改回 R87 **无条件裸块**（审查线处方 +
+       * 主理人裁决）。x 方向第 2/3/4 排体量在保留的 k=0 第一街区里逐位生成，
+       * 用户「第一个建筑」完整留下；删除只发生在 z 维度（for 上界）。 */
+      {
         const r1 = R29_REAR_ROW;
         const r1x = (r1.xIn + r1.xOut) / 2;
         const r1w = r1.xOut - r1.xIn;
@@ -3865,7 +3879,7 @@ export function makeInnerCity(): StoneBuckets {
             extra(b, 'glass', put(pane));
           }
         }
-      } // end R88_CITY_DEEP_ON guard（第一排之后后排体量整排跳过生成）
+      } // end R87 无条件裸块（R89 撤销 R88 极性反 guard）
 
       /* ── 火盆 ×2（连墙墙根，探出街面 0.7）── */
       for (const bz of [-blockLen / 2 + 2, 8]) {
@@ -3888,12 +3902,19 @@ export function makeInnerCity(): StoneBuckets {
   /* ── R29 远景剪影带：横向拓展的最外层（|x| 120…175，两侧沿全街铺设）───────
    * 参考图的"建筑丰富"有一半来自**远景层叠的天际线**：近景塔 → 中景墙 → 远景塔簇，
    * 三层进深压在一起才有城市感。本段是纯剪影：只入 wall / ashlar 桶，不参与碰撞、
-   * 不投影、靠雾自然退远；全部 box/spire（12~16 tri），确定性取模排布（不随机）。 */
+   * 不投影、靠雾自然退远；全部 box/spire（12~16 tri），确定性取模排布（不随机）。
+   * R89 裁决 b：本段的 6 边 roof spire（每侧 11 组 / k=0..10）**就是用户黄框里
+   * 那排「灰色六角孔塔楼」**，位于 k 循环之外、改 for 上界删不到。故按上界法只留
+   * 每侧最靠近第一排的 k=0 一组（z=-430）作天际线塔冠剪影，其余 10 组/侧**真的
+   * 不生成**（wall/ashlar/roof/gold 四桶仍各有几何 ⇒ `R29_SKYLINE` 契约桶不空、
+   * r32_zone 建桶/DC 断言不破）；不把 11 组全删光，避免天际线一马平川。
+   * #r89city=off ⇒ skyFar 回 s.zFar，22 组全量逐位回 R88。 */
   {
     const s = R29_SKYLINE;
     const span = s.xOut - s.xIn;
+    const skyFar = R89_CITY_TRIM_ON ? s.zNear : s.zFar;
     for (const side of [-1, 1] as const) {
-      for (let z = s.zNear; z >= s.zFar; z -= 100) {
+      for (let z = s.zNear; z >= skyFar; z -= 100) {
         const k = Math.round((s.zNear - z) / 100);
         const hIn = 34 + ((k * 37) % 26);
         const hOut = 62 + ((k * 53) % 34);
@@ -3913,7 +3934,26 @@ export function makeInnerCity(): StoneBuckets {
    * （r29_corridor_probe 判据：车从拱顶廊下穿过不侵廊）。
    * R32：加密到 5 座（+2 座在块心 k=1/15；用户令「连廊/跨街廊…更密的内部结构」），
    * 且楼面下加**木梁**（wood 桶：跨街廊的暴露木构读法，材料丰富度四桶之一）。 */
-  for (const cz of [...R30_CROSSINGS, ...R32_CORRIDOR.extraCrossings]) {
+  /* R89 裁决 a：5 座连廊 z=-427.5/-526.5/-756.5/-986.5/-1071.5 全落在 k≥1 区，
+   * 削掉 k≥1 街区后两端承托体量消失 ⇒ 悬空。按裁决只保留 z=-427.5 一座（最靠近
+   * 第一排、真机正面视角唯一可辨），其余 4 座**不生成**；并给保留连廊两端补最小
+   * 承托柱：连廊跨度 21m（端点 |x|=10.5）、楼面底 y=11.75、宽 4.4 ⇒ 两根
+   * ashlar box（1.8×11.75×4.4）立在 |x|=9.6 / z=-427.5，从地面托到楼面底。
+   * 复用既有 ashlar 桶 ⇒ 0 新增材质 / 0 新增 DC；|x|∈[8.7,10.5] > 行车走廊 8，
+   * 不侵走廊（r29_corridor_probe 判据）。端点 z=-427.5 在 k=1 街区、不在 k=0
+   * 第一排体量 [-411.5,-365.5] 内，故**不可省略**托座。
+   * #r89city=off ⇒ 5 座原 z 全量、两端由 k≥1 街区自然承托，不补柱（逐位回 R88）。 */
+  const allCrossings = [...R30_CROSSINGS, ...R32_CORRIDOR.extraCrossings];
+  const nearestCrossing = Math.max(...allCrossings); // -427.5：最靠近第一排的一座
+  const crossings = R89_CITY_TRIM_ON
+    ? allCrossings.filter((z) => z === nearestCrossing)
+    : allCrossings;
+  if (R89_CITY_TRIM_ON) {
+    for (const sx of [-1, 1] as const) {
+      b.ashlar.push(box('ashlar', 1.8, 11.75, 4.4, sx * 9.6, 11.75 / 2, nearestCrossing));
+    }
+  }
+  for (const cz of crossings) {
     pour(b, mapParts(corridorCrossing({ span: 21, width: 4.4, floorY: 12, rise: 1.7 }), (g) => g.translate(0, 0, cz)));
     for (const s of [-1, 1] as const) {
       extra(b, 'wood', box('wood', 0.34, 0.34, 4.4, s * 5.4, 11.6, cz));

@@ -357,6 +357,44 @@ export const C2_FRONT_ZHI_R87 = -0.5325;
  *  下沿 x=effCoverHalfW(0.163)、上沿 x=effCoverHalfW-0.005=0.158（body 半宽 0.167 内）。 */
 export const C2_FRONT_XIN_R87 = 0.005;
 
+/* ── R89 · C2 尾灯「删两块黑玻璃 + 删上楔板 + 一整块黑面板」──────────────────────
+ * 主理人纠正处方（覆盖本波一轮派单）：病根不是「斜面本身」，而是 FRONT 被拆成**左右
+ *   两半** + 两块 R86 外上斜插楔板。审查定稿精确面清单（56 tri / 3 mesh）：
+ *   · R86 外上楔板 :1030-1055（x 0.188→0.160 / y[0.266,0.366] / z[−0.578,−0.502]，
+ *     y 顶 0.366 > MAEXTRO 字标 yC=0.353）= 用户「上面的去除」那块斜插板。
+ *   · R87/R88 FRONT 两半 :1072-1102（x 0→±0.163/±0.158 / y[0.266,0.346] /
+ *     z −0.5619→−0.5325 / 法线 (0,0.28,−0.96)）= 用户「两个黑色玻璃」。
+ *   · R84 上半侧填 :995-1020、face 侧填 sq :951-982 = 用户「侧面加上了」，**保留**；
+ *     红条 20 tri / lampRearMat 刹车联动、coverBox 横杆一律不动。
+ * 「更深的正面」= z 已比 faceZ 深 0.008~0.038 local，只是被拆成两半＋侧楔 ⇒ 合成
+ *   **一整块**跟随 tumblehome 的倾斜面即满足，不再加第三块 inward front quad。
+ * 单开关精确回滚：旧两段包 `if(!R89_C2_BLACKPANEL_ON)`（源码保留、默认不生成），
+ *   新整幅 quad 包 `if(R89_C2_BLACKPANEL_ON)`；默认 = 无黑玻璃、无楔板、一整块黑面板。
+ *   `#r89c2blackpanel=off` ⇒ 逐位回 R88（两半 FRONT + 楔板复现、撤新板）。
+ *   `#r89c2slant=off` ⇒ 单独恢复 R86 楔板，消去法定位「上面的斜插板」。
+ *   `#r89c2matte=on` ⇒ 单独启用 coverMat 去反光（metalness 0 / roughness 1）做 A/B；
+ *   默认 OFF ⇒ 逐位保持 R88 材质 0.08 / 0.72|0.78，`#r89c2blackpanel=off` 几何+材质
+ *   一起回 R88（消去法单变量，不污染像素差归因）。
+ * 新 quad 复用 coverMat 同一实例、merge 进**最终** coverGeo（coverMesh 在全部 merge
+ *   之后创建，防 R84 孤儿几何）⇒ 零新 mesh / 零新材质 / 零新增 DC / 零新增贴图。
+ * coverMesh 走 markExternal 打 r44External=true ⇒ V800Adapter:5270 状态表整件跳过、
+ *   恒渲染 ⇒ 无需给 coverMat 补 sculptMaterial.id，也不动 #batchmerge 材质主键。
+ * tri 账（主理人终裁）：删楔板 2 quad(−4) + 删 FRONT 两半 2 quad(−4) + 新整幅 1 quad(+2)
+ *   = 净 −6 ⇒ 默认 tri 56→50、coverMesh 84→66 顶点；**不加第三块 inward front quad**。
+ *   C2_TRI_BUDGET 公式本波已按 R89 逐开关累加重算（默认 50），tri 断言由主理人 Phase3 兜底。
+ */
+/** R89 主开关：默认 ON = 删两半 FRONT + 删 R86 楔板 + 一整块黑面板。
+ *  `#r89c2blackpanel=off` ⇒ 逐位回 R88（旧两段复现、撤新板）。 */
+export const R89_C2_BLACKPANEL_ON = !r69HookOff('r89c2blackpanel');
+/** R89 消去法定位：`#r89c2slant=off` ⇒ 单独恢复 R86 外上楔板（不改 FRONT / 新板）。 */
+export const R89_C2_SLANT_ROLLBACK = r69HookOff('r89c2slant');
+/** R89 去反光（主理人终裁）：默认 **OFF** ⇒ 保持 R88 材质、正面横杆观感不变；
+ *  `#r89c2matte=on` ⇒ 单独启用 metalness→0 / roughness→1 供真机 A/B。
+ *  ⚠ 不用 `!r69HookOff(...)`：默认关才使 `#r89c2blackpanel=off` 几何+材质一起回 R88
+ *  （审查员指出的 A/B 单变量污染由此消除），node/SSR 无 window 同样 OFF。 */
+export const R89_C2_MATTE_ON =
+  typeof window !== 'undefined' && /(?:^|[#&])r89c2matte=on/i.test(window.location.hash);
+
 /* ── R84 · C2 尾灯盖板侧面黑填充进深加深（缓解 GLB 锯齿破面露头）────────────────
  * 病根：用户 11-14 C2 尾灯特写截图 —— 凤凰点阵正常，但右侧车身有锯齿破面
  *   （lamp_rear.glb 非流形，按 x 分 48 桶上边缘抖动 25.84mm）。R83 三段收口解决的是
@@ -429,16 +467,20 @@ export const R81_C2_SIDE_DOUBLE_ON = !r69HookOff('r81c2dsided');
  *  R69：竖灯缩小（高×0.48/宽×0.40）+ 侧面贴完整尾灯纹理 ⇒ face 并入左右侧壁 +4 ⇒ 默认 40。
  *  `#r69c2lamp=off` ⇒ 无侧壁 ⇒ 回 R68 的 36。 */
 export const C2_DC_BUDGET = 3;
-/** tri 上限：base 40（盖板12 + face4/侧壁8 + 红条20），R71 盖板侧面填充 +4 ⇒ 44，
- *  R84 上半区黑填充（左右各一 quad）+4 ⇒ 48，R86 外上填充（左右各一 quad）+4 与
- *  正面 FRONT 填充（左右各半 quad）+4 共 +8 ⇒ 56（即 48→56）。
- *  `#r86c2upperouter=off` ⇒ 回 48（外上 + 正面 FRONT 同时撤）；`#r84c2sideup=off` ⇒ 回 44；
- *  `#r71c2coverfill=off` ⇒ 回 40；`#r69c2lamp=off` ⇒ 回 36 基线。 */
+/** tri 上限：base 36（盖板12 + face4 + 红条20），R69 侧壁 +4、R71 盖板侧填 +4、
+ *  R84 上半侧填 +4。R89 终裁（默认 tri 50）：旧 R86 外上楔板 2quad(+4) 与 FRONT 两半
+ *  2quad(+4) 默认不生成，改由新整幅倾斜面板 1quad(+2) 取代 ⇒ **逐开关累加**，不再沿用
+ *  R88 的固定 `(R86 ? 8 : 0)`。各态实测：默认 50 / `#r89c2blackpanel=off` 56（四块齐现，
+ *  逐位回 R88）/ `#r89c2slant=off` 54（单回楔板）/ `#r86c2upperouter=off` 50 / 两者 off 48。
+ *  ⚠ 审查员建议式 `+ (BP ? 2 : (R86 ? 8 : 0))` 在 `#r89c2slant=off` 态算 50、实测 54
+ *  （漏了单独恢复楔板的 +4），故采用下式逐项累加；tri 断言由主理人 Phase3 同步。 */
 export const C2_TRI_BUDGET = 36
   + (R69_C2_LAMP_ON ? 4 : 0)
   + (R71_C2_COVERFILL_ON ? 4 : 0)
   + (R84_C2_SIDE_UP_ON ? 4 : 0)
-  + (R86_C2_UPPEROUTER_ON ? 8 : 0);
+  + (R86_C2_UPPEROUTER_ON && (!R89_C2_BLACKPANEL_ON || R89_C2_SLANT_ROLLBACK) ? 4 : 0)
+  + (R86_C2_UPPEROUTER_ON && !R89_C2_BLACKPANEL_ON ? 4 : 0)
+  + (R89_C2_BLACKPANEL_ON ? 2 : 0);
 export const C2_MAT_BUDGET = 2;
 export const C2_TEX_BUDGET = 1;
 
@@ -857,6 +899,17 @@ export function buildTailLampC2(opts: C2BuildOptions): C2BuildResult {
     coverMat.side = THREE.DoubleSide;
     faceMat.side = THREE.DoubleSide;
   }
+  // R89 去反光（主理人终裁）：默认 **OFF**，coverMat 保持 R88 的 metalness 0.08 /
+  //   roughness 0.72|0.78 ⇒ 正面横杆观感不变、「与横杆一样的黑色」成立，且
+  //   `#r89c2blackpanel=off` 时几何与材质一起回 R88 ⇒ 消去法单变量不污染。
+  //   coverMat 实测已非镜面（黑玻璃真因是 FRONT 倾斜几何，本波已删）⇒ 材质不必再动。
+  //   `#r89c2matte=on` ⇒ 单独启用 metalness→0 / roughness→1 供真机 A/B 去反光贡献；
+  //   ⚠ coverMat 为 coverMesh 共享实例 ⇒ 启用时横杆也会变全哑光（更沉、同色同质）。
+  //   ⚠ 只改构造后的标量，不动 `roughness: tweak ? ...` 字面行（r68_visual:387 逐字护栏）。
+  if (R89_C2_MATTE_ON) {
+    coverMat.metalness = 0;
+    coverMat.roughness = 1;
+  }
 
   // Phase 2b-C（侧缘接缝自查）：盖板由单面 2-tri plane 改**薄盒**（BoxGeometry 6 面 = 12 tri）。
   // rear34 后 3/4 视角下，单面 plane 的侧缘会读作一条贴片（z 外凸 body 尾门 10mm 世界）；
@@ -1027,7 +1080,14 @@ export function buildTailLampC2(opts: C2BuildOptions): C2BuildResult {
   //   两沿都内收于 body 侧围（实测 0.909w / 0.770w）⇒ 恒不外凸，不重演 R82 外悬空黑板。
   //   x 随 y 收（yHi 顶点用 xHi、yLo 顶点用 xLo），仍是 4 顶点 2 tri 单 quad。
   // zOut/zIn 取同 R84 上填充（跟随 R83 ztail / R84 拓深），覆盖拓深后整段进深。
-  if (R86_C2_UPPEROUTER_ON) {
+  // ⚠ R89 归因（Super VL 856Z 像素级，审查员复核）：本段 outerQuads 左右各一 =
+  //   用户「两个黑色玻璃」（从车身向上斜插进天空、65–70° 的深灰梯形板），也是
+  //   「上面的去除」所指；y 顶 0.366 > MAEXTRO 0.353。⚠ 与「侧面已加上」不是同一件：
+  //   侧面 = R84 上半侧填 + R71 盖板侧填（±X 贴侧壁），保留不动。
+  // ⚠ R89：默认删除，仅回滚态生成：`#r89c2blackpanel=off`（逐位回 R88 四块齐现）／
+  //   `#r89c2slant=off`（单独恢复本块作消去法定位）。主理人终裁不新增第三开关，
+  //   现有两开关已完整覆盖「单回楔板」与「全回 R88」，避免开关膨胀。
+  if (R86_C2_UPPEROUTER_ON && (!R89_C2_BLACKPANEL_ON || R89_C2_SLANT_ROLLBACK)) {
     const zOutOuter = G.faceZ - effZTail;
     const zInOuter = G.faceZ + sideDepthEff;
     const yLoOuter = G.coverYHi;
@@ -1069,7 +1129,14 @@ export function buildTailLampC2(opts: C2BuildOptions): C2BuildResult {
   //   法线 −Z 用 makeQuad 索引 [0,1,2,1,3,2]；左右各半 quad（分 x≤0 / x≥0）
   //   共 +4 tri（tri 52 ⇒ 56，不变）。复用 coverMat（DoubleSide 已开不会过曝）。
   // ⚠ 保留已生效的侧面外上 quad（用户已确认侧面填了）；本段只补正面缺失。
-  if (R86_C2_UPPEROUTER_ON) {
+  // ⚠ R89 归因更正（Super VL 856Z 像素级，审查员复核）：「两个黑色玻璃」= 上方 R86
+  //   外上楔板左右各一，**非本段**；本段 FRONT 两半 = 中央占画面 80%+ 的巨大纯黑矩形，
+  //   对应用户①「上半区域填与正面横杆一样的黑色」。两段默认都删 + 补整幅黑面板
+  //   ⇒ 两个症状全覆盖（用户④「上面的去除」由删楔板承担）。
+  // ⚠ R89：本段默认删除；`#r89c2blackpanel=off` 逐位回滚复现（与 R86 楔板同开关，
+  //   精确回 R88 四块齐现）。源码保留不物理删 ⇒ r81_regression.test.ts:343-346 的
+  //   R88 front 正锁切片仍成立、护栏不因删块而红。
+  if (R86_C2_UPPEROUTER_ON && !R89_C2_BLACKPANEL_ON) {
     const frontYLo = G.coverYHi;
     const frontYHi = 0.346;
     const xLoF = effCoverHalfW;
@@ -1099,6 +1166,40 @@ export function buildTailLampC2(opts: C2BuildOptions): C2BuildResult {
     }
     coverGeo = mergeSafe([coverGeo, ...frontQuads]);
     for (const q of frontQuads) q.dispose();
+  }
+
+  // R89 · 一整块黑面板（替代删掉的两半 FRONT + 上楔板）：跟随 tumblehome 的**整幅**
+  //   倾斜面，x=±effCoverHalfW(0.163) 上下同宽 ⇒ x=0 无中缝；y[coverYHi 0.266, 0.346]
+  //   （0.346 = 镀铬带底，带 yC=0.353 / h=0.014 ⇒ 不压带、不盖 MAEXTRO 字标）；
+  //   z 下沿 C2_FRONT_ZLO_R87(−0.5619) → 上沿 C2_FRONT_ZHI_R87(−0.5325) 贴 body
+  //   内收曲面（各外凸 0.0005 local = 2.4mm 世界，不悬空）；法线 (0,0.28,−0.96)、
+  //   setIndex([0,1,2,1,3,2])。
+  // ⚠ 绕序按审查要求用 **makeQuad 式「左上/右上/左下/右下」**：(v1−v0)×(v2−v0)
+  //   = (0,+0.345,−0.938) ≈ normal (0,0.28,−0.96) ⇒ 几何法线与法线属性同向。
+  //   旧 R88 FRONT 块用「左下/右下/左上/右上」，叉积为 (0,−0.345,+0.938) 与 normal
+  //   **相反**（仅靠 DoubleSide 掩盖、背面光照被 three 翻转）⇒ 也是「黑玻璃」观感的
+  //   隐藏成因，本波一并根治；关 DoubleSide 也不会消失。
+  //   「更深的正面」由 z 随 y 内收 0.0294 local 直接给出，不再加第三块 inward quad。
+  //   1 quad = 2 tri，复用 coverMat 同一实例，merge 进最终 coverGeo ⇒ 3 mesh / 3 DC / 2 材质。
+  if (R89_C2_BLACKPANEL_ON) {
+    const panelYLo = G.coverYHi;
+    const panelYHi = 0.346;
+    const panelHalfW = effCoverHalfW;
+    const panel = new THREE.BufferGeometry();
+    // 左上 / 右上 / 左下 / 右下（与 makeQuad 同序，z 随 y 内收）
+    panel.setAttribute('position', new THREE.Float32BufferAttribute([
+      -panelHalfW, panelYHi, C2_FRONT_ZHI_R87,
+      panelHalfW, panelYHi, C2_FRONT_ZHI_R87,
+      -panelHalfW, panelYLo, C2_FRONT_ZLO_R87,
+      panelHalfW, panelYLo, C2_FRONT_ZLO_R87
+    ], 3));
+    panel.setAttribute('normal', new THREE.Float32BufferAttribute([
+      0, 0.28, -0.96, 0, 0.28, -0.96, 0, 0.28, -0.96, 0, 0.28, -0.96
+    ], 3));
+    panel.setAttribute('uv', new THREE.Float32BufferAttribute([0, 1, 1, 1, 0, 0, 1, 0], 2));
+    panel.setIndex([0, 1, 2, 1, 3, 2]);
+    coverGeo = mergeSafe([coverGeo, panel]);
+    panel.dispose();
   }
   // coverMesh 在全部 coverGeo merge（R71 端面填充 + R84 上填充 + R86 外上填充）之后创建，
   //   确保 Mesh 捕获的是**最终**合并几何 ⇒ 填充 quad 真正渲染（见上方 coverMesh 下移注）。

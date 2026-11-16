@@ -33,10 +33,11 @@
  *       已验证可跑量级），供真机对比 / 母版掉帧时兜底。
  *
  * 挂载契约（与 mountExternalWheel 同纪律，但不走矩阵反解 —— 本件挂 wheel spin 枢轴）：
- *   · **几何口径**：GLB 顶点在「米」（探针实测 bbox size X 0.978 / Y 0.618 / Z 1.040，
- *     radial≈1.0 m ⇒ 是「米」不是「模型单位」）。递交几何在「spec 米」= 真实米 ÷
- *     manifest.scale（=4.75）。故 mesh.scale = 1 / manifest.scale（**不用** manifest.scale
- *     放大 —— 那是把「模型单位」放大回米的口径，方向相反）。
+ *   · **几何口径（R89 修正）**：GLB 顶点在「米」（探针实测 bbox 最大维 ≈1.0396 m）。
+ *     程序化轮毂面半径 R_FACE=0.343 m（同为米制）⇒ mesh.scale = 2*R_FACE / 径向实测值
+ *     ≈ 0.660，让母版轮毂外径填满轮框到胎唇。**与 manifest.scale 无关**：旧 `1/scale`
+ *     =0.2105 把米误当模型单位再压一次，母版只剩目标直径 32%，真机读作轮框里一个小圆盘
+ *     （用户本波「调整大小和尺寸及中心点以适配」即指此）。
  *   · **朝向（R86 修正）**：探针实测母版 bbox size **Y=0.618 最薄** ⇒ 轮轴沿 **Y**
  *     （⚠️ 派单稿称「轮轴沿 Z、rotation.y=-π/2 逐位复用」是误读 bbox 数字——最薄维是 Y
  *     不是 Z；旧 `wheel-hub-hi.glb` 才是 Z 轴 Y1.040/Z0.619）。故不能沿用 rotation.y=-π/2
@@ -66,6 +67,7 @@
  */
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { R_FACE } from './wheelHub';
 
 /**
  * R83 · 高精度轮毂开关（**默认 OFF**，`#r83wheelhub=on` 启用）。
@@ -114,9 +116,8 @@ function inTestEnv(): boolean {
 
 /**
  * 装载高精度轮毂 GLB 并返回 4 个 mesh（共享几何 + 共享材质，×4 DC）。
- * @param scale manifest.scale（=4.75）—— 用于把 GLB「米」顶点压回「spec 米」；
- *              mesh.scale = 1 / scale（注意：与 InteriorSteering 的 scale 放大方向相反，
- *              因为本 GLB 顶点已是米、不是模型单位）。
+ * @param scale manifest.scale（=4.75）—— R89 起仅用于日志/调用契约，不参与缩放；
+ *              实际 mesh.scale 由 R_FACE 与 GLB 实测 bbox 径向反算（见上方几何口径）。
  * @returns 4 个 mesh（fl/fr/rl/rr 顺序不敏感，调用方按 side 自行挂到对应 spin）；
  *          失败返回 null ⇒ 调用方保持程序化轮毂，游戏零感知。
  */
@@ -212,26 +213,35 @@ export async function loadWheelHubHi(
     // ⚠️ 共享 geometry 只 translate 一次（4 实例共用），零每帧成本、零显存增量。
     geometry.computeBoundingBox();
     const bb = geometry.boundingBox;
+    /* R89 兜底：用户「调整大小和尺寸及中心点以适配」。
+     * 旧 kScale = 1/scale（=0.2105）把「米」顶点误当「模型单位」压缩，母版径向
+     * 1.0396 m 只落到 0.219 m，而程序化轮毂面直径 2*R_FACE=0.686 m ⇒ 轮毂只剩
+     * 目标的 32%，真机读作「轮框里一个小圆盘」。母版与 R_FACE 同为米制，缩放
+     * 与 manifest.scale 无关，直接由实测 bbox 径向反算，避免硬编码魔数。
+     * 最薄维 = 轮轴（1.5M 母版为 Y / 旧 288K 件为 Z），据此同时决定 rotation。 */
+    const ext = bb ? bb.getSize(new THREE.Vector3()) : new THREE.Vector3(1, 1, 1);
+    const axle = ext.x <= ext.y && ext.x <= ext.z ? 0 : ext.y <= ext.z ? 1 : 2;
+    const radial = Math.max(ext.x, ext.y, ext.z);
     if (bb) {
       const cx = (bb.min.x + bb.max.x) / 2;
       const cy = (bb.min.y + bb.max.y) / 2;
       const cz = (bb.min.z + bb.max.z) / 2;
-      geometry.translate(-cx, -cy, -cz);
+      geometry.translate(-cx, -cy, -cz); // 轮心归零 ⇒ spin 原点即轮心，无需额外 position 补偿
     }
     const material = source.material as THREE.Material;
     // R49-A2 阴影代理同律：四轮本体已退出 shadow pass，本件也不投（castShadow=false）
-    const kScale = 1 / scale;
+    const kScale = (2 * R_FACE) / radial;
     const meshes: THREE.Mesh[] = [];
     for (let i = 0; i < 4; i++) {
       const mesh = new THREE.Mesh(geometry, material);
       mesh.name = 'r83-hub-hi';
-      mesh.scale.setScalar(kScale);           // 米 → spec 米
-      // ⚠️ R86 修正：必须绕 Z 旋转 -π/2。母版轮轴沿 **Y**（探针 bbox size Y=0.618 最薄，
-      //    见头注），而 spin.rotation.x 绕局部 X 自转 ⇒ 需把 GLB Y（轮轴）映射到车 X 轴。
-      //    rotateZ(-π/2) 把 +Y→+X、径向 X-Z 平面→Y-Z 平面 ⇒ 轮盘落在 Y-Z 面、绕 X 正常滚动。
-      //    （旧 wheel-hub-hi.glb 是 Z 轴才用 rotateY(-π/2)；母版换成 Y 轴后沿用会错滚/打转。）
-      //    外圈面朝向二义同旧件：默认 -π/2（+Y→+X），如真机目检外圈面朝内可换 +π/2（+Y→-X）。
-      mesh.rotation.set(0, 0, -Math.PI / 2);
+      mesh.scale.setScalar(kScale);           // 母版米制径向 → 2*R_FACE 轮毂面直径
+      /* R89 轴向防呆：按实测最薄维决定旋转，换 `#hubmaster=off` 回退旧 Z 轴件时自动切
+       * rotation.y=-π/2，不再靠人工记「母版 Y 轴 / 旧件 Z 轴」。
+       * Y 轴件：rotateZ(-π/2) 把 +Y→+X，轮盘落 Y-Z 面，spin.rotation.x 绕 X 正常滚动；
+       * Z 轴件：rotateY(-π/2) 把 +Z→+X，等价效果。X 轴件已对齐，不转。 */
+      if (axle === 1) mesh.rotation.set(0, 0, -Math.PI / 2);
+      else if (axle === 2) mesh.rotation.set(0, -Math.PI / 2, 0);
       mesh.position.set(0, 0, 0);             // spin 原点已是轮心（geometry 已重定位）
       mesh.castShadow = false;
       mesh.receiveShadow = false;

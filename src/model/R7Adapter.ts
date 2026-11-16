@@ -36,6 +36,16 @@ import {
   type ExternalShellHandle
 } from './external/ExternalShell';
 import { loadInteriorSteering } from './external/InteriorSteering';
+// R89：R7 1.5M-tri 主驾座舱母版（新模块自持 URL，不动 ASSET_URLS / ExternalShell.ts）
+import {
+  loadMasterCabin,
+  getMasterCabinAudit,
+  R89_R7_MASTER_ON,
+  R89_R7_GLASS_ON,
+  R89_R7_NO_ROOFCULL_ON,
+  R89_R7_FRONTSIDE_ON,
+  R89_MASTER_TRI
+} from './external/InteriorCabinMaster';
 import { setFxWheelOffsets } from '../fx';
 import { DEFAULT_VARIANT } from '../config/vehiclePaint';
 // R68 P0-3 修正 C 双路径：别名接入新增导出函数，原 createR7FrontDetails() 逐字保留
@@ -1575,6 +1585,8 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
    */
   // ---- R44 状态：外部壳句柄 / 程序化外观隐藏标记 / 最近一次内舱态 ----
   let shellHandle: ExternalShellHandle | null = null;
+  /** R89：1.5M-tri 主驾座舱母版容器（r44External 免纳管；visible 只由 applyVisibility 末尾一行写） */
+  let masterCabin: THREE.Object3D | null = null;
   /** R47：高精度方向盘（仅 cabin 态可见；外景态零 DC / 不透车外） */
   let steeringMesh: THREE.Mesh | null = null;
   /** R47：高精度盘装配成功后要恒隐藏的程序化盘（防双盘重叠 / z-fighting） */
@@ -1857,28 +1869,54 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
     }
 
     // —— 外部壳专属（bodyMesh / glass / lamp / side / opacity / roofCull）——
+    /* R89 · 车内黑板根治（三处同段最小改动，不重写 R19f 整套）：
+     *   ① glass 恒显 / lamp 仍 !interior —— 与 V800Adapter.ts:5453-5454（R87 根治
+     *      前挡黑板）同构。R7 旧代码把 glass+lamp 一起 `!interior` ⇒ cabin 态玻璃
+     *      整批隐、上半屏看穿/大平板；玻璃走 transparent alpha（opacity 0.55，非
+     *      transmission，不触发整场景重绘），恒显即杜绝露黑底。
+     *   ② 不剔顶：现在有真实 1.5M 座舱壳，剔顶只会制造新看穿；applyRoofCull(false)
+     *      幂等恢复完整 index。⚠ 保留 `applyRoofCull(interior && r47CabinFix` 前缀
+     *      （tests/r50_r7eye.test.ts 正则按此锚定）。
+     *   ③ cabin 态 bodyMesh 保持 FrontSide ⇒ 背面剔除后内壁不渲染，R7 主驾前视
+     *      （紫像素判据 21.55% ⇒ R7）上半屏约 60% 看穿、dark 39%/brown 45%/方向盘 0%
+     *      的巨大暗面黑板消失，座舱交给母版接管。R47 的 DoubleSide 是「外模包裹观感」
+     *      旧机制，本波撤机制而非叠补丁（⚠ 车内黑板图 836Z 经紫像素判据 0.00% 证实是
+     *      V800 而非 R7，本波不据此改 V800）。
+     * 总闸 `#r89r7master=off` ⇒ 三处逐位回 R88；三个子项各自 =off 可单独回退。 */
+    const r89Master = R89_R7_MASTER_ON;
     if (shellHandle) {
       // ②：R47 不再整壳隐藏（FrontSide 背面剔除天然不遮挡座舱视线）
       shellHandle.bodyMesh.visible = r47CabinFix || !interior;
       // ②：外景态隐私玻璃完全不透明（只改 opacity，零 program 重编译）
       shellHandle.setGlassOpaque(!interior && r47CabinFix);
-      // ②：cabin 态 DoubleSide 让外模内壁可见（**值变才 needsUpdate**，非每帧重编译）
+      // ②/R89③：cabin 态默认保持 FrontSide（值变才 needsUpdate，非每帧重编译）
       const bm = shellHandle.bodyMesh.material as THREE.MeshPhysicalMaterial;
-      const wantSide = interior && r47CabinFix ? THREE.DoubleSide : THREE.FrontSide;
+      const wantSide = interior && r47CabinFix
+        ? (r89Master && R89_R7_FRONTSIDE_ON ? THREE.FrontSide : THREE.DoubleSide)
+        : THREE.FrontSide;
       if (bm.side !== wantSide) { bm.side = wantSide; bm.needsUpdate = true; }
-      // ②：glass/lamp 语义件与外壳同显隐
-      for (const sm of [...shellHandle.glassMeshes, ...shellHandle.lampMeshes]) {
-        sm.visible = !interior;
+      // ②/R89①：glass/lamp 显隐分离（V800 R87 同构）；总闸/子闸关闭 ⇒ 逐位回 R88 全隐
+      if (r89Master && R89_R7_GLASS_ON) {
+        for (const sm of shellHandle.glassMeshes) sm.visible = true;
+        for (const sm of shellHandle.lampMeshes) sm.visible = !interior;
+      } else {
+        for (const sm of [...shellHandle.glassMeshes, ...shellHandle.lampMeshes]) {
+          sm.visible = !interior;
+        }
       }
-      // ② R50/R71：cabin 剔顶（cabinRear 用更高阈值连 header 一起剔；#r50roof=off 直通）
+      // ② R50/R71：R89 默认 cabin 不剔顶（cabinRear 阈值 / #r50roof=off 语义不变）
       applyRoofCull(
-        interior && r47CabinFix,
+        interior && r47CabinFix && !(r89Master && R89_R7_NO_ROOFCULL_ON),
         interior && cameraInRearZone && R71_REAR_ROOF ? R7_REAR_ROOF_CLIP_WORLD_Y : R50_ROOF_CLIP_WORLD_Y,
       );
     }
     // ② R47/R71：高精盘 cabin 显（近距门控覆盖）；程序化盘接管后恒隐藏、近距态恢复
     if (steeringMesh) steeringMesh.visible = interior && !steerNear;
     for (const m of proceduralSteeringMeshes) m.visible = interior && steerNear;
+    /* R89 · 1.5M 母版唯一显隐真源：整棵子树 r44External 免纳管（不进 W1 状态表、
+     * 不进 cabinOccluderMats / pokeList），只有这一行写 visible。外景态 false ⇒
+     * 零 tri / 零 DC / 零材质开销，P0 运行时流畅度不受 1.5M 面数影响。 */
+    if (masterCabin) masterCabin.visible = interior;
   };
 
   /* ══════════════ R44 外部壳（外观 GLB 资产化）══════════════
@@ -1984,6 +2022,27 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
       wheel.visible = false;
       for (const m of proceduralSteeringMeshes) m.visible = false;
     })();
+    /* R89 · 1.5M-tri 主驾座舱母版完整装配（默认 ON；#r89r7master=off ⇒ 完全不装配，
+     * 逐位回 R88）。与 loadInteriorSteering 同父挂 body；fire-and-forget，不阻塞外部壳
+     * / 轮 / 轮拱内衬就绪（首建时长无限制，P0 恒为运行时流畅度）。
+     * 整棵子树 r44External ⇒ 建表已在此之前完成、不纳管；材质无 sculptMaterial.id
+     * ⇒ 不进 cabinOccluderMats / pokeList。visible 唯一写入点 = applyVisibility 末尾
+     * 一行（装配初值 exterior=false ⇒ 外景态零 tri / 零 DC）。 */
+    if (R89_R7_MASTER_ON) {
+      void (async () => {
+        const master = await loadMasterCabin();
+        if (!master) return; // 失败：程序化座舱保持完整，游戏零感知
+        body.add(master.root);
+        masterCabin = master.root;
+        master.root.visible = false;
+        const audit = getMasterCabinAudit(master.root);
+        console.info(
+          `[R7Adapter] R89 母版就绪 tri=${audit.tri}/${R89_MASTER_TRI} ` +
+          `mesh=${audit.meshCount} mat=${audit.materialCount} ` +
+          `sculptId=${audit.hasSculptId} external=${audit.isExternal}`
+        );
+      })();
+    }
     const hubTags = ['fl', 'fr', 'rl', 'rr'] as const;
     const usedSpin = new Set<THREE.Object3D>();
     // 切割退化（静态轮）：无外部轮 mesh 时整段跳过

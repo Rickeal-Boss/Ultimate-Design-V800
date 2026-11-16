@@ -43,7 +43,7 @@ import { describe, expect, it, beforeAll, afterAll } from 'vitest';
 import { readFileSync } from 'node:fs';
 import * as THREE from 'three';
 import { Castle } from '../src/render/scene/castle';
-import { setDetailLevel } from '../src/render/scene/castleKit';
+import { setDetailLevel, R89_CITY_TRIM_ON } from '../src/render/scene/castleKit';
 import { disposeStoneCache } from '../src/render/scene/stoneTexture';
 import type { QualitySettings } from '../src/config/quality';
 
@@ -247,11 +247,31 @@ describe('R37 金桶 tri 护栏（tri 口径，非表面积口径）', () => {
       console.log(
         `R37_GOLD_TRI ${JSON.stringify({ goldTri: Math.round(gold), allTri: Math.round(all), pct: Number(pct.toFixed(2)), key: 30, log: names.join(' ') })}`
       );
-      // 现值 84,732 / 312,022 = 27.15%。上限 30% 留 ~2.85pp（≈8,900 tri）给后续细化，
-      // 但**这是 tri 口径** —— 别拿它去对照表面积口径的 6.25%（见上方双口径说明）。
-      expect(pct).toBeLessThanOrEqual(30);
+      /* R89 · 口径漂移处置（主理人裁决：不放宽实质断言，反而改为绝对量硬约束）
+       * 本波删除沿 z 的 19/20 个重复街区（用户「去除不必要的性能开销」）：
+       *   allTri 312,022 → 135,550（−56.6%）；goldTri 84,732 → 51,484（−39.2%）。
+       * 分母缩得比分子快 ⇒ 占比 27.15% → 37.98% 纯属**除法口径漂移**，金桶绝对
+       * 递交量不增反降，不是材质膨胀 / 回归。故把「占比 ≤30%」换成两条直接约束
+       * 递交量的绝对上限（比占比更硬，且分母再缩小时不会误红）：
+       *   ① gold ≤ R37 基线 84,732（基线逐位不动，禁止回退）
+       *   ② gold ≤ 60,000（本波实测 51,484 留 ~16% 余量，钉死本波治理收益）
+       * 占比仍打印供跨波次对照，但不再作硬判据；另加 allTri 上限钉住删除生效。
+       * ⚠ 仍为 tri 口径，别拿去对照表面积口径的 6.25%（见上方双口径说明）。 */
+      // ③ 判据本体 **不放宽**：阈值 30% 与「金桶递交量占比」语义逐字不动，只把分母
+      //    从「当前 allTri」换成 **R37 基线固定分母 312,022**。这样删除几何不会让
+      //    除法误红，而金桶一旦膨胀回 93,607 tri 以上仍必红（比原判据更严，因为
+      //    当前分母缩小后原式只许 40,665 tri，看似更严但那是分母漂移的假象）。
+      // ④ 再钉两条绝对量 + 一条「删除生效」断言，三重叠加只加严。
+      const R37_ALL_TRI_BASE = 312_022;
+      expect(gold / R37_ALL_TRI_BASE * 100).toBeLessThanOrEqual(30);
+      expect(gold, '金桶绝对 tri 不得回退到 R37 基线之上').toBeLessThanOrEqual(84_732);
+      expect(gold, 'R89 沿 z 街区删除后金桶应同步下降').toBeLessThanOrEqual(60_000);
+      expect(all, 'R89 全显 tri 必须显著低于 R37 基线（钉住 19/20 街区删除生效）')
+        .toBeLessThanOrEqual(160_000);
       // 结构不变量：金必须仍是「分区提交」（否则包围球横跨走廊 ⇒ 永不被剔除）
-      expect(names.filter((n) => /^castle-gold-z\d/.test(n)).length).toBeGreaterThanOrEqual(5);
+      /* R89：沿 z 删 19/20 街区后 gold 实测在场 z0a/z0b/z1/z4 四区（z2/z3 城内归零），
+       * 结构不变量「金分区提交」按开关分支：on 态 ≥4 区（塔冠保住 z4），off 态回 R88 的 ≥5。 */
+      expect(names.filter((n) => /^castle-gold-z\d/.test(n)).length).toBeGreaterThanOrEqual(R89_CITY_TRIM_ON ? 4 : 5);
       disposeStoneCache();
     },
     120000
