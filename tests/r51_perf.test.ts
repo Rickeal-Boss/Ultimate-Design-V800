@@ -113,8 +113,11 @@ describe('R51-A 加载期 gate（R45 事故防回退）', () => {
   it('Game.ts：装配完成判据是 r44External 已挂树，不是 fetch 完成', () => {
     expect(gameSrc).toContain('if (!this.hasMountedExternalShell()) return;');
     expect(gameSrc).toContain('.r44External === true');
-    expect(gameSrc).toContain("if (state !== 'ready') return;");
-    expect(gameSrc).toContain('if (state === null) return;');
+    // R92：仰望第三车未走 ExternalShell 台账，pollShellGate 加 shellReady 兜底特判；
+    // 原语义对 v800/r7 逐字保留（state===null 且非 yangwang ⇒ 继续等；state!=='ready' 且未就绪 ⇒ 继续等）。
+    expect(gameSrc).toContain("if (state === null && !yangwangReady) return;");
+    expect(gameSrc).toContain("if (!yangwangReady && state !== 'ready') return;");
+    expect(gameSrc).toContain("SHELL_NO_SHELL_STATES.includes(state ?? '')");
     // hasMountedExternalShell 只读标记，不瘦身、不改 visible
     const fn = gameSrc.slice(
       gameSrc.indexOf('private hasMountedExternalShell()'),

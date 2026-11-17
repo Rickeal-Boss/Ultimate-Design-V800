@@ -101,6 +101,14 @@ const R7_ADAPTER: R7AdapterModule | null =
   resolveVehicleId() === 'r7' ? await import('../model/R7Adapter') : null;
 
 /**
+ * R92 第三车「仰望」适配器顶层预取（与 R7 同机制：仅活动车型为 yangwang 时才 import，
+ * 其他玩家零 chunk 成本）。createCar() 同步消费，模块求值与构造同任务内完成。
+ */
+type YangwangAdapterModule = typeof import('../model/YangwangAdapter');
+const YANGWANG_ADAPTER: YangwangAdapterModule | null =
+  resolveVehicleId() === 'yangwang' ? await import('../model/YangwangAdapter') : null;
+
+/**
  * 冗余制动期间的刹车灯亮度。
  * 断裂后 pedalForce 归零，若沿用 `pedalForce > 1 ? 8 : 1.6` 会让灯掉回怠速 ——
  * 车明明在减速却灭灯。取 4.5（介于怠速 1.6 与全力 8 之间）：在刹，但不是你踩的。
@@ -1026,6 +1034,15 @@ export class Game {
     // R37-C 车漆：装配期一次性消费（换色与换车同机制 —— Menu 落盘后 location.reload()）。
     // resolveAssemblyPaintId 对 r7 返回 null 表示「保留原厂墨绿」，v800 恒为 5 色之一
     // （默认 champagne，数值 = R36 基线 ⇒ 不换色时车模逐位不变）。
+    // R92 第三车：仰望资产未登记进 vehiclePaint 白名单（v800|r7），不消费车漆选择
+    // —— 显式传 null 走适配器原厂香槟金，绝不把 v800 的车漆选择串进仰望。
+    // ⚠ 必须先于 paintId 三元判断，否则 TS 把后续 profile.id 窄化成 v800|r7 报 TS2367。
+    if (this.profile.id === 'yangwang') {
+      if (!YANGWANG_ADAPTER) {
+        throw new Error('[Game] yangwang 适配器未预取：活动车型在模块求值后被改写？');
+      }
+      return YANGWANG_ADAPTER.createYangwangCarAdapter(this.tier, null);
+    }
     const paintId = resolveAssemblyPaintId(this.profile.id);
     if (this.profile.id === 'r7') {
       if (!R7_ADAPTER) {
@@ -1571,6 +1588,16 @@ export class Game {
         this.hud.setActiveView(this.interiorMode);
         this.snapCamTimer = REDUNDANCY.cabinHoldSeconds;
         break;
+      case 'tire_blow': {
+        // R92 半程爆胎：车身姿态**结构性平稳**（1D 物理无侧向自由度），只做视觉轮胎形变
+        // + 提示；绝不切 crash 机位、绝不碰 body.rotation（那是撞主殿专属）。
+        const carcass = this.car as CarLike & { snapTire?: (index: number) => void };
+        carcass.snapTire?.(0); // 左前轮压扁歪斜；非仰望车（可选字段缺失）空操作
+        this.sfx.warn();
+        vibrate([60, 30, 60]);
+        this.hud.showToast('轮胎破裂！四电机稳住车身 · 保持平稳继续刹停', true, 2600);
+        break;
+      }
       case 'stopped': {
         // 结算段：电影侧机位 2s → orbit（frame 内按 settleTimer 推进）
         const degraded = event.result.degraded;
@@ -1815,8 +1842,15 @@ export class Game {
     }
 
     const state = readShellStatus(this.profile.id);
-    if (state === null) return; // 台账尚未建立：继续等，绝不提前放行
-    if (SHELL_NO_SHELL_STATES.includes(state)) {
+    // R92 第三车兜底：仰望未走 ExternalShell.ts 台账（白名单隔离），readShellStatus
+    // 恒 null。若适配器已自报 GLB 装配完成（shellReady getter），视同 'ready' 放行；
+    // 台账存在时仍以台账为准（主路径由 YangwangAdapter 写 __r44Shell.yangwang）。
+    const yangwangReady =
+      state === null &&
+      this.profile.id === 'yangwang' &&
+      (this.car as CarLike & { shellReady?: boolean }).shellReady === true;
+    if (state === null && !yangwangReady) return; // 台账尚未建立：继续等，绝不提前放行
+    if (SHELL_NO_SHELL_STATES.includes(state ?? '')) {
       /* 既有失败分支：failed（网络/解析/`#r44ext=off`/Node 测试环境，
        * ExternalShell.ts:679-683,1135）或 cancelled（用户主动「停止下载」，
        * ExternalShell.ts:1125-1133，此后不会再有壳到达）。
@@ -1826,7 +1860,7 @@ export class Game {
       markShellUnavailable();
       return;
     }
-    if (state !== 'ready') return; // idle / loading：继续等
+    if (!yangwangReady && state !== 'ready') return; // idle / loading：继续等
 
     /* 硬证据：`r44ShellStatus.state='ready'` 是 `loadExternalShell()` 返回**前**
      * （ExternalShell.ts:1113）置的，属 fetch/parse 完成，**不是装配完成**。

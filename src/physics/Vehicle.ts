@@ -1,6 +1,6 @@
 /**
  * 纵向拟真动力学（纯函数步进器，可单测）。
- * dv/dt = (F_motor×throttle − F_drag − F_roll − F_brake − F_regen) / m
+ * dv/dt = (F_motor×throttle − F_drag − F_roll − F_extraDrag − F_brake − F_regen) / m
  * 电机模型：恒扭矩(T_max)→恒功率曲线，效率 0.92；电子限速 200km/h。
  */
 import { BRAKE, DRIVE, GRAVITY, MS_TO_KMH, REDUNDANCY, VEHICLE } from '../config/physics';
@@ -44,6 +44,12 @@ export interface VehicleInput {
    * （不依赖 BrakeModel，便于无头单测）。
    */
   redundancyDecel?: number;
+  /**
+   * R92 半程爆胎的额外拖阻 N（**仅加速段生效**）。
+   * 只在 `!powerCut` 分支从驱动力里扣掉，刹车段完全不读此字段 ——
+   * 否则爆胎反而刹得更短（玩法反转）。不传 = 0 ⇒ 既有数值锚逐位不变。
+   */
+  extraDragN?: number;
 }
 
 export function createVehicleState(): VehicleState {
@@ -203,7 +209,10 @@ export function stepVehicle(
     state.thermalHold = 0;
     if (state.brakeTemp < BRAKE.thermalRearmTemp) state.thermalArmed = true;
     const fMotor = motorForce(speed, input.throttle);
-    accel = (fMotor - dragForce(speed) - rollForce()) / MASS;
+    // R92 爆胎拖阻：与风阻/滚阻同一受力路径，仍走下方电子限速钳位。
+    // 5200N / 3300kg ≈ 1.576 m/s²（0.16g），功率平衡极速 ≈179.8km/h。
+    const extraDrag = Math.max(0, input.extraDragN ?? 0);
+    accel = (fMotor - dragForce(speed) - rollForce() - extraDrag) / MASS;
   }
 
   state.accel = accel;

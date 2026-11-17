@@ -1,0 +1,63 @@
+{
+  "source": "baked offline from read-only GLBs",
+  "scale": 4.5,
+  "nativeBBox": {
+    "min": [
+      -0.249702,
+      0.0,
+      -0.618594
+    ],
+    "max": [
+      0.248454,
+      0.34567,
+      0.553007
+    ]
+  },
+  "wheelbaseZCenter": 0.0075,
+  "rotationCorrected": "rotX(+90deg) baked into POSITION/NORMAL",
+  "hubCentersNative": {
+    "wheel-fl": [
+      0.187,
+      0.0785,
+      0.3555
+    ],
+    "wheel-fr": [
+      -0.187,
+      0.0785,
+      0.3555
+    ],
+    "wheel-rl": [
+      0.187,
+      0.0785,
+      -0.3555
+    ],
+    "wheel-rr": [
+      -0.187,
+      0.0785,
+      -0.3555
+    ]
+  },
+  "wheelRadiusNative": 0.0785,
+  "triangles": {
+    "body": 1275005,
+    "wheels": 323876,
+    "total": 1598881
+  },
+  "images": [
+    "texture_pbr_20250901_normal",
+    "texture_pbr_20250901",
+    "texture_pbr_20250901_metallic-texture_pbr_20250901_roughness"
+  ],
+  "materialVariant": "champagne-gold (baked basecolor)",
+  "drawCallEstimate": {
+    "bodyPrimitives": 14,
+    "wheels": 4,
+    "totalExterior": 18
+  },
+  "wheelSourceMeshes": {
+    "wheel-fl": "拆解.glb part_9",
+    "wheel-fr": "拆解.glb part_3",
+    "wheel-rl": "拆解.glb part_0",
+    "wheel-rr": "拆解.glb part_4"
+  }
+}

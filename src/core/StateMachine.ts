@@ -57,6 +57,11 @@ export type GameEvent =
   | { type: 'start' }
   | { type: 'brake_too_early' }
   | { type: 'brake_start'; v0Kmh: number }
+  /**
+   * R92 半程爆胎：车身姿态不变（严格 1D 纵向物理），仅加速段多一份拖阻。
+   * `distance` = 触发时里程 m，`speedKmh` = 触发瞬时车速。
+   */
+  | { type: 'tire_blow'; distance: number; speedKmh: number }
   /** 踏板断裂：不结算失败，由 Game 播放脱落演出并提示冗余接管 */
   | { type: 'pedal_snap'; atSeconds: number; speedKmh: number }
   | { type: 'stopped'; result: RunResult }
@@ -75,12 +80,42 @@ const START_OFFSET_M = 2.7;
 /** 采样间隔（原版 tg=0.04） */
 const SAMPLE_INTERVAL = 0.04;
 
+/**
+ * R92 半程爆胎触发线：可行驶总长 (TRACK.barrierDistance − START_OFFSET_M) 的正中
+ * = (1300 − 2.7) / 2 = **648.65 m**。数值由冻结常量派生，不写死魔法数。
+ */
+export const TIRE_BLOW_DISTANCE_M = (TRACK.barrierDistance - START_OFFSET_M) / 2;
+/**
+ * R92 爆胎额外拖阻 N：**仅加速段生效**（见 Vehicle.stepVehicle 的 `extraDragN`）。
+ * 5200N / 3300kg ≈ 1.576 m/s²（0.16g），功率平衡极速 ≈179.8 km/h；
+ * 刹车段绝不叠加——否则爆胎反而刹得更短（182→166m），玩法反转。
+ */
+export const TIRE_BLOW_DRAG_N = 5200;
+
+/**
+ * R92 回滚开关：浏览器默认开，`#r92tire=off` 关。
+ *
+ * ⚠ 运行时求值（不是模块加载期 const）：① 便于 URL A/B 与护栏 stub；② **无头环境恒关**——
+ * vitest/Node 下 `window` 不存在，若默认开，648.65m 处 197.97km/h 会被 5200N
+ * 拖阻压到 179.8km/h 平衡，永远回不到 `atLimiter` 的 199km/h 门槛，
+ * 既有「限速自动切入」数值锚（physics.test.ts / redundancy.test.ts）全废。
+ * 浏览器里无 hash ⇒ true，玩法默认爆胎；纯物理/状态机仍与 R91 逐位一致。
+ */
+export function isTireBlowEnabled(): boolean {
+  if (typeof window === 'undefined') return false;
+  return !/(?:^|[#&])r92tire=off/i.test(window.location.hash);
+}
+/** 模块加载期开关快照（诊断/外部 A/B 展示用；判定逻辑一律走 isTireBlowEnabled()） */
+export const R92_TIRE_BLOW_ON = isTireBlowEnabled();
+
 export class StateMachine {
   phase: Phase = 'menu';
   vehicle: VehicleState = createVehicleState();
   pedal: PedalState = createPedalState();
   /** 当前档位（默认 V800 —— 不传时全部行为与 R15 之前逐位一致） */
   profile: VehicleProfile = VEHICLE_PROFILES.v800;
+  /** R92 半程爆胎是否已发生（每局仅 accel 段触发一次；重开由 start() 复位） */
+  tireBlown = false;
 
   brakeElapsed = 0;
   v0Kmh = 0;
@@ -144,6 +179,7 @@ export class StateMachine {
   start(): GameEvent[] {
     this.vehicle = createVehicleState();
     resetPedal(this.pedal);
+    this.tireBlown = false;
     this.brakeElapsed = 0;
     this.v0Kmh = 0;
     this.peakForce = 0;
@@ -160,6 +196,7 @@ export class StateMachine {
   toMenu(): void {
     this.vehicle = createVehicleState();
     resetPedal(this.pedal);
+    this.tireBlown = false;
     this.phase = 'menu';
   }
 
@@ -202,8 +239,12 @@ export class StateMachine {
             throttle: input.throttle,
             brake: 0,
             powerCut: false,
-            pedalForce: 0
+            pedalForce: 0,
+            // R92：爆胎拖阻只挂在加速段；刹车段 stepBraking 不传此字段 ⇒ 逐位不变
+            extraDragN: this.tireBlown ? TIRE_BLOW_DRAG_N : 0
           });
+          // 在 stepVehicle 之后判距：跨线那一帧先按无拖阻走一步，下一帧起生效
+          this.maybeBlowTire(events);
           this.checkBarrier(events);
         }
         break;
@@ -217,6 +258,25 @@ export class StateMachine {
         break;
     }
     return events;
+  }
+
+  /**
+   * R92 半程爆胎触发（仅 accel 段调用，brake 段永不调用）。
+   *
+   * 姿态平稳是**结构性保证**：本作主线是严格 1D 纵向物理——车轮是纯 THREE.Object3D
+   * 枢轴（无 cannon 轮体），帧循环只写车轮自转角的单一轴分量，横向/俯仰姿态角
+   * 从不参与；这里也不碰任何姿态字段，只置一个布尔位 + 发事件。
+   * 因此「半程轮胎破裂但车身保持平稳」无需额外阻尼/配平代码（撞主殿的翻滚演出不在本路径）。
+   */
+  private maybeBlowTire(events: GameEvent[]): void {
+    if (this.tireBlown || !isTireBlowEnabled()) return;
+    if (this.vehicle.distance < TIRE_BLOW_DISTANCE_M) return;
+    this.tireBlown = true;
+    events.push({
+      type: 'tire_blow',
+      distance: this.vehicle.distance,
+      speedKmh: this.speedKmh
+    });
   }
 
   private stepBraking(dt: number, input: SessionInput, events: GameEvent[]): void {

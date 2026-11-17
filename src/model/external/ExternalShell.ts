@@ -2661,7 +2661,14 @@ export async function loadExternalShell(
             0, 1, 1, 1, 0, 0, 1, 0
           ], 2));
           maskGeo.setIndex([0, 1, 2, 1, 3, 2]);
-          remapUVToRegion(maskGeo, 0.336, 0.664, 0.40, 0.68);
+          /* R92（审查报告 §3 / 连续三波 P0 头号项）：本 quad 法线 (0,0,-1)、从车尾外看
+           * 是背面 ⇒ atlas u 方向反，中段 LUXEED 读作镜像 `DEEXUL`。只把 u 区间对调
+           * （u→0.336+0.664−u，R91 实测字标区 8.05% 像素变化、放大正读 LUXEED），
+           * v 区间 [0.40,0.68] 不变；remapUVToRegion 的 `u0+nu*(u1−u0)` 支持 u0>u1，
+           * 几何 / 法线 / 索引逐位不动（仍 4 顶点 / 2 tri / 法线 -Z / FrontSide）。
+           * 开关 R92_BADGE_U_ON 默认 ON；`#r92badgeu=off` ⇒ u0<u1 回镜像态供 A/B。
+           * 与 R86 `#r86r7tailu`（band 字标，非本 badge mask）互不干扰。 */
+          remapUVToRegion(maskGeo, R92_BADGE_U_ON ? 0.664 : 0.336, R92_BADGE_U_ON ? 0.336 : 0.664, 0.40, 0.68);
           const maskAtlas = R90_TAIL_PAINT_ON ? null : makeR7RearBandAtlas();
           let maskMat: THREE.Material;
           if (R90_TAIL_PAINT_ON) {
@@ -3216,6 +3223,26 @@ export const R67_TAIL_C2_ON = !r51HookOff('r67tail');
  * ══════════════════════════════════════════════════════════════════════════════ */
 export const R89_R7_TAIL65_ON = !r51HookOff('r89r7tail65');
 export const R89_R7_TAILMASK_ON = !r51HookOff('r89r7tailmask');
+
+/* ══════════════════════════════════════════════════════════════════════════════
+ * R92 · 尾灯 LUXEED 字标镜像根治（审查报告 §3，连续三波未修的头号 P0）
+ *
+ * 病根：`r89_r7_tail_mask` 字标 quad 法线 (0,0,-1)、从车尾外看是背面 ⇒ atlas
+ *   u 方向反，中段 LUXEED 读作镜像 `DEEXUL`。R91 实测只翻 u ⇒ 字标区 8.05% 像素
+ *   变化、放大正读 `LUXEED`。
+ * 处方：mask 的 UV 重映射 u0/u1 对调（u→0.336+0.664−u），v 区间 [0.40,0.68] 不动；
+ *   底层 helper 的 u0>u1 反向线性插值保证几何 / 法线 / 索引逐位不动。
+ * 开关：`R92_BADGE_U_ON` 默认 ON；`#r92badgeu=off` ⇒ u0<u1 回镜像态供 A/B。
+ *   ⚠ 与 R86 `#r86r7tailu`（band 字标，非本 badge mask）互不干扰。
+ * ⚠ 键名不含 `noprewarm`；Node / vitest 无 window ⇒ r51HookOff 恒 false ⇒ 恒 ON。
+ * ⚠ 本纯函数与装配处三元必须逐字同参（on→0.664/0.336，off→0.336/0.664）。
+ * ══════════════════════════════════════════════════════════════════════════════ */
+export const R92_BADGE_U_ON = !r51HookOff('r92badgeu');
+/** R92 纯函数（供护栏直接断言 on/off 两态的 u 区间，零几何改动）：
+ *  on ⇒ (0.664, 0.336) u0>u1 翻 u 正读 LUXEED；off ⇒ (0.336, 0.664) u0<u1 镜像回滚。 */
+export function r92BadgeURange(on: boolean): readonly [number, number] {
+  return on ? [0.664, 0.336] : [0.336, 0.664];
+}
 
 /* ══════════════════════════════════════════════════════════════════════════════
  * R68 · 七项视觉主理开关（**单一真源**，默认全 ON、`#r68xxx=off` 逐位回基线）

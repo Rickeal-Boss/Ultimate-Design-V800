@@ -15,6 +15,12 @@ import { createPedalState, stepPedal } from '../src/physics/BrakeModel';
 import { createVehicleState, stepVehicle } from '../src/physics/Vehicle';
 import { StateMachine } from '../src/core/StateMachine';
 
+/* ─── R92 · 仰望(yangwang)三车接入护栏（以下仅追加，上方现有断言逐字不动） ─── */
+import { vi } from 'vitest';
+import { VEHICLE_IDS, resolveVehicleId } from '../src/config/vehicles';
+import { viewButtonsFor } from '../src/ui/Hud';
+import { VEHICLE_DIFF, VEHICLE_RULE } from '../src/ui/Menu';
+
 const DT = 1 / 120;
 const R7 = VEHICLE_PROFILES.r7;
 const V800 = VEHICLE_PROFILES.v800;
@@ -158,5 +164,44 @@ describe('R7 打法的可玩性（电回收为主）', () => {
       expect(sm.lastResult.reason).not.toBe('brake_pedal_failed');
       expect(sm.lastResult.degraded).toBe(false);
     }
+  });
+});
+
+describe('仰望（yangwang）三车接入护栏', () => {
+  const YANGWANG = VEHICLE_PROFILES.yangwang;
+
+  it('VEHICLE_IDS 含三车且无重复', () => {
+    expect(VEHICLE_IDS).toContain('v800');
+    expect(VEHICLE_IDS).toContain('r7');
+    expect(VEHICLE_IDS).toContain('yangwang');
+    expect(new Set(VEHICLE_IDS).size).toBe(VEHICLE_IDS.length);
+  });
+
+  it('#vehicle=yangwang 解析为 yangwang（hash 优先）', () => {
+    vi.stubGlobal('window', { location: { hash: '#vehicle=yangwang' } });
+    try {
+      expect(resolveVehicleId()).toBe('yangwang');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('profile 合法：踏板不断裂 / 升温 ×100 / 限速 200 / 仰望量级元数据', () => {
+    expect(YANGWANG.brakeBreakable).toBe(false);
+    expect(YANGWANG.brakeTempGainScale).toBe(100);
+    expect(YANGWANG.maxSpeedKmh).toBe(200);
+    expect(YANGWANG.massKg).toBe(3300);
+    expect(YANGWANG.cameraScale).toBe(1);
+  });
+
+  it('viewButtonsFor(yangwang) 与 viewButtonsFor(r7) 逐位一致', () => {
+    expect(viewButtonsFor('yangwang')).toEqual(viewButtonsFor('r7'));
+  });
+
+  it('菜单差异文案与玩法条款齐备且非空', () => {
+    expect(VEHICLE_DIFF.yangwang).toBeDefined();
+    expect(VEHICLE_DIFF.yangwang.length).toBeGreaterThan(0);
+    expect(VEHICLE_DIFF.yangwang.every((line) => line.trim().length > 0)).toBe(true);
+    expect(VEHICLE_RULE.yangwang.trim().length).toBeGreaterThan(0);
   });
 });

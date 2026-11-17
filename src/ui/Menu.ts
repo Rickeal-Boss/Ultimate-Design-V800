@@ -1,5 +1,5 @@
 /**
- * 开始菜单：玩法说明（滑条操作）+ **车型选择**（R15-4 双车玩法）+ 开始按钮。
+ * 开始菜单：玩法说明（滑条操作）+ **车型选择**（R15-4 三车玩法）+ 开始按钮。
  *
  * 选车语义：选中 → setActiveVehicle(id) 写 localStorage → location.reload()。
  * 为什么必须 reload：车模装配目前是「按活动车型构建」的（createV800CarAdapter /
@@ -20,7 +20,8 @@ import {
   paintChoiceSwatch,
   resolvePaintChoiceFor,
   setActivePaint,
-  type PaintChoice
+  type PaintChoice,
+  type VehicleKey
 } from '../config/vehiclePaint';
 import {
   SHELL_TOTAL_MB,
@@ -33,7 +34,7 @@ import { isMotionBlurEnabled, setMotionBlurEnabled } from '../config/motionBlur'
 import { byId, blurIfInside, el, setVisible } from './dom';
 
 /** 差异说明：一句话讲清「这辆车为什么玩法不同」（菜单卡片正文） */
-const VEHICLE_DIFF: Record<VehicleId, string[]> = {
+export const VEHICLE_DIFF: Record<VehicleId, string[]> = {
   v800: [
     '机械刹车会断裂：满程保持约 1.77 s 踏板力冲到 1612 N → 踏板脱开',
     '断裂后由紧急制动安全冗余以 25% 力度接管并拖停 —— 惊险获救，但判负',
@@ -43,18 +44,45 @@ const VEHICLE_DIFF: Record<VehicleId, string[]> = {
     '刹车永不断裂：踏板力钳在 1612 N，怎么踩都不断',
     '代价是制动盘升温 ×50 —— 必须脉冲式点刹控温，踩满约 0.5 s 就进红区',
     '越过红区触发 2 s 热保护断力；锁定期间电回收仍在，别松滑条，让回收慢慢带'
+  ],
+  yangwang: [
+    '半程约 650m 中途爆胎，易四方四电机稳住车身：姿态平稳、不会翻滚，仍可刹停',
+    '踏板不会断裂：制动盘升温 ×50，必须脉冲式点刹控温，踩满约 0.5 s 就进红区',
+    '越过红区触发 2 s 热保护断力；爆胎后方向更稳，但别把滑条一直顶到底'
   ]
 };
 
 /**
- * 玩法第 ④ 条（唯一的车型相关条款），其余 ①②③⑤⑥ 两车通用。
+ * 玩法第 ④ 条（唯一的车型相关条款），其余 ①②③⑤⑥ 三车通用。
  * V800 原文逐字保留（既有玩法文案不得回退）。
  */
-const VEHICLE_RULE: Record<VehicleId, string> = {
+export const VEHICLE_RULE: Record<VehicleId, string> = {
   v800:
     '④ 满程保持会过载爬升——踏板力达到 1612 N 踏板断裂：制动失效，紧急制动安全冗余以 25% 力度接管（判负，但车会停住）',
-  r7: '④ 踏板不会断裂（踏板力钳在 1612 N），但制动盘升温 ×50：踩满约 0.5s 进红区触发 2s 热保护断力，必须脉冲点刹（红区/锁定期别松滑条，让电回收继续出力）'
+  r7: '④ 踏板不会断裂（踏板力钳在 1612 N），但制动盘升温 ×50：踩满约 0.5s 进红区触发 2s 热保护断力，必须脉冲点刹（红区/锁定期别松滑条，让电回收继续出力）',
+  yangwang:
+    '④ 半程约 650m 中途爆胎，但易四方四电机保持车身平稳、不会翻滚，仍可刹停；踏板不会断裂（力钳在 1612 N），制动盘升温 ×50：踩满约 0.5s 进红区触发 2s 热保护断力，必须脉冲点刹'
 };
+
+/** 卡片角标：三车各自一句定位（v800/r7 原文逐字保留） */
+const VEHICLE_TAG: Record<VehicleId, string> = {
+  v800: '会断踏板 · 冗余接管判负',
+  r7: '不断踏板 · 热保护 2s 断力',
+  yangwang: '中途爆胎稳行 · 脉冲点刹'
+};
+
+/**
+ * 资产表 key 收窄：vehiclePaint（VEHICLE_VARIANTS / DEFAULT_VARIANT /
+ * STORAGE_KEY_BY_VEHICLE）与 highDetail（SHELL_TOTAL_MB）的 key 仍是 'v800'|'r7'，
+ * 且不在本轮白名单内。仰望暂无独立资产条目 ——
+ *  · 高精度壳容量文案借 V800 口径（纯显示，无写盘副作用）；
+ *  · 车漆不开放切换（见 constructor），绝不写进 v800.paint ——
+ *    守住 R37 P2-9「在 B 车选色写进 A 车 key，改掉 A 车玩家选择」的既有教训。
+ * 资产表扩 key 后可直接删掉本函数并把调用点改回传 VehicleId。
+ */
+function assetKeyFor(id: VehicleId): VehicleKey {
+  return id === 'yangwang' ? 'v800' : id;
+}
 
 const SELECT_STYLE_ID = 'menu-vehicle-style';
 
@@ -200,6 +228,12 @@ function ensureSelectStyle(): void {
   border: 1px solid rgba(255, 255, 255, 0.35);
   box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.35);
 }
+/* 仰望车漆资产未登记：占位说明与色块行等高（28px），不推高「开始挑战」（R37-P1） */
+.menu-panel .paint-note {
+  font-size: 11.5px;
+  opacity: .72;
+  line-height: 28px;
+}
 
 /* ---- R46 LOAD-A 停止下载高精度模型 ----
  * 复用既有 .btn ghost 骨架（styles.css:626），只收字号/字距：不新增行高、
@@ -224,13 +258,7 @@ function buildCard(id: VehicleId, active: VehicleId, onPick: (id: VehicleId) => 
   const ul = el('ul', 'vc-diff');
   for (const line of VEHICLE_DIFF[id]) ul.append(el('li', undefined, line));
   card.append(ul);
-  card.append(
-    el(
-      'span',
-      'vc-tag',
-      id === 'v800' ? '会断踏板 · 冗余接管判负' : '不断踏板 · 热保护 2s 断力'
-    )
-  );
+  card.append(el('span', 'vc-tag', VEHICLE_TAG[id]));
   card.addEventListener('click', () => onPick(id));
   return card;
 }
@@ -288,7 +316,7 @@ export class Menu {
     );
     this.startButton = el('button', 'btn primary') as HTMLButtonElement;
 
-    // ---- 车型选择（两张卡片 + 差异说明）----
+    // ---- 车型选择（三张卡片 + 差异说明）----
     ensureSelectStyle();
     const pick = el('div', 'vehicle-pick');
     const pickLabel = el('div', 'menu-rules-label', '选择车型');
@@ -299,12 +327,18 @@ export class Menu {
     }
 
     // ---- 车漆选择（色块一排；R7 多一个「原厂墨绿」在首位）----
-    const paintActive = resolvePaintChoiceFor(active);
+    // 仰望资产表未登记（见 assetKeyFor）：不渲染色块、不落盘，避免污染 v800.paint。
+    const paintKey = active === 'yangwang' ? null : assetKeyFor(active);
+    const paintActive = paintKey ? resolvePaintChoiceFor(paintKey) : '';
     const paintPick = el('div', 'paint-pick');
-    for (const choice of paintChoicesFor(active)) {
-      const sw = buildSwatch(choice, paintActive, (next) => this.pickPaint(next));
-      this.swatches.set(choice, sw);
-      paintPick.append(sw);
+    if (paintKey) {
+      for (const choice of paintChoicesFor(paintKey)) {
+        const sw = buildSwatch(choice, paintActive, (next) => this.pickPaint(next));
+        this.swatches.set(choice, sw);
+        paintPick.append(sw);
+      }
+    } else {
+      paintPick.append(el('span', 'paint-note', '车漆随车型装配（暂不可选）'));
     }
 
     const rules = el('div', 'menu-rules');
@@ -387,10 +421,13 @@ export class Menu {
    */
   private pickPaint(choice: PaintChoice): void {
     const vehicle = resolveVehicleId();
-    if (choice === resolvePaintChoiceFor(vehicle)) return;
+    // 仰望无独立资产 key：菜单不渲染其色块，这里兜底早退，绝不写进 v800.paint。
+    if (vehicle === 'yangwang') return;
+    const assetKey = assetKeyFor(vehicle);
+    if (choice === resolvePaintChoiceFor(assetKey)) return;
     // R37 P2-9：**必须显式传当前车型** —— 车漆 key 已按车型隔离，
     // 在 R7 选色若写进 V800 的 key，就会把 V800 的玩家选择改掉。
-    setActivePaint(choice, vehicle);
+    setActivePaint(choice, assetKey);
     for (const [key, sw] of this.swatches) {
       const on = key === choice;
       sw.classList.toggle('active', on);
@@ -411,7 +448,7 @@ export class Menu {
 
   /** 三态文案：允许高精度(未就绪) / 允许高精度(已就绪) / 已停止或偏好关闭 */
   private hdButtonLabel(): string {
-    const total = SHELL_TOTAL_MB[this.hdVehicle];
+    const total = SHELL_TOTAL_MB[assetKeyFor(this.hdVehicle)];
     if (!isHighDetailEnabled() || isShellLoadCancelled()) {
       return `恢复高精度车模（约 ${total} MB）`;
     }

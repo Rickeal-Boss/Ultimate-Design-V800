@@ -1,15 +1,16 @@
 /**
- * 车辆档位（vehicle profile）—— R15-4 双车玩法。
+ * 车辆档位（vehicle profile）—— R15-4 三车玩法（R92 接入仰望）。
  *
  * 设计口径：**档位只描述「差异」，不复制「公共」**。
  * 所有热参数（brakeTempThreshold 1.0 / brakeTempCoolRate 0.5 / thermalRearmTemp 0.6 /
  * thermalHoldSeconds 2）与制动力学参数（breakForceN 1612 / decelPerNewton =
- * ABS_MAX_DECEL/1612 / absMaxDecel = 1.1g）对两车完全共用，见 config/physics.ts。
+ * ABS_MAX_DECEL/1612 / absMaxDecel = 1.1g）对三车完全共用，见 config/physics.ts。
  * profile 里只有两项会真正改变物理：
  *   - `brakeBreakable`     → BrakeModel.stepPedal 第五参（false：踏板钳在 breakForceN，不断）
  *   - `brakeTempGainScale` → Vehicle.stepVehicle 第四参（制动盘升温倍率）
  *     ⚠️ R29：V800 由 1 → **0.75**（外部审查 B1，热切断破坏制动单调性），
- *        R7 保持 100 不动 ⇒ R7 的热行为逐位不变。两档的比值不再是 100。
+ *        R7 保持 100 不动 ⇒ R7 的热行为逐位不变；仰望同 R7 档 =100（与 R7 同基因）。
+ *        V800 与 R7 的比值不再是 100，仰望/R7 保持 1。
  *
  * ⚠️ 未接线项（需主理人确认后再动）：`massKg` / `maxSpeedKmh` / 三围目前是**元数据 +
  * 限速判据**，尚未接入纵向动力学：stepVehicle 仍用 config/physics.ts 的 VEHICLE 常量
@@ -17,7 +18,7 @@
  * 现有 66 项回归的全部数值锚都要重标 —— 属独立变更，不在本轮白名单语义内。
  * StateMachine.atLimiter 已按 maxSpeedKmh（来源也是 profile.maxSpeedKmh）。
  */
-export type VehicleId = 'v800' | 'r7';
+export type VehicleId = 'v800' | 'r7' | 'yangwang';
 
 /** 单个内饰机位（**装配局部坐标**，与 CameraRig MODES 的 local 偏移同口径） */
 export interface InteriorViewPose {
@@ -36,14 +37,21 @@ export interface InteriorViewPose {
 export type InteriorViews = Record<'driver' | 'passenger' | 'rear', InteriorViewPose>;
 
 export interface VehicleProfile {
+  /**
+   * 车型 id（三车全集）。R92：Game.createCar() 已用三元在调用点收窄
+   * （`profile.id === 'yangwang' ? null : resolveAssemblyPaintId(profile.id)`），
+   * 故这里恢复成完整的 VehicleId —— 否则 `=== 'yangwang'` 会因类型无交集被 TS2367 拦下，
+   * 且 readShellStatus(profile.id) 等消费方本就按 VehicleId 声明。
+   * 需要资产 key（'v800'|'r7'）的场合在消费侧局部收窄（见 Game.createCar / Menu.assetKeyFor）。
+   */
   id: VehicleId;
   /** 菜单/结算展示名 */
   name: string;
   /** 菜单副标题（一句话定位） */
   subtitle: string;
-  /** 踏板是否可能机械断裂（V800 true / R7 false） */
+  /** 踏板是否可能机械断裂（V800 true / R7、仰望 false） */
   brakeBreakable: boolean;
-  /** 制动盘升温倍率（相对 BRAKE.brakeTempGain；V800 = 1 / R7 = 100） */
+  /** 制动盘升温倍率（相对 BRAKE.brakeTempGain；V800 = 0.75 / R7、仰望 = 100） */
   brakeTempGainScale: number;
   massKg: number;
   maxSpeedKmh: number;
@@ -100,6 +108,21 @@ export const VEHICLE_PROFILES: Record<VehicleId, VehicleProfile> = {
     widthM: 1.981,
     heightM: 1.634,
     cameraScale: 1
+  },
+  yangwang: {
+    id: 'yangwang',
+    name: '仰望U8L',
+    subtitle: '行政豪华轿车 · 易四方四电机 · 爆胎稳行',
+    // 与 R7 同基因：踏板永不断裂、制动盘升温 ×100（脉冲点刹玩法）。
+    // 差异化放在玩法层（半程爆胎但车身平稳），不改任何已锁定的物理常量。
+    brakeBreakable: false,
+    brakeTempGainScale: 100,
+    massKg: 3300,
+    maxSpeedKmh: 200,
+    lengthM: 5.3,
+    widthM: 2.0,
+    heightM: 1.5,
+    cameraScale: 1
   }
 };
 
@@ -109,7 +132,7 @@ export const VEHICLE_IDS = Object.keys(VEHICLE_PROFILES) as VehicleId[];
 const STORAGE_KEY = 'v800.vehicle';
 
 function isVehicleId(v: string | null | undefined): v is VehicleId {
-  return v === 'v800' || v === 'r7';
+  return v === 'v800' || v === 'r7' || v === 'yangwang';
 }
 
 function readHash(): VehicleId | null {
@@ -130,7 +153,7 @@ function readStorage(): VehicleId | null {
   }
 }
 
-/** 当前生效车型：URL `#vehicle=r7` > localStorage 'v800.vehicle' > 'v800' */
+/** 当前生效车型：URL `#vehicle=yangwang|r7` > localStorage 'v800.vehicle' > 'v800' */
 export function resolveVehicleId(): VehicleId {
   return readHash() ?? readStorage() ?? 'v800';
 }

@@ -78,9 +78,9 @@ const VIEW_BUTTONS_R7: ReadonlyArray<readonly [CameraMode, string]> = [
   ['side', '侧跟']
 ];
 
-/** 纯函数（可单测）：按车型给出该渲染哪些视角按钮 */
+/** 纯函数（可单测）：按车型给出该渲染哪些视角按钮。仰望复用 R7 的 7 机位组。 */
 export function viewButtonsFor(id: VehicleId): ReadonlyArray<readonly [CameraMode, string]> {
-  return id === 'r7' ? VIEW_BUTTONS_R7 : VIEW_BUTTONS;
+  return id === 'yangwang' || id === 'r7' ? VIEW_BUTTONS_R7 : VIEW_BUTTONS;
 }
 
 /**
@@ -277,7 +277,7 @@ export class Hud {
     helpClose.addEventListener('click', () => this.hideFreeHelp());
     this.freeHelp.append(helpTitle, helpGrid, helpClose);
 
-    // 视角按钮组（顶部居中）；V800 5 个 / R7 7 个（多三个内饰机位）
+    // 视角按钮组（顶部居中）；V800 5 个 / R7、仰望 7 个（多三个内饰机位）
     const viewGroup = el('div', 'view-group');
     for (const [mode, label] of viewButtonsFor(this.vehicleId)) {
       const btn = el('button', 'view-btn') as HTMLButtonElement;
