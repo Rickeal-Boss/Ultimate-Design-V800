@@ -2071,7 +2071,7 @@ export function v800MaterialSignature(m: THREE.Material): string {
  *   vehiclePaint 变体表 / URL `#paint=`）。程序化车漆不再消费该参数，固定走
  *   R36 香槟金基线（外部壳装载失败时的回退外观）。
  */
-export function createV800CarAdapter(tier: QualityTier = 'high', paintId: string = DEFAULT_VARIANT.v800): CarLike {
+export function createV800CarAdapter(tier: QualityTier = 'high', paintId: string = DEFAULT_VARIANT.v800, opts?: { interiorOnly?: boolean }): CarLike {
   const model = createZunjieV800LuxuryMPVModel({ textureSize: carTextureSizeFor(tier) });
   const runtime = model.userData.runtime as ProceduralModelRuntime | undefined;
 
@@ -5564,6 +5564,9 @@ const R48_LAMP_TONE: boolean =
    * R44_INTERIOR_MATERIAL_IDS / R44_KEEP_MESH_NAMES 白名单保留（建表时打 tag 用）。 */
 
   void (async () => {
+    /* R93：interiorOnly（yangwang 复用 V800 座舱）——绝不下载/挂载 v800 外部壳。
+     * 否则 yangwang 场景会并发下载 v800 全套 28MB 外壳，拖死加载门（线上 3/3 复现）。 */
+    if (opts?.interiorOnly) return;
     try {
     const shell = await loadExternalShell('v800', paintId);
     if (!shell) return; // 失败：保持程序化外观（含回退车漆），运行时零改动

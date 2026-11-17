@@ -120,7 +120,9 @@ export function createYangwangCarAdapter(tier: QualityTier = 'high', paintId: st
   // 复用 V800 座舱：只把它的 body 子组挂进来，并把它的内部基准偏航清零，
   // 避免与仰望 body 的 π 叠成 2π（座舱会朝车尾）。V800.root 保持游离，
   // dispose 时仍由 v800.dispose() 释放其自有资源。
-  const v800 = createV800CarAdapter(tier) as CarLike & {
+  // R93：interiorOnly=true —— 复用 V800 程序化座舱但**绝不下载 v800 外部壳**（28MB），
+  // 否则与 yangwang 自身 GLB 并发下载会拖死加载门（线上 3/3 复现的 P0 卡加载）。
+  const v800 = createV800CarAdapter(tier, undefined, { interiorOnly: true }) as CarLike & {
     applyVisibility?: (s: CarVisibilityState) => void;
   };
   const interiorRoot = v800.body;
