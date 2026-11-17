@@ -18,7 +18,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import * as THREE from 'three';
 import { Castle, zoneIndexOf } from '../src/render/scene/castle';
-import { setDetailLevel, R89_CITY_TRIM_ON, R91_CITY_RESTORE_ON } from '../src/render/scene/castleKit';
+import { setDetailLevel, R89_CITY_TRIM_ON, R91_CITY_RESTORE_ON, R91_CITY_KEEP_BLOCKS } from '../src/render/scene/castleKit';
 import { disposeStoneCache } from '../src/render/scene/stoneTexture';
 import type { QualitySettings } from '../src/config/quality';
 import { R31_BUDGET } from '../src/render/scene/r31Budget';
@@ -183,10 +183,16 @@ describe('R32 C-4 · 建桶结构与 DC 设计公式', () => {
       // z2/z3：R89 on ⇒ 城内街区体量归零；off ⇒ 回 R88 在场。
       // R91：恢复中段街区（keep=6）使 k=1..5 落入 z2(−460..−760)，z2 重新在场；
       //   z3(−760..−1060) 仍不达（keep=6 最远块中心 −664.5 ⇒ 归 z2），谓词保持。
+      // R94：6 街区改沿 z **均匀分布**（ks=[0,4,8,11,15,19]），k=8 ⇒ 块心 z=−894.5 落入
+      //   z3(−760..−1060)、k=15 ⇒ 块心 z=−1078.5 落入 z4(−1060..−1290)，z3/z4 城内区
+      //   **同时重新在场**（R88 满量口径即如此）⇒ 谓词同 z2 一样跟着 R91 恢复走；
+      //   keep≤1（`#r91city=off` 回 R89 只留 k=0）时最远块心 −388.5 ⇒ z3/z4 仍归零。
+      //   注：z3/z4 归属取决于 cityBlockIndices 的均匀采样输出（keep=6 同时命中 k=8 与
+      //   k=15），而非「keep ≥ 某阈值」的单调谓词，故 z3/z4 同式。
       expectZone('ashlar', 2, !R89_CITY_TRIM_ON || R91_CITY_RESTORE_ON);
-      expectZone('ashlar', 3, !R89_CITY_TRIM_ON);
-      // z4/z5：天际线塔冠/火盆保留（k 循环外），两态都在场
-      expectZone('ashlar', 4, false); // 实测缺失：塔冠走 z5 桶
+      expectZone('ashlar', 3, !R89_CITY_TRIM_ON || (R91_CITY_RESTORE_ON && R91_CITY_KEEP_BLOCKS >= 2));
+      expectZone('ashlar', 4, !R89_CITY_TRIM_ON || (R91_CITY_RESTORE_ON && R91_CITY_KEEP_BLOCKS >= 2));
+      // z5：天际线塔冠/火盆保留（k 循环外），两态都在场
       expectZone('ashlar', 5, true);
       expectZone('gold', 4, true);
       expect(castleMesh(scene, 'castle-gold-z5'), 'R39-P9 之后 gold 只有 5 区（z5 已并入 z4）').toBeUndefined();

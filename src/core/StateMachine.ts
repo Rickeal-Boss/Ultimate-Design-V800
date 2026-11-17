@@ -89,6 +89,7 @@ export const TIRE_BLOW_DISTANCE_M = (TRACK.barrierDistance - START_OFFSET_M) / 2
  * R92 爆胎额外拖阻 N：**仅加速段生效**（见 Vehicle.stepVehicle 的 `extraDragN`）。
  * 5200N / 3300kg ≈ 1.576 m/s²（0.16g），功率平衡极速 ≈179.8 km/h；
  * 刹车段绝不叠加——否则爆胎反而刹得更短（182→166m），玩法反转。
+ * 注（R94）：爆胎**事件**已改为相位无关（accel/brake 段均可发），拖阻仍只挂 accel。
  */
 export const TIRE_BLOW_DRAG_N = 5200;
 
@@ -114,7 +115,7 @@ export class StateMachine {
   pedal: PedalState = createPedalState();
   /** 当前档位（默认 V800 —— 不传时全部行为与 R15 之前逐位一致） */
   profile: VehicleProfile = VEHICLE_PROFILES.v800;
-  /** R92 半程爆胎是否已发生（每局仅 accel 段触发一次；重开由 start() 复位） */
+  /** R92 半程爆胎是否已发生（每局一次，相位无关——accel/brake 段均可触发；重开由 start() 复位） */
   tireBlown = false;
 
   brakeElapsed = 0;
@@ -243,8 +244,6 @@ export class StateMachine {
             // R92：爆胎拖阻只挂在加速段；刹车段 stepBraking 不传此字段 ⇒ 逐位不变
             extraDragN: this.tireBlown ? TIRE_BLOW_DRAG_N : 0
           });
-          // 在 stepVehicle 之后判距：跨线那一帧先按无拖阻走一步，下一帧起生效
-          this.maybeBlowTire(events);
           this.checkBarrier(events);
         }
         break;
@@ -257,11 +256,23 @@ export class StateMachine {
       case 'crashed':
         break;
     }
+    // R94：相位无关的统一判距（accel/brake 均可，其余相位不触发）。
+    // 在 stepVehicle 之后判距：跨线那一帧先按无拖阻走一步，下一帧起生效。
+    this.maybeBlowTire(events);
     return events;
   }
 
   /**
-   * R92 半程爆胎触发（仅 accel 段调用，brake 段永不调用）。
+   * R92 半程爆胎触发（R94：相位无关，accel 或 brake 段均可，每局仅一次）。
+   *
+   * 历史缺陷：本判断原只在 `case 'accel'` 内调用。玩家必须在 ~400–450m 就踩刹车
+   * （200km/h 起刹停需 ~850m，1300−850=450），而爆胎线在 648.65m——跨线那一帧
+   * 玩家早已切到 `phase='brake'`，于是 `case 'accel'` 不再执行，正常一局爆胎永不触发。
+   * 现提升到 step() 末尾统一调用，仅在 accel/brake 判定；countdown/menu/stopped/crashed
+   * 一律不触发（撞主殿与停车后无再触发）。
+   *
+   * 刹车段只发 `tire_blow` 事件（视觉形变 + HUD toast + 音效），**零物理改动**：
+   * 5200N 拖阻仍只在 accel 段经 extraDragN 传入，故刹停距离/时间/峰值力/冗余距离逐位不变。
    *
    * 姿态平稳是**结构性保证**：本作主线是严格 1D 纵向物理——车轮是纯 THREE.Object3D
    * 枢轴（无 cannon 轮体），帧循环只写车轮自转角的单一轴分量，横向/俯仰姿态角
@@ -270,6 +281,7 @@ export class StateMachine {
    */
   private maybeBlowTire(events: GameEvent[]): void {
     if (this.tireBlown || !isTireBlowEnabled()) return;
+    if (this.phase !== 'accel' && this.phase !== 'brake') return;
     if (this.vehicle.distance < TIRE_BLOW_DISTANCE_M) return;
     this.tireBlown = true;
     events.push({

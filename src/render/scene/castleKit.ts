@@ -188,6 +188,28 @@ export const R91_CITY_FULL_ON =
 export const R91_CITY_KEEP_BLOCKS = 6;
 
 /**
+ * R94-P1 · **城内街区沿 z 全距均匀采样索引**。
+ * 病根：R91 的 `for (k < Math.min(blocks, keep))` 从 zNear **连续堆** keep 个街区
+ * （keep=6 ⇒ k=0..5 ⇒ 块心 −388.5…−618.5），只覆盖 z ∈ [−365.5, −641.5]，而赛道
+ * barrier 在 z=−1300 ⇒ **中段/后段约 644m 城内楼群全空**（用户「加载门通过后中段
+ * 仍无建筑」）。处方：把 keep 个街区**沿 z 全距均匀分布**（近端锚 k=0、远端锚
+ * k=blocks−1），间距 ≤ 3·blockLen=138m ≪ `ZONE_VIEW_RANGE`=550 ⇒ 整条走廊在任一
+ * 视距内总有街区在场；**街区数不变（仍 keep 个）⇒ tri 预算不变**。
+ * 退化口径（开关语义 / 回滚口径逐位不动）：
+ *   · keep ≤ 1（`#r91city=off` ⇒ R89 keep=1）⇒ `[0]`（Math.min 保证循环至少跑一次
+ *     ⇒ `castle-pave` 契约桶在场，**禁止空循环**）；
+ *   · keep ≥ blocks（`#r91city=full` / `#r89city=off` ⇒ keep=20）⇒ `[0..blocks−1]`
+ *     逐位等同 R88 满量。
+ * 纯函数导出供护栏（tests/r94_city_blocks）钉采样索引与块心 z 序列确定值。
+ */
+export function cityBlockIndices(blocks: number, keep: number): number[] {
+  const n = Math.max(1, Math.min(Math.floor(blocks), Math.floor(keep)));
+  if (n <= 1) return [0];
+  if (n >= blocks) return Array.from({ length: blocks }, (_, i) => i);
+  return Array.from({ length: n }, (_, i) => Math.round(i * (blocks - 1) / (n - 1)));
+}
+
+/**
  * R86 深化 · **城内后排塔体「基段截断」遮挡线**（前排殿/连墙顶高 ~17.3m）。
  * `makeInnerCity` 内后排塔体（②~⑤ 排 + 院落）把 box 基段从 0 抬到 OCC，仅留
  * OCC 以上残段；y_max ≤ OCC 整删、y_min ≥ OCC 整保、跨 OCC 截到 OCC。
@@ -2969,8 +2991,9 @@ export function makeInnerCity(): StoneBuckets {
   const blocks = Math.floor((zNear - zFar) / blockLen); // 20
   const depth = 8;
   /* R89：沿 z 的 20 个重复街区是用户黄框真凶（定罪见 R89_CITY_TRIM_ON）。
-   * 默认只保留 k=0 第一排；Math.min 保证循环至少跑一次 ⇒ 3383 的
-   * `if (!far && k < 8)` 会执行，R36-A2 `castle-pave` 契约桶仍在场。
+   * 默认只保留 k=0 第一排（R91 起为 keep 个街区、R94 起沿 z 全距均匀采样，见下）；
+   * cityBlockIndices 的 Math.min 保证循环**至少跑一次** ⇒ `if (!far && k < 8)` 会
+   * 执行，R36-A2 `castle-pave` 契约桶仍在场。
    * 禁止循环首 continue / 空循环 / setDeepFar 后 continue（DEEP_FAR 会泄漏给
    * 循环外连廊段，且空循环会打掉 pave 桶）。#r89city=off ⇒ 上界回 blocks=20。 */
   const R89_CITY_KEEP_BLOCKS = R89_CITY_TRIM_ON ? 1 : blocks; // ← .qa 探针 esbuild 锚点（勿改该行字面）
@@ -2980,12 +3003,21 @@ export function makeInnerCity(): StoneBuckets {
    * 浏览器里该全局恒 undefined ⇒ 落 R91 默认 6（A/B 开关语义见 R91_CITY_RESTORE_ON）。 */
   const r91Keep = R91_CITY_FULL_ON ? blocks : R91_CITY_RESTORE_ON ? R91_CITY_KEEP_BLOCKS : R89_CITY_KEEP_BLOCKS;
   const keep = (globalThis as unknown as { __R91_KEEP_BLOCKS?: number }).__R91_KEEP_BLOCKS ?? r91Keep;
-  for (let k = 0; k < Math.min(blocks, keep); k += 1) {
+  /* R94-P1：**街区沿 z 全距均匀采样**（见 cityBlockIndices）。keep 个街区不再从 zNear
+   * 连续堆 ⇒ keep=6 覆盖 z∈[−365.5, −1285.5] 全走廊（末块块心 −1262.5，barrier 前
+   * 37.5m），修复「加载门通过后中段仍无建筑」。退化：keep≤1 ⇒ [0]、keep≥blocks ⇒ [0..19]。
+   * **i = 分布序号**（0..n−1）只用于逐块高度递减口径；**k 判定（far / nearZone / hero /
+   * k%2 街面火盆）一律沿用 k** ⇒ k=15/19 落 DEEP_FAR（远的更省 tri）、k=0/4 落近区。 */
+  const cityBlocks = cityBlockIndices(blocks, keep);
+  for (let i = 0; i < cityBlocks.length; i += 1) {
+    const k = cityBlocks[i];
     const zc = zNear - blockLen / 2 - k * blockLen; // 块中心
-    // R91：逐块高度递减 —— 记录本块开始前各桶几何数（块 k=1..5 缩 Y×(1−0.03k)，
-    // k=0 不缩作近景基准；只记录 k>0，省掉 k=0 的空表）。
+    // R91：逐块高度递减（R94 起改按**分布序号 i** 递减）—— 记录本块开始前各桶几何数
+    // （第 i=1..n−1 块缩 Y×(1−0.03i)，i=0 不缩作近景基准；只记录 i>0，省掉 i=0 的空表）。
+    // ⚠ 口径必须是 i 而不是 k：R94 均匀分布后 k 最大到 blocks−1=19，按 k 递减会把最远
+    // 块削到 1−0.57=43% 高、明显塌；按 i 递减 i=5 ⇒ 0.85，「近高远低、破均质」原意图保持。
     const blockStartLen: Record<string, number> = {};
-    if (k > 0) {
+    if (i > 0) {
       for (const key of Object.keys(b) as (keyof StoneBuckets)[]) {
         blockStartLen[key] = (b[key] as unknown as THREE.BufferGeometry[]).length;
       }
@@ -3932,12 +3964,13 @@ export function makeInnerCity(): StoneBuckets {
     /* ── R91 · 逐块高度递减（破「排排白楼」均质剪影）──────────────────────────
      * 只缩 Y、绕原点（即地面）⇒ 建筑高度向地面收、近高远低，读作自然进深/透视
      * 衰减；**不动 X/Z**（街区纵向/侧向间距不变，z 中值不变 ⇒ 探针 z 分片稳定）。
-     * 只对 k>0 块做（k=0 保持 1.0 作近景基准）；**跳过 pave/地面桶**（水平地坪
-     * 缩 Y 无意义且会破坏 R36-A2 pave 契约的 y 面位）。缩放量确定性 `1 − 0.03k`：
-     *   k=1→0.97、k=2→0.94、k=3→0.91、k=4→0.88、k=5→0.85（≤15%，读作进深而不
+     * 只对 i>0 块做（i=0 保持 1.0 作近景基准）；**跳过 pave/地面桶**（水平地坪
+     * 缩 Y 无意义且会破坏 R36-A2 pave 契约的 y 面位）。缩放量确定性 `1 − 0.03i`
+     * （**i = 分布序号 0..n−1**，非 k）：
+     *   i=1→0.97、i=2→0.94、i=3→0.91、i=4→0.88、i=5→0.85（≤15%，读作进深而不
      *   是变形）。块内每件新几何恰好缩一次（startLen 快照按桶记）。 */
-    if (k > 0) {
-      const jitterY = 1 - 0.03 * k;
+    if (i > 0) {
+      const jitterY = 1 - 0.03 * i;
       for (const key of Object.keys(b) as (keyof StoneBuckets)[]) {
         if (String(key) === 'pave') continue; // 地面桶不动（pave 是 extra 动态变体桶，不在 keyof）
         const arr = b[key] as unknown as THREE.BufferGeometry[];

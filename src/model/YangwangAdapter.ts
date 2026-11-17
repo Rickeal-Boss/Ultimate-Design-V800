@@ -131,6 +131,8 @@ export function createYangwangCarAdapter(tier: QualityTier = 'high', paintId: st
   interiorRoot.visible = false;
   markV800Subtree(interiorRoot);
   body.add(interiorRoot);
+  // R94 · 车内态「米黄色光面中间隔板」根治（只动材质 visible，零几何 / 零新增 DC）。
+  cullV800ExteriorMaterials(interiorRoot);
 
   // ---- 四轮 rig：anchor → deform（爆胎形变）→ spin（唯一滚动轴）→ mesh ----
   const rigs: WheelRig[] = [];
@@ -414,6 +416,91 @@ function markV800Subtree(root: THREE.Object3D): void {
   root.traverse((o) => {
     o.userData.yangwangV800Interior = true;
   });
+}
+
+/**
+ * R94 · 座舱内饰材质白名单（**逐位复刻** V800Adapter 的 `R44_INTERIOR_MATERIAL_IDS`，
+ * 见其 L5544-5548）。
+ *
+ * ⚠ 同步纪律：该白名单在 V800Adapter 里是**函数内局部常量、未导出**，无法 import；
+ * 若 V800 侧新增 / 删除内饰材质 id，本表**必须同步**，否则车内态会把新内饰件一起裁掉
+ * （或放过新外观件）。`tests/r94_yangwang_cabin.test.ts` 以源码字符串断言钉死两表一致，
+ * 漂移会在 CI 上立刻红。
+ */
+const V800_INTERIOR_MATERIAL_IDS: ReadonlySet<string> = new Set([
+  'carpet', 'curtain', 'crystal', 'gauge-ui', 'headliner-suede', 'leather-dark',
+  'leather-ivory', 'leather-warm', 'pillar-trim', 'screen-ui', 'starlight', 'wood'
+]);
+
+/** 同上映：V800Adapter 的 `R44_KEEP_MESH_NAMES`（L5551-5556，id-less 材质的 mesh 名白名单）。 */
+const V800_KEEP_MESH_NAMES: ReadonlySet<string> = new Set([
+  'brake-pedal', 'cabin-floor-carpet', 'cabin-roof-carpet', 'welcome-carpet',
+  'cabin-roof-carpet-ext-rear', 'cabin-roof-carpet-ext-front'
+]);
+
+/**
+ * R94 · 一次性裁掉 V800 程序化「外壳件」材质 —— 治仰望车内「米黄色光面中间隔板」。
+ *
+ * ── 根因（探针 `.qa/r94/probe_interior.ts` 实锤，非目检推测）──
+ * 本适配器以 `{interiorOnly:true}` 复用 V800 座舱 ⇒ V800Adapter 的外壳 IIFE 在其顶部早退
+ * （L5567-5569，R93 防 28MB 并发下载的护栏），于是两件事同时失效：
+ *   1. `buildVisibilityTable(...)`（L5596，**只在外壳就绪回调里调用**）从未执行
+ *      ⇒ `matEntries` / `meshEntries` 恒为空数组，`applyVisibility` 的 pass-1/pass-2 空转；
+ *   2. `shellHandle == null` ⇒ `applyVisibility` 里 `exteriorShellReady` 恒 false。
+ * ⇒ V800 那套「外壳就绪后按内饰白名单永久隐藏程序化外观」的幂等状态表对本实例**整体不生效**：
+ *   程序化外壳件（glass-clear 风挡 / paint-* 车身 / tire / 轮毂 / 后视镜 / 车顶模块 /
+ *   车灯 / 格栅 / 铬饰条 …）全留在座舱里照常绘制。车内态可见 mesh 达 **133** 个。
+ *
+ * ── 症状读数（主驾眼位 7×7 方向栅格 Raycaster，眼点 = 世界 (-0.40,1.34,-0.72)）──
+ *   裁切前：`windshield`（材质 `glass-clear`：color #878F99、roughness **0.03**、
+ *     metalness 0.02、envMapIntensity **0.7**、opacity 0.66 —— 一块近镜面反射板）命中
+ *     **28/49 条射线 = 57% 画面**，贴脸 dmin 0.66m；它反射暖色软光箱 ⇒ 读作「米黄色光面隔板」。
+ *     后排眼点则被 `batch/paint-upper`（材质 `paint-upper` 香槟金 **#D3AC5D** = 米黄色、
+ *     metalness 0.45 / roughness 0.38 = 光面）以 dmin **0.49m** 命中 **17/49**。
+ *   裁切后：两者命中均 **0/49**，车内可见 mesh 133 → **32**（只剩仪表台 / 三联屏 / 方向盘 /
+ *     后排座椅 / 顶棚 / 地毯 / 水晶件 / 窗帘 / 氛围件）。
+ *   该结果与 V800 自身 cabin 稳态（外壳已就绪 + interior=true）逐条同构 —— 也正是 V800
+ *   历史上同一类病灶：R13 注释记录用户把这块 glass-clear 认作「奶白色面板 / 白板」，
+ *   R15c/R16 注释记录第一排座椅被认作「中央隔板实体模块」。
+ *
+ * ── 为什么改 `material.visible` 而不是逐个藏 mesh ──
+ *   V800 的外观件多是 batchMerge 后的**合批网格**（`batch/paint-upper` 一个 mesh 含
+ *   body-lower / hood-panel / roof-panel / front-end），整批共享一个材质实例；按名字逐个
+ *   藏 mesh 必然漏（V800 自己的 R15c 注释记录过同款教训）。按材质实例判词 + 去重，
+ *   与 V800 pass-1（`matSeen` 去重、按 traverse 先序取首见 mesh）逐条同构。
+ *
+ * ── 三条判词（对齐 V800Adapter `applyVisibility` pass-1，L5420-5423）──
+ *   · `userData.cabinHidable === true` → 隐：第一排座椅 / 中控的座舱遮挡克隆
+ *     （V800Adapter L3878 / L3919 打的标），即 R15c 记录的「中央隔板」本体；
+ *   · 有 `sculptMaterial.id` → 按内饰白名单：`glass-clear` / `glass-dark` / `paint-*` /
+ *     `tire` / `wheel-alloy` / `chrome` / 后视镜 / 车顶模块 / 车灯 … 全被裁；
+ *   · id-less → 按 mesh 名白名单：`cabin-roof-carpet` / `cabin-floor-carpet` /
+ *     `welcome-carpet` / `brake-pedal` 等深色顶棚衬毯与地板件**保留**。
+ *     （⚠ 这一条比 V800 pass-1 更宽松一格：V800 对 id-less 材质一律 `!exteriorShellReady`
+ *     判隐，会把顶棚衬毯一起藏掉、车内露空顶；此处刻意保留深色衬毯，避免出现新破洞。
+ *     若 V800 侧改了这两张白名单，请同步本函数的注释与判词。）
+ *
+ * 幂等；只写 `material.visible`，**不 dispose、不动几何、不换贴图**；对 `batch/*` 合批件
+ * 同样生效（共享材质实例）。回滚：删掉本调用即逐位回到裁切前状态。
+ */
+function cullV800ExteriorMaterials(scope: THREE.Object3D): void {
+  const verdict = new Map<THREE.Material, boolean>();
+  scope.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    const arr = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    for (const mt of arr) {
+      if (!mt || verdict.has(mt)) continue;
+      const ud = mt.userData as { sculptMaterial?: { id?: string }; cabinHidable?: boolean };
+      const id = ud?.sculptMaterial?.id ?? null;
+      let keep: boolean;
+      if (ud?.cabinHidable === true) keep = false;
+      else if (id != null) keep = V800_INTERIOR_MATERIAL_IDS.has(id);
+      else keep = V800_KEEP_MESH_NAMES.has(mesh.name);
+      verdict.set(mt, keep);
+    }
+  });
+  for (const [mt, keep] of verdict) mt.visible = keep;
 }
 
 function disposeGltf(scene: THREE.Object3D): void {
