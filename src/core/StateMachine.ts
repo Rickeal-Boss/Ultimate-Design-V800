@@ -172,8 +172,9 @@ export class StateMachine {
     return this.samples;
   }
 
-  /** 估算得分预览（刹车段实时显示） */
+  /** 估算得分预览（刹车段实时显示）；R95 彩蛋车（yangwang）恒 0（不计分） */
   get scorePreview(): number {
+    if (this.profile.id === 'yangwang') return 0;
     return this.brakeElapsed > 0.15 ? calcScore(this.v0Kmh, this.brakeElapsed) : 0;
   }
 
@@ -389,7 +390,10 @@ export class StateMachine {
       peakForce: this.peakForce,
       // 冗余刹停计 0 分（决策①：制动系统已失效，不算成功刹停；本机最佳不被污染）。
       // 惩罚不靠新系数：刹停时间被拉长 3 倍以上，公式本身已足够体现。
-      score: success ? calcScore(v0Kmh, stopSeconds) : 0,
+      // R95 彩蛋车（yangwang）：**不计分**——success 保持 true（结算仍显「完美刹停」），
+      // 但 score 恒为 0（彩蛋挑战不计入本机最佳）。
+      score:
+        success && this.profile.id !== 'yangwang' ? calcScore(v0Kmh, stopSeconds) : 0,
       samples: this.samples.slice()
     };
     return this.lastResult;

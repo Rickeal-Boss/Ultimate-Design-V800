@@ -10,10 +10,10 @@
  *   · **近端连续**：k=0,1,2,3…（空档 0）⇒ 玩家起点看到连片城市（R91 的连续堆语义）；
  *   · **远端稀疏覆盖**：末块 k=blocks−1=19 ⇒ 块心 −1262.5，barrier 前 37.5m，
  *     不回归 R93「中段空」；
- *   · **最大空档 ≤ 4·blockLen=184m**（默认 keep=8，不劣于 R94）；
- *   · **默认 keep 加密 6 → 8**（`R91_CITY_KEEP_BLOCKS`；加密目标 10 因 tri 预算约束
- *     回落 8 —— keep=10 的 nearZone+mid 街区推高 innerCity tri 至 ~102k，超 ~90k 预算）。
- * 默认 keep=8 ⇒ ks=[0,1,2,3,7,11,15,19]，近端连续 0..3（4 块）+ 远端 7/11/15/19。
+ *   · **最大空档 ≤ 3·blockLen=138m**（默认 keep=10，较 R95 的 184m 再减 25%）；
+ *   · **默认 keep 加密 8 → 10**（`R91_CITY_KEEP_BLOCKS`；R96 用户「间隔消失」仍反馈，
+ *     采纳探测 R96 裁决 —— innerCity tri ≈106k < castleTriHigh 400k 硬限、dc=29 不变）。
+ * 默认 keep=10 ⇒ ks=[0,1,2,3,6,8,11,14,16,19]，近端连续 0..3（4 块）+ 均匀铺到 k=19。
  *
  * 本文件钉 R95-P2 六条硬护栏：
  *   ① 默认 keep=8 ⇒ ks 与块心 z 序列确定值（toBeCloseTo）；
@@ -38,9 +38,9 @@ const { zNear, zFar, blockLen } = INNER;
 const BLOCKS = Math.floor((zNear - zFar) / blockLen);
 const blockCenterZ = (k: number): number => zNear - blockLen / 2 - k * blockLen;
 
-/** 默认 keep=8 的 R95-P2 采样式（近密远疏）与块心 z 序列 */
-const DEFAULT_KS = [0, 1, 2, 3, 7, 11, 15, 19];
-const DEFAULT_Z = [-388.5, -434.5, -480.5, -526.5, -710.5, -894.5, -1078.5, -1262.5];
+/** 默认 keep=10 的 R96 采样式（近密远疏 + 加密）与块心 z 序列 */
+const DEFAULT_KS = [0, 1, 2, 3, 6, 8, 11, 14, 16, 19];
+const DEFAULT_Z = [-388.5, -434.5, -480.5, -526.5, -664.5, -756.5, -894.5, -1032.5, -1124.5, -1262.5];
 
 beforeEach(() => {
   delete (globalThis as { __R91_KEEP_BLOCKS?: number }).__R91_KEEP_BLOCKS;
@@ -55,7 +55,7 @@ afterAll(() => {
   (globalThis as { document?: unknown }).document = REAL_DOC;
 });
 
-describe('R95-P2 · 默认 keep=8 近密远疏采样式确定值', () => {
+describe('R95-P2 · 默认 keep=10 近密远疏采样式确定值', () => {
   it('blocks 口径 = floor((zNear−zFar)/blockLen) = 20（r28Layout INNER）', () => {
     expect(BLOCKS).toBe(20);
     expect(zNear).toBe(-365.5);
@@ -63,12 +63,12 @@ describe('R95-P2 · 默认 keep=8 近密远疏采样式确定值', () => {
     expect(blockLen).toBe(46);
   });
 
-  it('默认 keep=8 ⇒ ks = [0,1,2,3,7,11,15,19]（确定值）', () => {
-    expect(R91_CITY_KEEP_BLOCKS).toBe(8);
+  it('默认 keep=10 ⇒ ks = [0,1,2,3,6,8,11,14,16,19]（确定值）', () => {
+    expect(R91_CITY_KEEP_BLOCKS).toBe(10);
     expect(cityBlockIndices(BLOCKS, R91_CITY_KEEP_BLOCKS)).toEqual(DEFAULT_KS);
   });
 
-  it('默认 keep=8 ⇒ 块心 z 序列确定值（toBeCloseTo）', () => {
+  it('默认 keep=10 ⇒ 块心 z 序列确定值（toBeCloseTo）', () => {
     const zs = cityBlockIndices(BLOCKS, R91_CITY_KEEP_BLOCKS).map(blockCenterZ);
     expect(zs.length).toBe(DEFAULT_Z.length);
     zs.forEach((z, i) => expect(z).toBeCloseTo(DEFAULT_Z[i]!, 6));
@@ -95,13 +95,13 @@ describe('R95-P2 · 近端连续 + 远端覆盖 + 最大空档', () => {
     expect(Math.abs(lastZ - -1300)).toBeLessThanOrEqual(60);
   });
 
-  it('最大相邻块心间距 ≤ 184m（4·blockLen，不劣于 R94）', () => {
+  it('最大相邻块心间距 ≤ 138m（3·blockLen，较 R95 184m 再减）', () => {
     const ks = cityBlockIndices(BLOCKS, R91_CITY_KEEP_BLOCKS);
     const zs = ks.map(blockCenterZ);
     const gaps: number[] = [];
     for (let i = 1; i < zs.length; i += 1) gaps.push(Math.abs(zs[i]! - zs[i - 1]!));
-    expect(Math.max(...gaps)).toBeLessThanOrEqual(4 * blockLen);
-    expect(Math.max(...gaps)).toBeCloseTo(184, 6);
+    expect(Math.max(...gaps)).toBeLessThanOrEqual(3 * blockLen);
+    expect(Math.max(...gaps)).toBeCloseTo(138, 6);
   });
 });
 
@@ -118,14 +118,14 @@ describe('R95-P2 · 退化口径（开关语义 / 回滚）', () => {
 });
 
 describe('R95-P2 · 高度递减不塌（1−0.03i，i=分布序号）', () => {
-  it('最远栋 jitterY = 1−0.03(n−1) ≥ 0.7（keep=8 ⇒ 0.79）', () => {
+  it('最远栋 jitterY = 1−0.03(n−1) ≥ 0.7（keep=10 ⇒ 0.73）', () => {
     const n = R91_CITY_KEEP_BLOCKS;
     const decays = Array.from({ length: n }, (_, i) => 1 - 0.03 * i);
     expect(decays[0]).toBe(1);
     for (let i = 1; i < n; i += 1) expect(decays[i]).toBeLessThan(decays[i - 1]!);
-    // 最远栋（i=n−1）不塌：0.79 ≥ 0.7
+    // 最远栋（i=n−1）不塌：0.73 ≥ 0.7
     expect(decays[n - 1]).toBeGreaterThanOrEqual(0.7 - 1e-9);
-    expect(decays[n - 1]).toBeCloseTo(0.79, 6);
+    expect(decays[n - 1]).toBeCloseTo(0.73, 6);
     // 反口径：若误用 k=19 ⇒ 1−0.03·19=0.43 明显塌（口径护栏）
     expect(1 - 0.03 * 19).toBeLessThan(0.5);
   });

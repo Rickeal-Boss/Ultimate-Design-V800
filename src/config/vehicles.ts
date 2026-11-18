@@ -9,8 +9,9 @@
  *   - `brakeBreakable`     → BrakeModel.stepPedal 第五参（false：踏板钳在 breakForceN，不断）
  *   - `brakeTempGainScale` → Vehicle.stepVehicle 第四参（制动盘升温倍率）
  *     ⚠️ R29：V800 由 1 → **0.75**（外部审查 B1，热切断破坏制动单调性），
- *        R7 保持 100 不动 ⇒ R7 的热行为逐位不变；仰望同 R7 档 =100（与 R7 同基因）。
- *        V800 与 R7 的比值不再是 100，仰望/R7 保持 1。
+ *        R7 保持 100 不动 ⇒ R7 的热行为逐位不变；
+ *        仰望（R95 彩蛋车）改为 **0** ⇒ 制动盘永不升温、热保护永不触发（不过热）。
+ *        V800 与 R7 的比值不再是 100，仰望也不再与 R7 同基因。
  *
  * ⚠️ 未接线项（需主理人确认后再动）：`massKg` / `maxSpeedKmh` / 三围目前是**元数据 +
  * 限速判据**，尚未接入纵向动力学：stepVehicle 仍用 config/physics.ts 的 VEHICLE 常量
@@ -51,7 +52,7 @@ export interface VehicleProfile {
   subtitle: string;
   /** 踏板是否可能机械断裂（V800 true / R7、仰望 false） */
   brakeBreakable: boolean;
-  /** 制动盘升温倍率（相对 BRAKE.brakeTempGain；V800 = 0.75 / R7、仰望 = 100） */
+  /** 制动盘升温倍率（相对 BRAKE.brakeTempGain；V800 = 0.75 / R7 = 100 / 仰望 = 0（不过热）） */
   brakeTempGainScale: number;
   massKg: number;
   maxSpeedKmh: number;
@@ -113,10 +114,10 @@ export const VEHICLE_PROFILES: Record<VehicleId, VehicleProfile> = {
     id: 'yangwang',
     name: '仰望U8L',
     subtitle: '行政豪华轿车 · 易四方四电机 · 爆胎稳行',
-    // 与 R7 同基因：踏板永不断裂、制动盘升温 ×100（脉冲点刹玩法）。
-    // 差异化放在玩法层（半程爆胎但车身平稳），不改任何已锁定的物理常量。
+    // R95 彩蛋车：踏板永不断裂；制动盘升温 ×0 ⇒ 盘温永不升 ⇒ 热保护永不触发（不过热）。
+    // 差异化放在玩法层（半程爆胎但车身平稳 + 不计分），不改任何已锁定的物理常量。
     brakeBreakable: false,
-    brakeTempGainScale: 100,
+    brakeTempGainScale: 0,
     massKg: 3300,
     maxSpeedKmh: 200,
     lengthM: 5.3,

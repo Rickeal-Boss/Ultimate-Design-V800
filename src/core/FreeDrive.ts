@@ -37,13 +37,13 @@ export const FREE = {
   refSpeedMs: 5.5,
   /** 低速最大前轮转角 rad（≈35.5°，≤18 km/h） */
   steerMaxLow: 0.62,
-  /** 高速最大前轮转角 rad（≈9.2°，≥60 km/h） */
-  steerMaxHigh: 0.16,
+  /** 高速最大前轮转角 rad（≈6.9°，≥60 km/h） */
+  steerMaxHigh: 0.12,
   /** 转角收窄区间（km/h）：18 → 60 线性 */
   steerLowKmh: 18,
   steerHighKmh: 60,
   /** 转向输入一阶平滑时间常数 s */
-  steerTau: 0.15,
+  steerTau: 0.10,
   /** 倒车限速 m/s（≈28.8 km/h） */
   reverseMaxMs: 8,
   /** 倒车驱动力占前进驱动力的比例（倒车不需要全扭矩） */
@@ -77,12 +77,12 @@ export const FREE = {
   gripDecayTau: 0.22,
   /** 后轴抓地恢复时间常数 s（松手刹回正；「恢复抓地时间有限」的口径） */
   gripRecoverTau: 0.45,
-  /** 视觉侧倾上限 rad（2.5°） */
-  rollMaxRad: (2.5 * Math.PI) / 180,
-  /** 视觉俯仰上限 rad（1.2°） */
-  pitchMaxRad: (1.2 * Math.PI) / 180,
-  /** 侧倾灵敏度：横向加速度 4.5 m/s² 时打满 2.5° */
-  rollRefMs2: 4.5,
+  /** 视觉侧倾上限 rad（3.5°） */
+  rollMaxRad: (3.5 * Math.PI) / 180,
+  /** 视觉俯仰上限 rad（2.0°） */
+  pitchMaxRad: (2.0 * Math.PI) / 180,
+  /** 侧倾灵敏度：横向加速度 4.0 m/s² 时打满 3.5° */
+  rollRefMs2: 4.0,
   /** 俯仰灵敏度（与主线 pitchTarget = accel × 0.0045 同系数） */
   pitchPerAccel: 0.0045,
   /** 撞墙时速度的法向衰减系数（1 = 完全吃掉法向分量） */
@@ -93,12 +93,32 @@ export const FREE = {
 
 /** 场景边界（世界坐标 m） */
 export const BOUNDS = {
-  /** 御桥段 / 城内段分界 z */
-  cityZ: -365,
-  /** 御桥段侧向半宽。R29 桥面收窄（16.72 → **12.6**，`r28Layout.VIADUCT.totalHalf`）
-   *  ⇒ 边界必须同步收到 12.0，否则自由探索能把车开出桥沿掉进峡谷。 */
+  /** 御桥段 / 城门带分界 z（= 城门脸，GATE.z+GATE.depth/2=−351.5，castleKit makePaving 同源） */
+  gateFrontZ: -351.5,
+  /** 城门带 / 城内大街分界 z（= INNER.zNear=−365.5，r28Layout 同源） */
+  gateBackZ: -365.5,
+  /** 城内大街 / 主殿广场分界 z（= INNER.zFar=−1285.5，r28Layout 同源） */
+  plazaZ: -1285.5,
+  /**
+   * 御桥段侧向半宽。R29 桥面收窄（16.72 → **12.6**，`r28Layout.VIADUCT.totalHalf`）
+   *  ⇒ 边界必须同步收到 12.0，否则自由探索能把车开出桥沿掉进峡谷。
+   */
   bridgeHalfW: 12.0,
-  /** 城内大街侧向半宽（街侧建筑前脸 |x| = 15.5，留 1.0 车宽余量） */
+  /** 城门洞半宽（贴隧道地面外缘 10；门墩 x≥10，防穿门墩） */
+  tunnelHalfW: 10.0,
+  /**
+   * 城内建筑块半宽（多边角）：贴街面拱廊柱列内缘（≈11.12），车缘 11.5 微擦可接受。
+   * R96 由旧直线 14.5 收窄 —— 旧值让车穿过柱列/台基（重穿模）。
+   */
+  arcadeHalfW: 10.5,
+  /**
+   * 城内空档半宽（多边角）：开放到建筑前脸线（15.5），车能开进建筑间隔（免空气墙）。
+   * 上限即建筑前脸线，车被挡在建筑线内，不会驶出场景 / 绕到建筑背后。
+   */
+  cityOpenHalfW: 15.5,
+  /** 主殿广场半宽（与空档同宽，广场两侧到建筑前脸线） */
+  plazaHalfW: 15.5,
+  /** 兼容口径：原城内段半宽（保留，部分注释/旧档引用；新逻辑走 arcade/cityOpen） */
   cityHalfW: 14.5,
   /** z 硬钳位 */
   zMin: -1297,
@@ -117,6 +137,46 @@ export const BOUNDS = {
   hallBounce: 0.8
 } as const;
 
+/**
+ * 城内大街 keep=10 街区的 z 区间（块心 zc = zNear − 23 − 46k，块长 46，zc±23）。
+ * ⚠ **单一真源约束**：与 castleKit `cityBlockIndices(20, R91_CITY_KEEP_BLOCKS=10)` 的
+ * ks=[0,1,2,3,6,8,11,14,16,19] 同步；改 keep 必须同步此表（r95_city_blocks 测试钉 ks，
+ * corridor 护栏钉块区间，双保险）。
+ * 区间覆盖：御桥→[−365.5,−411.5]…，空档（无街区）自动落 15.5（开放）。
+ */
+const CITY_BLOCK_Z: ReadonlyArray<readonly [number, number]> = [
+  [-411.5, -365.5],
+  [-457.5, -411.5],
+  [-503.5, -457.5],
+  [-549.5, -503.5],
+  [-687.5, -641.5],
+  [-779.5, -733.5],
+  [-917.5, -871.5],
+  [-1055.5, -1009.5],
+  [-1147.5, -1101.5],
+  [-1285.5, -1239.5]
+];
+
+/** 块边界线性过渡半宽 m（多边角：块中心 10.5 → 块边界 15.5 连续渐变，防突变撞墙） */
+const EDGE_TRANSITION = 3;
+
+/** 纯函数：当前 z 处的侧向可行驶半宽（R96 多边角，随建筑轮廓分段） */
+export function corridorHalfWidth(z: number): number {
+  if (z >= BOUNDS.gateFrontZ) return BOUNDS.bridgeHalfW; // 御桥段：贴桥沿 12.0（防坠峡谷）
+  if (z >= BOUNDS.gateBackZ) return BOUNDS.tunnelHalfW; // 城门带：贴隧道地面外缘 10.0（防穿门墩）
+  if (z <= BOUNDS.plazaZ) return BOUNDS.plazaHalfW; // 主殿广场：15.5
+  // 城内大街：块区窄（贴拱廊柱列）/ 空档宽（建筑前脸线开放），块边界线性过渡
+  for (const [zmin, zmax] of CITY_BLOCK_Z) {
+    if (z >= zmin && z <= zmax) {
+      const dc = Math.min(z - zmin, zmax - z); // 到最近块边界的距离
+      if (dc >= EDGE_TRANSITION) return BOUNDS.arcadeHalfW; // 块中心：10.5（贴柱列）
+      const t = dc / EDGE_TRANSITION; // 0=块边界 → 1=过渡完成
+      // 块边界处 = 空档宽 15.5（连续），向块中心线性收到 10.5（多边角斜边）
+      return BOUNDS.arcadeHalfW + (BOUNDS.cityOpenHalfW - BOUNDS.arcadeHalfW) * (1 - t);
+    }
+  }
+  return BOUNDS.cityOpenHalfW; // 空档：开放到建筑前脸线 15.5（免空气墙）
+}
 /** 自由探索起点：城门外（城门洞 z = −358.5）以北 28.5 m，车头朝城门 */
 export const FREE_START = Object.freeze({ x: 0, z: -330, heading: 0 });
 
@@ -190,11 +250,6 @@ export function forwardOf(heading: number): { x: number; z: number } {
 /** 纯函数：由前向量反解 heading（forwardOf 的逆） */
 export function headingOf(fx: number, fz: number): number {
   return Math.atan2(-fx, -fz);
-}
-
-/** 纯函数：当前 z 处的侧向可行驶半宽 */
-export function corridorHalfWidth(z: number): number {
-  return z > BOUNDS.cityZ ? BOUNDS.bridgeHalfW : BOUNDS.cityHalfW;
 }
 
 /**

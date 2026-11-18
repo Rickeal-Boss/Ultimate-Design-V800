@@ -48,8 +48,8 @@ const blockCenterZ = (k: number): number => zNear - blockLen / 2 - k * blockLen;
 /** castle.ts ZONE_VIEW_RANGE 的镜像（常量不导出，此处仅作间距口径引用） */
 const ZONE_VIEW_RANGE = 550;
 
-/** 默认 keep=8 的块心 z 序列（近密远疏，见 cityBlockIndices） */
-const DEFAULT_KEPT_Z = [-388.5, -434.5, -480.5, -526.5, -710.5, -894.5, -1078.5, -1262.5];
+/** 默认 keep=10 的块心 z 序列（近密远疏，见 cityBlockIndices） */
+const DEFAULT_KEPT_Z = [-388.5, -434.5, -480.5, -526.5, -664.5, -756.5, -894.5, -1032.5, -1124.5, -1262.5];
 /** 非默认 keep=6 的采样索引（近端连续 4 块 + 远端 k=19） */
 const KEEP6_KS = [0, 1, 2, 3, 11, 19];
 
@@ -90,11 +90,11 @@ describe('R94 · cityBlockIndices 采样索引语义', () => {
     expect(blockLen).toBe(46);
   });
 
-  it('默认 keep=8 ⇒ 采样索引集 [0,1,2,3,7,11,15,19]（近密远疏）', () => {
-    expect(cityBlockIndices(20, R91_CITY_KEEP_BLOCKS)).toEqual([0, 1, 2, 3, 7, 11, 15, 19]);
+  it('默认 keep=10 ⇒ 采样索引集 [0,1,2,3,6,8,11,14,16,19]（近密远疏 + 加密）', () => {
+    expect(cityBlockIndices(20, R91_CITY_KEEP_BLOCKS)).toEqual([0, 1, 2, 3, 6, 8, 11, 14, 16, 19]);
   });
 
-  it('默认 keep=8 ⇒ 块心 z 序列确定值（近端 −388.5 锚定、远端 −1262.5 抵到 barrier 前）', () => {
+  it('默认 keep=10 ⇒ 块心 z 序列确定值（近端 −388.5 锚定、远端 −1262.5 抵到 barrier 前）', () => {
     const zs = cityBlockIndices(20, R91_CITY_KEEP_BLOCKS).map(blockCenterZ);
     expect(zs.length).toBe(DEFAULT_KEPT_Z.length);
     zs.forEach((z, i) => expect(z).toBeCloseTo(DEFAULT_KEPT_Z[i]!, 6));
@@ -115,13 +115,13 @@ describe('R94 · cityBlockIndices 采样索引语义', () => {
     expect(Math.abs(-1262.5 - -1300)).toBeLessThanOrEqual(60);
   });
 
-  it('相邻块心间距 ≤ 4·blockLen ≪ ZONE_VIEW_RANGE=550 ⇒ 任一视距内总有街区在场', () => {
+  it('相邻块心间距 ≤ 3·blockLen ≪ ZONE_VIEW_RANGE=550 ⇒ 任一视距内总有街区在场', () => {
     const zs = cityBlockIndices(20, R91_CITY_KEEP_BLOCKS).map(blockCenterZ);
     const gaps: number[] = [];
     for (let i = 1; i < zs.length; i += 1) gaps.push(Math.abs(zs[i]! - zs[i - 1]!));
-    // 步长序列（k 差 1,1,1,4,4,4,4 × blockLen=46）—— 近端连续 0..3、中远端稀疏：
-    expect(gaps.map((g) => Math.round(g / blockLen))).toEqual([1, 1, 1, 4, 4, 4, 4]);
-    expect(Math.max(...gaps)).toBeCloseTo(blockLen * 4, 6); // 最大空档 = 4 街区 = 184m
+    // 步长序列（k 差 1,1,1,3,2,3,3,2,3 × blockLen=46）—— 近端连续 0..3、中远端稀疏：
+    expect(gaps.map((g) => Math.round(g / blockLen))).toEqual([1, 1, 1, 3, 2, 3, 3, 2, 3]);
+    expect(Math.max(...gaps)).toBeCloseTo(blockLen * 3, 6); // 最大空档 = 3 街区 = 138m
     expect(Math.max(...gaps)).toBeLessThan(ZONE_VIEW_RANGE);
   });
 
@@ -145,7 +145,7 @@ describe('R94 · cityBlockIndices 采样索引语义', () => {
 });
 
 describe('R94 · 逐块高度递减改按分布序号 i（近高远低不破成「塌楼」）', () => {
-  it('衰减 1−0.03i 单调递减且最远块不塌（keep=8 ⇒ i=7 ⇒ 0.79 ≥ 0.7）', () => {
+  it('衰减 1−0.03i 单调递减且最远块不塌（keep=10 ⇒ i=9 ⇒ 0.73 ≥ 0.7）', () => {
     const decays = Array.from({ length: R91_CITY_KEEP_BLOCKS }, (_, i) => 1 - 0.03 * i);
     expect(decays[0]).toBe(1);
     for (let i = 1; i < decays.length; i += 1) {
@@ -158,10 +158,10 @@ describe('R94 · 逐块高度递减改按分布序号 i（近高远低不破成�
 });
 
 describe('R94 · 开关语义回归（浏览器 hash A/B）', () => {
-  it('默认（无 hash / node 无头）⇒ keep 常量 = 8，索引集长度 8', () => {
+  it('默认（无 hash / node 无头）⇒ keep 常量 = 10，索引集长度 10', () => {
     // castleKit 开关函数在 `typeof window === 'undefined'` 时默认 ON（无头 = 浏览器默认态），
-    // 故无 window shim 即测得 R95-P2 默认 keep=8 ⇒ 采样 8 个街区。
-    expect(R91_CITY_KEEP_BLOCKS).toBe(8);
+    // 故无 window shim 即测得 R96 默认 keep=10 ⇒ 采样 10 个街区。
+    expect(R91_CITY_KEEP_BLOCKS).toBe(10);
     expect(cityBlockIndices(BLOCKS, R91_CITY_KEEP_BLOCKS).length).toBe(R91_CITY_KEEP_BLOCKS);
   });
 

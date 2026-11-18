@@ -186,12 +186,41 @@ describe('仰望（yangwang）三车接入护栏', () => {
     }
   });
 
-  it('profile 合法：踏板不断裂 / 升温 ×100 / 限速 200 / 仰望量级元数据', () => {
+  it('profile 合法：踏板不断裂 / 不过热（升温 ×0）/ 限速 200 / 仰望量级元数据', () => {
     expect(YANGWANG.brakeBreakable).toBe(false);
-    expect(YANGWANG.brakeTempGainScale).toBe(100);
+    expect(YANGWANG.brakeTempGainScale).toBe(0);
     expect(YANGWANG.maxSpeedKmh).toBe(200);
     expect(YANGWANG.massKg).toBe(3300);
     expect(YANGWANG.cameraScale).toBe(1);
+  });
+
+  it('彩蛋玩法（R95）：满踩不过热 + 完美刹停但计 0 分', () => {
+    const sm = new StateMachine(YANGWANG);
+    sm.start();
+    // 倒计时
+    for (let i = 0; i < 120 * 4; i++) sm.step(DT, { throttle: 0, brake: 0, brakePressed: false });
+    expect(sm.phase).toBe('accel');
+    // 加速到可切入
+    let guard = 0;
+    while (sm.phase === 'accel' && !sm.canBrake && guard++ < 120 * 30) {
+      sm.step(DT, { throttle: 1, brake: 0, brakePressed: false });
+    }
+    expect(sm.canBrake).toBe(true);
+    // 满踩刹车（gainScale=0 ⇒ 盘温永不升、热保护永不触发）
+    sm.step(DT, { throttle: 0, brake: 1, brakePressed: true });
+    expect(sm.phase).toBe('brake');
+    guard = 0;
+    while (sm.phase === 'brake' && guard++ < 120 * 200) {
+      sm.step(DT, { throttle: 0, brake: 1, brakePressed: true });
+    }
+    expect(sm.phase).toBe('stopped');
+    expect(sm.vehicle.thermalLocks).toBe(0);
+    expect(sm.vehicle.brakeTemp).toBe(0);
+    const res = sm.lastResult;
+    expect(res).not.toBeNull();
+    expect(res!.success).toBe(true);
+    expect(res!.score).toBe(0);
+    expect(sm.scorePreview).toBe(0);
   });
 
   it('viewButtonsFor(yangwang) 与 viewButtonsFor(r7) 逐位一致', () => {

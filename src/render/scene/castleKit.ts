@@ -188,8 +188,11 @@ export const R91_CITY_RESTORE_ON =
   typeof window === 'undefined' || !/(?:^|[#&])r91city=off/i.test(window.location.hash);
 export const R91_CITY_FULL_ON =
   typeof window !== 'undefined' && /(?:^|[#&])r91city=full/i.test(window.location.hash);
-/** 默认 keep：R91 为 6；R95-P2 加密目标 10、tri 预算约束下**回落 8**（见 cityBlockIndices）。 */
-export const R91_CITY_KEEP_BLOCKS = 8;
+/** 默认 keep：R91 为 6；R95-P2 加密目标 10（tri 预算约束回落 8）；R96 用户「间隔消失」
+ *  仍反馈 ⇒ 采纳探测 R96 裁决 **10**：ks=[0,1,2,3,6,8,11,14,16,19]，最大空档 3·blockLen
+ *  =138m（较 R95 的 184m 再减 25%），近端连续 4 块，innerCity tri ≈106k（< castleTriHigh
+ *  400k 硬限、dc=29 不变，见 r31Budget）。 */
+export const R91_CITY_KEEP_BLOCKS = 10;
 
 /**
  * R95-P2 · **城内街区「近密远疏」采样索引**（R94-P1 均匀分布 + R91 近端连续的合并）。
