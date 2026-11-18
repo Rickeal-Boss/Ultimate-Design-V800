@@ -178,35 +178,59 @@ export const R89_CITY_TRIM_ON =
  * **确定性逐块高度递减**（Y × (1−0.03k)）—— 不再生成「排排同高白色密集楼房」的
  * 均匀剪影，读作自然进深/透视衰减（近高远低、破均质重复）。
  * `#r91city=off` ⇒ 逐位回 R89（keep=1）；`#r91city=full` ⇒ 全 20 街区（R88 满量，
- * 逐位回滚口径）。默认（无 hash）= keep=6。
+ * 逐位回滚口径）。默认（无 hash）= keep=**6**。
+ * R95-P2 起默认值改 **8**（加密目标 10、tri 预算约束回落 8，见下方 cityBlockIndices
+ * 的「近密远疏」处方）—— 近端连续 4 块 + 远端稀疏覆盖 k=19，最大空档 184m，
+ * `#r91city=off`/`#r91city=full` 的退化语义逐位不变。
  * 导出供护栏（r32_zone / r37_perf）与探针按开关分支断言。
  */
 export const R91_CITY_RESTORE_ON =
   typeof window === 'undefined' || !/(?:^|[#&])r91city=off/i.test(window.location.hash);
 export const R91_CITY_FULL_ON =
   typeof window !== 'undefined' && /(?:^|[#&])r91city=full/i.test(window.location.hash);
-export const R91_CITY_KEEP_BLOCKS = 6;
+/** 默认 keep：R91 为 6；R95-P2 加密目标 10、tri 预算约束下**回落 8**（见 cityBlockIndices）。 */
+export const R91_CITY_KEEP_BLOCKS = 8;
 
 /**
- * R94-P1 · **城内街区沿 z 全距均匀采样索引**。
- * 病根：R91 的 `for (k < Math.min(blocks, keep))` 从 zNear **连续堆** keep 个街区
- * （keep=6 ⇒ k=0..5 ⇒ 块心 −388.5…−618.5），只覆盖 z ∈ [−365.5, −641.5]，而赛道
- * barrier 在 z=−1300 ⇒ **中段/后段约 644m 城内楼群全空**（用户「加载门通过后中段
- * 仍无建筑」）。处方：把 keep 个街区**沿 z 全距均匀分布**（近端锚 k=0、远端锚
- * k=blocks−1），间距 ≤ 3·blockLen=138m ≪ `ZONE_VIEW_RANGE`=550 ⇒ 整条走廊在任一
- * 视距内总有街区在场；**街区数不变（仍 keep 个）⇒ tri 预算不变**。
+ * R95-P2 · **城内街区「近密远疏」采样索引**（R94-P1 均匀分布 + R91 近端连续的合并）。
+ * 病根：R94-P1 把 keep 个街区**沿 z 全距均匀等分**（keep=6 ⇒ [0,4,8,11,15,19] ⇒
+ * 块心间距恒 184m），俯瞰/远景下读作「中段有建筑空隙」；而 R91 的连续堆只盖近端、
+ * 中远端全空。处方 = **R91（近端连续）∪ R94（远端覆盖）**：
+ *   · **近端连续** nearCount 块（k=0,1,…,nearCount−1，空档 0 ⇒ 玩家起点看到连片城）；
+ *   · **远端均匀稀疏** farCount 块铺到 k=blocks−1（末块块心 z=−1262.5，barrier 前
+ *     37.5m，不回归 R93「中段空」）；
+ *   · **最大空档 ≤ 4·blockLen=184m**（默认 keep=8 ⇒ 不劣于 R94）。
+ * 默认 keep=8 ⇒ ks=[0,1,2,3,7,11,15,19]（近端连续 0..3 共 4 块、远端 7/11/15/19），
+ * 相邻块心间距最大 4 街区=184m，块心 z=−388.5…−1262.5 覆盖全走廊。
+ * ⚠ keep=10 会推高 innerCity tri（近端连续 + 更多近/中区街区）到 ~106k，超 ~90k
+ *   tri 预算 ⇒ 默认**回落 8**（主理人 R95-P2 处方：keep 10 超预算可降 8，优先保
+ *   近端连续 + 远端覆盖 + 预算）。nearCount 钳 3 ⇒ 近端连续恰 4 块（满足「ks 含
+ *   [0,1,2,3]」护栏）且远端 4 块铺到 k=19（最大空档恰 184m）。
  * 退化口径（开关语义 / 回滚口径逐位不动）：
  *   · keep ≤ 1（`#r91city=off` ⇒ R89 keep=1）⇒ `[0]`（Math.min 保证循环至少跑一次
  *     ⇒ `castle-pave` 契约桶在场，**禁止空循环**）；
  *   · keep ≥ blocks（`#r91city=full` / `#r89city=off` ⇒ keep=20）⇒ `[0..blocks−1]`
  *     逐位等同 R88 满量。
- * 纯函数导出供护栏（tests/r94_city_blocks）钉采样索引与块心 z 序列确定值。
+ * ⚠ nearCount=min(n−2, 3)（钳 3）⇒ 近端连续恰 4 块（[0,1,2,3]，满足护栏）且
+ *   farCount≥2 ⇒ 末元素恒 = blocks−1（远端覆盖对任意 n≥3 成立）；对 n=2 退化回
+ *   `[0,1]`（仅近端，2 块太少无远端可铺）。nearCount>3 会把第 5 块挤进近区
+ *   （k<8 全装饰）或把远端空档顶破 4 街区，tri / 空档二选一超限 ⇒ 钳 3。
+ * 纯函数导出供护栏（tests/r94_city_blocks / tests/r95_city_blocks）钉采样索引与块心
+ * z 序列确定值。
  */
 export function cityBlockIndices(blocks: number, keep: number): number[] {
   const n = Math.max(1, Math.min(Math.floor(blocks), Math.floor(keep)));
   if (n <= 1) return [0];
   if (n >= blocks) return Array.from({ length: blocks }, (_, i) => i);
-  return Array.from({ length: n }, (_, i) => Math.round(i * (blocks - 1) / (n - 1)));
+  // R95-P2：近密远疏 —— 近端连续 nearCount 块 + 远端均匀稀疏铺到 blocks−1。
+  const nearCount = Math.max(1, Math.min(n - 2, 3));
+  const farCount = n - nearCount;
+  const out: number[] = [];
+  for (let i = 0; i < nearCount; i += 1) out.push(i);
+  for (let j = 0; j < farCount; j += 1) {
+    out.push(nearCount + Math.round((j * (blocks - 1 - nearCount)) / Math.max(1, farCount - 1)));
+  }
+  return out;
 }
 
 /**
@@ -1539,6 +1563,33 @@ export function makeGate(): StoneBuckets {
       (g) => g.rotateY(Math.PI / 2).translate(0, 9, zFront + 0.05)
     )
   );
+
+  /* ── R95-P1 落地基座墙（landing-review 定罪修复：门楼/塔群前脸悬空）────────────
+   * 根因：门楼（GATE.z=−358.5）与塔群全部坐在「峡谷南缘」上，但大地开槽
+   * （Road.buildGround，|x|≤GORGE_HALF=70、z∈[zFar=−358.5, zNear=+60]）把
+   * **前脸以北的地面挖空** ⇒ 前脸（z∈[−351.5,−354]，底部 y=0）正下方只剩峡谷
+   * 壁（y=−32.3~−57.9），前脸悬空 32~58m。
+   * 方案①：在门楼前脸底部补**落地基座墙**（ashlar 桶），从 y=0 下探到谷底以下，
+   * 填住前脸下方空隙，读作「城堡坐在崖体基座上」。坐标：
+   *   · x：|x| ≤ 72（峡谷槽半宽 GORGE_HALF=70 ⇒ 覆盖槽宽 + 两侧各 2m 嵌岩；
+   *     建筑在 |x|∈(70,96] 的外延段落在**实体大地**上（无悬空），无需基座）。
+   *   · z：前脸 z=−351.5（=zFront，与门楼前脸齐平）向后扎到 −359（埋进峡谷
+   *     远封口 zFar=−358.5 之后 0.5m，封缝不露）。
+   *   · y：顶 −0.03（埋进桥面/大地 y=0 之下，不侵门洞行车走廊、不与桥面 z-fight；
+   *     楼体台基底 y=0 与基座顶仅 3cm 缝，200m 外亚像素不可见）；底 −70（低于
+   *     谷底最低点 bed−2.6≈−69.1，全幅埋进谷底/岩壁，防露缝）。
+   * 代价：1 个 box = 12 tri、0 新贴图、灰/白石桶 → 并入既有 ashlar 分区 mesh ⇒
+   * 静态 DC +0（仍 ≤ DESIGN_MAX_DC=29）。不动 GORGE_HALF / DIP_DEPTH。
+   */
+  {
+    const FW = 144; // x 跨度（|x|≤72）
+    const FH = 69.97; // y 跨度（−0.03 → −70）
+    const FD = 7.5; // z 跨度（−351.5 → −359）
+    const fcx = 0;
+    const fcy = (-0.03 + -70) / 2; // −35.015
+    const fcz = (zFront + -359) / 2; // −355.25
+    b.ashlar.push(box('ashlar', FW, FH, FD, fcx, fcy, fcz));
+  }
   return b;
 }
 
@@ -3003,11 +3054,14 @@ export function makeInnerCity(): StoneBuckets {
    * 浏览器里该全局恒 undefined ⇒ 落 R91 默认 6（A/B 开关语义见 R91_CITY_RESTORE_ON）。 */
   const r91Keep = R91_CITY_FULL_ON ? blocks : R91_CITY_RESTORE_ON ? R91_CITY_KEEP_BLOCKS : R89_CITY_KEEP_BLOCKS;
   const keep = (globalThis as unknown as { __R91_KEEP_BLOCKS?: number }).__R91_KEEP_BLOCKS ?? r91Keep;
-  /* R94-P1：**街区沿 z 全距均匀采样**（见 cityBlockIndices）。keep 个街区不再从 zNear
-   * 连续堆 ⇒ keep=6 覆盖 z∈[−365.5, −1285.5] 全走廊（末块块心 −1262.5，barrier 前
-   * 37.5m），修复「加载门通过后中段仍无建筑」。退化：keep≤1 ⇒ [0]、keep≥blocks ⇒ [0..19]。
+  /* R95-P2：**街区「近密远疏」采样**（见 cityBlockIndices）。keep 个街区不再均匀等分：
+   * 近端连续（k=0..nearCount−1，玩家起点见连片城）+ 远端稀疏铺到 k=blocks−1（末块
+   * 块心 −1262.5，barrier 前 37.5m），修复 R94「俯瞰中段有建筑空隙」；默认 keep=8 ⇒
+   * ks=[0,1,2,3,7,11,15,19]，最大空档 4·blockLen=184m（不劣于 R94）。
+   * 退化：keep≤1 ⇒ [0]、keep≥blocks ⇒ [0..19]。
    * **i = 分布序号**（0..n−1）只用于逐块高度递减口径；**k 判定（far / nearZone / hero /
-   * k%2 街面火盆）一律沿用 k** ⇒ k=15/19 落 DEEP_FAR（远的更省 tri）、k=0/4 落近区。 */
+   * k%2 街面火盆）一律沿用 k** ⇒ k=7 落近区、k=11 落 mid-trim、k=15/19 落 DEEP_FAR
+   * （远的更省 tri）、k=0..3 落近区（全装饰，近端连续推高 tri，远端减饰对冲）。 */
   const cityBlocks = cityBlockIndices(blocks, keep);
   for (let i = 0; i < cityBlocks.length; i += 1) {
     const k = cityBlocks[i];
@@ -3967,8 +4021,9 @@ export function makeInnerCity(): StoneBuckets {
      * 只对 i>0 块做（i=0 保持 1.0 作近景基准）；**跳过 pave/地面桶**（水平地坪
      * 缩 Y 无意义且会破坏 R36-A2 pave 契约的 y 面位）。缩放量确定性 `1 − 0.03i`
      * （**i = 分布序号 0..n−1**，非 k）：
-     *   i=1→0.97、i=2→0.94、i=3→0.91、i=4→0.88、i=5→0.85（≤15%，读作进深而不
-     *   是变形）。块内每件新几何恰好缩一次（startLen 快照按桶记）。 */
+     *   i=1→0.97、i=2→0.94、i=3→0.91、…、i=7→**0.79**（R95-P2 keep=8 ⇒ 最远栋
+     *   仍 ≥0.7 不塌；读作进深而不是变形）。块内每件新几何恰好缩一次（startLen
+     *   快照按桶记）。 */
     if (i > 0) {
       const jitterY = 1 - 0.03 * i;
       for (const key of Object.keys(b) as (keyof StoneBuckets)[]) {
