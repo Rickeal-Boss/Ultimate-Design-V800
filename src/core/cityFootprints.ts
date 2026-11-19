@@ -47,9 +47,15 @@ const CORNER_MARBLE_SKIRT = 1.2;
 const CORNER_BASE_INNER = INNER.faceHalf - CORNER_MARBLE_SKIRT / 2; // 14.9
 /** 角塔中心相对块端内偏 castleKit.ts:3461 `blockLen / 2 − 0.5` */
 const CORNER_EDGE_INSET = 0.5;
-/** 前排塔基 castleKit.ts:3254 `box(9.4, 1.2, 9.4, depth/2, …)`，depth = 8（:3078）⇒ 局部 x∈[0,4.7] */
-const FRONT_TOWER_DEPTH = 4.7;
-const FRONT_TOWER_BASE_INNER = INNER.faceHalf; // 15.5（塔基不越前脸）
+/** 前排塔基 castleKit.ts:3254 `box(9.4, 1.2, 9.4, depth/2, …)`，depth = 8（:3078）。
+ *  区分两个易混量：box 半宽 = 9.4/2 = 4.7（box 在 x/z 各向的半延展）；局部 x 中心 = depth/2 = 4。
+ *  ⇒ 局部 x∈[4−4.7, 4+4.7] = [−0.7, 8.7]，z 半延展 = 4.7。
+ *  内缘外凸量 = boxW/2 − depth/2 = 4.7 − 4 = 0.7（塔基越过前脸线 0.7 m，R104 修正穿模）。 */
+const FRONT_TOWER_BOX_W = 9.4;
+const FRONT_TOWER_HALF = FRONT_TOWER_BOX_W / 2; // 4.7（box x/z 半延展）
+const FRONT_TOWER_DEPTH = 8; // castleKit.ts:3078 闭包 depth（局部 x 中心 = depth/2 = 4）
+const FRONT_TOWER_INSET = FRONT_TOWER_HALF - FRONT_TOWER_DEPTH / 2; // 0.7
+const FRONT_TOWER_BASE_INNER = INNER.faceHalf - FRONT_TOWER_INSET; // 14.8（塔基真实可见内缘）
 /** 殿台基 castleKit.ts:3152 `box(depth+0.8, …, depth/2+0.4, …)` ⇒ 局部 x∈[0, depth+0.8] ⇒ 世界内缘 = faceHalf */
 const HALL_PLINTH_INNER = INNER.faceHalf; // 15.5（R103 修正：原误写 faceHalf−0.4=15.1）
 /** 殿前大理石带 castleKit.ts:3156 `box(0.5, 1.2, …, −0.25, …)` ⇒ 局部 x∈[−0.5,0] ⇒ 世界 |x|∈[15.0,15.5] */
@@ -74,12 +80,12 @@ const BUTTRESS_DEPTH = 1.0;
 const BUTTRESS_Z_HALF = (BUTTRESS_DEPTH + 1.1) / 2; // 1.05
 /** 殿身半宽（r28Layout.TOWER.hallW / 2 = 6.25，殿台基 / 大理石带 z 覆盖用） */
 const HALL_HALF = TOWER.hallW / 2;
-/** 连墙段 z 区间 castleKit.ts:3289-3292（塔→殿 / 殿→塔，避开前后排塔基 4.7 m 深度）：
+/** 连墙段 z 区间 castleKit.ts:3289-3292（塔→殿 / 殿→塔，避开前后排塔基 z 半延展 4.7 m）：
  *  `[-blockLen/2, -blockLen/4 - 4.7]` / `[blockLen/4 + 4.7, blockLen/2]`（local z）。
  *  飞扶壁墩落在段中点 lz（castleKit.ts:3478-3487 `const lz = (za + zb) / 2`）。 */
 const LINK_WALL_SEGS: ReadonlyArray<readonly [number, number]> = [
-  [-BLOCK_LEN / 2, -(BLOCK_LEN / 4 + FRONT_TOWER_DEPTH)],
-  [BLOCK_LEN / 4 + FRONT_TOWER_DEPTH, BLOCK_LEN / 2]
+  [-BLOCK_LEN / 2, -(BLOCK_LEN / 4 + FRONT_TOWER_HALF)],
+  [BLOCK_LEN / 4 + FRONT_TOWER_HALF, BLOCK_LEN / 2]
 ];
 
 /**
@@ -131,20 +137,20 @@ export function buildCityFootprints(): CityFootprint[] {
       });
     }
 
-    // ④ 前排塔基（每侧 2，局部 z = ±blockLen/4，内缘 = 前脸 15.5）
+    // ④ 前排塔基（每侧 2，局部 z = ±blockLen/4；内缘 = 前脸 − 0.7 = 14.8，外缘 = 前脸 + 8.7 = 24.2）
     for (const sign of [-1, 1] as const) {
       const tz = zc + sign * (BLOCK_LEN / 4);
       list.push({
         xInner: FRONT_TOWER_BASE_INNER,
-        xOuter: FRONT_TOWER_BASE_INNER + FRONT_TOWER_DEPTH,
-        zMin: tz - FRONT_TOWER_DEPTH,
-        zMax: tz + FRONT_TOWER_DEPTH,
+        xOuter: INNER.faceHalf + FRONT_TOWER_DEPTH / 2 + FRONT_TOWER_HALF, // 15.5 + 4 + 4.7 = 24.2
+        zMin: tz - FRONT_TOWER_HALF,
+        zMax: tz + FRONT_TOWER_HALF,
         kind: 'frontBase'
       });
     }
 
-    // ⑤ 拱廊柱（每侧 2n = 4，柱位 zc ± (i+0.5)·pitch；AABB 用柱心 ± (colR + 0.6 m 缓冲))
-    const colAabbHalf = ARCADE_COL_R + 0.6;
+    // ⑤ 拱廊柱（每侧 2n = 4，柱位 zc ± (i+0.5)·pitch；AABB 用柱心 ± (colR + 0.1 m 微稳定余量)）
+    const colAabbHalf = ARCADE_COL_R + 0.1; // 0.4（真源 colR=0.3，castleDetail.ts:1397；R104 收紧空气墙）
     for (let i = 0; i < ARCADE_COL_COUNT; i += 1) {
       const offset = (i + 0.5) * R30_ARCADE.pitch;
       for (const sign of [-1, 1] as const) {

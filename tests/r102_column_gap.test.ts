@@ -101,8 +101,9 @@ describe('R102 ③ 柱不穿模改由 2D 断言：clampToFootprints 收紧到「
       // 车心放在界内 ⇒ 不收紧（hit=false）
       const inside = clampToFootprints(bound - 0.01, pillarZ, h);
       expect(inside.hit).toBe(false);
-      // 车心越界 ⇒ 收紧回 bound，命中 arcadeCol
-      const outside = clampToFootprints(bound + 0.5, pillarZ, h);
+      // 车心越到柱内缘之外 ⇒ OBB 与柱 AABB（R104 收紧到 colAabbHalf=0.4）真相交 ⇒ 收紧回 bound
+      // （旧 +0.5 偏移是按旧 0.9 宽柱校准的，收紧后斜插 h 的 SAT 会判不交，故改用车心过内缘 11.12）
+      const outside = clampToFootprints(PILLAR_INNER + 0.3, pillarZ, h);
       expect(outside.hit).toBe(true);
       expect(outside.kind).toBe('arcadeCol');
       expect(outside.x).toBeCloseTo(bound, 6);

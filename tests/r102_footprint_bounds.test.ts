@@ -96,9 +96,10 @@ describe('R102 ① 占位清单覆盖 probe-bounds §2 六类地面层实体（�
     }
   });
 
-  it('建筑前脸 / 前排塔基 / 殿台基内缘 = 15.5，殿前大理石带 15.0', () => {
+  it('建筑前脸 / 殿台基内缘 = 15.5；前排塔基内缘 = 14.8（R104 修正）；殿前大理石带 15.0', () => {
     for (const f of byKind('frontWall')) expect(f.xInner).toBeCloseTo(INNER.faceHalf, 12);
-    for (const f of byKind('frontBase')) expect(f.xInner).toBeCloseTo(INNER.faceHalf, 12);
+    // R104 修正：前排塔基真实可见内缘 = faceHalf − (boxW/2 − depth/2) = 15.5 − 0.7 = 14.8（原误 15.5 穿模）
+    for (const f of byKind('frontBase')) expect(f.xInner).toBeCloseTo(INNER.faceHalf - 0.7, 12);
     const hallBases = byKind('hallBase');
     // R103 修正：殿台基内缘 = faceHalf = 15.5（原误 15.1）；大理石带 = faceHalf − 0.5 = 15.0（原误 15.25）
     const plinth = hallBases.filter((f) => Math.abs(f.xInner - INNER.faceHalf) < 1e-9);
@@ -147,11 +148,15 @@ describe('R102 ② clampToFootprints 纯函数（直行 θ=0 回归不变 / 斜�
     expect(fp.x).toBeCloseTo(INNER.faceHalf - 0.5 - HALF_L, 12); // 15.0 − 2.7475 = 12.2525
   });
 
-  it('直行 θ=0 块内真空隙（殿前大理石带与首柱之间 z=−378.5）：1D = 前脸包络 14.497，2D 不新增约束', () => {
-    // z=−378.5：殿前大理石带 z ≤ −381.65、首柱 z ≥ −383.2 ⇒ 车长 z 覆盖（heading 0 沿 Z，dz=半长 2.7475）
-    //   [−381.25,−375.75] 落在真空隙（无柱/墩/带）；1D |z−zc|=10 > CITY_HALL_ZR_EXTENT ⇒ 前脸包络 14.497。
+  it('直行 θ=0 块内真空隙（近端塔基与角塔基座之间 z=−371.1）：1D = 前脸包络 14.497，2D 不新增约束', () => {
+    // R104 P1 收紧后（前排塔基真实内缘 14.8）块心 z 带 z∈[zc−18.3, zc+18.3] 已被塔基/大理石带/前脸
+    //   连续覆盖，heading=0 在前脸包络 14.497 处不再有原 z=−378.5 那种稳健真空隙（旧版靠塔基旧内缘
+    //   15.5 与车缘 15.5 边界重合的浮点分离假象）。块 0（zc=−388.5）域内真真空隙仅落在近端塔基
+    //   （tz=zc+11.5=−377，z 带 [−381.7,−372.3]）与角塔基座（cz=zc+22.5=−366，z 带 [−369.1,−362.9]）
+    //   之间：z∈[−372.3,−369.1]。取中点 z=−371.1（车长 z 覆盖 [−373.85,−368.35]，仅擦边不交占位盒）。
+    //   |z−zc|=17.4 > CITY_HALL_ZR_EXTENT ⇒ 1D = 前脸包络 14.497。
     // 车沿 Z 行驶 ⇒ dx = 半宽 1.003，车缘 14.497+1.003 = 15.5 恰贴建筑前脸线（frontWall 内缘 15.5 不相交）⇒ 2D 不收紧。
-    const z = -378.5;
+    const z = -371.1;
     const faceCenter = BOUNDS.cityOpenHalfW - HALF_W; // 14.497 前脸车心包络
     const x1d = resolveBounds(20, z, 0, 10).x;
     expect(x1d).toBeCloseTo(faceCenter, 12);

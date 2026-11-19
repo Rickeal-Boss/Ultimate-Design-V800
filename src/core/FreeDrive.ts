@@ -116,6 +116,32 @@ export const IMPACT_YAW_GAIN = 0.02;
 /** 法向入射冲量 → 视觉侧倾瞬态增益（rad·s/m，小值起始） */
 export const IMPACT_ROLL_GAIN = 0.004;
 
+/* ── R104 · 撞墙「顿挫感」通道（impact feel）独立标定 ─────────────────────
+ * 不放进 FREE 灵魂表，也不改任何既有常量（IMPACT_TAU / IMPACT_YAW_GAIN /
+ * IMPACT_ROLL_GAIN / wallDecay / WALL_SCRUB_* / 摩擦圆 / 灵魂 12 全部零改）。
+ * R99~R101 把撞墙从单帧硬切改成了一阶收敛，但速度与 heading **共用 τ=0.12 平行收敛**：
+ * 速度收敛目标 r.speed 依赖随收敛递减的 fn ⇒ 目标漂移 ⇒ 正撞 20m/s 只掉 ~43% 且摊在
+ * 0.2s 里，撞墙瞬间看不到速度骤降；yaw 注入是「每帧速率项」且下一帧被 yawRateFor 覆盖
+ * ⇒「被顶一下」不可见。本通道只做两件事（探测报告 §4 推荐组合 ③+④）：
+ *   ③ 放慢 heading 收敛（独立 τ）⇒ 车头多指向墙一会儿 ⇒ fn 停留更大 ⇒ 撞后几帧持续
+ *      刮擦减速（顿挫），而速度仍走 IMPACT_TAU 一阶（R99 防硬切成果保留）。
+ *   ④ 把 yaw 注入从「每帧速率项」改为「一次性短冲量」⇒ 撞墙帧记 wallKick，在
+ *      WALL_IMPACT_KICK_MS 窗口内分摊加到 yawRate，冲量放完即止（不再被每帧覆盖）。
+ */
+/**
+ * R104 撞墙朝向收敛时间常数 s（**独立于 IMPACT_TAU**，只用于 step() 的 impactHeadingStep）。
+ * heading 慢于速度收敛 ⇒ 车头多指向墙 ⇒ fn=f·n 停留更大 ⇒ 撞后几帧持续刮擦减速（顿挫）。
+ * 速度仍用 IMPACT_TAU=0.12 一阶收敛（防单帧硬切）。撞墙域边界常量，不入灵魂表。
+ */
+export const WALL_IMPACT_HEADING_TAU = 0.22;
+/**
+ * R104 撞墙横摆冲量窗口 s：撞墙帧一次性记 wallKick 峰值，在此窗口内按
+ * wallKick·(dt/WALL_IMPACT_KICK_MS) 每帧分摊加到 yawRate，窗口走完冲量即放完（不再累加）。
+ */
+export const WALL_IMPACT_KICK_MS = 0.15;
+/** R104 撞墙横摆冲量峰值上限 rad/s（真源 / 产品标定：min(wallImpact, 此值) 记为 wallKick） */
+export const WALL_IMPACT_KICK_MAX = 1.2;
+
 /* ── R101 Phase2 · 撞墙切向刮擦摩擦（wall scrub）独立标定 ───────────────────
  * 不放进 FREE 灵魂表：刮擦是**撞墙域边界耗散**，与漂移轮胎模型（灵魂 12 参数）无关，
  * 也不碰 FREE_BODY_DAMPING / 摩擦圆（tyreMu/latUse/decelAvail）/ 制动力 / decelPerNewton。
@@ -627,6 +653,19 @@ export class FreeDrive {
    * 收敛到平行墙后 fn→0，若现算会让刮擦退化回零摩擦蹭滑。供给 step() 算 scrub 减速度。
    */
   private wallScrubN = 0;
+  /**
+   * R104 撞墙横摆冲量峰值 [rad/s]：撞墙帧一次性记 min(wallImpact, WALL_IMPACT_KICK_MAX)，
+   * 在 WALL_IMPACT_KICK_MS 窗口内分摊加到 yawRate。区别于旧的「每帧速率项」（下一帧被
+   * yawRateFor 整体覆盖 ⇒ 一帧脉冲不可见），冲量在窗口内稳定注入 ⇒ 可见的「被顶一下」。
+   */
+  private wallKick = 0;
+  /** R104 撞墙横摆冲量剩余窗口 [s]：>0 时每帧分摊 wallKick·(dt/WALL_IMPACT_KICK_MS)，放完即止 */
+  private wallKickRemain = 0;
+  /**
+   * R104 本次贴墙接触是否已放过冲量：贴墙期间 impacting 每帧成立，若不闩住 ⇒ 窗口耗尽后
+   * 立刻被重新装填 ⇒ 冲量退化回「持续横摆」。闩住后一次接触只放一记，离墙复位再撞才放下一记。
+   */
+  private wallKickFired = false;
   /** R102 只读观测口：供测试纯数值断言「贴墙期间 scrub 不被段间跳变误清零」（不暴露写权限） */
   get scrubN(): number {
     return this.wallScrubN;
@@ -706,6 +745,9 @@ export class FreeDrive {
     this.yawDyn = 0;
     this.wallImpact = 0;
     this.wallScrubN = 0;
+    this.wallKick = 0;
+    this.wallKickRemain = 0;
+    this.wallKickFired = false;
     this.wallSideTouchLatch = false;
     this.wallSideTouchFarFrames = 0;
   }
@@ -757,6 +799,9 @@ export class FreeDrive {
     this.yawDyn = 0;
     this.wallImpact = 0;
     this.wallScrubN = 0;
+    this.wallKick = 0;
+    this.wallKickRemain = 0;
+    this.wallKickFired = false;
     this.wallSideTouchLatch = false;
     this.keys.clear();
     this.emit('reset');
@@ -778,6 +823,9 @@ export class FreeDrive {
     this.yawDyn = 0;
     this.wallImpact = 0;
     this.wallScrubN = 0;
+    this.wallKick = 0;
+    this.wallKickRemain = 0;
+    this.wallKickFired = false;
     this.wallSideTouchLatch = false;
     this.wallSideTouchFarFrames = 0;
   }
@@ -809,6 +857,9 @@ export class FreeDrive {
       s.beta = 0;
       this.wallImpact = 0;
     this.wallScrubN = 0;
+    this.wallKick = 0;
+    this.wallKickRemain = 0;
+    this.wallKickFired = false;
     this.wallSideTouchLatch = false;
     this.wallSideTouchFarFrames = 0;
       return;
@@ -866,6 +917,7 @@ export class FreeDrive {
       // 仍与墙接触：维持撞击强度（由下方 impacting 块按 impactN 峰值刷新）
     } else {
       this.wallScrubN = 0; // 已离墙：刮擦结束
+      this.wallKickFired = false; // 已离墙：复位横摆冲量闩，下次撞墙再放一记
     }
     // 刮擦减速度：撞得越狠刮得越狠 + 封顶（撞墙域边界耗散，与轮胎摩擦圆独立）
     const wallScrub = Math.min(this.wallScrubN * WALL_SCRUB_DECEL, WALL_SCRUB_DECEL_MAX);
@@ -1041,6 +1093,10 @@ export class FreeDrive {
     if (r.kind === 'hall') {
       s.accel = 0;
       this.wallImpact = Math.max(this.wallImpact, r.impactN ?? 0);
+      // R104 ④：hall 正撞同样记横摆冲量（与 side/end 同通道），保留「被顶一下」的可见瞬态；
+      // 速度仍 r.speed=0 彻底停、heading 原样、无 targetHeading ⇒ hall 契约不变。
+      this.wallKick = Math.min(this.wallImpact, WALL_IMPACT_KICK_MAX);
+      this.wallKickRemain = WALL_IMPACT_KICK_MS;
       s.beta = damp(s.beta, 0, 1 / IMPACT_TAU, dt);
       this.yawDyn = damp(this.yawDyn, 0, 1 / IMPACT_TAU, dt);
     }
@@ -1053,8 +1109,20 @@ export class FreeDrive {
       // R101：撞墙强度供刮擦维持（hall 不进此块 ⇒ 正撞彻底停、无刮擦，契约不变）。
       // 下一帧起只要仍贴墙，step() 就按此强度持续刮擦，堵死平行墙零摩擦蹭滑。
       this.wallScrubN = Math.max(this.wallScrubN, r.impactN!);
-      // 朝向一阶收敛（角度差走最短弧，避免 ±π wrap 跳变），不再一帧硬掰到墙面切向。
-      s.heading = impactHeadingStep(s.heading, r.targetHeading!, IMPACT_TAU, dt);
+      // R104 ④：撞墙帧记横摆冲量峰值（min(wallImpact, 上限)），在下方窗口内分摊注入，
+      // 取代旧的「每帧速率项」（被下一帧 yawRateFor 覆盖 ⇒ 一帧脉冲不可见）。
+      // ⚠ 窗口只在「本次贴墙接触尚未放过冲量」时装填：贴墙期间 impacting 每帧成立，若每帧
+      //   重置 remain ⇒ 窗口永不耗尽 ⇒ 冲量退化回「持续横摆」而非一次性「顶一下」。用
+      //   wallKickFired 闩住 ⇒ 一次接触只放一记，离墙复位（见下方 wallScrubN 清零处）再撞才放。
+      this.wallKick = Math.max(this.wallKick, Math.min(this.wallImpact, WALL_IMPACT_KICK_MAX));
+      if (!this.wallKickFired) {
+        this.wallKickRemain = WALL_IMPACT_KICK_MS;
+        this.wallKickFired = true;
+      }
+      // R104 ③：朝向一阶收敛改用更慢的 WALL_IMPACT_HEADING_TAU（独立于速度用的 IMPACT_TAU）——
+      // 车头多指向墙一会儿 ⇒ fn=f·n 停留更大 ⇒ 撞后几帧持续刮擦减速（顿挫感）；
+      // 角度差走最短弧（避免 ±π wrap 跳变），不再一帧硬掰到墙面切向。速度仍走 IMPACT_TAU。
+      s.heading = impactHeadingStep(s.heading, r.targetHeading!, WALL_IMPACT_HEADING_TAU, dt);
       // 同步漂移态：擦碰把侧滑角 / 动态横摆往回收 —— 消除「旧 beta 把速度方向偏走」
       // 与「速度骤降退出漂移层把状态硬清零」两处次生硬切。
       s.beta = damp(s.beta, 0, 1 / IMPACT_TAU, dt);
@@ -1064,12 +1132,24 @@ export class FreeDrive {
     this.wallImpact = damp(this.wallImpact, 0, 1 / IMPACT_TAU, dt);
     if (this.wallImpact < 1e-4) this.wallImpact = 0;
     if (this.wallImpact > 0) {
-      s.yawRate += IMPACT_YAW_GAIN * this.wallImpact * (dt / IMPACT_TAU);
+      // R104 ④：yaw 注入改为下方「一次性短冲量」——旧的每帧速率项在下一帧被 yawRateFor
+      // 整体覆盖 ⇒ 只是一帧脉冲、不可见。roll 仍走每帧速率项（持久状态、被 roll 阻尼
+      // 徐徐衰减 ⇒ 累积成可见侧倾），保持原样。
       s.roll += IMPACT_ROLL_GAIN * this.wallImpact * (dt / IMPACT_TAU);
       // R100 Phase3：注入发生在下游 clamp(rollTarget) 之前，灵魂上限只约束 target
       // 不约束 state 注入量 ⇒ 高速撞击 roll 峰随 |v| 线性涨（55m/s 达 0.109rad，超 3.5° 约 79%）。
       // 紧跟注入做硬 clamp：保留「被顶一下」体感，只是幅度收进真车合理包络。
       s.roll = clamp(s.roll, -FREE.rollMaxRad, FREE.rollMaxRad);
+    }
+    // R104 ④ 撞墙横摆冲量：撞墙帧记 wallKick 峰值，在 WALL_IMPACT_KICK_MS 窗口内每帧分摊
+    // wallKick·(dt/WALL_IMPACT_KICK_MS) 加到 yawRate，窗口走完即放完（不再每帧累加 / 被覆盖）。
+    // ⇒ 撞墙瞬间有一记稳定、可见的「被顶一下」横摆，而非旧的一帧脉冲。
+    if (this.wallKickRemain > 0 && this.wallKick > 0) {
+      const kickDt = Math.min(dt, this.wallKickRemain);
+      s.yawRate += this.wallKick * (kickDt / WALL_IMPACT_KICK_MS);
+      this.wallKickRemain = Math.max(0, this.wallKickRemain - dt);
+      if (this.wallKickRemain <= 0) this.wallKick = 0; // 冲量放完即止
+      // 冲量注入后紧跟 clamp，state 不得越过灵魂横摆上限（与 roll 同口径）。
       s.yawRate = clamp(s.yawRate, -FREE.maxYawRate, FREE.maxYawRate);
     }
 

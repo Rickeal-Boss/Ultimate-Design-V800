@@ -125,7 +125,10 @@ describe('R102 脱困 ③ 只给转向不给油门/刹车：不触发（门控�
     fd.press('KeyD', true); // 只给转向
     for (let i = 0; i < 60; i += 1) {
       fd.step(DT);
-      expect(fd.state.yawRate).toBeCloseTo(0, 6); // 无油门/刹车 ⇒ 门控不触发
+      // R104 撞击手感：钉停态建立时的撞墙 yaw 一次性短冲量（WALL_IMPACT_KICK_*）会留极小衰减残差
+      // （实测 |yawRate|≈1e-5 rad/s ≈ 0.0006°/s，物理等同不脱困）。门控仍需油门/刹车同时按下，
+      // 故断言「yawRate≈0（3 位小数）」而非钉死 5e-7 —— 残差远小于任何可感知脱困。
+      expect(fd.state.yawRate).toBeCloseTo(0, 3); // 无油门/刹车 ⇒ 门控不触发（残差 <5e-4 视为零）
     }
   });
 });
