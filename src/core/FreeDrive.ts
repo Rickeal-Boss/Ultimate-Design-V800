@@ -23,11 +23,10 @@
  *   · 主殿正面 z ≤ −1297.5 且 |x| < 24 → 停车 + 轻微后退弹开（事件 'hall'）
  */
 import { BRAKE, MS_TO_KMH, VEHICLE } from '../config/physics';
-// R99：角塔基座内缘真源（INNER.faceHalf），与 VEHICLE.widthM 一起派生块角车心限。
-import { INNER } from '../render/scene/r28Layout';
-// R100：拱廊柱列几何真源（R30_ARCADE.width / pitch），派生柱位周期窄带；
-//   castleKit 模块加载无 DOM 副作用（r97_bounds_clearance 在 beforeAll 前已 import 同源）。
-import { R30_ARCADE } from '../render/scene/castleKit';
+// R99：角塔基座内缘真源（INNER.faceHalf / TOWER.hallW），与 VEHICLE.widthM 一起派生块角 / 殿身车心限。
+import { INNER, TOWER } from '../render/scene/r28Layout';
+// R103 阶段二：拱廊柱列（R30_ARCADE）已下沉到 cityFootprints.ts 的 2D 占位，此处不再 import
+//   （castleKit 模块加载无 DOM 副作用，r97_bounds_clearance 在 beforeAll 前已 import 同源）。
 // R98：车身回正阻尼抽成独立配置（6/4 → 3.8/3.2），漂移灵魂参数与纵向力不受影响。
 import { FREE_BODY_DAMPING } from '../config/freeBodyFeel';
 import { dragForce, motorForce, rollForce } from '../physics/Vehicle';
@@ -242,36 +241,34 @@ const CITY_CORNER_BASE_INNER = INNER.faceHalf - CITY_CORNER_MARBLE_SKIRT / 2; //
 /** 角点车心限 = 可见基座内缘 − 车半宽 = 14.9 − 1.003 = 13.897（车缘恰贴基座不嵌入） */
 const CITY_CORNER_CAR_CENTER = CITY_CORNER_BASE_INNER - VEHICLE.widthM / 2;
 
+/* ── R103 · 阶段二「看不见空隙不挡」──────────────────────────────────────────
+ * 用户铁律：看得见实体贴着挡、看不见空隙不挡。R100 把块心段保守钳在 10.0（车缘 11.003），
+ * 但柱间/墩间的真空隙最近可见实体是建筑前脸 15.5 ⇒ 约 4.5 m 无形空气墙（probe §3.2 A1）。
+ *
+ * 架构裁决（主理人）：1D「走廊半宽」标量**无法表达「可停在其外侧的周期突出物」**。
+ * 柱列 11.12 / 飞扶壁墩 11.35 是周期物，车可合法停在「柱与前脸之间」的空隙（车心到 14.497）；
+ * 若沿用 1D 窄带钳到 10.117/10.347，则贴前脸行驶的车一进柱位 z 带就被 `|x|>halfW → x=halfW`
+ * 瞬移 4.4 m 进路内（穿模）。故：
+ *   - 1D 块心只保留**连续墙**包络（车几何上不可外越）：殿身大理石带 15.0 → 13.997；
+ *     其余建筑前脸 15.5 → 14.497。
+ *   - 周期突出物（柱 11.12 / 连墙墩 11.35 / 角塔墩 11.35）全部下沉到 step() 的
+ *     2D clampToFootprints，按车 OBB 是否**真相交**来钳（只收紧不放宽、无瞬移）。
+ * 角塔大理石基座裙 14.9 是**连续墙**（绕角塔一周），仍留 1D（13.897）。
+ */
+
+/** 殿前大理石带内缘 = faceHalf − 带半宽 0.5 = 15.0（castleKit.ts:3156 box(0.5,…,−0.25) ⇒ 世界 |x|∈[15.0,15.5]） */
+const CITY_HALL_MARBLE_INNER = INNER.faceHalf - 0.5; // 15.0
+/** 殿身车心限 = 大理石带内缘 − 车半宽 = 15.0 − 1.003 = 13.997（车缘恰贴大理石带） */
+const CITY_HALL_CAR_CENTER = CITY_HALL_MARBLE_INNER - VEHICLE.widthM / 2;
+/** 殿身 |z−块心| 包络 = hallW/2 + 大理石带 z 半外扩 0.6（与 cityFootprints 殿前大理石带 z 覆盖同源） */
+const CITY_HALL_ZR_EXTENT = TOWER.hallW / 2 + 0.6; // 6.25 + 0.6 = 6.85
+
 /* ── R100 · 边界精度贴可见实体（柱列周期 / 空档角塔带）──────────────────────
  * 用户澄清：不补街沿、不加兜底墙；只让挡车边界精确贴合可见实体。全部常量由真源
  * import 派生（R30_ARCADE / INNER / VEHICLE），禁写死 10.117 / 11.12 / 8.8 / 1.303 / 2.6。
  */
-/** 拱廊柱半径（castleDetail.ts:1397 `const colR = 0.3`，corridorRun 局部常量，真源不可 import） */
-const ARCADE_COL_R = 0.3;
-/** 柱心相对廊宽外偏（castleDetail.ts:1410 `cx = −width + colR + 0.12`） */
-const ARCADE_COL_OFFSET = 0.12;
-/** 拱廊整体内移（castleKit.ts:3474 `g.translate(-1.0,0,0)`） */
-const ARCADE_TRANSLATE = 1.0;
-/**
- * 拱廊柱可见内缘 |x|（r97_bounds_clearance.test.ts:36 同源公式）：
- *   柱心局部 cx = −width + colR + 0.12，整体再 translate(−1.0)，put 镜像加 faceHalf ⇒
- *   柱心世界 |x| = faceHalf + cx − translate = faceHalf − width + colR + 0.12 − translate；
- *   柱内缘 = 柱心 − colR ⇒ colR 抵消 ⇒ faceHalf − width − translate + 0.12 = 15.5−3.5−1.0+0.12 = 11.12。
- */
-const ARCADE_COL_INNER = INNER.faceHalf - R30_ARCADE.width - ARCADE_TRANSLATE + ARCADE_COL_OFFSET; // 11.12
-/** 柱位车心限 = 柱内缘 − 车半宽 = 11.12 − 1.003 = 10.117（车缘贴柱，比现状 10.0 松 0.117m） */
-const ARCADE_PILLAR_CAR_CENTER = ARCADE_COL_INNER - VEHICLE.widthM / 2;
-/**
- * 柱位 z 邻域半宽 = (柱直径 2·colR + 车宽 VEHICLE.widthM)/2 = colR + 车半宽
- *   = 0.3 + 1.003 = 1.303（审查团 §2.1：车外廓与柱外廓在 z 向重叠即贴柱）。
- */
-const ARCADE_PILLAR_NEAR_HALF = ARCADE_COL_R + VEHICLE.widthM / 2;
-/** 柱 z 节距 = R30_ARCADE.pitch = 8.8；柱位 zc ± (i+0.5)·pitch（i=0,1 ⇒ ±4.4 / ±13.2） */
-const ARCADE_PILLAR_PITCH = R30_ARCADE.pitch;
-/** 单侧柱数 n = floor(len/2/pitch)，len = blockLen−2 = 44（castleKit.ts:3468 len=blockLen−2）⇒ floor(22/8.8)=2 */
-const ARCADE_PILLAR_COUNT = Math.floor(
-  (CITY_BLOCK_Z[0][1] - CITY_BLOCK_Z[0][0] - 2) / 2 / ARCADE_PILLAR_PITCH
-);
+/* R103 阶段二：拱廊柱列（内缘 11.12 / 节距 8.8 / 柱数）已下沉到 cityFootprints.ts 的 2D
+ * 占位（arcadeCol），1D 走廊不再按柱位收窄 ⇒ FreeDrive 不再需要这组常量（避免未用告警）。 */
 /** 角塔进深 castleKit.ts:330 `R30_CORNER.d=5`（私有常量，真源不可 import） */
 const CITY_CORNER_D = 5;
 /**
@@ -323,28 +320,18 @@ export function corridorCenterHalfWidth(z: number): number {
   for (const [zmin, zmax] of CITY_BLOCK_Z) {
     if (z >= zmin && z <= zmax) {
       const dc = Math.min(z - zmin, zmax - z); // 到最近块边界的距离
-      if (dc < EDGE_TRANSITION) {
-        // R99 多边形角：外端贴可见角塔基座内缘（车心限 13.897 → 车缘 14.9 恰贴），
-        // 内端 = 块心 10.0（车缘 11.003 保持 R97 净空）。与 corridorHalfWidth 同型线性斜边，
-        // 仅把外端点从抽象面线 15.5 换成可见实体 14.9；分段顺序严格镜像，不碰其它段。
-        const t = dc / EDGE_TRANSITION; // 0=块角 → 1=柱列段
-        return CITY_CORNER_CAR_CENTER + (BOUNDS.arcadeHalfW - CITY_CORNER_CAR_CENTER) * t;
-      }
-      // R100 ① 柱列周期贴实体：块心段 dc≥3 不再恒定 10.0。柱位邻域（|z−z_pillar|≤1.303）
-      // 车心限 = 柱内缘 11.12 − 车半宽 = 10.117（车缘贴柱，比现状松 0.117m）；柱间维持 10.0，
-      // **不放宽到 14.497**——飞扶壁墩内缘 11.125/11.35 < 14.497，放宽必撞墩（审查团 §2.1），
-      // 故柱间保留 R97 窄带是正确产品决策。柱位 z = 块心 ± (i+0.5)·pitch（i=0,1）。
       const zc = (zmin + zmax) / 2;
-      for (let i = 0; i < ARCADE_PILLAR_COUNT; i += 1) {
-        const pillarOffset = (i + 0.5) * ARCADE_PILLAR_PITCH; // 4.4 / 13.2
-        if (
-          Math.abs(z - (zc - pillarOffset)) <= ARCADE_PILLAR_NEAR_HALF ||
-          Math.abs(z - (zc + pillarOffset)) <= ARCADE_PILLAR_NEAR_HALF
-        ) {
-          return ARCADE_PILLAR_CAR_CENTER; // 10.117 贴柱
-        }
+      const zr = Math.abs(z - zc); // 到块心的距离
+      // R103 阶段二：块心 1D 只保留连续墙包络（殿身大理石带 13.997 / 建筑前脸 14.497）。
+      // 周期突出物（柱列 / 飞扶壁墩）下沉到 2D，消除柱间/墩间空气墙且无瞬移（见上方 R103 注释）。
+      const envelope = zr <= CITY_HALL_ZR_EXTENT ? CITY_HALL_CAR_CENTER : BOUNDS.cityOpenHalfW - VEHICLE.widthM / 2;
+      if (dc < EDGE_TRANSITION) {
+        // R99 块角：角塔大理石基座（连续墙）14.9 → 13.897 突出于前脸，随 dc 线性淡出到
+        // 建筑包络（dc=3 处与块心包络连续）。角塔飞扶壁外墩 11.35 是突出物 → 2D 兜底。
+        const t = dc / EDGE_TRANSITION; // 0=块角 → 1=柱列段
+        return CITY_CORNER_CAR_CENTER + (envelope - CITY_CORNER_CAR_CENTER) * t;
       }
-      return BOUNDS.arcadeHalfW; // 柱间 / 无柱块心：10.0（R97 净空不变）
+      return envelope;
     }
   }
   // R100 ② 空档角塔带贴实体：z 落在块边界外侧 0~2.6m（角塔基座伸进空档覆盖带）时车心限
@@ -1018,24 +1005,27 @@ export class FreeDrive {
      * 只在城内域（z ∈ [plazaZ, gateBackZ]）激活 —— 桥段 / 城门带 / 主殿广场沿用 1D 钳位，
      * z=−250 桥段测试全程零触发，既有 r97/r98/r99/r100 护栏不破（resolveBounds 函数体未改）。 */
     if (nz <= BOUNDS.gateBackZ && nz >= BOUNDS.plazaZ && !driftActive) {
-      // !driftActive 门控与 R101 scrub 同源：主动漂移时轮胎摩擦圆已主导减速，车斜着走过
-      // 占位盒是漂移的正常横向行程，此时再钳 x / 注入 wallImpact / heading 收敛属双重惩罚，
-      // 会破坏漂移手感并拖慢 β 塌缩（free_drift 恢复段实测被钳后 β 半衰 2.05→2.57s、
-      // 多出撞墙假收敛）。漂移是瞬态，出漂移后 2D 收紧立即恢复，穿模窗口极短且玩家主动。
+      // R103 阶段二：块心 1D 已放宽到前脸 14.497 / 殿身 13.997，周期物（柱 11.12 / 连墙墩 /
+      // 角塔墩 11.35）全部下沉到本 2D 层。整层仍 **!driftActive 门控**（含位置钳）——实测若
+      // 漂移态也做位置钳，漂移车滑到前脸（现可达 14.497）会被钉在墙面、heading 不收敛 ⇒
+      // β 永不塌缩、rearGrip 不复原（free_drift 恢复段 β 卡 0.27 / grip 不回 1）。漂移是瞬态，
+      // 出漂移后 2D 立即恢复；漂移中短暂穿越柱/墩窗口极短且玩家主动（R102 同款取舍）。
       const fp = clampToFootprints(s.x, s.z, s.heading);
       if (fp.hit) {
         s.x = fp.x; // 只收紧 x：z 不动（占位盒 x 对称，z 方向无 2D 修正量）
-        const nxSide = fp.nx;
-        const fSide = forwardOf(s.heading);
-        const fnSide = fSide.x * nxSide;
-        // 法向入射强度复用 1D side 同口径 |v|·fn；若 1D 已撞出更大 impactN 则保留较大者
-        const fpImpact = fnSide > 0 ? Math.abs(s.speed) * fnSide : 0;
-        if (fpImpact > (r.impactN ?? 0)) r.impactN = fpImpact;
-        // 仅在 1D 没给 targetHeading 时才补：避免覆盖 resolveBounds 已定的滑行方向
-        if (r.targetHeading === undefined) {
-          r.targetHeading = slideHeading(fSide.x, fSide.z, nxSide, 0);
+        {
+          const nxSide = fp.nx;
+          const fSide = forwardOf(s.heading);
+          const fnSide = fSide.x * nxSide;
+          // 法向入射强度复用 1D side 同口径 |v|·fn；若 1D 已撞出更大 impactN 则保留较大者
+          const fpImpact = fnSide > 0 ? Math.abs(s.speed) * fnSide : 0;
+          if (fpImpact > (r.impactN ?? 0)) r.impactN = fpImpact;
+          // 仅在 1D 没给 targetHeading 时才补：避免覆盖 resolveBounds 已定的滑行方向
+          if (r.targetHeading === undefined) {
+            r.targetHeading = slideHeading(fSide.x, fSide.z, nxSide, 0);
+          }
+          if (r.kind === 'none') r.kind = 'side'; // 沿用 wall 事件 / 刮擦 / 朝向收敛链路
         }
-        if (r.kind === 'none') r.kind = 'side'; // 沿用 wall 事件 / 刮擦 / 朝向收敛链路
       }
     }
     // 速度按 IMPACT_TAU 一阶收敛到「法向吸收 + 切向保留」的目标值（1D / 2D 撞击共用）。

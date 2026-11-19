@@ -74,7 +74,8 @@ describe('R102 ① 占位清单覆盖 probe-bounds §2 六类地面层实体（�
     expect(byKind('cornerBase').length).toBe(20); // 10 块 × 2 座
     expect(byKind('frontBase').length).toBe(20); // 10 块 × 2 座
     expect(byKind('arcadeCol').length).toBe(40); // 10 块 × 4 柱
-    expect(byKind('buttressBase').length).toBe(20); // 10 块 × 2 连墙段
+    // R103 阶段二：连墙墩 20（10 块 × 2 连墙段）+ 角塔墩 4（hero 块 k<2 各 2 座）= 24
+    expect(byKind('buttressBase').length).toBe(24);
   });
 
   it('角塔基座内缘 = 14.9（真源派生，非写死）', () => {
@@ -95,20 +96,20 @@ describe('R102 ① 占位清单覆盖 probe-bounds §2 六类地面层实体（�
     }
   });
 
-  it('建筑前脸 / 前排塔基内缘 = 15.5，殿台基 15.1 / 大理石带 15.25', () => {
+  it('建筑前脸 / 前排塔基 / 殿台基内缘 = 15.5，殿前大理石带 15.0', () => {
     for (const f of byKind('frontWall')) expect(f.xInner).toBeCloseTo(INNER.faceHalf, 12);
     for (const f of byKind('frontBase')) expect(f.xInner).toBeCloseTo(INNER.faceHalf, 12);
     const hallBases = byKind('hallBase');
-    // 殿台基内缘 faceHalf − 0.4 = 15.1；大理石带 faceHalf − 0.25 = 15.25
-    const plinth = hallBases.filter((f) => Math.abs(f.xInner - (INNER.faceHalf - 0.4)) < 1e-9);
-    const marble = hallBases.filter((f) => Math.abs(f.xInner - (INNER.faceHalf - 0.25)) < 1e-9);
+    // R103 修正：殿台基内缘 = faceHalf = 15.5（原误 15.1）；大理石带 = faceHalf − 0.5 = 15.0（原误 15.25）
+    const plinth = hallBases.filter((f) => Math.abs(f.xInner - INNER.faceHalf) < 1e-9);
+    const marble = hallBases.filter((f) => Math.abs(f.xInner - (INNER.faceHalf - 0.5)) < 1e-9);
     expect(plinth.length).toBe(10);
     expect(marble.length).toBe(10);
   });
 
   it('殿台基 z 覆盖殿身 hallW/2 ± 0.7，占位盒居中于块心', () => {
     const plinth = byKind('hallBase').find(
-      (f) => Math.abs(f.xInner - (INNER.faceHalf - 0.4)) < 1e-9
+      (f) => Math.abs(f.xInner - INNER.faceHalf) < 1e-9
     )!;
     expect(plinth.zMin).toBeCloseTo(K0_ZC - TOWER.hallW / 2 - 0.7, 9);
     expect(plinth.zMax).toBeCloseTo(K0_ZC + TOWER.hallW / 2 + 0.7, 9);
@@ -130,13 +131,33 @@ describe('R102 ② clampToFootprints 纯函数（直行 θ=0 回归不变 / 斜�
     expect(fp.x).toBeLessThan(13.897);
   });
 
-  it('直行 θ=0 块心：车心 10.0（车缘 11.003），柱位外 2D 收紧不新增约束', () => {
-    const z = K0_ZC; // −388.5 块心（无柱位 / 无角塔）
-    const x1d = resolveBounds(20, z, HEADING_TO_PLUS_X, 10).x; // 10.0
+  it('直行 θ=0 块心：1D = 殿身包络 13.997，2D 在殿前大理石带 z 收紧到 12.2525', () => {
+    // R103 阶段二：块心 1D 从保守 10.0 放宽到连续墙包络。块心 |z−zc|=0 ≤ CITY_HALL_ZR_EXTENT
+    // ⇒ envelope = 殿前大理石带 15.0 − 半宽 1.003 = 13.997（车心线恰贴大理石带内缘）。
+    // 块心 z 落在殿前大理石带（xInner 15.0，z 覆盖 zc±6.85）内；朝 +X 直行（heading −π/2）时
+    // 车长沿 X ⇒ dx = 半长 2.7475，车 OBB x 伸展 13.997+2.7475 = 16.74 越带内缘 15.0 ⇒ 2D 真相交，
+    // 收紧到 15.0 − 2.7475 = 12.2525（比 1D 包络 13.997 更紧，车头真嵌入大理石带）。
+    const z = K0_ZC; // −388.5 块心
+    const hallCenter = INNER.faceHalf - 0.5 - HALF_W; // 13.997 殿身车心 1D 包络
+    const x1d = resolveBounds(20, z, HEADING_TO_PLUS_X, 10).x;
+    expect(x1d).toBeCloseTo(hallCenter, 12); // 1D 已放宽到殿身包络（非旧 10.0）
     const fp = clampToFootprints(x1d, z, HEADING_TO_PLUS_X);
-    expect(x1d).toBeCloseTo(BOUNDS.arcadeHalfW, 12);
-    expect(fp.x).toBeCloseTo(x1d, 12);
+    expect(fp.hit).toBe(true);
+    expect(fp.kind).toBe('hallBase'); // 殿前大理石带（xInner 15.0）
+    expect(fp.x).toBeCloseTo(INNER.faceHalf - 0.5 - HALF_L, 12); // 15.0 − 2.7475 = 12.2525
+  });
+
+  it('直行 θ=0 块内真空隙（殿前大理石带与首柱之间 z=−378.5）：1D = 前脸包络 14.497，2D 不新增约束', () => {
+    // z=−378.5：殿前大理石带 z ≤ −381.65、首柱 z ≥ −383.2 ⇒ 车长 z 覆盖（heading 0 沿 Z，dz=半长 2.7475）
+    //   [−381.25,−375.75] 落在真空隙（无柱/墩/带）；1D |z−zc|=10 > CITY_HALL_ZR_EXTENT ⇒ 前脸包络 14.497。
+    // 车沿 Z 行驶 ⇒ dx = 半宽 1.003，车缘 14.497+1.003 = 15.5 恰贴建筑前脸线（frontWall 内缘 15.5 不相交）⇒ 2D 不收紧。
+    const z = -378.5;
+    const faceCenter = BOUNDS.cityOpenHalfW - HALF_W; // 14.497 前脸车心包络
+    const x1d = resolveBounds(20, z, 0, 10).x;
+    expect(x1d).toBeCloseTo(faceCenter, 12);
+    const fp = clampToFootprints(x1d, z, 0);
     expect(fp.hit).toBe(false);
+    expect(fp.x).toBeCloseTo(x1d, 12);
   });
 
   it('斜插 θ=30° 飞扶壁墩位：墩比基座更靠内，2D 收到 9.107（不嵌墩）', () => {
@@ -211,34 +232,33 @@ describe('R102 ② clampToFootprints 纯函数（直行 θ=0 回归不变 / 斜�
 
 describe('R102 ③ 车长 z 覆盖采样（2D vs 1D 核心差异）', () => {
   it('车心在钳位线内、车角 bbox 越过基座内缘 ⇒ 2D 收紧、1D 漏过', () => {
-    // 块 0 上边界 −365.5 外侧 0.5 m（z=−365.0，空档角塔带）：角塔基座 z 覆盖 [−368.1,−361.9]
-    // 该 z 无飞扶壁墩（墩只落连墙段中点 lz = ±19.6，此处是块边界外侧空档）⇒ 唯一占位是基座。
-    // 注：z=−365.0 > gateBackZ=−365.5 归城门带，1D resolveBounds 给 tunnelHalfW − 半宽 = 8.997
-    //   （比 2D 紧得多，故不能拿 r1d.x 当 1D「漏过」证据）。我们绕过 1D 直接喂 x=14.5 验证 2D：
-    //   选 z=−364.0（车长 z 覆盖 [−365.0,−363.0]）避开飞扶壁墩（z 覆盖 [−366.1,−364.0]），
-    //   仅命中角塔基座 z 覆盖 [−368.1,−361.9] ⇒ kind='cornerBase'。
-    // θ=0：dx = 半宽 1.003，2D 限 = 14.9 − 1.003 = 13.897 < 14.5 ⇒ hit（车缘 15.503 嵌基座 0.6 m）
-    const z = -364.0;
-    const fp0 = clampToFootprints(14.5, z, 0);
+    // 用非 hero 块 k=3（z∈[−549.5,−503.5]，无角塔飞扶壁墩）隔离角塔基座：基座伸进空档
+    //   z 覆盖 [zmin−2.6, zmin+2.6] = [−506.1,−500.9]。选 z=−503.5（块下边界，车长 z 覆盖
+    //   [−506.25,−500.75] 仅命中角塔基座 ⇒ kind='cornerBase'）。
+    //   不用块 0/1/2：hero 块 k<2 的角塔墩（xInner 11.35）与块 1/2 边界墩恒更紧、会盖过基座。
+    // 绕过 1D 直接喂 x=14.2（> 1D 空档角塔覆盖带收紧线 13.897）验证 2D 越基座场景：
+    // θ=0：dx = 半宽 1.003，2D 限 = 14.9 − 1.003 = 13.897 < 14.2 ⇒ hit（车缘 15.203 嵌基座 0.3 m）
+    const z = -503.5;
+    const fp0 = clampToFootprints(14.2, z, 0);
     expect(fp0.hit).toBe(true);
     expect(fp0.kind).toBe('cornerBase');
     expect(fp0.x).toBeCloseTo(CORNER_BASE_INNER - HALF_W, 12); // 13.897
     // θ=30°：车角 dx=2.243 > 半宽 1.003，2D 收到 14.9 − 2.243 = 12.657（比 θ=0 再紧 1.24 m）
     const h = -Math.PI / 6;
-    const fp30 = clampToFootprints(14.5, z, h);
+    const fp30 = clampToFootprints(14.2, z, h);
     expect(fp30.hit).toBe(true);
     expect(fp30.kind).toBe('cornerBase');
     expect(fp30.x).toBeCloseTo(CORNER_BASE_INNER - dxAt(h), 12); // 12.657
     expect(fp30.x).toBeLessThan(fp0.x); // 2D 看 heading，1D 从不看
   });
 
-  it('飞扶壁墩位 1D 漏过、2D 收紧：车心 10.5 通过 1D（< 11.003 半宽线），2D 收到 10.347', () => {
-    // 块 0 飞扶壁墩世界 z=−408.125，1D resolveBounds 在此 z 给柱位车心限 10.117（柱位 z=−384.1
-    // 不在墩位，故 1D 实际给块心 10.0，比 10.5 更紧 ⇒ 换墩位 z 且 x=10.5 时 1D 不再挡）
+  it('飞扶壁墩位 1D 漏过、2D 收紧：车心 10.5 通过 1D（< 前脸包络 14.497），2D θ=30° 收到 9.107', () => {
+    // R103 阶段二：块心 1D 已放宽到连续墙包络，墩位 |z−zc|=19.625 > CITY_HALL_ZR_EXTENT ⇒ 1D = 前脸 14.497。
+    // 车心 10.5 远在 1D 包络内 ⇒ 1D 完全不挡（这正是设计 B「看不见空隙不挡」的意图：周期墩下沉 2D）。
     const zb = -408.125;
     const r1d = resolveBounds(10.5, zb, 0, 10);
-    expect(r1d.x).toBeCloseTo(BOUNDS.arcadeHalfW, 12); // 10.0 < 10.5 ⇒ 1D 已钳
-    // 直接用 x1d = 10.0 验证 2D 收紧到 11.35 − 1.003 = 10.347（比 1D 松，2D 只收紧不放宽 ⇒ 不动）
+    expect(r1d.x).toBeCloseTo(10.5, 12); // 1D 包络 14.497 > 10.5 ⇒ 1D 不钳、原样放行（这正是「1D 漏过」）
+    // θ=0 直行：2D 车缘 10.0+1.003=11.003 < 墩内缘 11.35 ⇒ 真空隙不收紧
     const fp0 = clampToFootprints(10.0, zb, 0);
     expect(fp0.hit).toBe(false); // 10.0 < 10.347 ⇒ 已在 2D 限内
     // 若车以 θ=30° 斜插（dx=2.243），2D 收到 11.35 − 2.243 = 9.107（10.0 > 9.107 ⇒ hit）
@@ -324,8 +344,9 @@ describe('R102 ⑥ 零改红线：resolveBounds / corridorHalfWidth / corridorCe
       CORNER_BASE_INNER - HALF_W,
       12
     );
+    // R103 阶段二：块心 1D = 连续墙包络（殿身 |z−zc|≤6.85 ⇒ 大理石带 15.0 − 半宽 = 13.997），非旧 10.0
     expect(resolveBounds(20, K0_ZC, HEADING_TO_PLUS_X, 10).x).toBeCloseTo(
-      BOUNDS.arcadeHalfW,
+      INNER.faceHalf - 0.5 - HALF_W,
       12
     );
     expect(resolveBounds(20, -250, HEADING_TO_PLUS_X, 10).x).toBeCloseTo(

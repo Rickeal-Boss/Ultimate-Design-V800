@@ -13,7 +13,8 @@
  *
  * 本文件钉：
  *   ① 桥 z=0 / 门洞 z=−358.5 / 空档 z=−600 / 广场 z=−1290 的车缘 ≤ 对应可见面线；
- *   ② 块心 z=−388.5 的车心限仍 10.0（R97 现状不变）；
+ *   ② 块心 z=−388.5 的车心限 = 殿身连续墙包络 13.997（R103 阶段二，车缘 15.0 贴大理石带）；
+ *      块角 3m 过渡（R99）从基座 13.897 衔接到 dc≥3 的连续墙包络（殿身/前脸）；
  *   ③ resolveBounds 撞侧墙后 x 等于新车心限；
  *   ④ corridorHalfWidth / BOUNDS 逐位不变（CameraRig 与 r97 测试依赖）。
  *
@@ -32,6 +33,13 @@ import { INNER, VIADUCT } from '../src/render/scene/r28Layout';
 
 /** 车半宽真源（physics.ts，勿写死） */
 const CAR_HALF_W = VEHICLE.widthM / 2; // 1.003
+
+/** 殿前大理石带单侧宽（castleKit.ts:3156 box(0.5)）⇒ 内缘 15.0（R103 阶段二殿身连续墙） */
+const MARBLE_BAND = 0.5;
+const HALL_MARBLE_INNER = INNER.faceHalf - MARBLE_BAND; // 15.0
+const HALL_ENVELOPE = HALL_MARBLE_INNER - CAR_HALF_W; // 13.997 殿身车心限
+/** 建筑前脸 / 空档开放车心限 = cityOpenHalfW − 车半宽 = 14.497（R103 阶段二前脸连续墙包络） */
+const OPEN_CAR_CENTER = BOUNDS.cityOpenHalfW - CAR_HALF_W;
 
 /** 各段可见面线真源：桥面 / 门墩内缘 / 街侧建筑前脸线（勿写死） */
 const FACE_LINE = {
@@ -70,16 +78,17 @@ describe('R98 ① 车缘不越可见面线（桥 / 门 / 空档 / 广场）', ()
   });
 });
 
-describe('R98 ② 块区车心限（块心 R97 不变 / 块角 R99 分离）', () => {
-  it('块心 z=−388.5 车心限仍 10.0（车缘 11.003 < 柱内缘 11.12）', () => {
+describe('R98 ② 块区车心限（R103 阶段二：块心=连续墙包络 / 块角 R99 分离）', () => {
+  it('块心 z=−388.5 车心限 = 殿身连续墙包络 13.997（车缘 15.0 贴大理石带）', () => {
     expect(CAR_HALF_W).toBeCloseTo(1.003, 12);
+    // corridorHalfWidth 面线仍是抽象块心 10.0（CameraRig 依赖，逐位不变）
     expect(corridorHalfWidth(-388.5)).toBe(10.0);
-    expect(corridorCenterHalfWidth(-388.5)).toBe(10.0); // 与 R97 逐位一致，不扣
-    expect(corridorCenterHalfWidth(-388.5)).toBe(BOUNDS.arcadeHalfW);
-    expect(carEdge(-388.5)).toBeCloseTo(11.003, 12);
+    // 车心限改为殿身连续墙包络：殿前大理石带 15.0 − 车半宽（zr=0 ≤ 6.85 → 殿身）
+    expect(corridorCenterHalfWidth(-388.5)).toBeCloseTo(HALL_ENVELOPE, 12);
+    expect(carEdge(-388.5)).toBeCloseTo(HALL_MARBLE_INNER, 12); // 15.0 贴大理石带
   });
 
-  it('块边界 3m 过渡（R99）：角点车缘贴基座 14.9、dc≥3 回 10.0、corridorHalfWidth 不变', () => {
+  it('块边界 3m 过渡（R99/R103）：角点车缘贴基座 14.9、dc≥3 回连续墙包络、corridorHalfWidth 不变', () => {
     // k=0 块 [-411.5, -365.5]：过渡区 −411.5..−408.5 / −368.5..−365.5。
     // 上边界 −365.5 与 gateBackZ 重合，按分段顺序归「城门带」，单独在下一例钉死。
     // R99：过渡外端点由抽象面线 15.5 改为可见角塔大理石基座内缘 14.9
@@ -92,14 +101,18 @@ describe('R98 ② 块区车心限（块心 R97 不变 / 块角 R99 分离）', (
     expect(carEdge(-411.5)).toBeCloseTo(CORNER_INNER, 12);
     expect(carEdge(-411.5)).toBeLessThanOrEqual(CORNER_INNER + 1e-9);
 
-    // dc≥3：回到 R97 块心 10.0（车缘 11.003 < 柱内缘 11.12）
-    expect(corridorCenterHalfWidth(-408.5)).toBe(BOUNDS.arcadeHalfW);
-    expect(corridorCenterHalfWidth(-368.5)).toBe(BOUNDS.arcadeHalfW);
-    expect(carEdge(-408.5)).toBeCloseTo(11.003, 12);
+    // dc<3 角过渡中点（dc=1.5）：从基座 13.897 线性放宽到 dc=3 处的前脸包络 14.497
+    //   下角 zr=23 → 前脸包络；(13.897+14.497)/2 = 14.197
+    expect(corridorCenterHalfWidth(-410)).toBeCloseTo((CORNER_CENTER + OPEN_CAR_CENTER) / 2, 12);
 
-    // 整段过渡车缘始终不越可见基座内缘
-    for (const z of [-411.5, -409.5, -408.5, -368.5, -366.5]) {
-      expect(carEdge(z)).toBeLessThanOrEqual(CORNER_INNER + 1e-9);
+    // dc≥3：回到块心连续墙包络（−408.5/−368.5 zr=20 > 6.85 → 前脸 14.497，非旧 10.0）
+    expect(corridorCenterHalfWidth(-408.5)).toBeCloseTo(OPEN_CAR_CENTER, 12);
+    expect(corridorCenterHalfWidth(-368.5)).toBeCloseTo(OPEN_CAR_CENTER, 12);
+    expect(carEdge(-408.5)).toBeCloseTo(INNER.faceHalf, 12); // 15.5 贴前脸
+
+    // 整段车缘始终不越可见建筑前脸线 15.5（角点贴基座 14.9、过渡/块心 ≤ 前脸 15.5）
+    for (const z of [-411.5, -410, -409.5, -408.5, -368.5, -366.5]) {
+      expect(carEdge(z)).toBeLessThanOrEqual(INNER.faceHalf + 1e-9);
     }
 
     // corridorHalfWidth 逐位不变：角点仍是抽象面线 15.5（CameraRig 依赖）
@@ -145,9 +158,9 @@ describe('R98 ③ resolveBounds 撞侧墙后 x = 新车心限', () => {
     });
   }
 
-  it('块心撞侧墙后 x 仍等于 R97 的 10.0（块区没被误扣）', () => {
+  it('块心撞侧墙后 x = 殿身连续墙包络 13.997（块区不再钉 10.0）', () => {
     const r = resolveBounds(20, -388.5, headingToPlusX, 10);
-    expect(r.x).toBeCloseTo(10.0, 12);
+    expect(r.x).toBeCloseTo(HALL_ENVELOPE, 12);
     expect(r.kind).toBe('side');
   });
 });

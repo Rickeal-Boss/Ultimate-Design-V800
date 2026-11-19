@@ -50,10 +50,10 @@ const CORNER_EDGE_INSET = 0.5;
 /** 前排塔基 castleKit.ts:3254 `box(9.4, 1.2, 9.4, depth/2, …)`，depth = 8（:3078）⇒ 局部 x∈[0,4.7] */
 const FRONT_TOWER_DEPTH = 4.7;
 const FRONT_TOWER_BASE_INNER = INNER.faceHalf; // 15.5（塔基不越前脸）
-/** 殿台基 castleKit.ts:3152 `box(depth+0.8, …, depth/2+0.4, …)` ⇒ 局部 x∈[−0.4, depth+0.4] */
-const HALL_PLINTH_INNER = INNER.faceHalf - 0.4; // 15.1
-/** 殿前大理石带 castleKit.ts:3156 `box(0.5, 1.2, …, −0.25, …)` ⇒ 世界 |x|∈[15.25, 15.75] */
-const HALL_MARBLE_INNER = INNER.faceHalf - 0.25; // 15.25
+/** 殿台基 castleKit.ts:3152 `box(depth+0.8, …, depth/2+0.4, …)` ⇒ 局部 x∈[0, depth+0.8] ⇒ 世界内缘 = faceHalf */
+const HALL_PLINTH_INNER = INNER.faceHalf; // 15.5（R103 修正：原误写 faceHalf−0.4=15.1）
+/** 殿前大理石带 castleKit.ts:3156 `box(0.5, 1.2, …, −0.25, …)` ⇒ 局部 x∈[−0.5,0] ⇒ 世界 |x|∈[15.0,15.5] */
+const HALL_MARBLE_INNER = INNER.faceHalf - 0.5; // 15.0（R103 修正：原误取中心 faceHalf−0.25=15.25）
 /** 建筑前脸 / 连墙内缘（ castleKit.ts:4121-4131 / :3158） */
 const FRONT_WALL_INNER = INNER.faceHalf; // 15.5
 /** 拱廊柱内缘（FreeDrive.ARCADE_COL_INNER 同源公式；R30_ARCADE:307 + castleDetail:1397/1410） */
@@ -88,7 +88,8 @@ const LINK_WALL_SEGS: ReadonlyArray<readonly [number, number]> = [
  */
 export function buildCityFootprints(): CityFootprint[] {
   const list: CityFootprint[] = [];
-  for (const [zmin, zmax] of CITY_BLOCK_Z) {
+  for (let k = 0; k < CITY_BLOCK_Z.length; k += 1) {
+    const [zmin, zmax] = CITY_BLOCK_Z[k];
     const zc = (zmin + zmax) / 2;
     const half = (zmax - zmin) / 2; // 23
 
@@ -170,9 +171,22 @@ export function buildCityFootprints(): CityFootprint[] {
         kind: 'buttressBase'
       });
     }
-    // ⑥b 角塔飞扶壁外墩（hero 块 only；z 同角塔中心，内缘 11.35 比基座 14.9 靠内得多
-    //     ⇒ 基座裙 14.9 已挡车，v1 不单列避免双计；若未来放宽 1D 钳位再启用）
-    void BUTTRESS_CORNER_INNER;
+    // ⑥b 角塔飞扶壁外墩（hero 块 k<2 only；z 同角塔中心 zc±(half−0.5)，内缘 11.35）。
+    //    R103 阶段二启用：块心 1D 已放宽到前脸 14.497 / 殿身 13.997，角塔基座裙 14.9 不再
+    //    兜住 11.35 的外墩（车可停在 11.35~14.9 之间）⇒ 必须单列为 2D 占位，否则 hero 块
+    //    角塔处穿模。非 hero 块（k≥2）渲染端不建此外墩 ⇒ 不占位（避免假空气墙）。
+    if (k < 2) {
+      for (const sign of [-1, 1] as const) {
+        const cz = zc + sign * (half - CORNER_EDGE_INSET);
+        list.push({
+          xInner: BUTTRESS_CORNER_INNER,
+          xOuter: INNER.faceHalf - R97_CITY_BUTTRESS.cornerReach,
+          zMin: cz - BUTTRESS_Z_HALF,
+          zMax: cz + BUTTRESS_Z_HALF,
+          kind: 'buttressBase'
+        });
+      }
+    }
   }
   return list;
 }
