@@ -137,6 +137,16 @@ function ensureSelectStyle(): void {
   font-size: 11.5px;
   line-height: 1.65;
   opacity: .9;
+  /* R98: 差异列表按字断行，长英文/数字串不顶破卡片（不动布局/颜色/字号） */
+  overflow-wrap: anywhere;
+  word-break: normal;
+  white-space: normal;
+  line-break: strict;
+}
+.vehicle-card .vc-diff li {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
 }
 .vehicle-card .vc-tag {
   display: inline-block;

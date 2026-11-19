@@ -13,15 +13,17 @@
  *   three.js `rotation.y = h` 作用于 (0,0,−1) 的结果正是 (−sin h, 0, −cos h)。
  *   heading 增大 = 车头向 −X 转 = 玩家视角的左转（面向 −Z、右手系，右 = +X）。
  *
- * 边界（世界坐标，不依赖物理引擎，保证不穿墙不掉桥）：
- *   · 御桥段：|x| ≤ 12.0（桥沿，防坠峡谷）
- *   · 城门带：|x| ≤ 10.0（门墩内缘）
- *   · 城内块区：|x| ≤ 10.0（拱廊柱列净空，车缘 11.003 < 柱内缘 11.12）
- *   · 城内空档 / 主殿广场：|x| ≤ 15.5（**可见建筑前脸线**，非空气墙；车被挡在建筑线内）
+ * 边界（世界坐标，不依赖物理引擎，保证不穿墙不掉桥；R98 起列出的是**车心**限）：
+ *   · 御桥段：|x| ≤ 12.0 − 车半宽 = 10.997（车缘 12.0 < 桥面 12.6，防坠峡谷）
+ *   · 城门带：|x| ≤ 10.0 − 车半宽 = 8.997（车缘 9.0 < 门墩内缘 10.0，防穿门墩）
+ *   · 城内块区：|x| ≤ 10.0（R97 已按车缘净空标定，车缘 11.003 < 柱内缘 11.12，不再扣）
+ *   · 城内空档 / 主殿广场：|x| ≤ 15.5 − 车半宽 = 14.497（**车缘贴可见建筑前脸线**，非空气墙）
  *   · z 钳位 [−1297, 70]
  *   · 主殿正面 z ≤ −1297.5 且 |x| < 24 → 停车 + 轻微后退弹开（事件 'hall'）
  */
 import { BRAKE, MS_TO_KMH, VEHICLE } from '../config/physics';
+// R98：车身回正阻尼抽成独立配置（6/4 → 3.8/3.2），漂移灵魂参数与纵向力不受影响。
+import { FREE_BODY_DAMPING } from '../config/freeBodyFeel';
 import { dragForce, motorForce, rollForce } from '../physics/Vehicle';
 import { clamp, damp } from '../util/math';
 // B6 a11y（R30-D2）：与 Sliders.onKey 共用「交互目标放行」判据（同一定义，
@@ -184,6 +186,32 @@ export function corridorHalfWidth(z: number): number {
   }
   return BOUNDS.cityOpenHalfW; // 空档：开放到建筑前脸线 15.5（免空气墙）
 }
+
+/**
+ * R98 纯函数：当前 z 处的**车心**可行驶半宽 =「车缘不越可见面线」的钳位值。
+ *
+ * 为什么要另起函数、而不改 corridorHalfWidth：后者返回的是**可见面线**半宽，
+ * CameraRig（相机钳位）与 r97_bounds_clearance 测试都依赖它逐位不变。
+ *
+ * 分段口径（与 corridorHalfWidth 的分段顺序严格镜像）：
+ *   - 城内块区（CITY_BLOCK_Z 区间，含块边界 3m 过渡）：R97 已把 arcadeHalfW 收到 10.0，
+ *     并按**车缘**净空标定（车缘 11.003 < 拱廊柱内缘 11.12）—— 该值本身就是车心限，
+ *     故保持 R97 现状，**不**再扣车半宽。
+ *   - 其它段（御桥 / 城门洞 / 城内空档 / 主殿广场）：corridorHalfWidth 返回的仍是
+ *     可见面线（桥面保守内缩 12.0 / 门墩内缘 10.0 / 建筑前脸线 15.5 / 广场 15.5），
+ *     R97 直接拿它当车心限 ⇒ 车缘越面线穿模。此处扣掉车半宽 VEHICLE.widthM/2 (=1.003)，
+ *     使车缘 ≤ 可见面线。
+ */
+export function corridorCenterHalfWidth(z: number): number {
+  if (z >= BOUNDS.gateFrontZ) return corridorHalfWidth(z) - VEHICLE.widthM / 2; // 御桥
+  if (z >= BOUNDS.gateBackZ) return corridorHalfWidth(z) - VEHICLE.widthM / 2; // 城门带
+  if (z <= BOUNDS.plazaZ) return corridorHalfWidth(z) - VEHICLE.widthM / 2; // 主殿广场
+  for (const [zmin, zmax] of CITY_BLOCK_Z) {
+    if (z >= zmin && z <= zmax) return corridorHalfWidth(z); // 块区（含 3m 过渡）：R97 车心限不变
+  }
+  return corridorHalfWidth(z) - VEHICLE.widthM / 2; // 空档：建筑前脸线扣车半宽
+}
+
 /** 自由探索起点：城门外（城门洞 z = −358.5）以北 28.5 m，车头朝城门 */
 export const FREE_START = Object.freeze({ x: 0, z: -330, heading: 0 });
 
@@ -373,8 +401,8 @@ export function resolveBounds(
     }
   }
 
-  // ③ 侧向护栏（御桥段 / 城内段半宽不同）
-  const halfW = corridorHalfWidth(z);
+  // ③ 侧向护栏（R98：块区保持 R97 车心限；其它段按可见面线扣车半宽，车缘不越面线）
+  const halfW = corridorCenterHalfWidth(z);
   if (Math.abs(x) > halfW) {
     const nx = x >= 0 ? 1 : -1;
     x = nx * halfW;
@@ -700,9 +728,9 @@ export class FreeDrive {
       -FREE.rollMaxRad,
       FREE.rollMaxRad
     );
-    s.roll = damp(s.roll, rollTarget, 6, dt);
+    s.roll = damp(s.roll, rollTarget, FREE_BODY_DAMPING.roll, dt);
     const pitchTarget = clamp(s.accel * FREE.pitchPerAccel, -FREE.pitchMaxRad, FREE.pitchMaxRad);
-    s.pitch = damp(s.pitch, pitchTarget, 4, dt);
+    s.pitch = damp(s.pitch, pitchTarget, FREE_BODY_DAMPING.pitch, dt);
     s.odometer += Math.abs(vAvg) * dt;
 
     // ---- 事件去抖 ----

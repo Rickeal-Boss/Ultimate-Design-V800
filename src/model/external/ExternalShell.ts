@@ -407,7 +407,11 @@ export const R62_PAINT_CLEARCOAT_ROUGH = r56HashNum('r62clearcoatrough') ?? 0.12
  *   逐 chunk 的进度刷新改走独立的 `shellHudProgress`（~200ms 节流）。
  */
 const SHELL_HUD_ID = 'r44-shell-hud';
-function shellHud(text: string | null, tone: 'info' | 'ok' | 'err' = 'info'): void {
+/**
+ * R98：导出给 YangwangAdapter 复用 —— 仰望单 GLB 与 V800/R7 共用**同一条** HUD 状态条，
+ * 避免两套 DOM 文案实现漂移。签名/语义零改动（ six call sites 仍逐位不变）。
+ */
+export function shellHud(text: string | null, tone: 'info' | 'ok' | 'err' = 'info'): void {
   if (typeof document === 'undefined') return;
   let el = document.getElementById(SHELL_HUD_ID) as HTMLDivElement | null;
   if (!text) { el?.remove(); return; }
@@ -429,11 +433,14 @@ function shellHud(text: string | null, tone: 'info' | 'ok' | 'err' = 'info'): vo
 const shellBytesByCar: Record<ExternalCarId, number> = { v800: 0, r7: 0 };
 
 let hudTimer: ReturnType<typeof setTimeout> | null = null;
-let hudPendingCar: ExternalCarId | null = null;
+let hudPendingCar: ExternalCarId | 'yangwang' | null = null;
 let hudPendingBytes = 0;
 
-/** 加载完成 / 取消 / 失败时清掉节流定时器 ⇒ 绝不在 L544 移除节点后残留回调重建幽灵进度条 */
-function clearHudThrottle(): void {
+/**
+ * 加载完成 / 取消 / 失败时清掉节流定时器 ⇒ 绝不在 L544 移除节点后残留回调重建幽灵进度条。
+ * R98：导出给 YangwangAdapter 在 GLB 终态（就绪/取消/失败/dispose）同样清理。
+ */
+export function clearHudThrottle(): void {
   if (hudTimer !== null) {
     clearTimeout(hudTimer);
     hudTimer = null;
@@ -450,7 +457,7 @@ function clearHudThrottle(): void {
  * ⚠ 不经过 shellHud：原函数会无条件写 `style.color`/`textContent`，这里把这两行
  *   一并挪进节流块（每 chunk 只做纯数值累加，不做 DOM/CSSOM 写）。
  */
-function shellHudProgress(car: ExternalCarId, bytes: number): void {
+export function shellHudProgress(car: ExternalCarId | 'yangwang', bytes: number): void {
   if (typeof document === 'undefined') return;
   if (!document.getElementById(SHELL_HUD_ID)) return;
   hudPendingCar = car;

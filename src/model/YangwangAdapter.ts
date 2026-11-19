@@ -21,6 +21,14 @@ import { createYangwangDetails, YANGWANG_DETAIL_IDLE } from './parts/yangwangFro
 import { setFxWheelOffsets } from '../fx';
 import { damp } from '../util/math';
 import type { QualityTier } from '../config/quality';
+import {
+  SHELL_TOTAL_MB,
+  isHighDetailEnabled,
+  isShellLoadCancelled,
+  onShellCancel,
+  shellCancelReason
+} from '../config/highDetail';
+import { clearHudThrottle, shellHud, shellHudProgress } from './external/ExternalShell';
 
 export type { CarLike, WheelPivot };
 
@@ -42,14 +50,30 @@ const HUBS_NATIVE: ReadonlyArray<readonly [number, number, number]> = [
 const DETAIL_IDLE = YANGWANG_DETAIL_IDLE;
 const clamp01 = (v: number): number => Math.min(1, Math.max(0, v));
 
-/** Game.pollShellGate 读的 window.__r44Shell 台账；model 层不 import config/ExternalShell。 */
-type ShellLedger = Record<string, { state?: string }>;
-function setYangwangShellState(state: 'loading' | 'ready' | 'failed'): void {
+/**
+ * Game.pollShellGate / Menu.shellReady 读的 `window.__r44Shell.yangwang` 台账。
+ * R98 扩 `bytes/total/error`（40MB 口径），与 V800/R7 的 ExternalShellStatus 同语义。
+ *
+ * ⚠ 写入一律**原地合并**：浏览器里 `window.__r44Shell` 就是 ExternalShell 的
+ *   `r44ShellStatus` 单例引用；整体替换会令 v800/r7 台账瞬间与探针脱钩。
+ *   Node/无 window 直接 return —— 零 DOM、零网络。
+ */
+type YangwangShellStatus = {
+  state?: 'loading' | 'ready' | 'failed' | 'cancelled';
+  bytes?: number;
+  total?: number;
+  error?: string;
+};
+function setYangwangShellStatus(patch: YangwangShellStatus): void {
   if (typeof window === 'undefined') return;
-  const host = window as unknown as { __r44Shell?: ShellLedger };
-  const prev = host.__r44Shell ?? {};
-  // 浅合并：v800/r7 两个 key 原样保留，绝不覆盖其他车的装载态。
-  host.__r44Shell = { ...prev, yangwang: { ...(prev.yangwang ?? {}), state } };
+  const host = window as unknown as { __r44Shell?: Record<string, YangwangShellStatus> };
+  const table = host.__r44Shell;
+  if (table && typeof table === 'object') {
+    // v800/r7 两个 key 原样保留，只写 yangwang 子系统。
+    table.yangwang = { ...(table.yangwang ?? {}), ...patch };
+  } else {
+    host.__r44Shell = { yangwang: { ...patch } };
+  }
 }
 
 /**
@@ -204,70 +228,132 @@ export function createYangwangCarAdapter(tier: QualityTier = 'high', paintId: st
   let lastClusterAt = -1;
   const bodyMaterials = new Set<THREE.Material>();
 
-  // GLB 异步装载；Node/测试环境不触发网络，保持 fallback 壳可构造。
+  // R98 · 高精度 GLB 反馈链路（与 V800/R7 同构）：偏好门禁 / 统一停止按钮 / 统一 HUD 进度。
+  // Node/测试环境（typeof window === 'undefined'）整段跳过：零网络、零 DOM、零订阅。
+  const YANGWANG_GLB_TOTAL_BYTES = SHELL_TOTAL_MB.yangwang * 1024 * 1024; // 40MB 口径
+  let unsubscribeShellCancel: (() => void) | null = null;
+  let glbLoadedBytes = 0;
   if (typeof window !== 'undefined') {
-    const loader = new GLTFLoader();
-    const url = new URL('../assets/cars/yangwang/yangwang.glb', import.meta.url).href;
-    loader.load(
-      url,
-      (gltf) => {
-        if (disposed) {
-          disposeGltf(gltf.scene);
-          return;
-        }
-        // P0：GLB 已解析、尚未挂树 ⇒ 台账先置 loading（Game 加载门主路径读此表）。
-        setYangwangShellState('loading');
-        const bodyNode = gltf.scene.getObjectByName('yangwang-body');
-        if (bodyNode) {
-          bodyNode.traverse((o) => {
-            const mesh = o as THREE.Mesh;
-            if (!mesh.isMesh) return;
-            // P0：Game.hasMountedExternalShell 靠此标记确认 GLB 真已挂树（与 V800/R7 同构）。
+    // ① 加载前门禁：偏好关闭 / 用户已停止 ⇒ 零 fetch、保持香槟金 fallback、台账 cancelled。
+    //    （v800 28MB 外壳由 interiorOnly 早退保证永不下载，本分支不触发任何下载。）
+    if (!isHighDetailEnabled() || isShellLoadCancelled()) {
+      setYangwangShellStatus({
+        state: 'cancelled',
+        bytes: 0,
+        total: YANGWANG_GLB_TOTAL_BYTES,
+        error: `default procedural (${shellCancelReason() ?? 'preference'})`
+      });
+      shellHud('已按设置使用默认车模（未下载高精度车模）', 'ok');
+    } else {
+      let cancelled = false;
+      const loader = new GLTFLoader();
+      const url = new URL('../assets/cars/yangwang/yangwang.glb', import.meta.url).href;
+      // ② 订阅统一停止信号：点「停止下载」⇒ 取消标记 + 台账 cancelled + HUD 文案；
+      //    onLoad 迟到也不挂树（直接 dispose），香槟金 fallback 保持可见。
+      const unsubscribe = onShellCancel((reason) => {
+        if (disposed || cancelled) return;
+        cancelled = true;
+        setYangwangShellStatus({
+          state: 'cancelled',
+          bytes: glbLoadedBytes,
+          total: YANGWANG_GLB_TOTAL_BYTES,
+          error: `cancelled by ${reason}`
+        });
+        clearHudThrottle();
+        shellHud('已停止下载高精度模型 · 当前使用默认车模', 'ok');
+      });
+      unsubscribeShellCancel = unsubscribe;
+      setYangwangShellStatus({ state: 'loading', bytes: 0, total: YANGWANG_GLB_TOTAL_BYTES });
+      clearHudThrottle();
+      shellHud(`高精度车模加载中 · 正在连接…（首次加载约 ${SHELL_TOTAL_MB.yangwang} MB）`);
+
+      /** 终态统一收口：注销订阅 + 清 HUD 节流；true = 本回调须提前退出（已取消/dispose）。 */
+      const settle = (): boolean => {
+        unsubscribe();
+        unsubscribeShellCancel = null;
+        clearHudThrottle();
+        return disposed || cancelled;
+      };
+
+      loader.load(
+        url,
+        (gltf) => {
+          if (settle()) {
+            disposeGltf(gltf.scene);
+            return;
+          }
+          const bodyNode = gltf.scene.getObjectByName('yangwang-body');
+          if (bodyNode) {
+            bodyNode.traverse((o) => {
+              const mesh = o as THREE.Mesh;
+              if (!mesh.isMesh) return;
+              // P0：Game.hasMountedExternalShell 靠此标记确认 GLB 真已挂树（与 V800/R7 同构）。
+              (mesh.userData as { r44External?: boolean }).r44External = true;
+              const arr = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+              for (const mat of arr) bodyMaterials.add(mat);
+            });
+            shell.add(bodyNode);
+          }
+          for (let i = 0; i < 4; i++) {
+            const tag = ['wheel-fl', 'wheel-fr', 'wheel-rl', 'wheel-rr'][i];
+            const node = gltf.scene.getObjectByName(tag);
+            const src = node
+              ? (((node as THREE.Mesh).isMesh
+                  ? node
+                  : node.children.find((c) => (c as THREE.Mesh).isMesh)) as
+                  | THREE.Mesh
+                  | undefined)
+              : undefined;
+            if (!src) continue;
+            // 烘焙时轮几何已 hub 居中；清掉源节点平移，避免 anchor 上二次位移。
+            const mesh = new THREE.Mesh(src.geometry, src.material);
+            mesh.name = `${tag}-runtime`;
             (mesh.userData as { r44External?: boolean }).r44External = true;
-            const arr = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-            for (const mat of arr) bodyMaterials.add(mat);
+            mesh.position.set(0, 0, 0);
+            mesh.rotation.set(0, 0, 0);
+            mesh.scale.set(1, 1, 1);
+            rigs[i].spin.add(mesh);
+            rigs[i].loaded = mesh;
+            rigs[i].fallback.visible = false;
+          }
+          fallbackBody.visible = false;
+          applyPaintVariant(bodyMaterials, paintId);
+          shellReady = true;
+          setYangwangShellStatus({
+            state: 'ready',
+            bytes: glbLoadedBytes,
+            total: YANGWANG_GLB_TOTAL_BYTES
           });
-          shell.add(bodyNode);
-        }
-        for (let i = 0; i < 4; i++) {
-          const tag = ['wheel-fl', 'wheel-fr', 'wheel-rl', 'wheel-rr'][i];
-          const node = gltf.scene.getObjectByName(tag);
-          const src = node
-            ? (((node as THREE.Mesh).isMesh
-                ? node
-                : node.children.find((c) => (c as THREE.Mesh).isMesh)) as
-                | THREE.Mesh
-                | undefined)
-            : undefined;
-          if (!src) continue;
-          // 烘焙时轮几何已 hub 居中；清掉源节点平移，避免 anchor 上二次位移。
-          const mesh = new THREE.Mesh(src.geometry, src.material);
-          mesh.name = `${tag}-runtime`;
-          (mesh.userData as { r44External?: boolean }).r44External = true;
-          mesh.position.set(0, 0, 0);
-          mesh.rotation.set(0, 0, 0);
-          mesh.scale.set(1, 1, 1);
-          rigs[i].spin.add(mesh);
-          rigs[i].loaded = mesh;
-          rigs[i].fallback.visible = false;
-        }
-        fallbackBody.visible = false;
-        applyPaintVariant(bodyMaterials, paintId);
-        shellReady = true;
-        setYangwangShellState('ready');
-        setFxWheelOffsets(
-          HUBS_NATIVE.map(([x, , z]) => [-x * SHELL_SCALE, -z * SHELL_SCALE] as const)
-        );
-      },
-      undefined,
-      () => {
-        // 缺资产时静默保留 fallback 壳；不把本机路径/网络细节写进日志。
-        if (!disposed) {
+          setFxWheelOffsets(
+            HUBS_NATIVE.map(([x, , z]) => [-x * SHELL_SCALE, -z * SHELL_SCALE] as const)
+          );
+          shellHud('高精度车模已就绪', 'ok');
+          globalThis.setTimeout(() => shellHud(null), 4000);
+        },
+        (event: ProgressEvent) => {
+          // ③ onProgress：统一 HUD 进度 + 台账 bytes/total（40MB 口径），逐块刷新。
+          if (disposed || cancelled) return;
+          const loaded = typeof event?.loaded === 'number' ? event.loaded : 0;
+          glbLoadedBytes = Math.max(glbLoadedBytes, loaded);
+          setYangwangShellStatus({ bytes: glbLoadedBytes, total: YANGWANG_GLB_TOTAL_BYTES });
+          shellHudProgress('yangwang', glbLoadedBytes);
+        },
+        (err: unknown) => {
+          if (settle()) return;
+          // ③ 失败不再静默：可读 HUD 文案 + 台账 error，香槟金 fallback 保持不变。
           shellReady = false;
-          setYangwangShellState('failed');
+          const msg = err instanceof Error ? err.message : String(err);
+          setYangwangShellStatus({
+            state: 'failed',
+            bytes: glbLoadedBytes,
+            total: YANGWANG_GLB_TOTAL_BYTES,
+            error: msg.slice(0, 200)
+          });
+          shellHud(`高精度车模加载失败，当前显示简化外观 · ${msg.slice(0, 90)}`, 'err');
+          console.warn('[Yangwang] GLB 装载失败，保持香槟金兜底外观：', err);
         }
-      }
-    );
+      );
+    }
   }
 
   const applyVisibility = (state: CarVisibilityState): void => {
@@ -348,6 +434,10 @@ export function createYangwangCarAdapter(tier: QualityTier = 'high', paintId: st
     dispose(): void {
       if (disposed) return;
       disposed = true;
+      // R98：dispose 亦属加载终态 —— 注销取消订阅 + 清 HUD 节流，杜绝残留回调重建幽灵进度条。
+      unsubscribeShellCancel?.();
+      unsubscribeShellCancel = null;
+      clearHudThrottle();
       v800.dispose();
       root.traverse((o) => {
         // V800 内饰子树由 v800.dispose() 自有释放链处理，避免二次 dispose。

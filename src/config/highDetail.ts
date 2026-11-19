@@ -20,10 +20,14 @@ export type ShellCancelReason = 'user' | 'preference';
  * 各车高精度资产总量（MB，解压后口径）—— HUD 进度文案与菜单恢复文案的**单一真源**。
  * 实测：v800 ≈48M（body 38M + glass 6M + 语义件/贴图），r7 ≈47M（body 27M + 双轮 15.1M + …）。
  * 取代 R45 写死的「首次加载约 45 MB」（REPORT_PHASE1B.md §1.3 感知源 ③）。
+ *
+ * R98：仰望单 GLB ≈40MB 亦纳入本表，令 YangwangAdapter 复用 ExternalShell 的统一 HUD
+ * 进度函数（`shellHudProgress` 读本表算总量口径），不再各写一套 MB 文案。
  */
-export const SHELL_TOTAL_MB: Readonly<Record<'v800' | 'r7', number>> = {
+export const SHELL_TOTAL_MB: Readonly<Record<'v800' | 'r7' | 'yangwang', number>> = {
   v800: 48,
-  r7: 47
+  r7: 47,
+  yangwang: 40
 };
 
 const STORAGE_KEY = 'v800.highDetail';
