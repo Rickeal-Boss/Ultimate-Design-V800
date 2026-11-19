@@ -58,7 +58,10 @@ describe('R101 wall scrub ① 撞后松油：切向刮擦把车快速刮停（�
     const fd = driveToWallHeading(heading, 55.56); // 200 km/h
     // 撞墙当帧切向速度仍高（切向 100% 保留的分解值），刮擦从下一帧起作用
     const v0 = Math.abs(fd.state.speed);
-    expect(v0).toBeGreaterThan(50); // 斜擦几乎不减总速（旧机制），当帧仍 >50 m/s
+    // R106 撞墙首帧法向速度骤降：fn≈0.3 斜擦扣掉入射法向分量的 KICK_RATIO(0.4) ⇒ 当帧从
+    // 旧 ~53 降到 ~48.7（仍高、非硬切）。切向刮擦从下一帧起作用，总速单调降到 <0.1 的
+    // 意图不变。阈值随新手感从 >50 重钉到 >48。
+    expect(v0).toBeGreaterThan(48); // 斜擦几乎不减总速（旧机制），当帧仍 >48 m/s
     // 松油持续 step：刮擦 scrub=min(55.56×0.3×0.8,12)=12 m/s² 持续耗散
     let dist = 0;
     let prev = Math.abs(fd.state.speed);
@@ -118,11 +121,13 @@ describe('R101 wall scrub ③ 轻擦(fn≈0.1)：scrub≈1.6 不瞬间刹停（�
   });
 });
 
-describe('R101 wall scrub ④ 撞墙当帧 speed 不破 r99 语义', () => {
-  it('撞墙当帧 speed 仍 >19（scrub 当帧未生效，单帧仅 12×(1/120)=0.1）', () => {
+describe('R101 wall scrub ④ 撞墙当帧 speed 不破 r99 语义（R106 首帧顿挫后仍保留切向）', () => {
+  it('撞墙当帧 speed 仍 >18（R106 首帧扣一记法向分量，斜擦 fn≈0.199 当帧 ~18.36，非硬切）', () => {
     const heading = -0.2; // 与 r99 同：fn≈0.1987
     const fd = driveToWallHeading(heading, 20);
-    expect(fd.state.speed).toBeGreaterThan(19); // 撞墙当帧切向保留，未被 scrub 破坏
+    // R106：当帧扣掉入射法向分量的 KICK_RATIO(0.4) ⇒ ~18.36（旧 ~19.73）。仍远高于 0，
+    // 切向保留 + 法向只扣一个比例 ⇒ R99 防硬切意图保留；阈值随新手感从 >19 重钉到 >18。
+    expect(fd.state.speed).toBeGreaterThan(18);
     expect(fd.state.x).toBeCloseTo(LIMIT, 9); // 几何钳位逐位不动
   });
 

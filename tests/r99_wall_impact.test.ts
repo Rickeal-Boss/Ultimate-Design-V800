@@ -125,7 +125,7 @@ describe('R99 ② resolveBounds 速度法向吸收 + 切向保留', () => {
 });
 
 describe('R99 ③ FreeDrive 写回：朝向一阶收敛 / 漂移态渐变 / 瞬态包络', () => {
-  it('撞墙帧：速度保留切向（>19m/s），heading 单帧只转一小步', () => {
+  it('撞墙帧：速度保留切向（R106 首帧顿挫后仍 >18m/s，非硬切），heading 单帧只转一小步', () => {
     const fd = new FreeDrive({ start: { x: 10.5, z: IMPACT_Z, heading: HEADING_TO_PLUS_X } });
     fd.state.speed = 20;
     let wallHits = 0;
@@ -139,7 +139,11 @@ describe('R99 ③ FreeDrive 写回：朝向一阶收敛 / 漂移态渐变 / 瞬�
     }
     expect(wallHits).toBeGreaterThan(0);
     expect(fd.state.x).toBeCloseTo(LIMIT, 9);
-    expect(fd.state.speed).toBeGreaterThan(19); // 旧版一帧掉到 16.42
+    // R106 撞墙首帧法向速度骤降（顿挫）：斜擦 fn≈0.199 只扣入射法向分量的
+    // WALL_IMPACT_SPEED_KICK_RATIO(0.4) ⇒ 当帧从旧 ~19.73 降到 ~18.36，仍远高于 0
+    // ⇒ R99「防硬切/不瞬移」意图保留（切向分量完整 + 法向只扣一个比例），只是阈值随
+    // 新手感从 >19 重钉到 >18。若回到单帧硬切（掉到分解值 16.42 以下 / 归零）必红。
+    expect(fd.state.speed).toBeGreaterThan(18);
     const dh = Math.abs(fd.state.heading - hBefore);
     expect(dh).toBeLessThan(0.05); // 旧版一帧转 0.2
   });

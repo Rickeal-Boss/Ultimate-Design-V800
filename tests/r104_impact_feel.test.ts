@@ -96,10 +96,12 @@ describe('R104 ② 正撞顿挫（③ 放慢 heading 收敛 ⇒ fn 停留 ⇒ �
     const vImpact = Math.abs(fd.state.speed);
     for (let i = 0; i < 24; i += 1) fd.step(DT); // 撞墙后再走 0.2s
     const vAfter = Math.abs(fd.state.speed);
-    // 实际掉速（慢 heading + scrub 叠加）严格大于旧 τ 纯耦合参照
+    // 实际掉速（慢 heading + R106 首帧顿挫 + scrub 叠加）严格大于旧 τ 纯耦合参照
     expect(v0 - vAfter).toBeGreaterThan(v0 - fast);
     expect(vAfter).toBeLessThan(fast);
-    expect(vImpact).toBeGreaterThan(15); // 撞墙当帧仍未被硬切成低速（R99 防硬切）
+    // R106 撞墙首帧法向速度骤降：正撞当帧从旧 ~18.77 降到 ~10.78（首帧掉速 ~46%，顿挫）。
+    // 仍远高于 0 ⇒ R99 防硬切保留；阈值随新手感从 >15 重钉到 >10（真源：仍 > 半数入射速）。
+    expect(vImpact).toBeGreaterThan(10);
   });
 });
 
@@ -107,7 +109,9 @@ describe('R104 ③ 防硬切（保留 R99 一阶收敛成果）', () => {
   it('正撞当帧速度不归零、不腰斩，需多帧才降到半速（一阶而非单帧硬切）', () => {
     const fd = driveHeadOn(20);
     const vImpact = Math.abs(fd.state.speed);
-    expect(vImpact).toBeGreaterThan(15); // 当帧仍高（旧单帧硬切会掉到分解值 2.0）
+    // R106 首帧顿挫：正撞当帧 ~10.78（首帧掉速 ~46%），仍远高于 0 ⇒ 不归零、非瞬移。
+    // 阈值随新手感从 >15 重钉到 >10（真源：仍 > 半数入射速，切向保留 + 法向只扣一个比例）。
+    expect(vImpact).toBeGreaterThan(10); // 当帧仍高（旧单帧硬切会掉到分解值 2.0 或归零）
     let framesToHalf = -1;
     for (let i = 0; i < 120; i += 1) {
       fd.step(DT);
