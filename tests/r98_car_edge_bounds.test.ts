@@ -7,8 +7,9 @@
  *   城门 车缘 10.0+1.003=11.003 > 门墩内缘 10.0
  *   空档/广场 车缘 15.5+1.003=16.503 > 建筑前脸线 15.5
  *
- * R98 新增 corridorCenterHalfWidth(z)：块区（含 3m 过渡）保持 R97 车心限不变，
- * 其它段扣掉车半宽 VEHICLE.widthM/2 (=1.003)。resolveBounds 第③步改用它。
+ * R98 新增 corridorCenterHalfWidth(z)：块区保持 R97 车心限、其它段扣车半宽 (=1.003)。
+ * R99 订正：块角 3m 过渡外端点由抽象面线 15.5 改为可见角塔基座内缘 14.9
+ *（车心限 13.897），块心 10.0 及其它段不变。resolveBounds 第③步沿用该函数。
  *
  * 本文件钉：
  *   ① 桥 z=0 / 门洞 z=−358.5 / 空档 z=−600 / 广场 z=−1290 的车缘 ≤ 对应可见面线；
@@ -69,7 +70,7 @@ describe('R98 ① 车缘不越可见面线（桥 / 门 / 空档 / 广场）', ()
   });
 });
 
-describe('R98 ② 块区车心限保持 R97（含 3m 过渡不扣车半宽）', () => {
+describe('R98 ② 块区车心限（块心 R97 不变 / 块角 R99 分离）', () => {
   it('块心 z=−388.5 车心限仍 10.0（车缘 11.003 < 柱内缘 11.12）', () => {
     expect(CAR_HALF_W).toBeCloseTo(1.003, 12);
     expect(corridorHalfWidth(-388.5)).toBe(10.0);
@@ -78,13 +79,32 @@ describe('R98 ② 块区车心限保持 R97（含 3m 过渡不扣车半宽）', 
     expect(carEdge(-388.5)).toBeCloseTo(11.003, 12);
   });
 
-  it('块边界 3m 过渡内仍走 R97 车心限（未被扣成面线−车半宽）', () => {
+  it('块边界 3m 过渡（R99）：角点车缘贴基座 14.9、dc≥3 回 10.0、corridorHalfWidth 不变', () => {
     // k=0 块 [-411.5, -365.5]：过渡区 −411.5..−408.5 / −368.5..−365.5。
-    // 上边界 −365.5 与 gateBackZ 重合，按 corridorHalfWidth 的分段顺序归「城门带」，
-    // 单独在下一例钉死；这里只取严格落在城内的过渡点。
+    // 上边界 −365.5 与 gateBackZ 重合，按分段顺序归「城门带」，单独在下一例钉死。
+    // R99：过渡外端点由抽象面线 15.5 改为可见角塔大理石基座内缘 14.9
+    //   （castleKit.ts:3381 基座裙外扩 1.2 ⇒ INNER.faceHalf − 1.2/2），车心限 13.897。
+    const CORNER_INNER = INNER.faceHalf - 1.2 / 2; // 14.9（真源推导，勿写死）
+    const CORNER_CENTER = CORNER_INNER - CAR_HALF_W; // 13.897
+
+    // dc=0 角点：车心限 13.897、车缘恰贴 14.9（R98 旧逻辑 15.5/16.503 嵌基座 1.6m）
+    expect(corridorCenterHalfWidth(-411.5)).toBeCloseTo(CORNER_CENTER, 12);
+    expect(carEdge(-411.5)).toBeCloseTo(CORNER_INNER, 12);
+    expect(carEdge(-411.5)).toBeLessThanOrEqual(CORNER_INNER + 1e-9);
+
+    // dc≥3：回到 R97 块心 10.0（车缘 11.003 < 柱内缘 11.12）
+    expect(corridorCenterHalfWidth(-408.5)).toBe(BOUNDS.arcadeHalfW);
+    expect(corridorCenterHalfWidth(-368.5)).toBe(BOUNDS.arcadeHalfW);
+    expect(carEdge(-408.5)).toBeCloseTo(11.003, 12);
+
+    // 整段过渡车缘始终不越可见基座内缘
     for (const z of [-411.5, -409.5, -408.5, -368.5, -366.5]) {
-      expect(corridorCenterHalfWidth(z)).toBe(corridorHalfWidth(z));
+      expect(carEdge(z)).toBeLessThanOrEqual(CORNER_INNER + 1e-9);
     }
+
+    // corridorHalfWidth 逐位不变：角点仍是抽象面线 15.5（CameraRig 依赖）
+    expect(corridorHalfWidth(-411.5)).toBe(15.5);
+    expect(corridorHalfWidth(-408.5)).toBe(10.0);
   });
 
   it('块上边界与 gateBackZ 重合点归城门带（车心限扣车半宽，门墩不穿模）', () => {

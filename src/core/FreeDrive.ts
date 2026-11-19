@@ -16,12 +16,15 @@
  * 边界（世界坐标，不依赖物理引擎，保证不穿墙不掉桥；R98 起列出的是**车心**限）：
  *   · 御桥段：|x| ≤ 12.0 − 车半宽 = 10.997（车缘 12.0 < 桥面 12.6，防坠峡谷）
  *   · 城门带：|x| ≤ 10.0 − 车半宽 = 8.997（车缘 9.0 < 门墩内缘 10.0，防穿门墩）
- *   · 城内块区：|x| ≤ 10.0（R97 已按车缘净空标定，车缘 11.003 < 柱内缘 11.12，不再扣）
+ *   · 城内块区块心：|x| ≤ 10.0（车缘 11.003 < 柱内缘 11.12）；块角 3m 过渡到可见
+ *     角塔大理石基座内缘 14.9（车心限 13.897，车缘恰贴基座不嵌入，R99）
  *   · 城内空档 / 主殿广场：|x| ≤ 15.5 − 车半宽 = 14.497（**车缘贴可见建筑前脸线**，非空气墙）
  *   · z 钳位 [−1297, 70]
  *   · 主殿正面 z ≤ −1297.5 且 |x| < 24 → 停车 + 轻微后退弹开（事件 'hall'）
  */
 import { BRAKE, MS_TO_KMH, VEHICLE } from '../config/physics';
+// R99：角塔基座内缘真源（INNER.faceHalf），与 VEHICLE.widthM 一起派生块角车心限。
+import { INNER } from '../render/scene/r28Layout';
 // R98：车身回正阻尼抽成独立配置（6/4 → 3.8/3.2），漂移灵魂参数与纵向力不受影响。
 import { FREE_BODY_DAMPING } from '../config/freeBodyFeel';
 import { dragForce, motorForce, rollForce } from '../physics/Vehicle';
@@ -94,6 +97,17 @@ export const FREE = {
   /** 撞墙后保留的最小速度比例（防卡死：擦墙仍能滑行） */
   wallKeepMin: 0.08
 } as const;
+
+/* ── R99 · 撞墙瞬态（wall-scuff transient）独立标定 ──────────────────────────
+ * 不放进 FREE 灵魂表：撞墙是边界写回的事，与漂移轮胎模型无关；也不碰
+ * FREE_BODY_DAMPING（R98 阻尼）。这三个量只驱动「被墙顶一下 → 带惯性滑走」
+ * 的一阶收敛与短暂横摆/侧倾冲击，hall 分支本轮不动。 */
+/** 朝向 / 漂移态一阶收敛时间常数 s（≈0.36s 走完 95%，不再是单帧硬切） */
+export const IMPACT_TAU = 0.12;
+/** 法向入射冲量 → 视觉横摆角速度瞬态增益（rad·s/m，小值起始） */
+export const IMPACT_YAW_GAIN = 0.02;
+/** 法向入射冲量 → 视觉侧倾瞬态增益（rad·s/m，小值起始） */
+export const IMPACT_ROLL_GAIN = 0.004;
 
 /** 场景边界（世界坐标 m） */
 export const BOUNDS = {
@@ -169,6 +183,21 @@ const CITY_BLOCK_Z: ReadonlyArray<readonly [number, number]> = [
 /** 块边界线性过渡半宽 m（多边角：块中心 10.0 → 块边界 15.5 连续渐变，防突变撞墙） */
 const EDGE_TRANSITION = 3;
 
+/**
+ * R99 多边形角：可见实体「街区角塔大理石基座」内缘（非抽象面线 15.5）。
+ *
+ * 真源（castleKit.ts，只读）：
+ *   - :330 `R30_CORNER = { h:31, w:8, d:5 }`（w=8 = ctw）
+ *   - :3381 `box('marble', ctw+1.2, 1.0, ctd+1.2, cx=ctw/2, …)`，put() 按 side·faceHalf 镜像
+ *     ⇒ 世界内缘 = INNER.faceHalf + (ctw/2 − (ctw+1.2)/2) = INNER.faceHalf − 1.2/2 = 14.9
+ *     （ctw 相消 ⇒ 只依赖基座裙外扩 1.2；R30_CORNER 为 castleKit 私有常量不可 import，
+ *       按真源几何等价化简，禁止写死 14.9 / 13.897。）
+ */
+const CITY_CORNER_MARBLE_SKIRT = 1.2; // castleKit.ts:3381 基座裙相对塔身的单侧外扩
+const CITY_CORNER_BASE_INNER = INNER.faceHalf - CITY_CORNER_MARBLE_SKIRT / 2; // 14.9 可见基座内缘
+/** 角点车心限 = 可见基座内缘 − 车半宽 = 14.9 − 1.003 = 13.897（车缘恰贴基座不嵌入） */
+const CITY_CORNER_CAR_CENTER = CITY_CORNER_BASE_INNER - VEHICLE.widthM / 2;
+
 /** 纯函数：当前 z 处的侧向可行驶半宽（R96 多边角，随建筑轮廓分段） */
 export function corridorHalfWidth(z: number): number {
   if (z >= BOUNDS.gateFrontZ) return BOUNDS.bridgeHalfW; // 御桥段：贴桥沿 12.0（防坠峡谷）
@@ -194,9 +223,10 @@ export function corridorHalfWidth(z: number): number {
  * CameraRig（相机钳位）与 r97_bounds_clearance 测试都依赖它逐位不变。
  *
  * 分段口径（与 corridorHalfWidth 的分段顺序严格镜像）：
- *   - 城内块区（CITY_BLOCK_Z 区间，含块边界 3m 过渡）：R97 已把 arcadeHalfW 收到 10.0，
- *     并按**车缘**净空标定（车缘 11.003 < 拱廊柱内缘 11.12）—— 该值本身就是车心限，
- *     故保持 R97 现状，**不**再扣车半宽。
+ *   - 城内块区（CITY_BLOCK_Z 区间）：块心 dc≥3 保持 R97 车心限 10.0（车缘 11.003 < 柱内缘
+ *     11.12，不再扣车半宽）；块角 3m 过渡（dc<3）由 R99 改为从「可见角塔大理石基座内缘
+ *     14.9 − 车半宽 = 13.897」线性收到 10.0 —— 车缘 dc=0 时恰贴基座 14.9（修复前 16.503
+ *     嵌入 1.6m），dc≥3 时仍 11.003 保持 R97 净空。corridorHalfWidth 本身逐位不动。
  *   - 其它段（御桥 / 城门洞 / 城内空档 / 主殿广场）：corridorHalfWidth 返回的仍是
  *     可见面线（桥面保守内缩 12.0 / 门墩内缘 10.0 / 建筑前脸线 15.5 / 广场 15.5），
  *     R97 直接拿它当车心限 ⇒ 车缘越面线穿模。此处扣掉车半宽 VEHICLE.widthM/2 (=1.003)，
@@ -207,7 +237,15 @@ export function corridorCenterHalfWidth(z: number): number {
   if (z >= BOUNDS.gateBackZ) return corridorHalfWidth(z) - VEHICLE.widthM / 2; // 城门带
   if (z <= BOUNDS.plazaZ) return corridorHalfWidth(z) - VEHICLE.widthM / 2; // 主殿广场
   for (const [zmin, zmax] of CITY_BLOCK_Z) {
-    if (z >= zmin && z <= zmax) return corridorHalfWidth(z); // 块区（含 3m 过渡）：R97 车心限不变
+    if (z >= zmin && z <= zmax) {
+      const dc = Math.min(z - zmin, zmax - z); // 到最近块边界的距离
+      if (dc >= EDGE_TRANSITION) return BOUNDS.arcadeHalfW; // 块心 10.0（R97 净空不变）
+      // R99 多边形角：外端贴可见角塔基座内缘（车心限 13.897 → 车缘 14.9 恰贴），
+      // 内端 = 块心 10.0（车缘 11.003 保持 R97 净空）。与 corridorHalfWidth 同型线性斜边，
+      // 仅把外端点从抽象面线 15.5 换成可见实体 14.9；分段顺序严格镜像，不碰其它段。
+      const t = dc / EDGE_TRANSITION; // 0=块角 → 1=柱列段
+      return CITY_CORNER_CAR_CENTER + (BOUNDS.arcadeHalfW - CITY_CORNER_CAR_CENTER) * t;
+    }
   }
   return corridorHalfWidth(z) - VEHICLE.widthM / 2; // 空档：建筑前脸线扣车半宽
 }
@@ -275,6 +313,10 @@ export interface BoundResult {
   heading: number;
   speed: number;
   kind: BoundKind;
+  /** R99：法向入射冲量强度 |v|·fn [m/s]，仅 side/end 撞击时 >0（hall 不带） */
+  impactN?: number;
+  /** R99：朝向一阶收敛的终值（沿墙切向，slideHeading 求终值），仅 side/end 撞击时给出 */
+  targetHeading?: number;
 }
 
 /** 纯函数：车头前向量（heading = 0 → (0,0,−1)） */
@@ -337,6 +379,25 @@ function wrapAngle(a: number): number {
 }
 
 /**
+ * R99 纯函数：撞墙朝向一阶收敛（单步只走全差距的 dt/tau 比例）。
+ *
+ * 用 wrapAngle 取最短角差，避免 heading 跨越 ±π 时绕远路 / 跳变；
+ * alpha 钳到 [0,1]，大 dt 也不会越过目标（越界即「过冲」，不是真车响应）。
+ * 对比硬切版本：原 slideHeading 一帧转完 Δh=0.2rad ⇒ 等效 ≈24rad/s；
+ * 这里 dt=1/120,tau=0.12 ⇒ 单帧只转 0.0139rad ⇒ ≈1.6rad/s（maxYawRate 量级）。
+ */
+export function impactHeadingStep(
+  h: number,
+  targetH: number,
+  tau: number,
+  dt: number
+): number {
+  const d = wrapAngle(targetH - h);
+  const alpha = tau > 0 ? clamp(dt / tau, 0, 1) : 1;
+  return wrapAngle(h + d * alpha);
+}
+
+/**
  * 纯函数：把外法向分量从前向量里剔除 → 沿墙滑行的新朝向。
  * @param n 单位外法向（指向墙外）
  */
@@ -387,6 +448,10 @@ export function resolveBounds(
   let kind: BoundKind = 'none';
   let h = heading;
   let v = speed;
+  // R99：几何钳位仍瞬时（防穿墙），但朝向/速度不再在一步内硬切；
+  // 这两项交给 FreeDrive.step() 经 IMPACT_TAU 一阶展开（hall 分支本轮不动）。
+  let impactN = 0;
+  let targetHeading: number | undefined;
 
   // ② 纵向两端（zMin 南端 / zMax 北端）
   if (z < BOUNDS.zMin || z > BOUNDS.zMax) {
@@ -395,8 +460,12 @@ export function resolveBounds(
     const f = forwardOf(h);
     const fn = f.z * nz;
     if (fn > 0) {
-      h = slideHeading(f.x, f.z, 0, nz);
-      v *= clamp(1 - FREE.wallDecay * fn, FREE.wallKeepMin, 1);
+      impactN = Math.abs(v) * fn; // 法向入射强度 [m/s]
+      // 法向吸收 + 切向保留的矢量分解（替代原「整体乘系数」的一帧骤降）
+      const fnComp = v * fn * (1 - FREE.wallDecay); // 法向分量被吸收 90%
+      const ftComp = v * Math.sqrt(Math.max(0, 1 - fn * fn)); // 切向分量保留
+      v = Math.sign(v) * Math.hypot(fnComp, ftComp);
+      targetHeading = slideHeading(f.x, f.z, 0, nz); // 终值仍用现成纯函数
       kind = 'end';
     }
   }
@@ -409,13 +478,17 @@ export function resolveBounds(
     const f = forwardOf(h);
     const fn = f.x * nx;
     if (fn > 0) {
-      h = slideHeading(f.x, f.z, nx, 0);
-      v *= clamp(1 - FREE.wallDecay * fn, FREE.wallKeepMin, 1);
+      impactN = Math.abs(v) * fn;
+      const fnComp = v * fn * (1 - FREE.wallDecay);
+      const ftComp = v * Math.sqrt(Math.max(0, 1 - fn * fn));
+      v = Math.sign(v) * Math.hypot(fnComp, ftComp);
+      targetHeading = slideHeading(f.x, f.z, nx, 0);
       kind = 'side';
     }
   }
 
-  return { x, z, heading: h, speed: v, kind };
+  // h 原样带回（不再一帧硬掰）；朝向收敛由 step() 的 impactHeadingStep 完成。
+  return { x, z, heading: h, speed: v, kind, impactN, targetHeading };
 }
 
 export class FreeDrive {
@@ -443,6 +516,8 @@ export class FreeDrive {
   /** R36-P1 漂移动力学状态：体轴侧向速度 m/s / 动态偏航角速度 rad/s */
   private vy = 0;
   private yawDyn = 0;
+  /** R99 撞墙瞬态包络 [m/s]：撞击时置为法向入射峰值，随后指数衰减，驱动横摆/侧倾余韵 */
+  private wallImpact = 0;
 
   private readonly onKeyDown = (e: KeyboardEvent): void => {
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
@@ -508,6 +583,7 @@ export class FreeDrive {
     };
     this.vy = 0;
     this.yawDyn = 0;
+    this.wallImpact = 0;
   }
 
   get active(): boolean {
@@ -555,6 +631,7 @@ export class FreeDrive {
     s.rearGrip = 1;
     this.vy = 0;
     this.yawDyn = 0;
+    this.wallImpact = 0;
     this.keys.clear();
     this.emit('reset');
   }
@@ -573,6 +650,7 @@ export class FreeDrive {
     s.rearGrip = 1;
     this.vy = 0;
     this.yawDyn = 0;
+    this.wallImpact = 0;
   }
 
   /** 给 QA 探针的只读快照 */
@@ -600,6 +678,7 @@ export class FreeDrive {
       this.yawDyn = 0;
       this.vy = 0;
       s.beta = 0;
+      this.wallImpact = 0;
       return;
     }
     const throttle = this.has('KeyW', 'ArrowUp') ? 1 : 0;
@@ -715,11 +794,36 @@ export class FreeDrive {
 
     // ---- 边界 ----
     const r = resolveBounds(nx, nz, s.heading, s.speed);
+    const impacting =
+      r.impactN !== undefined && r.impactN > 0 && r.targetHeading !== undefined;
     s.x = r.x;
     s.z = r.z;
     s.heading = r.heading;
-    s.speed = r.speed;
+    // 速度也按 IMPACT_TAU 一阶收敛到「法向吸收 + 切向保留」的目标值。
+    // 分解公式在 resolveBounds 内（纯函数口径不变）；但若一帧提交全部差值，
+    // fn 大时单帧减速度仍可达数十 g（与硬切同病），且连续贴墙会逐帧重复吸收
+    // 使速度几何级塌缩 —— 故与朝向一样用一阶惯性展开。
+    s.speed = impacting ? damp(s.speed, r.speed, 1 / IMPACT_TAU, dt) : r.speed;
     if (r.kind === 'hall') s.accel = 0;
+
+    // ---- R99 撞墙瞬态：几何已瞬时钳位，运动学在此按 IMPACT_TAU 一阶展开 ----
+    // 仅 side/end 撞击带 impactN/targetHeading；hall 分支本轮保持原样。
+    if (impacting) {
+      this.wallImpact = Math.max(this.wallImpact, r.impactN!); // 峰值：连续擦碰刷新
+      // 朝向一阶收敛（角度差走最短弧，避免 ±π wrap 跳变），不再一帧硬掰到墙面切向。
+      s.heading = impactHeadingStep(s.heading, r.targetHeading!, IMPACT_TAU, dt);
+      // 同步漂移态：擦碰把侧滑角 / 动态横摆往回收 —— 消除「旧 beta 把速度方向偏走」
+      // 与「速度骤降退出漂移层把状态硬清零」两处次生硬切。
+      s.beta = damp(s.beta, 0, 1 / IMPACT_TAU, dt);
+      this.yawDyn = damp(this.yawDyn, 0, 1 / IMPACT_TAU, dt);
+    }
+    // 包络指数衰减：撞击结束后仍有短暂「被顶一下、带惯性回正」余韵。
+    this.wallImpact = damp(this.wallImpact, 0, 1 / IMPACT_TAU, dt);
+    if (this.wallImpact < 1e-4) this.wallImpact = 0;
+    if (this.wallImpact > 0) {
+      s.yawRate += IMPACT_YAW_GAIN * this.wallImpact * (dt / IMPACT_TAU);
+      s.roll += IMPACT_ROLL_GAIN * this.wallImpact * (dt / IMPACT_TAU);
+    }
 
     // ---- 视觉姿态（侧倾 × 俯仰，都做平滑，避免阶跃）----
     const latAccel = yawRate * vAvg;

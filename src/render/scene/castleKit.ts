@@ -4081,6 +4081,60 @@ export function makeInnerCity(): StoneBuckets {
     }
   }
 
+  /* ── R99 · 空档补街（用户「中段建筑一段一段消失」）────────────────────────────
+   * 根因：makeInnerCity 只对 cityBlockIndices 采样的 ks 造殿/塔/连墙；相邻 ks 之间的
+   * 未采样块（当前 k=4/5/7/9/10/12/13/15/17/18）整块不生成，地面铺装却连续 ⇒ 露
+   * #D4C8B8 土黄地形（探测报告 verify/r99_probe_city.md）。
+   * 处方：不改采样/护栏，在循环外对「相邻 ks 跨度 >1 块」的每个缺块补一条确定性
+   *   临街殿身(从地面起) + 沿 z 覆盖整块 46m 的连墙 + 双坡顶，side=±1 双侧对称。
+   *   殿身前脸 |x|=faceHalf=15.5（不侵走廊 |x|≤8，铁律 L303-304）；连墙两段分别
+   *   与殿身边缘、相邻缺块首尾相接，全段无新缝。全部进已有 ashlar/wall/roof 桶
+   *   （roof 走 extra），不新增桶/mesh ⇒ DC +0。每缺块 6 box ≈72 tri。 */
+  {
+    const hallW = TOWER.hallW;
+    const hallH = TOWER.hallH;
+    const wallTop = 0.6 + hallH;
+    const eaveY = wallTop + 0.5;
+    const ridgeY = wallTop + 1.5;
+    const run = depth / 2 + 0.6;
+    const slopeLen = Math.hypot(run, ridgeY - eaveY);
+    const slopeAng = Math.atan2(ridgeY - eaveY, run);
+    const linkH = 14;
+    const halfHall = hallW / 2;
+    const wallSegs: readonly (readonly [number, number])[] = [
+      [-blockLen / 2, -halfHall], // 块首 → 殿身边
+      [halfHall, blockLen / 2] // 殿身边 → 块尾
+    ];
+    for (let s = 1; s < cityBlocks.length; s += 1) {
+      const kFrom = cityBlocks[s - 1]!;
+      const kTo = cityBlocks[s]!;
+      for (let kg = kFrom + 1; kg < kTo; kg += 1) {
+        const zc = zNear - blockLen / 2 - kg * blockLen; // 缺块块心
+        for (const side of [-1, 1] as const) {
+          // 局部 → 世界（与采样块同一 put 配方，L3143-3147）
+          const put = <T extends THREE.BufferGeometry>(g: T): T => {
+            if (side < 0) g.rotateY(Math.PI);
+            g.translate(side * faceHalf, 0, zc);
+            return g;
+          };
+          // 台基 + 殿身（前脸 |x|=faceHalf，从地面起，与采样块同尺度）
+          b.ashlar.push(put(box('ashlar', depth + 0.8, 0.6, hallW + 1.4, depth / 2 + 0.4, 0.3, 0)));
+          b.ashlar.push(put(box('ashlar', depth, hallH, hallW, depth / 2, 0.6 + hallH / 2, 0)));
+          // 双坡顶（roof 桶走 extra，与采样块 L3183 同坡向配方）
+          for (const rs of [-1, 1] as const) {
+            const lx = rs < 0 ? (depth / 2 - run) / 2 : (depth / 2 + run) / 2;
+            extra(b, 'roof', put(boxRot('roof', slopeLen, 0.5, hallW + 1.2, lx, (eaveY + ridgeY) / 2, 0, -rs * slopeAng)));
+          }
+          // 连墙两段：覆盖殿身以外的整块 z 范围，与殿身边缘/相邻缺块首尾相接无新缝
+          for (const [za, zb] of wallSegs) {
+            const len = zb - za;
+            b.wall.push(put(box('wall', depth, linkH, len, depth / 2, linkH / 2, (za + zb) / 2)));
+          }
+        }
+      }
+    }
+  }
+
   /* ── R29 远景剪影带：横向拓展的最外层（|x| 120…175，两侧沿全街铺设）───────
    * 参考图的"建筑丰富"有一半来自**远景层叠的天际线**：近景塔 → 中景墙 → 远景塔簇，
    * 三层进深压在一起才有城市感。本段是纯剪影：只入 wall / ashlar 桶，不参与碰撞、
