@@ -186,7 +186,10 @@ export function buildCityFootprints(): CityFootprint[] {
     }
 
     // ⑤ 拱廊柱（每侧 2n = 4，柱位 zc ± (i+0.5)·pitch；AABB 用柱心 ± (colR + 0.1 m 微稳定余量)）
-    const colAabbHalf = ARCADE_COL_R + 0.1; // 0.4（真源 colR=0.3，castleDetail.ts:1397；R104 收紧空气墙）
+    // R106：colAabbHalf 收到精确 colR（0.3）—— 消除 R104 遗留的 0.1m ghost 触发带（车在柱 z
+    //   边缘外 0.1m 仍被误钳到柱内缘 = 周期性 0.1m 空气墙）。车宽 2.006（z 半 1.003）≫ 柱 0.3，
+    //   SAT 重叠裕度充足，无边界抖动风险（R104 的 +0.1 余量过保守）。
+    const colAabbHalf = ARCADE_COL_R; // 0.3（真源 colR=0.3，castleDetail.ts:1397；精确贴柱无 ghost）
     for (let i = 0; i < ARCADE_COL_COUNT; i += 1) {
       const offset = (i + 0.5) * R30_ARCADE.pitch;
       for (const sign of [-1, 1] as const) {

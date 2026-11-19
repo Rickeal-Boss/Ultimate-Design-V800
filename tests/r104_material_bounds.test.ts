@@ -46,8 +46,8 @@ const TOWER_FACE_INSET = TOWER_BOX_W / 2 - TOWER_DEPTH / 2; // 0.7
 const FRONT_TOWER_INNER = INNER.faceHalf - TOWER_FACE_INSET; // 14.8
 /** castleDetail.ts:1397 拱廊柱半径（私有常量） */
 const COL_R = 0.3;
-/** 拱廊柱占位 z 半宽 = colR + 0.1 微稳定余量（A1 修正后，禁写死 0.4） */
-const COL_AABB_HALF = COL_R + 0.1; // 0.4
+/** 拱廊柱占位 z 半宽 = 精确 colR（R106 消除 0.1m ghost 带；禁写死 0.3） */
+const COL_AABB_HALF = COL_R; // 0.3
 /** 拱廊柱内缘（与 cityFootprints 同源公式；colR 抵消） */
 const ARCADE_COL_INNER = INNER.faceHalf - R30_ARCADE.width - 1.0 + 0.12; // 11.12
 
@@ -86,11 +86,11 @@ describe('R104 ① P1 前排塔基真实内缘 14.8（真源派生，防回退�
   });
 });
 
-describe('R104 ② A1 拱廊柱占位 z 半宽 0.4（真源派生，防回退到 0.9 空气墙）', () => {
-  it('柱占位 z 半宽 = colR + 0.1 = 0.4（真源派生，非写死；< R103 的 0.9）', () => {
+describe('R106 A1 拱廊柱占位 z 半宽精确 colR 0.3（消除 R104 遗留 0.1m ghost 空气墙）', () => {
+  it('柱占位 z 半宽 = 精确 colR = 0.3（真源派生，非写死；< R104 的 0.4 / R103 的 0.9）', () => {
     expect(COL_R).toBe(0.3); // castleDetail.ts:1397
-    expect(COL_AABB_HALF).toBeCloseTo(0.4, 12);
-    expect(COL_AABB_HALF).toBeLessThan(0.9); // 比 R103 旧值窄 ⇒ 空气墙减小
+    expect(COL_AABB_HALF).toBeCloseTo(0.3, 12);
+    expect(COL_AABB_HALF).toBeLessThan(0.4); // 比 R104 旧值窄 ⇒ 消除 0.1m ghost 带
     // 全部 40 根柱 z 半宽一致
     const cols = byKind('arcadeCol');
     expect(cols.length).toBe(40); // 10 块 × 4 柱
@@ -104,7 +104,7 @@ describe('R104 ② A1 拱廊柱占位 z 半宽 0.4（真源派生，防回退到
     // 块 0 首柱 z = zc + 0.5·pitch；θ=0 车长沿 Z、车缘 x = xInner 限
     const colZ = K0_ZC + 0.5 * R30_ARCADE.pitch;
     const fp = clampToFootprints(ARCADE_COL_INNER - HALF_W, colZ, 0);
-    // 车心已在柱内缘 − 半宽（车缘恰贴 11.12），2D 不再收紧（柱 z 带窄到 0.4，车 z 覆盖擦边不交）
+    // 车心已在柱内缘 − 半宽（车缘恰贴 11.12），2D 不再收紧（柱 z 带窄到 0.3，车 z 覆盖擦边不交）
     expect(fp.hit).toBe(false);
     expect(fp.x).toBeCloseTo(ARCADE_COL_INNER - HALF_W, 12); // 10.117
   });
