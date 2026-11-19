@@ -187,6 +187,22 @@ const FREE_FLY_DISABLED = (() => {
  *  进程内只有一个 rig 实例（Game.ts:405）⇒ 单标记安全，不串。 */
 let ACTIVE_IS_R7 = false;
 
+/**
+ * R97 · 自由探索机位动态 FOV（速度感补回）。
+ *
+ * Game.ts 早已把 absSpeed 传进 rig.update 的 speed 形参，但旧 free 机位把回调写成
+ * `free: () => {...}`（丢掉 speed 入参）⇒ FOV 恒定 60、自由探索全程零速度感。
+ * 这里抽成导出纯函数：free 机位内部调用它，回归网也直接断言它 —— 不依赖相机逐帧
+ * FOV 阻尼收敛（update 里 fov 是 min(1,dt*2) 的一阶滞后），测试完全确定。
+ *
+ * 口径对齐 chase 机位（Math.min(speed/72,1)*13，55→68）：自由探索速度上限按 55m/s，
+ * 故 /55、系数 12 ⇒ speed 0→60、27.5→66、≥55→72 饱和；线性段斜率 12/55。
+ * 只影响 FOV，机位构图量（offset/look/k/near/local）一个都不动。
+ */
+export function freeFovForSpeed(speed: number): number {
+  return 60 + Math.min(speed / 55, 1) * 12;
+}
+
 const MODES: Record<CameraMode, (speed: number, portrait: boolean, time: number) => void> = {
   orbit: (_speed, portrait, time) => {
     // 相位 3π/4：t=0 机位落在右前 45°（游戏里车头朝 -Z，无相位时 t=0 正对车尾，
@@ -252,11 +268,13 @@ const MODES: Record<CameraMode, (speed: number, portrait: boolean, time: number)
   cabinDriver: () => setInteriorPose('driver'),
   cabinPassenger: () => setInteriorPose('passenger'),
   cabinRear: () => setInteriorPose('rear'),
-  free: () => {
+  free: (speed) => {
     // 自由探索：车后 9.5m / 高 3.4m 的局部跟随（转向时整体绕车旋转）
+    // R97：补回自由机位速度感 —— Game.ts 已传 absSpeed，此前 free 写成 () 未消费该参数，
+    // FOV 恒定 60 ⇒ 自由探索零速度感。现按 freeFovForSpeed 随速度 60→72；构图量全部不动。
     POSE.offset.set(0, 3.4, 9.5);
     POSE.look.set(0, 1.3, -9);
-    POSE.fov = 60;
+    POSE.fov = freeFovForSpeed(speed);
     POSE.k = 3;
     POSE.near = 0.1;
     POSE.local = true;

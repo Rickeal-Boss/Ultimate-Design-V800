@@ -1,5 +1,5 @@
 /**
- * 车辆档位（vehicle profile）—— R15-4 三车玩法（R92 接入仰望）。
+ * 车辆档位（vehicle profile）—— R15-4 三车玩法（R92 接入仰望鼎曜）。
  *
  * 设计口径：**档位只描述「差异」，不复制「公共」**。
  * 所有热参数（brakeTempThreshold 1.0 / brakeTempCoolRate 0.5 / thermalRearmTemp 0.6 /
@@ -10,8 +10,8 @@
  *   - `brakeTempGainScale` → Vehicle.stepVehicle 第四参（制动盘升温倍率）
  *     ⚠️ R29：V800 由 1 → **0.75**（外部审查 B1，热切断破坏制动单调性），
  *        R7 保持 100 不动 ⇒ R7 的热行为逐位不变；
- *        仰望（R95 彩蛋车）改为 **0** ⇒ 制动盘永不升温、热保护永不触发（不过热）。
- *        V800 与 R7 的比值不再是 100，仰望也不再与 R7 同基因。
+ *        仰望鼎曜（R95 彩蛋车）改为 **0** ⇒ 制动盘永不升温、热保护永不触发（不过热）。
+ *        V800 与 R7 的比值不再是 100，仰望鼎曜也不再与 R7 同基因。
  *
  * ⚠️ 未接线项（需主理人确认后再动）：`massKg` / `maxSpeedKmh` / 三围目前是**元数据 +
  * 限速判据**，尚未接入纵向动力学：stepVehicle 仍用 config/physics.ts 的 VEHICLE 常量
@@ -112,7 +112,7 @@ export const VEHICLE_PROFILES: Record<VehicleId, VehicleProfile> = {
   },
   yangwang: {
     id: 'yangwang',
-    name: '仰望U8L',
+    name: '仰望鼎曜',
     subtitle: '行政豪华轿车 · 易四方四电机 · 爆胎稳行',
     // R95 彩蛋车：踏板永不断裂；制动盘升温 ×0 ⇒ 盘温永不升 ⇒ 热保护永不触发（不过热）。
     // 差异化放在玩法层（半程爆胎但车身平稳 + 不计分），不改任何已锁定的物理常量。
@@ -120,9 +120,9 @@ export const VEHICLE_PROFILES: Record<VehicleId, VehicleProfile> = {
     brakeTempGainScale: 0,
     massKg: 3300,
     maxSpeedKmh: 200,
-    lengthM: 5.3,
-    widthM: 2.0,
-    heightM: 1.5,
+    lengthM: 5.6,
+    widthM: 2.03,
+    heightM: 1.59,
     cameraScale: 1
   }
 };

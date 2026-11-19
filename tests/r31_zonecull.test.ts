@@ -2,7 +2,8 @@
  * R31 区域距离剔除回归（B 线运行时治理②）：
  * `Castle.updateViewerZ / revealAllZones` 的显隐契约必须被单测钉住——
  * 口径与 `.qa/r31_test/r31_b_runtime_probe.mjs` 的 visibleTriAt 一致：
- *   行车机位推进 ⇒ 后方/远方 z 区 mesh 整体隐藏，可见 tri 下降；
+ *   R97 方案 B（车前方恒显、只剔车后）：起点全显（根治中段空城）；
+ *   车驶入深区 ⇒ 车后 z 区 mesh 整体隐藏，可见 tri 下降；
  *   滞回带内微抖不重算；越带必重算；revealAllZones 全显并重置滞回态。
  *
  * 拦什么改动：
@@ -87,17 +88,26 @@ function buildCastle(): { scene: THREE.Scene; castle: Castle; totalTri: number }
 }
 
 describe('R31 区域距离剔除（updateViewerZ / revealAllZones）', () => {
-  it('入口机位：远区被隐藏、可见 tri 显著下降，且 getCastleStats 不变', () => {
+  it('R97 车前恒显 + 车后剔除：起点全显、深区机位车后区被隐藏且 tri 显著下降，getCastleStats 不变', () => {
     const { scene, castle, totalTri } = buildCastle();
     const stats = castle.getCastleStats();
     const all = readVisible(scene);
     expect(all.sig.length).toBeGreaterThan(10); // 分区合批确实产出多区 mesh
     expect(all.sig.some((n) => /-z\d+$/.test(n))).toBe(true); // 存在 -zN 分区 mesh
 
-    castle.updateViewerZ(30); // 御桥起点（行车入口）
+    /* R97 方案 B：显隐判据从「区心距 ≤550」改为「车前方恒显、只剔车后」（zMin 判据）。
+     * 起点 z=30 时所有区 zMin<30 ⇒ 29/29 全显是**正确行为**（用户诉求：连续城区，
+     * 根治「中段一段全空」），不再断言「入口机位有区被隐藏」（那条是 R38 旧语义）。 */
+    castle.updateViewerZ(30); // 御桥起点：车前方恒显
     const near = readVisible(scene);
-    expect(near.sig.length).toBeLessThan(all.sig.length); // 有区被隐藏
-    expect(near.tri).toBeLessThan(totalTri * 0.9); // 实测 −44%，留 10% 余量防几何漂移误红
+    expect(near.sig.length).toBe(all.sig.length); // R97：起点全显，一区不摘
+
+    // 车驶入深区 ⇒ 入口区（z0a/z0b/z1/z2/z3）全在车后，应被剔除
+    castle.updateViewerZ(-1300);
+    const deep = readVisible(scene);
+    expect(deep.sig.length).toBeLessThan(all.sig.length); // 车后区被隐藏
+    expect(deep.tri).toBeLessThan(totalTri * 0.9); // 车后区剔除后 tri 显著下降
+    expect(deep.sig.filter((n) => /^castle-(ashlar|gold)-z0[ab]$/.test(n))).toEqual([]); // 钉死入口区被剔
     // 装配期口径必须与显隐态解耦
     expect(castle.getCastleStats()).toEqual(stats);
     expect(stats.tris).toBeLessThanOrEqual(R31_BUDGET.castleTriHigh);

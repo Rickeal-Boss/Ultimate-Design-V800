@@ -304,7 +304,28 @@ const R29_SKYLINE = { xIn: 120, xOut: 175, zNear: -430, zFar: -1430 };
  * 街面拱廊柱列落在 |x|≥11 区内；判据 r29_corridor_probe.mjs）。
  */
 /** 城内街面低拱廊（连廊主体）：楼面 8.2m（>走廊 4.5 且低于街窗基座 8.5） */
-const R30_ARCADE = { floorY: 8.2, width: 3.5, pitch: 8.8, rise: 3.6 } as const;
+export const R30_ARCADE = { floorY: 8.2, width: 3.5, pitch: 8.8, rise: 3.6 } as const;
+
+/**
+ * R97-F3 · 城内飞扶壁外墩净空（车缘 11.003 不得穿墩）。
+ * 换算真源（castleDetail.flyingButtress:337）：局部 pierX = reach − pierW/2；
+ * 侧镜像后世界 |x| = INNER.faceHalf(15.5) − pierX ⇒ **reach 减小 = 墩外推**。
+ * 基座宽 pierW+1.1 ⇒ 墩内缘 |x| = 14.95 − reach（hi 档 pierW+1.55 ⇒ 14.725 − reach）。
+ * R96 reach 6.5 ⇒ 内缘 8.45（hi 8.225），车缘 11.503 嵌入 3.05m。
+ * 主理人原议 reach 5.3 实测内缘仅 9.65 < 11.003（方向对、幅度不足）——按同一外推方向
+ * 收到 3.6 ⇒ 内缘 11.35（hi 11.125），与拱廊柱内缘 11.12 同线略外，留足净空。
+ * pierW 不变（口径抵消：内缘 = faceHalf − reach − 0.55 与 pierW 无关）。
+ */
+export const R97_CITY_BUTTRESS = {
+  /** 连墙飞扶壁水平跨距（墙→墩心） */
+  linkReach: 3.6,
+  /** 街区角塔飞扶壁水平跨距 */
+  cornerReach: 3.6,
+  /** 连墙墩宽（不改为 R96 值） */
+  linkPierW: 1.4,
+  /** 角塔墩宽（不改 R96 值） */
+  cornerPierW: 1.3
+} as const;
 /** 街区角塔（每街区每侧 2 座，落在块两端 ∓22.5；深 5 只咬连墙外端 3m，窗已避让） */
 const R30_CORNER = { h: 31, w: 8, d: 5 } as const;
 /** 跨街封闭拱顶连廊 z（块心 k=3/8/13，确定性；避开门洞带与广场带） */
@@ -2106,8 +2127,16 @@ export function makeMainHall(): StoneBuckets {
   /* ── 前排门楼段（frontW 56 × frontH 70）── */
   {
     // 台基两层
-    b.ashlar.push(box('ashlar', frontW + 3, 1.2, frontDepth + 2, 0, 0.6, zMidFront));
-    b.ashlar.push(box('ashlar', frontW + 1.4, 1.0, frontDepth + 1, 0, 1.7, zMidFront));
+    /* R97-F3：台基前沿必须收到撞击立面 z=−1300（CRASH_WALL.z），不得探进车道。
+     * 改前沿 = zFront − depth/2 ⇒ 一层前沿 −1300、二层前沿 −1300。
+     * 改前沿 −1299（一层 depth=frontDepth+2=32，中心 zMidFront=−1315）时，
+     * 车鼻（zMin − 车半长 2.7475 = −1299.75）会嵌入台基 0.75m（旧注释误记 −1295.5，
+     * 系按已过期的 zMidFront=−1311.5 推导；真源 frontDepth=30 ⇒ zMidFront=−1315）。
+     * 只挪台基前沿，不改 BOUNDS.zMin（撞击锚点，破冗余/路障测试）。 */
+    const zPlinth1 = zFront - (frontDepth + 2) / 2; // −1316 ⇒ 前沿 −1300
+    const zPlinth2 = zFront - (frontDepth + 1) / 2; // −1315.5 ⇒ 前沿 −1300
+    b.ashlar.push(box('ashlar', frontW + 3, 1.2, frontDepth + 2, 0, 0.6, zPlinth1));
+    b.ashlar.push(box('ashlar', frontW + 1.4, 1.0, frontDepth + 1, 0, 1.7, zPlinth2));
     // 殿身（55 宽 × 60 高，2.7..62.7）
     const bodyH = frontH - 7.3;
     b.ashlar.push(box('ashlar', frontW, bodyH, frontDepth, 0, 2.7 + bodyH / 2, zMidFront));
@@ -2650,7 +2679,10 @@ export function makeMainHall(): StoneBuckets {
    * 主殿立面，这里不再生成任何 y > 0.02 的横穿体块（走廊探针的判据同此）。
    * `MAIN_HALL.stepLevels` 已置 0，保留常量位以免旧引用报错。 */
   {
-    const plazaNear = z - MAIN_HALL.plazaDepth; // −1282
+    /* R97-F3：广场带在主殿**前方**（+z 侧），plazaNear 必须是 z + plazaDepth = −1282。
+     * 旧式 `z − plazaDepth` = −1318 把列阵火盆埋进立面之后（殿身实心盒内，永不可见），
+     * 与注释「−1282」自相矛盾。取加号 ⇒ 陈设落在主殿前方可见侧。 */
+    const plazaNear = z + MAIN_HALL.plazaDepth; // −1282（主殿前方可见侧）
     // 大门火盆对（门龛两侧 ±11）
     for (const side of [-1, 1] as const) {
       const cx = side * HALL_BRAZIER.gatePairX;
@@ -2984,7 +3016,7 @@ export function makeMainHall(): StoneBuckets {
     }
     // ⑪ 广场列阵火盆 +2/侧（z 节拍 5，接在既有 arrayCount 之后）
     {
-      const plazaNear = z - MAIN_HALL.plazaDepth;
+      const plazaNear = z + MAIN_HALL.plazaDepth; // R97-F3：−1282（前方可见侧，非 −1318 埋立面后）
       for (const side of [-1, 1] as const) {
         for (let i = 0; i < 2; i += 1) {
           const cx = side * (ROAD_HALF + HALL_BRAZIER.arrayInset + 1.6);
@@ -3412,7 +3444,16 @@ export function makeInnerCity(): StoneBuckets {
           //   R34 回砍：104 tri/座 ×2 座 ×40 块侧，且是**双档都在**的实心件
           //   （远档 LOD 不裁）⇒ 中区 peak 的硬成本。收到 hero 街区。
           if (hero) {
-            const cfb = flyingButtress({ baseY: 0, springY: 9, topY: 22, reach: 6, depth: 1.0, band: 0.5, pierW: 1.3, pinnacle: false });
+            const cfb = flyingButtress({
+              baseY: 0,
+              springY: 9,
+              topY: 22,
+              reach: R97_CITY_BUTTRESS.cornerReach,
+              depth: 1.0,
+              band: 0.5,
+              pierW: R97_CITY_BUTTRESS.cornerPierW,
+              pinnacle: false
+            });
             pour(b, mapParts(cfb, (g) => put(g.rotateY(Math.PI).translate(0, 0, ctz))));
           }
         };
@@ -3441,10 +3482,10 @@ export function makeInnerCity(): StoneBuckets {
             baseY: 0,
             springY: 9.5,
             topY: 11.9,
-            reach: 6.5,
+            reach: R97_CITY_BUTTRESS.linkReach,
             depth: 1.0,
             band: 0.55,
-            pierW: 1.4,
+            pierW: R97_CITY_BUTTRESS.linkPierW,
             pinnacle: false
           });
           pour(b, mapParts(fb, (g) => (side > 0 ? g.rotateY(Math.PI) : g).translate(side * faceHalf, 0, zc + lz)));

@@ -194,6 +194,13 @@ describe('仰望（yangwang）三车接入护栏', () => {
     expect(YANGWANG.cameraScale).toBe(1);
   });
 
+  it('正名与三围：仰望鼎曜（非 U8L）/ 5600×2030×1590mm（R97）', () => {
+    expect(YANGWANG.name).toBe('仰望鼎曜');
+    expect(YANGWANG.lengthM).toBe(5.6);
+    expect(YANGWANG.widthM).toBe(2.03);
+    expect(YANGWANG.heightM).toBe(1.59);
+  });
+
   it('彩蛋玩法（R95）：满踩不过热 + 完美刹停但计 0 分', () => {
     const sm = new StateMachine(YANGWANG);
     sm.start();

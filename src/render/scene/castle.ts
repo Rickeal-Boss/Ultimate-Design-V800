@@ -728,6 +728,12 @@ export class Castle {
   private readonly zoneViews: Array<{
     mesh: THREE.Mesh;
     cz: number;
+    /**
+     * R97：本区 **后端** z（近档几何 `boundingBox.min.z`，无 bb 时回退 cz）。
+     * 显隐判据 `z > zMin − ZONE_VIEW_HYSTERESIS` 只用它，绝不用 cz ——
+     * 车深入城内（z 小于区心）时 cz 距离判据会把脚下/前方区误剔（详见 pushZoneMesh 注）。
+     */
+    zMin: number;
     hi: THREE.BufferGeometry;
     lo?: THREE.BufferGeometry;
     tier: 'hi' | 'lo';
@@ -1325,8 +1331,15 @@ export class Castle {
     hi.computeBoundingBox();
     const bb = hi.boundingBox;
     const cz = bb ? (bb.min.z + bb.max.z) * 0.5 : 0;
+    // R97：显隐必须用区**后端** z = bbox.min.z，**禁止**退回去用区心 cz。
+    // 反例（probe-city 定罪）：z2 区 cz≈−610 / bbox≈[−760,−460]，车开到 z=−700 时
+    // 仍在区内（脚下），但按 cz 的距离判据会被当「远离」摘掉 ⇒ 中段整段建筑消失。
+    // 俯视/远距机位相机 z 远离所有区心时同样成片被摘，只剩常驻 Terrain 大平面。
+    // 用 zMin 则：起点 z=+68 时所有区 zMin<68 ⇒ 全显；车驶过区后端才剔除；倒车自纳入。
+    // 无 bb（空几何/异常）时回退 cz，行为退化为旧判据但不影响正常区。
+    const zMin = bb ? bb.min.z : cz;
     if (lo) this.geometries.push(lo); // 双档都进 dispose 账本
-    this.zoneViews.push({ mesh, cz, hi, lo, tier: 'hi', fade: zoneMat.fade });
+    this.zoneViews.push({ mesh, cz, zMin, hi, lo, tier: 'hi', fade: zoneMat.fade });
   }
 
   /**
@@ -1360,12 +1373,28 @@ export class Castle {
    * Game 帧循环每帧调用一次（内部滞回，多数帧直接返回）；
    * 首帧（lastViewerZ=NaN）必算一次 ⇒ 不存在「从未显隐」的窗口。
    * 两段遍历（R39 起**频率不同**，见下方 R39-P0）：
-   * ① 距离显隐（≥ZONE_VIEW_RANGE 整区 visible=false）—— **逐帧**；
+   * ① 车前显隐（R97：z > zMin−H，车前方含脚下恒显、只剔车后）—— **逐帧**；
    * ② 远档 LOD（>D+滞回 换 lo、<D−滞回 换 hi；同 mesh 换 geometry，DC 不变）—— 每 20m 一次。
-   * 顺序保证弹入瞬间档位就是对的（显隐先算，LOD 随后；且区在 550m 闸门外一直判着 'lo'
-   * ⇒ 弹入时手上已经是远档，无「弹入时是旧档」帧）。
    *
-   * ══ R39-P0（淡入「弹入瞬间不是雾色」的根因修复）════════════════════════════════
+   * ══ R97（方案 B「车前方恒显，只剔车后」—— 根治「中段建筑一段完全消失」）══════════
+   * 定罪：旧 ① 按**区心距** `|cz−z| < ZONE_VIEW_RANGE(550)` 整区摘除。俯视/远距机位相机 z
+   *   远离所有区心 ⇒ 成片深区被摘，只剩常驻 Terrain 大平面 ⇒ 用户看到「细长路条 + 空米色」。
+   *   R96 加密街区（keep=10）无效：新块全落在被剔除的深区。
+   * 处方（**只改显隐判据，不动 ZONE_VIEW_RANGE / 几何 / 材质 / DC**）：
+   *   · 显隐改看**区后端** zMin（zoneViews 新增字段，见 pushZoneMesh）：
+   *       `visible = z > zMin − ZONE_VIEW_HYSTERESIS`
+   *       起点 z=+68 时所有区 zMin<68 ⇒ 全显；车深入后只有身后入口区被剔；倒车 z 回升自动
+   *       重新纳入。反例钉死：z2（cz≈−610, bbox≈[−760,−460]）车在 z=−700 时按 cz 判据会
+   *       被当「远区」摘掉（脚下建筑消失），zMin 判据恒显。
+   *   · **fade 必须同步联动**（updateFades 用同一判据：前方区 fade 恒 1）——
+   *       否则 visible=true 但 `uFade=0`（起点 z5 区心距 1448>550 ⇒ 旧逻辑淡成纯雾色）
+   *       = 建筑虽在却整片雾色，等于「假绿」。仅车后区保留 R38 距离淡出带。
+   *   · 旧的「弹入帧置 0」护栏随距离显隐一并退役：新语义下区从不会因「驶远再驶近」弹入。
+   * ⚠ 下方 R39-P0 长注记录的是**旧距离显隐**时代的调参，① 段已被 R97 取代；② LOD 段仍有效。
+   * ══════════════════════════════════════════════════════════════════════════════════
+   *
+   * ══ R39-P0（淡入「弹入瞬间不是雾色」的根因修复；历史留档，① 已被 R97 取代）══════
+   * 症状（外部逐帧审查 2026-10-28 拍到）：区弹入那一帧是「补丁级突变」（5px 宽、色差 284）。
    * 症状（外部逐帧审查 2026-10-28 拍到）：区弹入那一帧是「补丁级突变」（5px 宽、色差 284）。
    * 根因有两层，**只修第二层不够**（本轮实测已证）：
    *   ① 显隐判定带 **20m 陈旧度**：显隐只在 `|z−lastViewerZ| ≥ ZONE_VIEW_HYSTERESIS` 时重算，
@@ -1389,19 +1418,25 @@ export class Castle {
    * ⚠ 不改 `FADE_COLOR_UNIFORM` 的雾色取值（另一条「按真实背景色淡入」的路线风险更大，
    *   本轮不做）；`revealAllZones()` 行为不变 —— 它显式把 fade 置 1 且不经过本循环。
    */
+  /**
+   * R97 方案 B 的**唯一显隐判据**（显隐与淡入共用，杜绝「visible=true 但 fade=0」假绿）：
+   *   `z > zMin − ZONE_VIEW_HYSTERESIS` ⇔ 车还在该区**后端**之前（区内 / 车前方）⇒ 恒显；
+   *   `z ≤ zMin − ZONE_VIEW_HYSTERESIS` ⇔ 车已完全驶出该区后端（在车后方）⇒ 允许剔除。
+   * 用区后端 zMin 而非区心 cz：车深入 z2（bbox≈[−760,−460]）到 z=−700 时仍在区内，
+   * cz 判据会误剔，zMin 判据恒显。滞回 −H 让「刚驶出后端 H 米内」仍显，避免边界抖动。
+   */
+  private zoneAheadOrInside(z: number, zv: { readonly zMin: number }): boolean {
+    return z > zv.zMin - ZONE_VIEW_HYSTERESIS;
+  }
+
   updateViewerZ(z: number): void {
     // R38-P0-3：淡入**必须逐帧**更新（弹入那 100m 内要连续渐变），故放在滞回早退**之前**。
     // 成本：每区 1 次减法 + 1 次比较（绝大多数区在淡入带外直接跳过）⇒ 19 个区 < 1µs/帧。
     this.updateFades(z);
-    /* ① 距离显隐：**逐帧**（R39-P0 见上）。20m 滞回降级为**状态滞回**：
-     *    未显的区 d < R 才显（入口精确）、已显的区 d < R+H 才隐（闸门附近不抖）。 */
+    /* ① 车前显隐：**逐帧**（R97）。车前方含脚下的区恒显，只有完全驶出区后端（车后）
+     *    的区才剔。与 updateFades 共用 zoneAheadOrInside，杜绝假绿。 */
     for (const zv of this.zoneViews) {
-      const d = Math.abs(zv.cz - z);
-      const wasVisible = zv.mesh.visible;
-      const gate = wasVisible ? ZONE_VIEW_RANGE + ZONE_VIEW_HYSTERESIS : ZONE_VIEW_RANGE;
-      zv.mesh.visible = d < gate;
-      // R39-P0 护栏：弹入帧从**纯雾色**起（仅在淡入带内才置 0，见长注的瞬移告警）
-      if (!wasVisible && zv.mesh.visible && d > FADE_NEAR_DIST) zv.fade.value = 0;
+      zv.mesh.visible = this.zoneAheadOrInside(z, zv);
     }
     /* ② 远档 LOD：仍按 20m 观看者滞回重算（省掉每帧换档判定；换档带自带 20m 滞回） */
     if (Number.isFinite(this.lastViewerZ) && Math.abs(z - this.lastViewerZ) < ZONE_VIEW_HYSTERESIS) return;
@@ -1419,10 +1454,21 @@ export class Castle {
    * 即 550 → 450），把「整区一帧弹入」抹成 100m 行程的渐变。
    * 为什么按距离而不是按时间：淡入行程必须与机位位移同步，否则高速/低速下
    * 「淡入未完成就开到跟前」或「淡入过慢」都可能出现；按距离则与帧率无关。
+   * ⚠ R97：本距离淡入带**只对车后方（即将剔除）的区**生效；车前方/脚下的区一律 fade=1
+   *   （见函数体首段），否则起点深区虽 visible 却被淡成纯雾色 = 假绿。
    */
   private updateFades(z: number): void {
     const span = ZONE_VIEW_RANGE - FADE_NEAR_DIST;
     for (const zv of this.zoneViews) {
+      /* R97：车前方（含脚下）区恒显 ⇒ fade **必须恒置 1**，跳过距离淡入。
+       * 否则 visible=true 但整片雾色 = 「假绿」：起点 z=+68 时 z5(cz−1380) 区心距
+       * 1448 > 550 ⇒ 旧逻辑把 fade 淡成 0，建筑虽在却看不见，与修复前观感一致。
+       * 与 updateViewerZ 共用同一判据，杜绝判据分家。 */
+      if (this.zoneAheadOrInside(z, zv)) {
+        if (zv.fade.value !== 1) zv.fade.value = 1;
+        continue;
+      }
+      /* 仅「车已完全驶出、车后方即将/已经剔除」的区：保留 R38 距离淡出带逻辑不变。 */
       const d = Math.abs(zv.cz - z);
       if (d <= FADE_NEAR_DIST) {
         if (zv.fade.value !== 1) zv.fade.value = 1;
@@ -1446,6 +1492,26 @@ export class Castle {
     if (!zv.lo) return;
     zv.mesh.geometry = tier === 'hi' ? zv.hi : zv.lo;
     zv.tier = tier;
+  }
+
+  /**
+   * R97 验收门禁 C · 机读接口：按 mesh 名读该区 **fade uniform 真值**（只读）。
+   * 返回的就是注入 `shader.uniforms.uFade` 的同一对象值，不是从 visible 反推的近似。
+   * 返回 NaN = 未找到该区 ⇒ 调用方**必须显式 fail**，禁止 skip 吞掉「假绿」断言。
+   */
+  getZoneFade(name: string): number {
+    const zv = this.zoneViews.find((v) => v.mesh.name === name);
+    return zv ? zv.fade.value : Number.NaN;
+  }
+
+  /**
+   * R97 验收门禁 C · 机读接口：按 mesh 名读该区**后端 z**（显隐判据实际用的 zMin = bbox.min.z）。
+   * 测试夹具必须用它与判据同口径，**不得各自用 cz**（否则夹具与实现口径分家）。
+   * 返回 NaN = 未找到该区 ⇒ 调用方显式 fail。
+   */
+  getZoneZMin(name: string): number {
+    const zv = this.zoneViews.find((v) => v.mesh.name === name);
+    return zv ? zv.zMin : Number.NaN;
   }
 
   /**

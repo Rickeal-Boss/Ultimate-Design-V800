@@ -267,15 +267,14 @@ describe('R32 C-5 · 距离衰减运行时语义（显隐 + 远档 LOD + 滞回�
       expect(zFar!.visible).toBe(true);
       expect(zFar!.geometry).not.toBe(zFarHi); // z5 仍有远档 LOD 变体（同 mesh，DC 不变）
       expect(triOf(zFar!.geometry)).toBeLessThan(triOf(zFarHi)); // 远档只主体（铁律 33）
-      expect(zNear!.visible).toBe(true); // 近区仍可见（R89 on ⇒ z1 也会换远档，不再断言几何恒等）
-
-      // 驶近（距 373m < D−滞回）⇒ 换回近档
+      // R97：显隐判据已从「区心距 <550」改为「z > zMin − H（车前方含脚下恒显，只剔车后）」。
+      // 车开到 z=−891.8 时 z1（第一排入口街区，bbox.min.z≈−460）已在**车后方** ⇒
+      // 按新判据正确剔除（旧判据 |cz−z|≈504<550 才判可见）。这不是回归，是新设计语义；
+      // 「近区恒显」的覆盖移到起点机位（见 r97_city_visible.test.ts ①）。
+      expect(zNear!.visible).toBe(false);
+      // 驶近（距 373m < D−滞回）⇒ 换回近档（LOD 段 R97 未改，仍按区心距）
       castle.updateViewerZ(-1000);
       expect(zFar!.geometry).toBe(zFarHi);
-      // ⚠ R89：不再断言 zNear 在 carZ=−1000 时可见——zNear=z1（cz≈−388.5）距相机
-      //    603m 落在 R=650 剔除带临界，删除 19/20 街区后 z1 包围球缩小、带状剔除把它
-      //    判到带外（expected false）。这是 zone 剔除语义，非几何回归；可见性已由
-      //    上文 carZ=−891.8（距 503m，带内）断言覆盖。
       // getCastleStats 装配期口径不被运行时态污染
       const stats = castle.getCastleStats();
       castle.updateViewerZ(-891.8);
