@@ -113,6 +113,21 @@ export const IMPACT_YAW_GAIN = 0.02;
 /** 法向入射冲量 → 视觉侧倾瞬态增益（rad·s/m，小值起始） */
 export const IMPACT_ROLL_GAIN = 0.004;
 
+/* ── R101 Phase2 · 撞墙切向刮擦摩擦（wall scrub）独立标定 ───────────────────
+ * 不放进 FREE 灵魂表：刮擦是**撞墙域边界耗散**，与漂移轮胎模型（灵魂 12 参数）无关，
+ * 也不碰 FREE_BODY_DAMPING / 摩擦圆（tyreMu/latUse/decelAvail）/ 制动力 / decelPerNewton。
+ * 语义：撞上后车身/轮胎与墙持续刮擦是强耗散，按「撞得越狠刮得越狠 + 封顶」给一个
+ * 纵向减速度，作用在 step() 纵向力积分之后、电子限速钳位之前（撞墙耗散 ≠ 限速）。
+ * 堵死旧机制的漏洞：撞后 heading 收敛到切向平行墙 ⇒ fn→0 ⇒ resolveBounds 恒不判撞、
+ * 只剩几何钳位（只钳 x 不动速度）⇒ 边界成「无摩擦导轨」，贴墙含油门能无限蹭滑。
+ */
+/** 刮擦减速度对撞墙法向入射强度的系数（scrub = impactN × WALL_SCRUB_DECEL） */
+export const WALL_SCRUB_DECEL = 0.8;
+/** 刮擦减速度封顶 m/s²（>1.2g，真车撞墙刮擦量级；带油门净加速 ≈6.08 压不住） */
+export const WALL_SCRUB_DECEL_MAX = 12.0;
+/** 贴墙接触判定的位置容差 m（|x|≥halfW−ε / |z| 触 zMin/zMax，ε 取 0.05 防浮点抖动） */
+export const WALL_SCRUB_CONTACT_EPS = 0.05;
+
 /** 场景边界（世界坐标 m） */
 export const BOUNDS = {
   /** 御桥段 / 城门带分界 z（= 城门脸，GATE.z+GATE.depth/2=−351.5，castleKit makePaving 同源） */
@@ -594,6 +609,12 @@ export class FreeDrive {
   private yawDyn = 0;
   /** R99 撞墙瞬态包络 [m/s]：撞击时置为法向入射峰值，随后指数衰减，驱动横摆/侧倾余韵 */
   private wallImpact = 0;
+  /**
+   * R101 撞墙刮擦维持的撞击强度 [m/s]：撞墙时置为 impactN 峰值，**只要仍贴墙就维持**
+   * （不随 heading 转到切向而衰减），离墙即清零。用持久量而非现算 |v|·fn：撞后 heading
+   * 收敛到平行墙后 fn→0，若现算会让刮擦退化回零摩擦蹭滑。供给 step() 算 scrub 减速度。
+   */
+  private wallScrubN = 0;
 
   private readonly onKeyDown = (e: KeyboardEvent): void => {
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
@@ -660,6 +681,7 @@ export class FreeDrive {
     this.vy = 0;
     this.yawDyn = 0;
     this.wallImpact = 0;
+    this.wallScrubN = 0;
   }
 
   get active(): boolean {
@@ -708,6 +730,7 @@ export class FreeDrive {
     this.vy = 0;
     this.yawDyn = 0;
     this.wallImpact = 0;
+    this.wallScrubN = 0;
     this.keys.clear();
     this.emit('reset');
   }
@@ -727,6 +750,7 @@ export class FreeDrive {
     this.vy = 0;
     this.yawDyn = 0;
     this.wallImpact = 0;
+    this.wallScrubN = 0;
   }
 
   /** 给 QA 探针的只读快照 */
@@ -755,6 +779,7 @@ export class FreeDrive {
       this.vy = 0;
       s.beta = 0;
       this.wallImpact = 0;
+    this.wallScrubN = 0;
       return;
     }
     const throttle = this.has('KeyW', 'ArrowUp') ? 1 : 0;
@@ -774,6 +799,23 @@ export class FreeDrive {
     const v = s.speed;
     const av = Math.abs(v);
     const dir = v > 0 ? 1 : v < 0 ? -1 : 0;
+
+    /* ---- R101 Phase2 撞墙切向刮擦（wall scrub）接触判定 ----
+     * 用**当前位姿**（上一帧 resolveBounds 已把车心钳到墙）做几何接触判定，不依赖
+     * heading 法向 fn：撞后 heading 收敛到切向平行墙 ⇒ fn→0，若现算 |v|·fn 会让刮擦
+     * 退化回零摩擦蹭滑。仍贴墙（side：|x|≥halfW−ε；end：|z| 触 zMin/zMax）就维持
+     * wallScrubN 供下方刮擦；一旦离墙即清零（刮擦只在接触期间发生）。 */
+    const halfWnow = corridorCenterHalfWidth(s.z);
+    const sideTouch = Math.abs(s.x) >= halfWnow - WALL_SCRUB_CONTACT_EPS;
+    const endTouch =
+      s.z <= BOUNDS.zMin + WALL_SCRUB_CONTACT_EPS || s.z >= BOUNDS.zMax - WALL_SCRUB_CONTACT_EPS;
+    if (sideTouch || endTouch) {
+      // 仍与墙接触：维持撞击强度（由下方 impacting 块按 impactN 峰值刷新）
+    } else {
+      this.wallScrubN = 0; // 已离墙：刮擦结束
+    }
+    // 刮擦减速度：撞得越狠刮得越狠 + 封顶（撞墙域边界耗散，与轮胎摩擦圆独立）
+    const wallScrub = Math.min(this.wallScrubN * WALL_SCRUB_DECEL, WALL_SCRUB_DECEL_MAX);
 
     /* ---- R36-P1 后轴抓地一阶动力学（手刹收紧 / 松开恢复）----
      * rearGrip ∈ [driftGripFloor, 1]；它同时缩放后轴侧向力与后轴摩擦圆。 */
@@ -811,6 +853,15 @@ export class FreeDrive {
     force -= dir * (dragForce(av) + rollForce());
 
     let vNext = v + (force / MASS) * dt;
+    // R101 撞墙刮擦耗散：作用在电子限速钳位**之前**，语义是「撞墙耗散」非「限速」。
+    // 沿运动反方向减 scrub·dt，钳到不反向（沿用下方 :866 口径），油门压不住（12 > 净加速6.08）。
+    // ⚠ 主动漂移态（手刹/大侧偏/大动态横摆）不加刮擦：此时轮胎摩擦圆已饱和主导减速，
+    //   再叠墙体刮擦=双重惩罚且会干扰漂移模型回归（R37-D 自回正漂移蹭墙场景）。
+    //   R101 目标场景（撞后切向滑行）非漂移态 ⇒ 不受此门控影响。
+    if (wallScrub > 0 && dir !== 0 && !driftActive) {
+      vNext -= dir * wallScrub * dt;
+      if (vNext * dir <= 0) vNext = 0;
+    }
     // 电子限速：只钳速度、不动 accel（与主线同契约——油门照常有劲）
     if (vNext > this.maxSpeedMs) vNext = this.maxSpeedMs;
     if (vNext < -FREE.reverseMaxMs) vNext = -FREE.reverseMaxMs;
@@ -897,6 +948,9 @@ export class FreeDrive {
     // 不进此块（无 targetHeading ⇒ heading 原样，速度不渐变）。
     if (impacting) {
       this.wallImpact = Math.max(this.wallImpact, r.impactN!); // 峰值：连续擦碰刷新
+      // R101：撞墙强度供刮擦维持（hall 不进此块 ⇒ 正撞彻底停、无刮擦，契约不变）。
+      // 下一帧起只要仍贴墙，step() 就按此强度持续刮擦，堵死平行墙零摩擦蹭滑。
+      this.wallScrubN = Math.max(this.wallScrubN, r.impactN!);
       // 朝向一阶收敛（角度差走最短弧，避免 ±π wrap 跳变），不再一帧硬掰到墙面切向。
       s.heading = impactHeadingStep(s.heading, r.targetHeading!, IMPACT_TAU, dt);
       // 同步漂移态：擦碰把侧滑角 / 动态横摆往回收 —— 消除「旧 beta 把速度方向偏走」
