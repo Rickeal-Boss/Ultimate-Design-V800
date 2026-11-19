@@ -58,10 +58,11 @@ describe('R101 wall scrub ① 撞后松油：切向刮擦把车快速刮停（�
     const fd = driveToWallHeading(heading, 55.56); // 200 km/h
     // 撞墙当帧切向速度仍高（切向 100% 保留的分解值），刮擦从下一帧起作用
     const v0 = Math.abs(fd.state.speed);
-    // R106 撞墙首帧法向速度骤降：fn≈0.3 斜擦扣掉入射法向分量的 KICK_RATIO(0.4) ⇒ 当帧从
-    // 旧 ~53 降到 ~48.7（仍高、非硬切）。切向刮擦从下一帧起作用，总速单调降到 <0.1 的
-    // 意图不变。阈值随新手感从 >50 重钉到 >48。
-    expect(v0).toBeGreaterThan(48); // 斜擦几乎不减总速（旧机制），当帧仍 >48 m/s
+    // R106 撞墙首帧法向速度骤降：fn≈0.3 斜擦扣掉入射法向分量的 KICK_RATIO ⇒ 当帧从
+    // 旧 ~53 降一截（仍高、非硬切）。切向刮擦从下一帧起作用，总速单调降到 <0.1 的
+    // 意图不变。R108 比例 0.4→0.7（用户要求更硬撞击）⇒ 当帧 ~43.9，阈值随新手感从
+    // >48 重钉到 >40（仍 > 入射速 55.56 的 7 成、非硬切）。
+    expect(v0).toBeGreaterThan(40); // 斜擦扣一记法向分量后当帧仍 >40 m/s（非硬切）
     // 松油持续 step：刮擦 scrub=min(55.56×0.3×0.8,12)=12 m/s² 持续耗散
     let dist = 0;
     let prev = Math.abs(fd.state.speed);
@@ -112,12 +113,13 @@ describe('R101 wall scrub ③ 轻擦(fn≈0.1)：scrub≈1.6 不瞬间刹停（�
   it('20 m/s 轻擦：撞后 0.1s 仍 >18 m/s、1s 仍 >17 m/s（渐进减速而非瞬停）', () => {
     const heading = headingFor(0.1); // fn≈0.0998 ⇒ impactN≈2 ⇒ scrub≈1.6
     const fd = driveToWallHeading(heading, 20);
-    // 撞墙当帧：speed 仍 ≈20（scrub 当帧未生效，r99 语义）
-    expect(Math.abs(fd.state.speed)).toBeGreaterThan(19);
+    // 撞墙当帧：speed 仍 ≈20（scrub 当帧未生效，r99 语义）。R108 比例 0.7 ⇒ 当帧略降，
+    //   阈值随新手感从 >19 重钉到 >18（仍 ≈20−0.7×2≈18.6，非硬切）。
+    expect(Math.abs(fd.state.speed)).toBeGreaterThan(18);
     for (let i = 0; i < 12; i += 1) fd.step(DT); // 0.1 s
-    expect(Math.abs(fd.state.speed)).toBeGreaterThan(18); // 没被瞬间刹停
+    expect(Math.abs(fd.state.speed)).toBeGreaterThan(17); // 没被瞬间刹停（R108 从 >18 重钉）
     for (let i = 0; i < 108; i += 1) fd.step(DT); // 累计 1 s
-    expect(Math.abs(fd.state.speed)).toBeGreaterThan(17); // 仍沿墙滑行（≈20−1.6×1）
+    expect(Math.abs(fd.state.speed)).toBeGreaterThan(16); // 仍沿墙滑行（R108 从 >17 重钉）
   });
 });
 
@@ -125,9 +127,10 @@ describe('R101 wall scrub ④ 撞墙当帧 speed 不破 r99 语义（R106 首帧
   it('撞墙当帧 speed 仍 >18（R106 首帧扣一记法向分量，斜擦 fn≈0.199 当帧 ~18.36，非硬切）', () => {
     const heading = -0.2; // 与 r99 同：fn≈0.1987
     const fd = driveToWallHeading(heading, 20);
-    // R106：当帧扣掉入射法向分量的 KICK_RATIO(0.4) ⇒ ~18.36（旧 ~19.73）。仍远高于 0，
-    // 切向保留 + 法向只扣一个比例 ⇒ R99 防硬切意图保留；阈值随新手感从 >19 重钉到 >18。
-    expect(fd.state.speed).toBeGreaterThan(18);
+    // R106：当帧扣掉入射法向分量的 KICK_RATIO ⇒ 斜擦 fn≈0.199 当帧降一截。仍远高于 0，
+    // 切向保留 + 法向只扣一个比例 ⇒ R99 防硬切意图保留；R108 比例 0.4→0.7（更硬撞击）⇒
+    // 当帧 ~17.17，阈值随新手感从 >18 重钉到 >17（仍 > 0、非硬切/非瞬移）。
+    expect(fd.state.speed).toBeGreaterThan(17);
     expect(fd.state.x).toBeCloseTo(LIMIT, 9); // 几何钳位逐位不动
   });
 
