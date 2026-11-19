@@ -80,6 +80,42 @@ const BUTTRESS_DEPTH = 1.0;
 const BUTTRESS_Z_HALF = (BUTTRESS_DEPTH + 1.1) / 2; // 1.05
 /** 殿身半宽（r28Layout.TOWER.hallW / 2 = 6.25，殿台基 / 大理石带 z 覆盖用） */
 const HALL_HALF = TOWER.hallW / 2;
+
+/* ── R105 · 主殿前排飞扶壁外墩（广场域 z<plazaZ，唯一「非漂移也穿」的缺陷）────────
+ * 用户主诉「细致每个建筑底部材料的边界」。主理人全量扫 + 真源核实：主殿正脸前排 3 对递减
+ * 飞扶壁（castleKit.ts:2731 `[[13.5,7.0,2.6],[21.5,6.2,2.3],[29.5,5.4,2.0]]`）经
+ * `pour(...rotateY(-π/2).translate(side*wx,0,zFront))`（:2742，**直接放置不走 put/faceHalf**）
+ * 落到广场 z≈-1294.3，比最南块 k9（zmin=plazaZ=-1285.5）还南 ⇒ 在 2D 激活带
+ * [plazaZ,gateBackZ] 之外，且 buildCityFootprints 原无此条目 ⇒ 1D 车缘（广场≈16.5）直穿内墩。
+ * 坐标映射（rotateY(-π/2)：世界 x = side·wx − z_local，世界 z = zFront + x_local）：
+ *   墩对 castleDetail.ts:342 `pierZs=[-pairGap/2,+pairGap/2]`（local z）⇒ 世界 x = wx ∓ pairGap/2；
+ *   墩基座 castleDetail.ts:344 `box(pierW+1.1,0.5,depth+1.1,pierX,…,pz)` ⇒ 世界 x 半宽
+ *   = (depth+1.1)/2（local x→世界 z，local z→世界 x）；世界 z = zFront + pierX，
+ *   pierX = reach − pierW/2（:337）。仅 wx=13.5 内墩对车可达（外墩 wx≥21.5 内缘>16.5）。 */
+/** 主殿正脸 z（castleKit.ts:2123 `zFront = z` = -1300） */
+const PLAZA_HALL_FRONT_Z = -1300;
+/** 主殿前排飞扶壁：内墩对 wx / reach / pierW / depth / pairGap（castleKit.ts:2731/2741/2738） */
+const PLAZA_BUTTRESS_WX = 13.5;
+const PLAZA_BUTTRESS_REACH = 7.0;
+const PLAZA_BUTTRESS_PIER_W = 2.6;
+const PLAZA_BUTTRESS_DEPTH = 1.4;
+const PLAZA_BUTTRESS_PAIR_GAP = 3.2;
+/** 内墩世界 |x| = wx − pairGap/2（内侧墩，靠路心）；外墩 = wx + pairGap/2 = 15.1（车不可达） */
+const PLAZA_BUTTRESS_PIER_CENTER = PLAZA_BUTTRESS_WX - PLAZA_BUTTRESS_PAIR_GAP / 2; // 11.9
+/** 基座世界 x 半宽 = (depth+1.1)/2（castleDetail.ts:344 sz=depth+1.1 → rotateY 后世界 x） */
+const PLAZA_BUTTRESS_BASE_HALF_X = (PLAZA_BUTTRESS_DEPTH + 1.1) / 2; // 1.25
+/** hi-detail 大脚基座额外外扩 0.3（castleDetail.ts:345 `pierW+0.6`/`depth+0.6` 之外的大脚线脚）*/
+const PLAZA_BUTTRESS_HI_EXTRA = 0.3;
+/** 内墩基座内缘 |x|（取 hi-detail 最外凸级，防 hi 档穿模；low 档 = 10.65 略内 0.225） */
+const PLAZA_BUTTRESS_INNER =
+  PLAZA_BUTTRESS_PIER_CENTER -
+  PLAZA_BUTTRESS_BASE_HALF_X -
+  PLAZA_BUTTRESS_HI_EXTRA; // 11.9 - 1.25 - 0.3 = 10.425
+/** 内墩世界 z = zFront + pierX，pierX = reach − pierW/2（castleDetail.ts:337） */
+const PLAZA_BUTTRESS_Z =
+  PLAZA_HALL_FRONT_Z + (PLAZA_BUTTRESS_REACH - PLAZA_BUTTRESS_PIER_W / 2); // -1294.3
+/** 基座世界 z 半宽 = (pierW+1.1)/2（castleDetail.ts:344 sx=pierW+1.1 → rotateY 后世界 z） */
+const PLAZA_BUTTRESS_Z_HALF = (PLAZA_BUTTRESS_PIER_W + 1.1) / 2; // 1.85
 /** 连墙段 z 区间 castleKit.ts:3289-3292（塔→殿 / 殿→塔，避开前后排塔基 z 半延展 4.7 m）：
  *  `[-blockLen/2, -blockLen/4 - 4.7]` / `[blockLen/4 + 4.7, blockLen/2]`（local z）。
  *  飞扶壁墩落在段中点 lz（castleKit.ts:3478-3487 `const lz = (za + zb) / 2`）。 */
@@ -194,6 +230,21 @@ export function buildCityFootprints(): CityFootprint[] {
       }
     }
   }
+
+  // ⑦ 主殿前排飞扶壁内墩（广场域 z<plazaZ，块循环外 —— 主殿不在 CITY_BLOCK_Z 内）。
+  //    R105：这是唯一「非漂移态也穿模」的缺陷点（全量扫证实）。内墩基座内缘 10.425，车广场
+  //    1D 车缘 ≈16.5 直穿最多 ~3m（hi-detail 大脚）。外墩（wx≥21.5）内缘 >16.5 车不可达 ⇒
+  //    不占位（免假空气墙）。占位以 |x| 距离存储（双侧镜像由 clampToFootprints 按车侧处理）。
+  //    ⚠ 此 footprint 在 2D 激活带 [plazaZ,gateBackZ] 之外（z≈-1294.3<plazaZ）⇒ 需 FreeDrive
+  //    step() 的 2D 门控下界从 plazaZ 扩到 zMin 才会真正被 consult（R105 同步改）。
+  list.push({
+    xInner: PLAZA_BUTTRESS_INNER,
+    xOuter: PLAZA_BUTTRESS_PIER_CENTER + PLAZA_BUTTRESS_BASE_HALF_X,
+    zMin: PLAZA_BUTTRESS_Z - PLAZA_BUTTRESS_Z_HALF,
+    zMax: PLAZA_BUTTRESS_Z + PLAZA_BUTTRESS_Z_HALF,
+    kind: 'buttressBase'
+  });
+
   return list;
 }
 

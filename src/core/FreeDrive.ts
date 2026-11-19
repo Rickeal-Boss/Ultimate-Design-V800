@@ -142,6 +142,34 @@ export const WALL_IMPACT_KICK_MS = 0.15;
 /** R104 撞墙横摆冲量峰值上限 rad/s（真源 / 产品标定：min(wallImpact, 此值) 记为 wallKick） */
 export const WALL_IMPACT_KICK_MAX = 1.2;
 
+/* ── R105 · 漂移态 2D 防穿模（位置钳 + 朝向贴墙收敛，不注入撞击/速度/刮擦）──────
+ * 不放进 FREE 灵魂表，也不改任何既有常量（IMPACT_TAU / WALL_IMPACT_HEADING_TAU /
+ * WALL_SCRUB_* / WALL_IMPACT_* / 摩擦圆 / 灵魂 12 全部零改）。
+ * 背景：漂移态 2D 占位曾被 `!driftActive` 门控整体关闭 ⇒ 车漂移时能穿进建筑底部
+ *   3.5~5.6 m（buttressBase 内缘 11.35 / cornerBase 14.9 / frontWall 15.5 全被穿），
+ *   是全量几何扫确认的最大穿模源。但 R103/R104 关掉它的原因不是「位置钳」本身，
+ *   而是「位置钳 + 撞击/速度/heading 注入」：漂移车滑到前脸被钉在墙面 + fn 持续触发
+ *   wall-impact ⇒ β 被外力阻尼、永不塌缩、rearGrip 不复原（free_drift β 卡 0.27）。
+ * 改法：漂移态 2D 只做「位置钳（s.x=fp.x）+ heading 朝墙面切向一阶收敛」，**不注入
+ *   impactN / 不 damp speed / 不加 scrub / 不触发 wallImpact·wallKick**（这些是 β 半衰
+ *   回归的元凶）。heading 收敛用独立的更缓 τ，让车头不再一直戳向墙 ⇒ 轮胎自回正 +
+ *   rearGrip 恢复能自然把 β 塌缩，而非靠撞墙外力。 */
+/**
+ * R105 漂移态 2D 接触的朝向收敛时间常数 s（**独立于 WALL_IMPACT_HEADING_TAU**，更缓）。
+ * 漂移中贴建筑占位时只把车头朝墙面切向徐徐掰正（不注撞击/速度/刮擦），τ 取大一点
+ * 让收敛足够温和 —— 既防车头持续戳墙，又不干扰漂移模型自身的 β 塌缩节奏。
+ * 撞墙域边界常量，不入灵魂表。
+ */
+export const WALL_IMPACT_DRIFT_HEADING_TAU = 0.3;
+/**
+ * R105 漂移态 2D 接触的 β / 动态横摆回收速率 1/s（比 heading 收敛更快，独立标定）。
+ * 补上「2D 提前拦下 ⇒ 车到不了前脸 1D 墙 ⇒ 失去撞墙塌 β」的缺口：贴墙期间持续把 β /
+ * yawDyn 往回收，保证 free_drift 恢复段 β 在阈值内塌缩（不卡死）。仅作用在 2D 接触帧，
+ * 不注入 impactN / 不 damp speed / 不加 scrub / 不碰 rearGrip（自主恢复）。
+ * 撞墙域边界常量，不入灵魂表。
+ */
+export const WALL_IMPACT_DRIFT_BETA_RATE = 9.0;
+
 /* ── R101 Phase2 · 撞墙切向刮擦摩擦（wall scrub）独立标定 ───────────────────
  * 不放进 FREE 灵魂表：刮擦是**撞墙域边界耗散**，与漂移轮胎模型（灵魂 12 参数）无关，
  * 也不碰 FREE_BODY_DAMPING / 摩擦圆（tyreMu/latUse/decelAvail）/ 制动力 / decelPerNewton。
@@ -1054,18 +1082,49 @@ export class FreeDrive {
      * 11.12 m 处嵌柱 1.12 m，车尾 bbox（zc±2.75）合法待在钳位线外侧与 6.2 m 深台阶相交
      * ⇒「存在的建筑又穿模 / 车尾卡台阶缝隙」。clampToFootprints 把 OBB 4 角点的 x 伸展
      * dx(θ) = 半长|sinθ| + 半宽|cosθ| 与 z 覆盖重叠的城内占位盒取最紧界 |x| ≤ xInner − dx。
-     * 只在城内域（z ∈ [plazaZ, gateBackZ]）激活 —— 桥段 / 城门带 / 主殿广场沿用 1D 钳位，
-     * z=−250 桥段测试全程零触发，既有 r97/r98/r99/r100 护栏不破（resolveBounds 函数体未改）。 */
-    if (nz <= BOUNDS.gateBackZ && nz >= BOUNDS.plazaZ && !driftActive) {
-      // R103 阶段二：块心 1D 已放宽到前脸 14.497 / 殿身 13.997，周期物（柱 11.12 / 连墙墩 /
-      // 角塔墩 11.35）全部下沉到本 2D 层。整层仍 **!driftActive 门控**（含位置钳）——实测若
-      // 漂移态也做位置钳，漂移车滑到前脸（现可达 14.497）会被钉在墙面、heading 不收敛 ⇒
-      // β 永不塌缩、rearGrip 不复原（free_drift 恢复段 β 卡 0.27 / grip 不回 1）。漂移是瞬态，
-      // 出漂移后 2D 立即恢复；漂移中短暂穿越柱/墩窗口极短且玩家主动（R102 同款取舍）。
+     * 只在城内域 + 广场域（z ∈ [zMin, gateBackZ]）激活 —— 桥段 / 城门带沿用 1D 钳位，
+     * z=−250 桥段测试全程零触发，既有 r97/r98/r99/r100 护栏不破（resolveBounds 函数体未改）。
+     * R105：下界从 plazaZ 扩到 zMin —— 主殿前排飞扶壁内墩落到广场 z≈-1294.3（< plazaZ=-1285.5，
+     * 原激活带之外）却无 2D 兜底 ⇒ 车广场 1D 车缘≈16.5 直穿内墩基座（内缘 10.425）最多 ~3m。
+     * 扩到 zMin 后该域内仅此一条 footprint（buildCityFootprints 广场段只建飞扶壁内墩）⇒ 不引入
+     * 别处假钳位。 */
+    if (nz <= BOUNDS.gateBackZ && nz >= BOUNDS.zMin) {
+      // R105：去掉外层 !driftActive 门控 —— 漂移态**也做位置钳**（s.x=fp.x），堵死漂移穿模。
+      //   旧版整层被 !driftActive 关闭 ⇒ 漂移车能穿进建筑底部 3.5~5.6 m（全量几何扫最大穿模源）。
+      //   R103 关掉它的真因是「位置钳 + 撞击/速度/heading 注入」会让 β 永不塌缩，而非位置钳本身；
+      //   故此处按 driftActive 分流：漂移态只做位置钳 + 朝向贴墙收敛，不碰撞击/速度/刮擦链路。
       const fp = clampToFootprints(s.x, s.z, s.heading);
       if (fp.hit) {
         s.x = fp.x; // 只收紧 x：z 不动（占位盒 x 对称，z 方向无 2D 修正量）
-        {
+        if (driftActive) {
+          /* R105 漂移态：位置钳 + 朝向贴墙收敛 + β/横摆回收，**不注入撞击/速度/刮擦**。
+           * 2D 把车在建筑占位（柱 11.12 / 墩 11.35 / 基座 14.9）提前拦下后，车到不了前脸 1D 墙，
+           * 失去原本「撞前脸墙 → wall-impact 吸法向速度 + 塌 β」的机制 ⇒ 若只做 heading 收敛，
+           * 车会贴占位持续滑行、β 卡死、heading 绕圈（实测 β 卡 -0.5 / recoveredAt=-1）。
+           * 故贴墙时把 β / 动态横摆往回收（等价于 baseline 在前脸墙做的塌 β），让车头贴合速度方向、
+           * 轮胎自回正接管。关键红线：不改 r.impactN / r.targetHeading / r.kind ⇒ 下方 impacting 块
+           * （wallImpact·wallScrubN·wallKick·速度 IMPACT_TAU damp·scrub）不被 2D 触发 —— 这些是
+           * R103/R104 β 半衰 + rearGrip 不复原回归的元凶。rearGrip 走 gripRecoverTau 自主恢复，不受影响。
+           * 收敛 / 回收都用独立的更缓 WALL_IMPACT_DRIFT_HEADING_TAU（温和，不干扰漂移模型自身节奏）。 */
+          const fDrift = forwardOf(s.heading);
+          const targetH = slideHeading(fDrift.x, fDrift.z, fp.nx, 0);
+          s.heading = impactHeadingStep(
+            s.heading,
+            targetH,
+            WALL_IMPACT_DRIFT_HEADING_TAU,
+            dt
+          );
+          // β / 动态横摆回收用比 heading 收敛更快的速率：贴墙期间持续把侧滑角往回拉，
+          // 补上「2D 提前拦下 ⇒ 到不了前脸墙 ⇒ 失去撞墙塌 β」的缺口，保证 free_drift
+          // 恢复段 β 在阈值内塌缩（不卡死）。仍不碰 impactN / speed / scrub / rearGrip。
+          s.beta = damp(s.beta, 0, WALL_IMPACT_DRIFT_BETA_RATE, dt);
+          this.yawDyn = damp(this.yawDyn, 0, WALL_IMPACT_DRIFT_BETA_RATE, dt);
+          // heading 收敛改变了车 OBB 的 x 伸展 dx(θ) ⇒ 用收敛后的 heading 重钳一次位置，
+          // 否则会出现「钳位时按旧 heading 不重叠、收敛后按新 heading 又重叠」的单帧穿模瞬态。
+          const fpRe = clampToFootprints(s.x, s.z, s.heading);
+          if (fpRe.hit) s.x = fpRe.x;
+        } else {
+          // 非漂移态：原撞击 / heading / scrub 链路照旧（逐位不变）。
           const nxSide = fp.nx;
           const fSide = forwardOf(s.heading);
           const fnSide = fSide.x * nxSide;

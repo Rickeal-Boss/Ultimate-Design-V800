@@ -74,8 +74,9 @@ describe('R102 ① 占位清单覆盖 probe-bounds §2 六类地面层实体（�
     expect(byKind('cornerBase').length).toBe(20); // 10 块 × 2 座
     expect(byKind('frontBase').length).toBe(20); // 10 块 × 2 座
     expect(byKind('arcadeCol').length).toBe(40); // 10 块 × 4 柱
-    // R103 阶段二：连墙墩 20（10 块 × 2 连墙段）+ 角塔墩 4（hero 块 k<2 各 2 座）= 24
-    expect(byKind('buttressBase').length).toBe(24);
+    // R103 阶段二：连墙墩 20（10 块 × 2 连墙段）+ 角塔墩 4（hero 块 k<2 各 2 座）= 24；
+    // R105：+ 主殿前排飞扶壁内墩 1（广场域，双侧镜像单条）= 25
+    expect(byKind('buttressBase').length).toBe(25);
   });
 
   it('角塔基座内缘 = 14.9（真源派生，非写死）', () => {
@@ -91,7 +92,9 @@ describe('R102 ① 占位清单覆盖 probe-bounds §2 六类地面层实体（�
   });
 
   it('飞扶壁连墙墩内缘 = 11.35（真源派生，非写死）', () => {
+    // R105：排除广场域主殿前排飞扶壁内墩（xInner 10.425，z<plazaZ，另测）——此处只钉城内连墙/角塔墩
     for (const f of byKind('buttressBase')) {
+      if (f.zMin < BOUNDS.plazaZ) continue; // 广场域主殿飞扶壁（z≈-1294.3 < plazaZ）
       expect(f.xInner).toBeCloseTo(BUTTRESS_LINK_INNER, 12);
     }
   });

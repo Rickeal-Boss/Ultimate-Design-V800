@@ -180,10 +180,10 @@ describe('R103 阶段二 ④ 角塔飞扶壁墩 hero-only（k<2）', () => {
     );
   }
 
-  it('真源派生：角塔墩内缘 11.35（非写死）；连墙墩与角塔墩同为 buttressBase 共 24 座', () => {
+  it('真源派生：角塔墩内缘 11.35（非写死）；连墙墩与角塔墩同为 buttressBase 共 25 座（含主殿前排飞扶壁）', () => {
     expect(BUTTRESS_CORNER_INNER).toBeCloseTo(11.35, 12);
-    // 20 连墙墩（10 块 × 2 段）+ 4 角塔墩（hero 块 k=0,1 各 2 角）
-    expect(FOOTPRINTS.filter((f) => f.kind === 'buttressBase').length).toBe(24);
+    // 20 连墙墩（10 块 × 2 段）+ 4 角塔墩（hero 块 k=0,1 各 2 角）+ 1 主殿前排飞扶壁内墩（R105 广场域）
+    expect(FOOTPRINTS.filter((f) => f.kind === 'buttressBase').length).toBe(25);
   });
 
   it('hero 块（k=0,1）每块有 2 个角塔墩 2D 占位（内缘 11.35，z 同角塔中心）', () => {
@@ -206,18 +206,19 @@ describe('R103 阶段二 ④ 角塔飞扶壁墩 hero-only（k<2）', () => {
   });
 });
 
-describe('R103 阶段二 ⑤ 漂移豁免：2D 层 !driftActive 门控', () => {
-  it('clampToFootprints 是纯函数：漂移态豁免由 step() 的 !driftActive 门控（结构断言）', () => {
-    // 2D 收紧仅在城内域 + 非漂移态激活（FreeDrive.step：nz ≤ gateBackZ && nz ≥ plazaZ
-    //   && !driftActive 才调 clampToFootprints）。漂移是瞬态，出漂移后 2D 立即恢复。
-    //   漂移中 2D 位置钳的行为回归由 free_drift.test.ts 覆盖（β 塌缩 / rearGrip 复原），
-    //   此处只钉「城内 2D 唯一入口 = clampToFootprints」这一结构不变量，防绕过 2D 层。
+describe('R105 漂移态 2D 启用：城内/广场 2D 唯一入口 = clampToFootprints（结构断言）', () => {
+  it('clampToFootprints 是纯函数：2D 收紧在 [zMin,gateBackZ] 对非漂移+漂移都激活（结构断言）', () => {
+    // R105：去掉 !driftActive 门控 ⇒ 漂移态也做 2D 位置钳（堵死漂移穿模 3.5~5.6m）。
+    //   漂移分支只做「位置钳 + 朝向贴墙收敛 + β/横摆回收」，不注入 impactN/speed/scrub
+    //   （那是 R103 β 半衰回归的元凶）。漂移手感回归由 free_drift.test.ts 覆盖（β 塌缩 /
+    //   rearGrip 复原），此处只钉「城内/广场 2D 唯一入口 = clampToFootprints」结构不变量。
     const src = readFileSync(
       resolve(__dirname, '../src/core/FreeDrive.ts'),
       'utf8'
     );
-    // step() 里 clampToFootprints 调用被 !driftActive 门控（同一处 && 链）
-    expect(src).toMatch(/nz <= BOUNDS\.gateBackZ[\s\S]{0,80}&& !driftActive/);
+    // step() 2D 门控：城内+广场域 [zMin, gateBackZ]（R105 下界 plazaZ→zMin，纳入主殿飞扶壁）
+    expect(src).toMatch(/nz <= BOUNDS\.gateBackZ[\s\S]{0,40}&& nz >= BOUNDS\.zMin/);
+    // 非漂移 + 漂移两处都调 clampToFootprints（漂移态不再被整体跳过）
     expect(src).toMatch(/clampToFootprints\(s\.x, s\.z, s\.heading\)/);
   });
 

@@ -143,6 +143,6 @@ describe('R104 ③ 六类地面实体占位边界扫描（不穿 + 不过度挡�
     expect(byKind('cornerBase').length).toBe(20);
     expect(byKind('frontBase').length).toBe(20);
     expect(byKind('arcadeCol').length).toBe(40);
-    expect(byKind('buttressBase').length).toBe(24); // 连墙 20 + 角塔 4（hero 块）
+    expect(byKind('buttressBase').length).toBe(25); // 连墙 20 + 角塔 4（hero 块）+ 主殿前排飞扶壁 1（R105 广场域）
   });
 });
