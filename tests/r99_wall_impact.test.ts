@@ -116,10 +116,10 @@ describe('R99 ② resolveBounds 速度法向吸收 + 切向保留', () => {
     expect(r.speed).toBeCloseTo(20 * (1 - FREE.wallDecay), 6);
     expect(r.impactN).toBeCloseTo(20, 6);
     expect(r.targetHeading).toBeDefined();
-    // hall 分支不带撞击字段（本轮不动）
+    // R100：hall 带 impactN 供 wallImpact 瞬态复用，speed 仍 0、无 targetHeading
     const hall = resolveBounds(0, BOUNDS.zMin, 0, 20);
     expect(hall.kind).toBe('hall');
-    expect(hall.impactN).toBeUndefined();
+    expect(hall.impactN).toBe(20); // |v|：正撞法向强度
     expect(hall.targetHeading).toBeUndefined();
   });
 });

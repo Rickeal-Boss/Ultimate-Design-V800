@@ -25,6 +25,9 @@
 import { BRAKE, MS_TO_KMH, VEHICLE } from '../config/physics';
 // R99：角塔基座内缘真源（INNER.faceHalf），与 VEHICLE.widthM 一起派生块角车心限。
 import { INNER } from '../render/scene/r28Layout';
+// R100：拱廊柱列几何真源（R30_ARCADE.width / pitch），派生柱位周期窄带；
+//   castleKit 模块加载无 DOM 副作用（r97_bounds_clearance 在 beforeAll 前已 import 同源）。
+import { R30_ARCADE } from '../render/scene/castleKit';
 // R98：车身回正阻尼抽成独立配置（6/4 → 3.8/3.2），漂移灵魂参数与纵向力不受影响。
 import { FREE_BODY_DAMPING } from '../config/freeBodyFeel';
 import { dragForce, motorForce, rollForce } from '../physics/Vehicle';
@@ -101,7 +104,8 @@ export const FREE = {
 /* ── R99 · 撞墙瞬态（wall-scuff transient）独立标定 ──────────────────────────
  * 不放进 FREE 灵魂表：撞墙是边界写回的事，与漂移轮胎模型无关；也不碰
  * FREE_BODY_DAMPING（R98 阻尼）。这三个量只驱动「被墙顶一下 → 带惯性滑走」
- * 的一阶收敛与短暂横摆/侧倾冲击，hall 分支本轮不动。 */
+ * 的一阶收敛与短暂横摆/侧倾冲击。R100：hall 正撞复用同一包络做姿态瞬态，但速度
+ * 保持 speed:0（彻底停），不进 side/end 的速度分解路径。 */
 /** 朝向 / 漂移态一阶收敛时间常数 s（≈0.36s 走完 95%，不再是单帧硬切） */
 export const IMPACT_TAU = 0.12;
 /** 法向入射冲量 → 视觉横摆角速度瞬态增益（rad·s/m，小值起始） */
@@ -198,6 +202,46 @@ const CITY_CORNER_BASE_INNER = INNER.faceHalf - CITY_CORNER_MARBLE_SKIRT / 2; //
 /** 角点车心限 = 可见基座内缘 − 车半宽 = 14.9 − 1.003 = 13.897（车缘恰贴基座不嵌入） */
 const CITY_CORNER_CAR_CENTER = CITY_CORNER_BASE_INNER - VEHICLE.widthM / 2;
 
+/* ── R100 · 边界精度贴可见实体（柱列周期 / 空档角塔带）──────────────────────
+ * 用户澄清：不补街沿、不加兜底墙；只让挡车边界精确贴合可见实体。全部常量由真源
+ * import 派生（R30_ARCADE / INNER / VEHICLE），禁写死 10.117 / 11.12 / 8.8 / 1.303 / 2.6。
+ */
+/** 拱廊柱半径（castleDetail.ts:1397 `const colR = 0.3`，corridorRun 局部常量，真源不可 import） */
+const ARCADE_COL_R = 0.3;
+/** 柱心相对廊宽外偏（castleDetail.ts:1410 `cx = −width + colR + 0.12`） */
+const ARCADE_COL_OFFSET = 0.12;
+/** 拱廊整体内移（castleKit.ts:3474 `g.translate(-1.0,0,0)`） */
+const ARCADE_TRANSLATE = 1.0;
+/**
+ * 拱廊柱可见内缘 |x|（r97_bounds_clearance.test.ts:36 同源公式）：
+ *   柱心局部 cx = −width + colR + 0.12，整体再 translate(−1.0)，put 镜像加 faceHalf ⇒
+ *   柱心世界 |x| = faceHalf + cx − translate = faceHalf − width + colR + 0.12 − translate；
+ *   柱内缘 = 柱心 − colR ⇒ colR 抵消 ⇒ faceHalf − width − translate + 0.12 = 15.5−3.5−1.0+0.12 = 11.12。
+ */
+const ARCADE_COL_INNER = INNER.faceHalf - R30_ARCADE.width - ARCADE_TRANSLATE + ARCADE_COL_OFFSET; // 11.12
+/** 柱位车心限 = 柱内缘 − 车半宽 = 11.12 − 1.003 = 10.117（车缘贴柱，比现状 10.0 松 0.117m） */
+const ARCADE_PILLAR_CAR_CENTER = ARCADE_COL_INNER - VEHICLE.widthM / 2;
+/**
+ * 柱位 z 邻域半宽 = (柱直径 2·colR + 车宽 VEHICLE.widthM)/2 = colR + 车半宽
+ *   = 0.3 + 1.003 = 1.303（审查团 §2.1：车外廓与柱外廓在 z 向重叠即贴柱）。
+ */
+const ARCADE_PILLAR_NEAR_HALF = ARCADE_COL_R + VEHICLE.widthM / 2;
+/** 柱 z 节距 = R30_ARCADE.pitch = 8.8；柱位 zc ± (i+0.5)·pitch（i=0,1 ⇒ ±4.4 / ±13.2） */
+const ARCADE_PILLAR_PITCH = R30_ARCADE.pitch;
+/** 单侧柱数 n = floor(len/2/pitch)，len = blockLen−2 = 44（castleKit.ts:3468 len=blockLen−2）⇒ floor(22/8.8)=2 */
+const ARCADE_PILLAR_COUNT = Math.floor(
+  (CITY_BLOCK_Z[0][1] - CITY_BLOCK_Z[0][0] - 2) / 2 / ARCADE_PILLAR_PITCH
+);
+/** 角塔进深 castleKit.ts:330 `R30_CORNER.d=5`（私有常量，真源不可 import） */
+const CITY_CORNER_D = 5;
+/**
+ * 角塔基座伸进空档的 z 覆盖带 = (d + 裙)/2 − 0.5 =
+ *   (R30_CORNER.d + CITY_CORNER_MARBLE_SKIRT)/2 − 块端内偏0.5 = (5+1.2)/2 − 0.5 = 2.6
+ * （ctd+1.2 基座裙半宽 3.1；角塔中心块端内偏 0.5 ⇒ castleKit.ts:3461 `blockLen/2 − 0.5`）
+ */
+const CITY_CORNER_Z_REACH = (CITY_CORNER_D + CITY_CORNER_MARBLE_SKIRT) / 2 - 0.5;
+/** 覆盖带外端的线性过渡消抖宽度（报告 §2.3 遗留项 3，产品标定 0.4m） */
+const CITY_CORNER_Z_FADE = 0.4;
 /** 纯函数：当前 z 处的侧向可行驶半宽（R96 多边角，随建筑轮廓分段） */
 export function corridorHalfWidth(z: number): number {
   if (z >= BOUNDS.gateFrontZ) return BOUNDS.bridgeHalfW; // 御桥段：贴桥沿 12.0（防坠峡谷）
@@ -239,15 +283,43 @@ export function corridorCenterHalfWidth(z: number): number {
   for (const [zmin, zmax] of CITY_BLOCK_Z) {
     if (z >= zmin && z <= zmax) {
       const dc = Math.min(z - zmin, zmax - z); // 到最近块边界的距离
-      if (dc >= EDGE_TRANSITION) return BOUNDS.arcadeHalfW; // 块心 10.0（R97 净空不变）
-      // R99 多边形角：外端贴可见角塔基座内缘（车心限 13.897 → 车缘 14.9 恰贴），
-      // 内端 = 块心 10.0（车缘 11.003 保持 R97 净空）。与 corridorHalfWidth 同型线性斜边，
-      // 仅把外端点从抽象面线 15.5 换成可见实体 14.9；分段顺序严格镜像，不碰其它段。
-      const t = dc / EDGE_TRANSITION; // 0=块角 → 1=柱列段
-      return CITY_CORNER_CAR_CENTER + (BOUNDS.arcadeHalfW - CITY_CORNER_CAR_CENTER) * t;
+      if (dc < EDGE_TRANSITION) {
+        // R99 多边形角：外端贴可见角塔基座内缘（车心限 13.897 → 车缘 14.9 恰贴），
+        // 内端 = 块心 10.0（车缘 11.003 保持 R97 净空）。与 corridorHalfWidth 同型线性斜边，
+        // 仅把外端点从抽象面线 15.5 换成可见实体 14.9；分段顺序严格镜像，不碰其它段。
+        const t = dc / EDGE_TRANSITION; // 0=块角 → 1=柱列段
+        return CITY_CORNER_CAR_CENTER + (BOUNDS.arcadeHalfW - CITY_CORNER_CAR_CENTER) * t;
+      }
+      // R100 ① 柱列周期贴实体：块心段 dc≥3 不再恒定 10.0。柱位邻域（|z−z_pillar|≤1.303）
+      // 车心限 = 柱内缘 11.12 − 车半宽 = 10.117（车缘贴柱，比现状松 0.117m）；柱间维持 10.0，
+      // **不放宽到 14.497**——飞扶壁墩内缘 11.125/11.35 < 14.497，放宽必撞墩（审查团 §2.1），
+      // 故柱间保留 R97 窄带是正确产品决策。柱位 z = 块心 ± (i+0.5)·pitch（i=0,1）。
+      const zc = (zmin + zmax) / 2;
+      for (let i = 0; i < ARCADE_PILLAR_COUNT; i += 1) {
+        const pillarOffset = (i + 0.5) * ARCADE_PILLAR_PITCH; // 4.4 / 13.2
+        if (
+          Math.abs(z - (zc - pillarOffset)) <= ARCADE_PILLAR_NEAR_HALF ||
+          Math.abs(z - (zc + pillarOffset)) <= ARCADE_PILLAR_NEAR_HALF
+        ) {
+          return ARCADE_PILLAR_CAR_CENTER; // 10.117 贴柱
+        }
+      }
+      return BOUNDS.arcadeHalfW; // 柱间 / 无柱块心：10.0（R97 净空不变）
     }
   }
-  return corridorHalfWidth(z) - VEHICLE.widthM / 2; // 空档：建筑前脸线扣车半宽
+  // R100 ② 空档角塔带贴实体：z 落在块边界外侧 0~2.6m（角塔基座伸进空档覆盖带）时车心限
+  // 收到 13.897（车缘 14.9 贴基座），其余空档保持 14.497；覆盖带外端 0.4m 线性过渡消抖。
+  const openCenter = corridorHalfWidth(z) - VEHICLE.widthM / 2; // 14.497 开放基线
+  for (const [zmin, zmax] of CITY_BLOCK_Z) {
+    // 块下边界外侧（z < zmin）：越靠近 zmin 越深；块上边界外侧（z > zmax）镜像。
+    const outside = z < zmin ? zmin - z : z > zmax ? z - zmax : Infinity;
+    if (outside > CITY_CORNER_Z_REACH + CITY_CORNER_Z_FADE) continue;
+    if (outside <= CITY_CORNER_Z_REACH) return CITY_CORNER_CAR_CENTER; // 13.897 贴基座
+    // 外端 0.4m 线性过渡：13.897 → 14.497（放宽方向，非穿模）
+    const t = (outside - CITY_CORNER_Z_REACH) / CITY_CORNER_Z_FADE;
+    return CITY_CORNER_CAR_CENTER + (openCenter - CITY_CORNER_CAR_CENTER) * t;
+  }
+  return openCenter; // 其余空档：建筑前脸线扣车半宽 14.497
 }
 
 /** 自由探索起点：城门外（城门洞 z = −358.5）以北 28.5 m，车头朝城门 */
@@ -313,7 +385,8 @@ export interface BoundResult {
   heading: number;
   speed: number;
   kind: BoundKind;
-  /** R99：法向入射冲量强度 |v|·fn [m/s]，仅 side/end 撞击时 >0（hall 不带） */
+  /** R99：法向入射冲量强度 |v|·fn [m/s]，side/end 撞击时 >0；
+   *  R100：hall 正撞带 |v|（无 fn 分解，heading 原样、speed 仍 0） */
   impactN?: number;
   /** R99：朝向一阶收敛的终值（沿墙切向，slideHeading 求终值），仅 side/end 撞击时给出 */
   targetHeading?: number;
@@ -441,7 +514,10 @@ export function resolveBounds(
       z: BOUNDS.zMin + BOUNDS.hallBounce,
       heading,
       speed: 0,
-      kind: 'hall'
+      kind: 'hall',
+      // R100：带出正撞法向强度供 step 注入 wallImpact 包络（复用 R99 一阶瞬态）。
+      // 不设 targetHeading ⇒ heading 原样、不二次撞击；speed 仍 0 ⇒ 一次性彻底停契约不变。
+      impactN: Math.abs(speed)
     };
   }
 
@@ -449,7 +525,7 @@ export function resolveBounds(
   let h = heading;
   let v = speed;
   // R99：几何钳位仍瞬时（防穿墙），但朝向/速度不再在一步内硬切；
-  // 这两项交给 FreeDrive.step() 经 IMPACT_TAU 一阶展开（hall 分支本轮不动）。
+  // 这两项交给 FreeDrive.step() 经 IMPACT_TAU 一阶展开（hall 只注入 impactN 包络，速度仍 0）。
   let impactN = 0;
   let targetHeading: number | undefined;
 
@@ -804,10 +880,21 @@ export class FreeDrive {
     // fn 大时单帧减速度仍可达数十 g（与硬切同病），且连续贴墙会逐帧重复吸收
     // 使速度几何级塌缩 —— 故与朝向一样用一阶惯性展开。
     s.speed = impacting ? damp(s.speed, r.speed, 1 / IMPACT_TAU, dt) : r.speed;
-    if (r.kind === 'hall') s.accel = 0;
+    // R100 hall 瞬态（复用 R99 wallImpact 包络，不照搬 side 的速度分解）：
+    //   speed 仍取 r.speed=0 ⇒ 正撞彻底停、不二次撞击、z 弹开 0.8m 不变；
+    //   s.accel 保留归零（pitch 走 FREE_BODY_DAMPING.pitch 一阶，不产生俯仰硬切）；
+    //   impactN 注入包络 ⇒ 下方衰减段给 yawRate/roll 一记短暂「被顶一下」冲击；
+    //   beta/yawDyn 按 IMPACT_TAU 逐帧收敛 ⇒ 消除 speed<1.5 退出漂移层时的单帧横跳。
+    if (r.kind === 'hall') {
+      s.accel = 0;
+      this.wallImpact = Math.max(this.wallImpact, r.impactN ?? 0);
+      s.beta = damp(s.beta, 0, 1 / IMPACT_TAU, dt);
+      this.yawDyn = damp(this.yawDyn, 0, 1 / IMPACT_TAU, dt);
+    }
 
     // ---- R99 撞墙瞬态：几何已瞬时钳位，运动学在此按 IMPACT_TAU 一阶展开 ----
-    // 仅 side/end 撞击带 impactN/targetHeading；hall 分支本轮保持原样。
+    // side/end 撞击带 impactN + targetHeading；hall 只在上面注入 impactN 包络、
+    // 不进此块（无 targetHeading ⇒ heading 原样，速度不渐变）。
     if (impacting) {
       this.wallImpact = Math.max(this.wallImpact, r.impactN!); // 峰值：连续擦碰刷新
       // 朝向一阶收敛（角度差走最短弧，避免 ±π wrap 跳变），不再一帧硬掰到墙面切向。
@@ -823,6 +910,11 @@ export class FreeDrive {
     if (this.wallImpact > 0) {
       s.yawRate += IMPACT_YAW_GAIN * this.wallImpact * (dt / IMPACT_TAU);
       s.roll += IMPACT_ROLL_GAIN * this.wallImpact * (dt / IMPACT_TAU);
+      // R100 Phase3：注入发生在下游 clamp(rollTarget) 之前，灵魂上限只约束 target
+      // 不约束 state 注入量 ⇒ 高速撞击 roll 峰随 |v| 线性涨（55m/s 达 0.109rad，超 3.5° 约 79%）。
+      // 紧跟注入做硬 clamp：保留「被顶一下」体感，只是幅度收进真车合理包络。
+      s.roll = clamp(s.roll, -FREE.rollMaxRad, FREE.rollMaxRad);
+      s.yawRate = clamp(s.yawRate, -FREE.maxYawRate, FREE.maxYawRate);
     }
 
     // ---- 视觉姿态（侧倾 × 俯仰，都做平滑，避免阶跃）----

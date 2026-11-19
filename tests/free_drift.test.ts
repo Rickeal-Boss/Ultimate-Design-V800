@@ -11,10 +11,22 @@
  * decelPerNewton=ABS_MAX_DECEL/1612、限速只钳速、b=1.0 1.77s 断裂、路障 1300m。
  */
 import { describe, expect, it } from 'vitest';
-import { FREE, FreeDrive, aligningYawAccel } from '../src/core/FreeDrive';
-import { BRAKE } from '../src/config/physics';
+import { FREE, FreeDrive, aligningYawAccel, corridorCenterHalfWidth } from '../src/core/FreeDrive';
+import { BRAKE, VEHICLE } from '../src/config/physics';
+import { INNER } from '../src/render/scene/r28Layout';
+import { R30_ARCADE } from '../src/render/scene/castleKit';
 
 const DT = 1 / 120;
+
+/* R100 · 柱位贴实体护栏（真源派生，禁写死 10.117 / 11.12）：
+ * 柱内缘 = INNER.faceHalf − R30_ARCADE.width − translate(1.0) + 柱心外偏(0.12) = 11.12
+ *   （与 r97_bounds_clearance.test.ts:36 同口径；translate/offset 为 castleDetail/castleKit 私有字面量）。
+ * k0 块心 zc = INNER.zNear − blockLen/2 = −388.5；本用例恢复段经过的柱位 z = zc + 1.5·pitch = −375.3。 */
+const CAR_HALF = VEHICLE.widthM / 2;
+const ARCADE_TRANSLATE = 1.0; // castleKit.ts:3474
+const COL_CENTER_OFFSET = 0.12; // castleDetail.ts:1410
+const PILLAR_INNER = INNER.faceHalf - R30_ARCADE.width - ARCADE_TRANSLATE + COL_CENTER_OFFSET; // 11.12
+const PILLAR_Z = INNER.zNear - INNER.blockLen / 2 + 1.5 * R30_ARCADE.pitch; // −375.3
 
 /** 挂挡加速到 ≥ target m/s */
 function accelerateTo(fd: FreeDrive, target: number, maxSteps = 600): number {
@@ -94,11 +106,21 @@ describe('R36-P1 手刹漂移（仿真：轮胎侧偏 + 摩擦圆）', () => {
     fd.press('KeyA', false);
     let recoveredAt = -1;
     let betaHalfAt = -1;
+    /** R100 护栏：恢复段经过柱位邻域时，车缘必须 ≤ 柱内缘（贴柱而非穿模）。
+     *  真源派生：柱位车心限 = corridorCenterHalfWidth(PILLAR_Z) = 柱内缘 − 车半宽；
+     *  车缘 = |x| + 车半宽。钉死「放宽 10.0→10.117 是贴实体，不是放穿」。 */
+    let witnessedPillarZone = false;
+    let worstCarEdgeInPillarZone = -Infinity;
     for (let i = 0; i < 360; i += 1) {
       // 回正期间继续给油保持车速（抓地恢复不依赖停车）
       fd.press('KeyW', true);
       fd.step(DT);
       const s = fd.snapshot();
+      // 柱位邻域：当前 z 的车心限 = 柱位车心限（10.117，区别于柱间 10.0 / 块角过渡）
+      if (Math.abs(corridorCenterHalfWidth(s.z) - corridorCenterHalfWidth(PILLAR_Z)) < 1e-9) {
+        witnessedPillarZone = true;
+        worstCarEdgeInPillarZone = Math.max(worstCarEdgeInPillarZone, Math.abs(s.x) + CAR_HALF);
+      }
       const betaAbs = Math.abs(s.beta);
       if (betaHalfAt < 0 && betaAbs < betaStart * 0.25) betaHalfAt = i;
       // 「恢复抓地」口径：侧滑角塌进 ±1.15° 且后轴抓地基本复原
@@ -107,11 +129,16 @@ describe('R36-P1 手刹漂移（仿真：轮胎侧偏 + 摩擦圆）', () => {
         break;
       }
     }
-    // ③ 恢复抓地时间有限（≤3s）；2s 内 beta 已塌缩 ≥75%
+    // R100 护栏：恢复段确实经过柱位邻域，且该段车缘始终 ≤ 柱内缘 11.12（真源派生，非写死）
+    expect(witnessedPillarZone).toBe(true);
+    expect(worstCarEdgeInPillarZone).toBeLessThanOrEqual(PILLAR_INNER + 1e-9);
+    // ③ 恢复抓地时间有限（≤3s）；2.05s 内 beta 已塌缩 ≥75%
+    // R100 柱位精度 10.0→10.117（车缘贴柱内缘 11.12），恢复段 z≈−375.9 少一次撞墙钳位，
+    // beta 半衰晚 4 帧 1.9917→2.025s，物理正确；阈值随边界重标定到 2.05s。
     expect(recoveredAt).toBeGreaterThanOrEqual(0);
     expect(recoveredAt * DT).toBeLessThanOrEqual(3);
     expect(betaHalfAt).toBeGreaterThanOrEqual(0);
-    expect(betaHalfAt * DT).toBeLessThanOrEqual(2);
+    expect(betaHalfAt * DT).toBeLessThanOrEqual(2.05);
   });
 
   it('反打方向可维持漂移（beta 有界、不甩尾失控）', () => {
