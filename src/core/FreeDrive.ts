@@ -32,6 +32,10 @@ import { R30_ARCADE } from '../render/scene/castleKit';
 import { FREE_BODY_DAMPING } from '../config/freeBodyFeel';
 import { dragForce, motorForce, rollForce } from '../physics/Vehicle';
 import { clamp, damp } from '../util/math';
+// R102：城内地面实体（角塔基座 / 柱础 / 飞扶壁墩 / 殿台基 / 前脸）2D 占位 + 车 OBB 收紧。
+//   纯数值模块（无 three/DOM），只提供 clampToFootprints(x,z,heading)；1D 钳位
+//   resolveBounds / corridorCenterHalfWidth / corridorHalfWidth 函数体逐位不动。
+import { clampToFootprints } from './cityFootprints';
 // B6 a11y（R30-D2）：与 Sliders.onKey 共用「交互目标放行」判据（同一定义，
 // 避免两处选择器列表漂移）。dom.ts 是无依赖叶子工具，不构成循环依赖。
 import { isInteractiveTarget } from '../ui/dom';
@@ -127,6 +131,26 @@ export const WALL_SCRUB_DECEL = 0.8;
 export const WALL_SCRUB_DECEL_MAX = 12.0;
 /** 贴墙接触判定的位置容差 m（|x|≥halfW−ε / |z| 触 zMin/zMax，ε 取 0.05 防浮点抖动） */
 export const WALL_SCRUB_CONTACT_EPS = 0.05;
+/**
+ * R102 脱困门控的速度阈值 m/s（≈5.4 km/h）。贴墙 + 低速（|v|<此值）+ 玩家主动操作
+ * （油门/刹车 + 转向）时，scrub 钉速（封顶 12 > 净加速 6.11 > 倒车 2.08）+ yawRateFor
+ * 的转向因子∝|v|→0 会让车头彻底失去转向权限，玩家无法转头脱困（HUD 显示 D + 速度 0）。
+ * 此窗口恢复最小转向权限让车头转离墙。低速口径与漂移退出阈值 1.5 m/s 对齐。
+ * 仍归撞墙域边界常量，不入 FREE 灵魂表（与 scrub 同源，不碰灵魂 12 参数）。
+ */
+export const WALL_SCRUB_RELEASE_MS = 1.5;
+/**
+ * R102 离墙滞后带 m：已贴墙态改用此更宽松阈值维持 sideTouch=true，防止
+ * corridorCenterHalfWidth(z) 段间跳变导致误清零。最大段间跳变 = 桥 10.997 →
+ * 隧道 8.997 → 块心 10.0 = 1.003 m 差 + 柱位 10.117 多出 0.117 m ⇒ 1.2 > 1.114 覆盖。
+ */
+export const WALL_SCRUB_RELEASE_EPS = 1.2;
+/**
+ * R102 latch 持续远离帧闸门：latch 已贴墙态只在**连续**超过此帧数都超出 RELEASE_EPS 带
+ * 才真正清 latch。覆盖隧道→城内过渡时经过块角区（halfW 瞬时 13.897，gap ≈4.7 m）的瞬态，
+ * 块角区通过 ≈40 帧(0.33s)，取 60 帧(0.5s)保证不被瞬态清 latch。120 fps 口径。
+ */
+export const WALL_SCRUB_LATCH_FAR_FRAMES = 60;
 
 /** 场景边界（世界坐标 m） */
 export const BOUNDS = {
@@ -186,7 +210,8 @@ export const BOUNDS = {
  * corridor 护栏钉块区间，双保险）。
  * 区间覆盖：御桥→[−365.5,−411.5]…，空档（无街区）自动落 15.5（开放）。
  */
-const CITY_BLOCK_Z: ReadonlyArray<readonly [number, number]> = [
+/** R102 起导出：cityFootprints 由同一份块区间派生 2D 占位，避免两处 keep 块漂移。 */
+export const CITY_BLOCK_Z: ReadonlyArray<readonly [number, number]> = [
   [-411.5, -365.5],
   [-457.5, -411.5],
   [-503.5, -457.5],
@@ -615,6 +640,18 @@ export class FreeDrive {
    * 收敛到平行墙后 fn→0，若现算会让刮擦退化回零摩擦蹭滑。供给 step() 算 scrub 减速度。
    */
   private wallScrubN = 0;
+  /** R102 只读观测口：供测试纯数值断言「贴墙期间 scrub 不被段间跳变误清零」（不暴露写权限） */
+  get scrubN(): number {
+    return this.wallScrubN;
+  }
+  /**
+   * R102 贴墙滞后锁存：撞墙帧 sideTouch=true 时置 true；|x| 掉到 halfWnow−RELEASE_EPS
+   * 以下才回 false。防止 corridorCenterHalfWidth 随 z 段间跳变（桥 10.997 → 隧道 8.997 →
+   * 块心 10.0 / 柱位 10.117）时 halfWnow 瞬时变大导致接触判定闪断、wallScrubN 被误清零。
+   */
+  private wallSideTouchLatch = false;
+  /** R102 连续超出 RELEASE_EPS 带的帧计数：超过 WALL_SCRUB_LATCH_FAR_FRAMES 才清 latch */
+  private wallSideTouchFarFrames = 0;
 
   private readonly onKeyDown = (e: KeyboardEvent): void => {
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
@@ -682,6 +719,8 @@ export class FreeDrive {
     this.yawDyn = 0;
     this.wallImpact = 0;
     this.wallScrubN = 0;
+    this.wallSideTouchLatch = false;
+    this.wallSideTouchFarFrames = 0;
   }
 
   get active(): boolean {
@@ -731,6 +770,7 @@ export class FreeDrive {
     this.yawDyn = 0;
     this.wallImpact = 0;
     this.wallScrubN = 0;
+    this.wallSideTouchLatch = false;
     this.keys.clear();
     this.emit('reset');
   }
@@ -751,6 +791,8 @@ export class FreeDrive {
     this.yawDyn = 0;
     this.wallImpact = 0;
     this.wallScrubN = 0;
+    this.wallSideTouchLatch = false;
+    this.wallSideTouchFarFrames = 0;
   }
 
   /** 给 QA 探针的只读快照 */
@@ -780,6 +822,8 @@ export class FreeDrive {
       s.beta = 0;
       this.wallImpact = 0;
     this.wallScrubN = 0;
+    this.wallSideTouchLatch = false;
+    this.wallSideTouchFarFrames = 0;
       return;
     }
     const throttle = this.has('KeyW', 'ArrowUp') ? 1 : 0;
@@ -800,13 +844,35 @@ export class FreeDrive {
     const av = Math.abs(v);
     const dir = v > 0 ? 1 : v < 0 ? -1 : 0;
 
-    /* ---- R101 Phase2 撞墙切向刮擦（wall scrub）接触判定 ----
+    /* ---- R101 Phase2 / R102 离墙滞后：撞墙切向刮擦接触判定 ----
      * 用**当前位姿**（上一帧 resolveBounds 已把车心钳到墙）做几何接触判定，不依赖
      * heading 法向 fn：撞后 heading 收敛到切向平行墙 ⇒ fn→0，若现算 |v|·fn 会让刮擦
      * 退化回零摩擦蹭滑。仍贴墙（side：|x|≥halfW−ε；end：|z| 触 zMin/zMax）就维持
-     * wallScrubN 供下方刮擦；一旦离墙即清零（刮擦只在接触期间发生）。 */
+     * wallScrubN 供下方刮擦；一旦离墙即清零（刮擦只在接触期间发生）。
+     *
+     * R102 离墙滞后：corridorCenterHalfWidth(z) 随 z 段间跳变（桥 10.997 → 隧道 8.997 →
+     * 块心 10.0 → 柱位 10.117 → 空档角塔 13.897），车贴上一段墙 x 不变而 halfWnow 变大时
+     * |x| < halfWnow−0.05 ⇒ 旧判定闪断、wallScrubN 被误清零。改用双阈值滞后 + 持续远离闸门：
+     * 1. 已贴墙态（latch=true）用 RELEASE_EPS(1.2) 维持接触，未贴墙态用 CONTACT_EPS(0.05) 进入；
+     * 2. latch 只在**连续** WALL_SCRUB_LATCH_FAR_FRAMES(60=0.5s) 帧都超出 RELEASE_EPS 带
+     *    才真正清 latch——覆盖隧道→城内过渡时经过块角区（gap 瞬时≈4.7 m）的瞬态。 */
     const halfWnow = corridorCenterHalfWidth(s.z);
-    const sideTouch = Math.abs(s.x) >= halfWnow - WALL_SCRUB_CONTACT_EPS;
+    const absX = Math.abs(s.x);
+    const sideTouchRaw = absX >= halfWnow - WALL_SCRUB_CONTACT_EPS;
+    if (sideTouchRaw) {
+      this.wallSideTouchLatch = true;
+      this.wallSideTouchFarFrames = 0;
+    } else if (this.wallSideTouchLatch) {
+      if (absX >= halfWnow - WALL_SCRUB_RELEASE_EPS) {
+        this.wallSideTouchFarFrames = 0; // 仍在滞后带内，重置远离计数
+      } else {
+        this.wallSideTouchFarFrames++;
+        if (this.wallSideTouchFarFrames > WALL_SCRUB_LATCH_FAR_FRAMES) {
+          this.wallSideTouchLatch = false;
+        }
+      }
+    }
+    const sideTouch = this.wallSideTouchLatch;
     const endTouch =
       s.z <= BOUNDS.zMin + WALL_SCRUB_CONTACT_EPS || s.z >= BOUNDS.zMax - WALL_SCRUB_CONTACT_EPS;
     if (sideTouch || endTouch) {
@@ -909,6 +975,24 @@ export class FreeDrive {
       this.yawDyn = 0;
       s.beta = 0;
       yawRate = yawRateFor(s.steer, vAvg !== 0 ? vAvg : v);
+      // ---- R102 贴墙低速脱困：恢复最小转向权限 ----
+      // 死锁闭环：wallScrubN 贴墙期间以 Math.max 记峰、永不衰减（封顶 12 m/s²），
+      // 12 > 前进净加速 6.11 > 倒车 2.08 ⇒ scrub 单帧把 vNext 钳回 0（速度 0）；
+      // 速度 0 时 yawRateFor 的转向因子 clamp(|v|/refSpeedMs,0,1)∝|v|→0 ⇒ 车头无转向
+      // 权限，玩家无法转头脱困（HUD 显示 D + 速度 0）。scrub 作用方向 dir=sign(v) 是标量、
+      // 不往坑里压，真正困住车的是 scrub 钉速 + 转向权限归零。
+      // 门控：贴墙(wallScrub>0) + 低速(av<WALL_SCRUB_RELEASE_MS) + 玩家主动操作
+      // (转向 + 油门/刹车) ⇒ 给一记与驾驶方向同号的最小横摆率（0.35·maxYawRate≈18°/s），
+      // 让车头转离墙 ⇒ f.x 指向路内 ⇒ 前移使 |x| 掉到 halfW−ε ⇒ sideTouch=false
+      // ⇒ wallScrubN 清零 ⇒ 彻底脱困。仅低速窗口生效，不改 scrub 公式/几何/摩擦圆。
+      if (
+        wallScrub > 0 &&
+        steerIn !== 0 &&
+        (throttle > 0 || brakeIn > 0) &&
+        av < WALL_SCRUB_RELEASE_MS
+      ) {
+        yawRate = steerIn * FREE.maxYawRate * 0.35 * (vAvg >= 0 ? 1 : -1);
+      }
       moveHeading = s.heading;
     }
     const f = forwardOf(moveHeading);
@@ -921,15 +1005,43 @@ export class FreeDrive {
 
     // ---- 边界 ----
     const r = resolveBounds(nx, nz, s.heading, s.speed);
-    const impacting =
-      r.impactN !== undefined && r.impactN > 0 && r.targetHeading !== undefined;
     s.x = r.x;
     s.z = r.z;
     s.heading = r.heading;
-    // 速度也按 IMPACT_TAU 一阶收敛到「法向吸收 + 切向保留」的目标值。
-    // 分解公式在 resolveBounds 内（纯函数口径不变）；但若一帧提交全部差值，
-    // fn 大时单帧减速度仍可达数十 g（与硬切同病），且连续贴墙会逐帧重复吸收
-    // 使速度几何级塌缩 —— 故与朝向一样用一阶惯性展开。
+
+    /* ---- R102 城内 2D 占位收紧（车长 bbox vs 台阶/基座/柱础，只收紧不放宽）----
+     * resolveBounds 是「车心点 vs 1D h(z)」，车长 5.495 / 车宽 2.006 的 OBB 从未参与判断：
+     * 车斜插 θ=30° 时车角 dx=2.243 m，块角 14.9 m 基座内缘处车角嵌基座 1.24 m、柱位
+     * 11.12 m 处嵌柱 1.12 m，车尾 bbox（zc±2.75）合法待在钳位线外侧与 6.2 m 深台阶相交
+     * ⇒「存在的建筑又穿模 / 车尾卡台阶缝隙」。clampToFootprints 把 OBB 4 角点的 x 伸展
+     * dx(θ) = 半长|sinθ| + 半宽|cosθ| 与 z 覆盖重叠的城内占位盒取最紧界 |x| ≤ xInner − dx。
+     * 只在城内域（z ∈ [plazaZ, gateBackZ]）激活 —— 桥段 / 城门带 / 主殿广场沿用 1D 钳位，
+     * z=−250 桥段测试全程零触发，既有 r97/r98/r99/r100 护栏不破（resolveBounds 函数体未改）。 */
+    if (nz <= BOUNDS.gateBackZ && nz >= BOUNDS.plazaZ && !driftActive) {
+      // !driftActive 门控与 R101 scrub 同源：主动漂移时轮胎摩擦圆已主导减速，车斜着走过
+      // 占位盒是漂移的正常横向行程，此时再钳 x / 注入 wallImpact / heading 收敛属双重惩罚，
+      // 会破坏漂移手感并拖慢 β 塌缩（free_drift 恢复段实测被钳后 β 半衰 2.05→2.57s、
+      // 多出撞墙假收敛）。漂移是瞬态，出漂移后 2D 收紧立即恢复，穿模窗口极短且玩家主动。
+      const fp = clampToFootprints(s.x, s.z, s.heading);
+      if (fp.hit) {
+        s.x = fp.x; // 只收紧 x：z 不动（占位盒 x 对称，z 方向无 2D 修正量）
+        const nxSide = fp.nx;
+        const fSide = forwardOf(s.heading);
+        const fnSide = fSide.x * nxSide;
+        // 法向入射强度复用 1D side 同口径 |v|·fn；若 1D 已撞出更大 impactN 则保留较大者
+        const fpImpact = fnSide > 0 ? Math.abs(s.speed) * fnSide : 0;
+        if (fpImpact > (r.impactN ?? 0)) r.impactN = fpImpact;
+        // 仅在 1D 没给 targetHeading 时才补：避免覆盖 resolveBounds 已定的滑行方向
+        if (r.targetHeading === undefined) {
+          r.targetHeading = slideHeading(fSide.x, fSide.z, nxSide, 0);
+        }
+        if (r.kind === 'none') r.kind = 'side'; // 沿用 wall 事件 / 刮擦 / 朝向收敛链路
+      }
+    }
+    // 速度按 IMPACT_TAU 一阶收敛到「法向吸收 + 切向保留」的目标值（1D / 2D 撞击共用）。
+    // 一阶而非一帧硬切的理由见 resolveBounds 注释：fn 大时单帧减速度可达数十 g。
+    const impacting =
+      r.impactN !== undefined && r.impactN > 0 && r.targetHeading !== undefined;
     s.speed = impacting ? damp(s.speed, r.speed, 1 / IMPACT_TAU, dt) : r.speed;
     // R100 hall 瞬态（复用 R99 wallImpact 包络，不照搬 side 的速度分解）：
     //   speed 仍取 r.speed=0 ⇒ 正撞彻底停、不二次撞击、z 弹开 0.8m 不变；

@@ -61,6 +61,11 @@ const HAZE = new THREE.Color(ACTIVE_ENV.fog.color);
 const HAZE_BOTTOM = 0.15;
 /** 环顶混雾量（缺陷 B：环顶剪影融进天光，消除硬边带） */
 const HAZE_TOP = 0.55;
+/**
+ * 近环顶混雾量（R102 空气透视层次）：近环比远环更「实」⇒ 两层山前后纵深读得出来，
+ * 而不是一片扁平。远环仍用 HAZE_TOP 0.55（更贴雾色），近环收到 0.42。
+ */
+const HAZE_TOP_NEAR = 0.42;
 
 /**
  * 光照增益（**截图反演值，别拍脑袋改**）。
@@ -304,8 +309,9 @@ export class Terrain {
     //   2600 环 → z=−2600 处（主殿后 1300m）、2000 环 → z=−2000 处（后 700m），
     // 既保留「城堡靠山」的天际线，又不再侵入 z∈[−365, −1300] 的行车走廊与视线。
     const sky = emptyPatch();
+    // R102 空气透视层次：近环顶行混雾收到 HAZE_TOP_NEAR（0.42），比远环 0.55 更实。
     this.buildRing(sky, 2600, 320, 3813444, ROCK_FAR, 0.34);
-    this.buildRing(sky, 2000, 210, 4864582, ROCK_NEAR, 0.5);
+    this.buildRing(sky, 2000, 210, 4864582, ROCK_NEAR, 0.5, HAZE_TOP_NEAR);
     const skyline = new THREE.Mesh(toGeometry(sky), this.material(ROCK_GAIN_FAR, THREE.BackSide));
     skyline.name = 'terrain-skyline';
     skyline.frustumCulled = false;
@@ -340,15 +346,27 @@ export class Terrain {
   }
 
   /**
-   * 远景岩环：一圈竖直岩壁（底 y=−10，顶 = 轮廓高度）。
+   * 远景岩环：一圈竖直岩壁（底 y=−10，顶 = 轮廓高度）—— R102 加层次版。
    *
    * 轮廓 = 3 项低频正弦定主脊 + 1 项高频（47π，指数 0.5 做尖峰）+ LCG 破整齐，
    * 沿用 R26 的「三角波尖顶」做法（3 项正弦叠出来是圆包，远看像雾团不像山）。
-   * 逐站色偏改成 **纵向节理**：沿方位角高频、沿高度不变 ⇒ 竖条纹。
+   * R102 再叠一层 **fbm 角向起伏**（周期噪声，角 0/2π 同值 ⇒ 接缝闭合），让主脊之间
+   * 长出次级齿，剪影不是平顶圆包。
+   *
+   * R102 加层次（治「远景扁平像纸片」，缺陷来自用户截图）：
+   *  ① SEG 260 → 400（角向 +54%）；
+   *  ② 每列 2 顶点 → **4 行**（v = 0 / 0.3 / 0.65 / 1）—— 旧行距是「底+顶」
+   *     两点线性插值 ⇒ 整面平。现中间两行在半径与高度上各加**节理起伏**
+   *     （径向 fbm 沿方位角高频 = 竖向沟壑；高度 noise2 沿弧长高频 = 岩檐错位），
+   *     环内表面读作块状巨岩（vision §02 语言），不再是纸片。
+   *     单环 tri：260×2×2=1040 → 400×3×2=2400，两环合计 2080 → 4800，
+   *     占整帧红线 465,000 约 1.0%（原 0.45%），余量充足。
+   *  ③ 顶点色仍走 rockTint 纵向节理；中间行按径向位移加一点遮挡压暗（crease），
+   *     沟壑读得出深度 —— **只向下压，不向上抬**（明度红线，雾色插值除外）。
    *
    * R28 空气透视（缺陷 B）：顶点色在 rockTint 之后**向雾色插值**，底 HAZE_BOTTOM、
-   * 顶 HAZE_TOP —— 环顶剪影融进天光，不再是贴着天空的硬边带；半径内收到
-   * 1600/1200 后环带在画面里有体量，远景由「远环 + 雾」兜底（V H6）。
+   * 顶 HAZE_TOP —— 环顶剪影融进天光，不再是贴着天空的硬边带。R102 近环顶行收到
+   * HAZE_TOP_NEAR（0.42），比远环 0.55 更实 ⇒ 两层山前后纵深读得出来。
    */
   private buildRing(
     out: Patch,
@@ -356,43 +374,75 @@ export class Terrain {
     heightScale: number,
     seed: number,
     base: THREE.Color,
-    bottomShade: number
+    bottomShade: number,
+    hazeTop: number = HAZE_TOP
   ): void {
     const origin = out.pos.length / 3;
     const tmp = new THREE.Color();
-    const SEG = 260;
+    const SEG = 400;
+    // 4 行：v=0 崖脚 → v=1 环顶剪影（两中间行承载节理起伏）
+    const ROWS = [0, 0.3, 0.65, 1] as const;
+    const NV = ROWS.length;
     const heights: number[] = [];
     for (let i = 0; i <= SEG; i += 1) {
       const t = i / SEG;
+      const ang = t * Math.PI * 2;
       heights.push(
         heightScale *
           (0.26 +
             0.29 * Math.abs(Math.sin(t * Math.PI * 7 + radius)) +
             0.18 * Math.abs(Math.sin(t * Math.PI * 23)) +
             0.32 * Math.pow(Math.abs(Math.sin(t * Math.PI * 47 + 0.9)), 0.5) +
-            0.18 * noise2(i * 0.37 + seed * 0.013, seed * 0.007))
+            0.18 * noise2(i * 0.37 + seed * 0.013, seed * 0.007) +
+            // R102：次级齿（周期噪声，角 0/2π 同值 ⇒ 接缝闭合），幅度 0.10
+            0.1 * (fbm2(Math.cos(ang) * 2.3 + seed * 0.004, Math.sin(ang) * 2.3) - 0.5) * 2)
       );
     }
     heights[SEG] = heights[0]; // 闭合接缝
 
     for (let i = 0; i <= SEG; i += 1) {
       const angle = (i / SEG) * Math.PI * 2;
-      const x = Math.cos(angle) * radius;
-      const z = Math.sin(angle) * radius;
+      const cosA = Math.cos(angle);
+      const sinA = Math.sin(angle);
       const h = heights[i];
       // 沿方位角的节理（u 用弧长 / 30m 一节，v 恒 0.4 ⇒ 竖条纹贯穿全高）
       const u = (i / SEG) * ((Math.PI * 2 * radius) / 30);
-      out.pos.push(x, -10, z, x, h, z);
-      // 顶：u 节理 × 重混雾；底（崖脚）：同一节理 × 遮挡压暗 × 轻混雾
-      const kt = rockTint(u, 0.4, 0);
-      const kb = rockTint(u, 0.4, bottomShade);
-      tmp.copy(base).multiplyScalar(kt).lerp(HAZE, HAZE_TOP);
-      out.col.push(tmp.r, tmp.g, tmp.b);
-      tmp.copy(base).multiplyScalar(kb).lerp(HAZE, HAZE_BOTTOM);
-      out.col.push(tmp.r, tmp.g, tmp.b);
-      if (i < SEG) {
-        const b = origin + i * 2;
-        out.idx.push(b, b + 1, b + 2, b + 1, b + 3, b + 2);
+      // 周期 fbm：径向沟壑沿方位角高频（约 22 个起伏/整圈），角 0/2π 同值
+      const ridged = fbm2(cosA * 3.5 + seed * 0.004, sinA * 3.5);
+      // 周期 fbm：岩檐高度错位（另一频率/相位，与径向沟壑解耦），同样角 0/2π 同值
+      const ledge = fbm2(cosA * 5.5 + seed * 0.011 + 17.3, sinA * 5.5 + 4.7);
+      for (let j = 0; j < NV; j += 1) {
+        const v = ROWS[j];
+        const yBase = -10 + (h + 10) * v;
+        let y = yBase;
+        let rr = radius;
+        if (v > 0 && v < 1) {
+          // 中间两行：径向沟壑（沿竖向拉长 = 节理）+ 高度错位（岩檐），顶/底两行不扰动
+          // 以免破坏崖脚接缝与环顶剪影轮廓。径向幅度 ~26m，在 2000/2600m 半径上
+          // 是 1%~1.3% 的进深，侧看得出块状体量。
+          const amp = Math.sin(v * Math.PI); // 两端归零，中间满幅
+          rr = radius - 26 * (ridged - 0.5) * 2 * amp;
+          y = yBase + 9 * (ledge - 0.5) * 2 * amp;
+        }
+        const x = cosA * rr;
+        const z = sinA * rr;
+        out.pos.push(x, y, z);
+        // 顶：u 节理 × 重混雾；底（崖脚）：同一节理 × 遮挡压暗 × 轻混雾；
+        // 中间行：节理 × 遮挡随高度衰减 × 沟壑处再压一点（crease）× 雾按高度插值
+        const shade = bottomShade + (0 - bottomShade) * v;
+        const crease = v > 0 && v < 1 ? 0.12 * (1 - ridged) * Math.sin(v * Math.PI) : 0;
+        const kt = rockTint(u, 0.4, shade + crease);
+        const haze = HAZE_BOTTOM + (hazeTop - HAZE_BOTTOM) * v;
+        tmp.copy(base).multiplyScalar(kt).lerp(HAZE, haze);
+        out.col.push(tmp.r, tmp.g, tmp.b);
+      }
+    }
+    for (let i = 0; i < SEG; i += 1) {
+      const a = origin + i * NV;
+      const b = origin + (i + 1) * NV;
+      for (let j = 0; j < NV - 1; j += 1) {
+        // 绕序：BackSide（从圈内看），a 列 j 行 → a 列 j+1 行 → b 列 j 行
+        out.idx.push(a + j, a + j + 1, b + j, a + j + 1, b + j + 1, b + j);
       }
     }
   }
