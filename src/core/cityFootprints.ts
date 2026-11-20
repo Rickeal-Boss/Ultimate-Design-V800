@@ -300,6 +300,16 @@ function obbOverlapsAabb(
 ): boolean {
   const c = Math.cos(heading);
   const s = Math.sin(heading);
+  // R111：车头前向 f=(-sin h,-cos h)、垂直 v=(cos h,-sin h)。车 OBB 半轴：半长 halfL 沿 f、
+  // 半宽 halfW 沿 v。任意单位轴 (ax,az) 上的投影半径 = halfL*|(ax,az)·f| + halfW*|(ax,az)·v|
+  //   = halfL*|ax*(-s)+az*(-c)| + halfW*|ax*c+az*(-s)|
+  //   = halfL*|ax*s+az*c| + halfW*|ax*c-az*s|。
+  // ⚠ 旧公式 halfL*|ax*c+az*s| + halfW*|ax*s-az*c| 把半长/半宽配错了轴（cos/sin 交换）：
+  //   h=0（车头朝 -Z，车宽沿 X）时 world-x 半径算出 halfL=2.7475（实为半宽 1.003）、world-z
+  //   半径算出 halfW=1.003（实为半长 2.7475）⇒ 车长 5.5m 的**前缘已穿入占位盒 ~1.7m**，SAT 却
+  //   判「x 轴分离 ⇒ 不相交」⇒ 2D 接触不触发 ⇒ 车持续穿模（R111 探针 6 实测直行穿柱带 1.3m/30帧）。
+  //   反过来在近横穿时又**提前**判交（x 半径高估）⇒ 假阳性横推 = 空气墙。本修正让 SAT 用真实
+  //   车体半径，判交时机与车体几何一致（前缘触占位盒才判交），穿模与空气墙同时消除。
   const axes: ReadonlyArray<readonly [number, number]> = [
     [1, 0],
     [0, 1],
@@ -315,8 +325,8 @@ function obbOverlapsAabb(
   const fcz = (f.zMin + f.zMax) / 2;
   const fhz = (f.zMax - f.zMin) / 2;
   for (const [ax, az] of axes) {
-    // 车 OBB 在该轴上的投影半径
-    const carR = halfL * Math.abs(ax * c + az * s) + halfW * Math.abs(ax * s - az * c);
+    // 车 OBB 在该轴上的投影半径（R111 修正：半长沿车头 f、半宽沿垂直 v）
+    const carR = halfL * Math.abs(ax * s + az * c) + halfW * Math.abs(ax * c - az * s);
     // 占位 AABB 在该轴上的投影半径
     const fpR = fhx * Math.abs(ax) + fhz * Math.abs(az);
     // 两中心在该轴上的距离

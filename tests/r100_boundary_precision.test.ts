@@ -184,7 +184,9 @@ describe('R103 阶段二 · 柱位 z 1D=所在包络 / 柱·墩由 2D 兜底', (
   it('前脸包络 14.497 越过墩内缘 11.35 合法：墩是周期突出物，由 2D 收紧兜底', () => {
     // 1D 已放宽到前脸 14.497 > 飞扶壁墩内缘 11.35 ⇒ 1D 不再为墩保守收窄（旧「必撞墩」premise 推翻）
     expect(OPEN_CAR_CENTER).toBeGreaterThan(BUTTRESS_INNER);
-    // 2D 兜底：斜插车在连墙墩位被收紧到「墩内缘 11.35 − dx(θ)」，防穿墩
+    // 2D 兜底：斜插车在连墙墩位被收紧到「墩内缘 11.35 − dx(θ)」，防穿墩。
+    // R111：x=14.497 斜插车缘内点 12.254 距墩外缘 11.9 有 0.35m 空隙（旧 SAT 假阳性误判交墩、
+    //   真接触是角塔基座）；改 x=13.0（车角内点 10.757 真嵌墩内缘 0.59m）⇒ 真命中墩。
     const zc = (CITY_BLOCK_Z[0][0] + CITY_BLOCK_Z[0][1]) / 2;
     const pierZ = zc + LINK_SEG_MID_LOCAL; // k0 下连墙墩 −408.1
     const pier = getCityFootprints().find(
@@ -192,7 +194,7 @@ describe('R103 阶段二 · 柱位 z 1D=所在包络 / 柱·墩由 2D 兜底', (
     );
     expect(pier).toBeDefined();
     expect(pier!.xInner).toBeCloseTo(BUTTRESS_INNER, 12);
-    const r = clampToFootprints(OPEN_CAR_CENTER, pierZ, OBLIQUE);
+    const r = clampToFootprints(13.0, pierZ, OBLIQUE);
     expect(r.hit).toBe(true);
     expect(r.kind).toBe('buttressBase');
     expect(r.x).toBeCloseTo(BUTTRESS_INNER - dxAt(OBLIQUE), 12);

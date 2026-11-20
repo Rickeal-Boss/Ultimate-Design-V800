@@ -15,6 +15,10 @@
  * CITY_BLOCK_Z），禁写死派生值（14.9 / 11.12 / 2.7475 / 1.003）。
  * 场景：块 0 近 gateBack 侧飞扶壁外墩 z 带 [-369.95,-367.85]（中心 -368.9），
  *       该处 1D halfW=14.497（不拦）、2D 墩 xInner=11.35 ⇒ 2D 接触先于 1D 触发（纯 2D 场景）。
+ * R111：旧 SAT 车世界 x 半径误用 halfL（2.7475）⇒ 车在 x=13.5 直行时被「提前」判交（假阳性空气墙），
+ *       实测 x=13.5 车缘 12.497 距墩外缘 11.9 有 0.6m 空隙、根本不接触。修正后 SAT 用真实车体
+ *       半径（h=0 时 x 半径 = 半宽 1.003）⇒ 原场景 x=13.5 不再误触发。为使测试仍守护「真实接触」，
+ *       起点改为 x=12.0（车缘 10.997 真嵌墩 11.35 内缘 0.35m）、x=10.0（斜插 θ=30° 真嵌墩）。
  */
 import { describe, expect, it } from 'vitest';
 import { FreeDrive, CITY_BLOCK_Z, WALL_2D_MAX_LATERAL_STEP } from '../src/core/FreeDrive';
@@ -27,8 +31,9 @@ const K0 = CITY_BLOCK_Z[0];
 const Z_TEST = -368.9;
 
 describe('R110 ① 2D 接触首帧单帧横向钳位 ≤ 步长上限（无空气墙/瞬移）', () => {
-  it('z=-368.9 墩带合法 1D 起点 x=13.5 直行：任意相邻帧 |Δx| ≤ WALL_2D_MAX_LATERAL_STEP', () => {
-    const fd = new FreeDrive({ start: { x: 13.5, z: Z_TEST, heading: 0 } });
+  it('z=-368.9 墩带合法 1D 起点 x=12.0 直行：任意相邻帧 |Δx| ≤ WALL_2D_MAX_LATERAL_STEP', () => {
+    // R111：x=12.0 车缘 10.997 真嵌墩内缘 11.35（旧 x=13.5 是假阳性，已修正 SAT 不再判交）
+    const fd = new FreeDrive({ start: { x: 12.0, z: Z_TEST, heading: 0 } });
     fd.press('KeyW', true);
     let prevX = fd.snapshot().x;
     let maxStep = 0;
@@ -48,8 +53,8 @@ describe('R110 ① 2D 接触首帧单帧横向钳位 ≤ 步长上限（无空�
 });
 
 describe('R110 ② 命中后多帧收敛到 clampToFootprints 目标（不再一帧到位）', () => {
-  it('z=-368.9 墩带 x=13.5 直行：hit 帧数 > 1（多帧收敛），运行中贴近目标到一步内', () => {
-    const fd = new FreeDrive({ start: { x: 13.5, z: Z_TEST, heading: 0 } });
+  it('z=-368.9 墩带 x=12.0 直行：hit 帧数 > 1（多帧收敛），运行中贴近目标到一步内', () => {
+    const fd = new FreeDrive({ start: { x: 12.0, z: Z_TEST, heading: 0 } });
     fd.press('KeyW', true);
     let hitFrames = 0;
     let minGap = Infinity;
@@ -72,7 +77,8 @@ describe('R110 ② 命中后多帧收敛到 clampToFootprints 目标（不再一
 
 describe('R110 ③ 2D 接触产生真实撞击速度损失（Bug2 法向符号修，不再滑开）', () => {
   it('z=-368.9 墩带斜插 θ=30°（fn=0.5>0）带速入墩：0.2s 后速度明显下降（>5%）', () => {
-    const fd = new FreeDrive({ start: { x: 9.5, z: Z_TEST, heading: -Math.PI / 6 } });
+    // R111：x=9.5 斜插角真未达墩（角点在 z=-370.78 带外），改 x=10.0 使车角真嵌墩内缘
+    const fd = new FreeDrive({ start: { x: 10.0, z: Z_TEST, heading: -Math.PI / 6 } });
     fd.state.speed = 15; // 注入初速（等效于行驶中接近墩带；teleport 会归零故用 state 注入）
     fd.press('KeyW', true);
     const preHitSpeed = 15;

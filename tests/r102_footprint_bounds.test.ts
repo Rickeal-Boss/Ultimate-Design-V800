@@ -123,12 +123,14 @@ describe('R102 ① 占位清单覆盖 probe-bounds §2 六类地面层实体（�
 describe('R102 ② clampToFootprints 纯函数（直行 θ=0 回归不变 / 斜插 θ=30,45 收紧）', () => {
   it('直行 θ=0 飞扶壁墩位：车长 z 覆盖命中飞扶壁墩（内缘 11.35 < 基座 14.9）⇒ 2D 收紧到 10.347', () => {
     // 墩世界 z = zc − 19.6 = −408.125（连墙段中点 lz=−19.6），墩 z 覆盖 [−409.15,−407.05]。
-    // 1D resolveBounds 在墩位 z 给块心 10.0；我们绕过 1D 直接喂 x=13.897（块角基座 1D 线）
-    // 验证 2D：θ=0 时 dx = 半宽 1.003，车长 bbox z ∈ [−410.87,−405.38] 落进墩 z 覆盖
-    // ⇒ 墩内缘 11.35 − 1.003 = 10.347 比基座 13.897 更紧 ⇒ 2D 取墩。
+    // 1D resolveBounds 在墩位 z 给块心 10.0；我们绕过 1D 直接喂 x 验证 2D。
+    // R111：旧 SAT 车世界 x 半径误用 halfL ⇒ x=13.897 被假阳性判交；修正后 x=13.897 车缘
+    //   12.894 距墩外缘 11.9 有 ~1m 空隙、根本不接触。改喂 x=12.0（车缘 10.997 真嵌墩 11.35
+    //   内缘 0.35m）⇒ 真命中。θ=0 时 dx = 半宽 1.003，车长 bbox z ∈ [−410.87,−405.38] 落进墩
+    //   z 覆盖 ⇒ 墩内缘 11.35 − 1.003 = 10.347 比基座 13.897 更紧 ⇒ 2D 取墩。
     // 这正是 probe-bounds §3.1 P1「车尾卡台阶缝隙」根因：1D 在车心 z 求值、不采样车尾 z 覆盖。
     const z = BUTTRESS_Z; // −408.125 墩位
-    const fp = clampToFootprints(13.897, z, 0);
+    const fp = clampToFootprints(12.0, z, 0);
     expect(fp.hit).toBe(true);
     expect(fp.kind).toBe('buttressBase');
     expect(fp.x).toBeCloseTo(BUTTRESS_LINK_INNER - HALF_W, 12); // 10.347
@@ -151,21 +153,24 @@ describe('R102 ② clampToFootprints 纯函数（直行 θ=0 回归不变 / 斜�
     expect(fp.x).toBeCloseTo(INNER.faceHalf - 0.5 - HALF_L, 12); // 15.0 − 2.7475 = 12.2525
   });
 
-  it('直行 θ=0 块内真空隙（近端塔基与角塔基座之间 z=−371.1）：1D = 前脸包络 14.497，2D 不新增约束', () => {
+  it('直行 θ=0 近端塔基与角塔基座之间 z=−371.1：1D = 前脸包络 14.497，2D 收紧到前排塔基 13.797', () => {
     // R104 P1 收紧后（前排塔基真实内缘 14.8）块心 z 带 z∈[zc−18.3, zc+18.3] 已被塔基/大理石带/前脸
-    //   连续覆盖，heading=0 在前脸包络 14.497 处不再有原 z=−378.5 那种稳健真空隙（旧版靠塔基旧内缘
-    //   15.5 与车缘 15.5 边界重合的浮点分离假象）。块 0（zc=−388.5）域内真真空隙仅落在近端塔基
-    //   （tz=zc+11.5=−377，z 带 [−381.7,−372.3]）与角塔基座（cz=zc+22.5=−366，z 带 [−369.1,−362.9]）
-    //   之间：z∈[−372.3,−369.1]。取中点 z=−371.1（车长 z 覆盖 [−373.85,−368.35]，仅擦边不交占位盒）。
+    //   连续覆盖。块 0（zc=−388.5）取 z=−371.1（车长 bbox z 覆盖 [−373.85,−368.35]）。
     //   |z−zc|=17.4 > CITY_HALL_ZR_EXTENT ⇒ 1D = 前脸包络 14.497。
-    // 车沿 Z 行驶 ⇒ dx = 半宽 1.003，车缘 14.497+1.003 = 15.5 恰贴建筑前脸线（frontWall 内缘 15.5 不相交）⇒ 2D 不收紧。
+    // R111：旧 SAT 车世界 z 半径误用 halfW（1.003）⇒ 车长 bbox 只按 ±1.003 采样，z=−371.1 时
+    //   车「看似」只到 −370.1 不交前排塔基带 [−381.7,−372.3] ⇒ 旧测试误判「真空隙 2D 不收紧」。
+    //   修正后 z 半径 = 半长 2.7475 ⇒ 车头 bbox 真到 −373.85 嵌进前排塔基带 ⇒ 2D 真命中。
+    //   车缘 14.497+1.003=15.5 嵌前排塔基内缘 14.8 ⇒ 收紧到 14.8 − 1.003 = 13.797（比 1D 更紧）。
+    //   这正是修正 SAT 的正确行为：1D 前脸包络在塔基带过松，2D 兜底防车头穿塔基。
     const z = -371.1;
     const faceCenter = BOUNDS.cityOpenHalfW - HALF_W; // 14.497 前脸车心包络
     const x1d = resolveBounds(20, z, 0, 10).x;
     expect(x1d).toBeCloseTo(faceCenter, 12);
     const fp = clampToFootprints(x1d, z, 0);
-    expect(fp.hit).toBe(false);
-    expect(fp.x).toBeCloseTo(x1d, 12);
+    expect(fp.hit).toBe(true);
+    expect(fp.kind).toBe('frontBase'); // 前排塔基（R104 真实内缘 14.8）
+    expect(fp.x).toBeCloseTo(INNER.faceHalf - 0.7 - HALF_W, 12); // 13.797
+    expect(fp.x).toBeLessThan(x1d); // 2D 比 1D 更紧（防车头穿塔基）
   });
 
   it('斜插 θ=30° 飞扶壁墩位：墩比基座更靠内，2D 收到 9.107（不嵌墩）', () => {
@@ -175,7 +180,9 @@ describe('R102 ② clampToFootprints 纯函数（直行 θ=0 回归不变 / 斜�
     expect(dx).toBeCloseTo(HALF_L * 0.5 + HALF_W * (Math.sqrt(3) / 2), 12);
     // 车长 bbox z 覆盖 [−411.03,−405.22] 命中墩（限 9.107）与角塔基座（限 12.657），
     // 取最紧 = 墩。1D 完全漏过墩内缘 11.35。
-    const fp = clampToFootprints(13.897, z, h);
+    // R111：x=13.897 斜插车缘内点 12.254 距墩外缘 11.9 有 0.35m 空隙（旧 SAT 假阳性误判交）；
+    //   改 x=13.0（车角内点 10.757 真嵌墩 11.35 内缘 0.59m）⇒ 真命中墩。
+    const fp = clampToFootprints(13.0, z, h);
     expect(fp.hit).toBe(true);
     expect(fp.kind).toBe('buttressBase');
     expect(fp.x).toBeCloseTo(BUTTRESS_LINK_INNER - dx, 12); // 9.107
@@ -230,7 +237,7 @@ describe('R102 ② clampToFootprints 纯函数（直行 θ=0 回归不变 / 斜�
   });
 
   it('镜像对称：−X 侧 θ=30° 飞扶壁墩收紧到 −9.107（put side 镜像）', () => {
-    const fp = clampToFootprints(-13.897, BUTTRESS_Z, Math.PI / 6);
+    const fp = clampToFootprints(-13.0, BUTTRESS_Z, Math.PI / 6);
     expect(fp.hit).toBe(true);
     expect(fp.kind).toBe('buttressBase');
     expect(fp.x).toBeCloseTo(-(BUTTRESS_LINK_INNER - dxAt(Math.PI / 6)), 12);

@@ -135,10 +135,12 @@ describe('R105 ② 真源派生的最内实体内缘（与占位清单一致，�
     const zb = zc - 19.6; // −408.125 墩位
     const h = -Math.PI / 6; // 30°
     const dx = HALF_L * Math.abs(Math.sin(h)) + HALF_W * Math.abs(Math.cos(h)); // 2.243
-    // 车心放在 1D 前脸包络（14.497）处 —— 修复前漂移态可达此深度并穿墩
-    const x1d = 14.497;
+    // R111：旧 SAT 车世界 x 半径误用 halfL ⇒ 车在 x=14.497 斜插被假阳性判交墩；修正后
+    //   x=14.497 车缘内点 12.254 距墩外缘 11.9 有 0.35m 空隙、真接触是角塔基座。改 x=13.0
+    //   （车角内点 10.757 真嵌墩 11.35 内缘 0.59m）⇒ 真命中墩，守「防穿墩」意图。
+    const x1d = 13.0;
     const edgeBefore = x1d + dx;
-    expect(edgeBefore).toBeGreaterThan(BUTTRESS_INNER); // 修复前车缘确实越过墩内缘（穿模）
+    expect(edgeBefore).toBeGreaterThan(BUTTRESS_INNER); // 车缘确实越过墩内缘（穿模）
     // clampToFootprints 把车心收到 xInner − dx，车缘恰贴墩内缘不穿
     const fp = clampToFootprints(x1d, zb, h);
     expect(fp.hit).toBe(true);
