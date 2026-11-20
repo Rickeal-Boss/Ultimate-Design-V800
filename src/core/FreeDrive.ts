@@ -276,6 +276,32 @@ export const WALL_SCRUB_RELEASE_EPS = 1.2;
  * 块角区通过 ≈40 帧(0.33s)，取 60 帧(0.5s)保证不被瞬态清 latch。120 fps 口径。
  */
 export const WALL_SCRUB_LATCH_FAR_FRAMES = 60;
+/**
+ * R110 城内 2D 接触每帧最大横向收敛步长 m。
+ * 旧版一帧写死 s.x=fp.x（可单帧钳位最大 6.34 m ⇒ 玩家读作「空气墙/瞬移/穿模弹开」）。
+ * 本常量把位置修正摊到多帧：120Hz 下 0.30 m/帧 = 36 m/s 横向收敛率，单帧不瞬移、
+ * 高速撞击 2~3 帧内贴合、不卡柱侧（收敛目标= clampToFootprints 目标 x，只收紧不放宽）。
+ * 命中判定（fp.hit/kind）仍每帧成立 ⇒ 下方 impact/heading/scrub 链路照常触发。
+ */
+export const WALL_2D_MAX_LATERAL_STEP = 0.30;
+/**
+ * R110 掠擦「接触期连续切向摩擦」系数（× wallScrubN ⇒ 减速度 m/s²）。
+ * 斜擦/掠擦时法向分量 fn→0 ⇒ impactN=|v|·fn≈0 ⇒ IMPACT_TAU 一阶几乎不扣速（r.speed≈v，
+ * 切向 100% 保留）；WALL_SCRUB_FLOOR 对轻擦给的刮擦也偏弱 ⇒ 84° 掠擦 1s 仍滑 ~5 m/s
+ * （用户连续诉求「撞击时车辆自动滑开建筑材料」）。
+ * 本常量给贴墙接触期补一档**减速度 = FRICTION × wallScrubN**：模拟墙面对切向的真实摩擦。
+ *   · 量纲/模型与既有 wallScrub 同口径（都 ∝ latched wallScrubN，非 ∝ 当前速度）——这是关键：
+ *     若用固定速率 damp（∝ 当前速度）会让轻擦（接触期车速高）比硬擦扣得**更多**，违反 r106⑤
+ *     「越正撞击越狠」单调性；用 ∝ wallScrubN 则轻擦/硬擦（都 floor 到 8）得同额摩擦，硬擦仍
+ *     靠更大的 speedKick（∝ fn）净减速更多 ⇒ 单调性保留。
+ *   · 只在接触期作用（wallScrubN>0 即仍贴墙；离墙锁存清零立即停止）；
+ *   · 恒定减速度钳到不反向 ⇒ 绝不归零、不瞬停（r101③「非瞬停、渐进减速」契约保留）；
+ *   · 门控 !driftActive 与 wallScrub 同口径：漂移态轮胎摩擦圆已主导减速，不再叠墙体惩罚。
+ * 值 0.25 ⇒ 轻擦（wallScrubN=8 下限）得 2.0 m/s²：84° 掠擦 1s 内把切向残速压到 ~3 m/s 带
+ * （r101③ 实测 5.09 → 目标 2.5~3.5），r101① 200km/h 斜擦只加快刮停（更快 <0.1、滑更短，
+ * 上界 140m 仍满足）、r102 脱困平衡点仍在油门可挣脱带宽（净加速 6.08 − 摩擦 2.0 仍为正）。
+ */
+export const WALL_TANGENT_FRICTION = 0.25;
 
 /** 场景边界（世界坐标 m） */
 export const BOUNDS = {
@@ -1195,8 +1221,12 @@ export class FreeDrive {
       //   R103 关掉它的真因是「位置钳 + 撞击/速度/heading 注入」会让 β 永不塌缩，而非位置钳本身；
       //   故此处按 driftActive 分流：漂移态只做位置钳 + 朝向贴墙收敛，不碰撞击/速度/刮擦链路。
       const fp = clampToFootprints(s.x, s.z, s.heading);
+      let mainClampDelta = 0;
       if (fp.hit) {
-        s.x = fp.x; // 只收紧 x：z 不动（占位盒 x 对称，z 方向无 2D 修正量）
+        // R110 连续收敛：不再一帧写死 s.x=fp.x（曾单帧钳位 6.34 m = 空气墙/瞬移）。
+        // 每帧最多朝目标 x 走 WALL_2D_MAX_LATERAL_STEP，命中判定/impact 链路不受影响。
+        mainClampDelta = clamp(fp.x - s.x, -WALL_2D_MAX_LATERAL_STEP, WALL_2D_MAX_LATERAL_STEP); // 只收紧 x：z 不动（占位盒 x 对称）
+        s.x += mainClampDelta;
         if (driftActive) {
           /* R105 漂移态：位置钳 + 朝向贴墙收敛 + β/横摆回收，**不注入撞击/速度/刮擦**。
            * 2D 把车在建筑占位（柱 11.12 / 墩 11.35 / 基座 14.9）提前拦下后，车到不了前脸 1D 墙，
@@ -1222,11 +1252,19 @@ export class FreeDrive {
           this.yawDyn = damp(this.yawDyn, 0, WALL_IMPACT_DRIFT_BETA_RATE, dt);
           // heading 收敛改变了车 OBB 的 x 伸展 dx(θ) ⇒ 用收敛后的 heading 重钳一次位置，
           // 否则会出现「钳位时按旧 heading 不重叠、收敛后按新 heading 又重叠」的单帧穿模瞬态。
+          // R110：第二次钳位与主钳位共用同一 0.30 m/帧预算 —— 若两钳各放 0.30 会单帧合计
+          // 0.60 m（+漂移运动），被 r105 的 maxXStep 护栏抓到。用剩余预算重钳，总钳位 ≤ 0.30。
           const fpRe = clampToFootprints(s.x, s.z, s.heading);
-          if (fpRe.hit) s.x = fpRe.x;
+          if (fpRe.hit) {
+            const reBudget = WALL_2D_MAX_LATERAL_STEP - Math.abs(mainClampDelta);
+            s.x += clamp(fpRe.x - s.x, -reBudget, reBudget);
+          }
         } else {
           // 非漂移态：原撞击 / heading / scrub 链路照旧（逐位不变）。
-          const nxSide = fp.nx;
+          // R110 法向符号修：fp.nx 指向路内（x≥0 时 −1），与 resolveBounds :705 的 nx=x>=0?1:-1
+          // （指向墙外/墙面）符号相反 ⇒ 旧 fnSide=fSide.x·fp.nx 恒 ≤0 ⇒ 2D 接触从不扣速 = 滑开。
+          // 取 -fp.nx 与 1D 同约定 ⇒ 朝墙走 fnSide>0 ⇒ 真撞击进 impactN / slideHeading 法向也对了。
+          const nxSide = -fp.nx;
           const fSide = forwardOf(s.heading);
           const fnSide = fSide.x * nxSide;
           // 法向入射强度复用 1D side 同口径 |v|·fn；若 1D 已撞出更大 impactN 则保留较大者
@@ -1245,6 +1283,17 @@ export class FreeDrive {
     const impacting =
       r.impactN !== undefined && r.impactN > 0 && r.targetHeading !== undefined;
     s.speed = impacting ? damp(s.speed, r.speed, 1 / IMPACT_TAU, dt) : r.speed;
+    // R110 掠擦接触期连续切向摩擦：贴墙（wallScrubN>0，离墙即清零）期间施加恒定减速度
+    // FRICTION×wallScrubN，模拟墙面对切向的真实摩擦，压住「撞击后车沿墙自动滑开」残速
+    // （84° 掠擦 1s 仍滑 ~5 m/s）。模型 ∝ wallScrubN（非 ∝ 当前速度）⇒ 轻擦/硬擦同额摩擦，
+    // r106⑤「越正撞击越狠」单调性靠 speedKick（∝ fn）保留。门控 !driftActive 同 wallScrub；
+    // 钳到不反向 ⇒ 不归零/不瞬停；仅接触期作用。
+    if (this.wallScrubN > 0 && !driftActive) {
+      const tangentDecel = WALL_TANGENT_FRICTION * this.wallScrubN;
+      const sign = Math.sign(s.speed) || 1;
+      const reduced = Math.abs(s.speed) - tangentDecel * dt;
+      s.speed = sign * Math.max(0, reduced);
+    }
     // R106 ① 撞墙首帧「顿挫」：在 IMPACT_TAU 一阶那一档之外，撞墙帧一次性再扣掉「入射
     // 法向分量 r.impactN=|v|·fn」的固定比例（WALL_IMPACT_SPEED_KICK_RATIO），使正撞首帧
     // 速度从 ~6% 掉速提到 ~44%——撞墙读作一次真实碰撞而非融化成滑行。有界且不瞬移：

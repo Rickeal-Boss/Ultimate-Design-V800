@@ -368,6 +368,15 @@ const PITCH_LIMIT = 1.1;
  */
 const FREE_CAM_MARGIN = 0.8;
 
+/* ── R110 · 柔化碰撞抖动（探测实证「僵硬」四根因之一/二/三的通用修）──────────
+ * 原实现瞬时起步 + 线性硬衰减 + 高频 sin 直叠 position ⇒ 用户读作「僵硬的
+ * 碰撞时镜头抖动」。这里只改**通用实现**一处，全场景注入点同时生效：
+ *  · SHAKE_TAU：指数衰减时间常数（τ=0.18 ⇒ 0.8 抖到 0.1 约 0.55s，比线性
+ *    平滑且结尾软收敛，不硬切）。取代 :619/:560 的 `shake -= dt*1.4`。
+ *  · SHAKE_MAX：幅度上限，防 0.8 级注入爆幅（叠加 0.45 → 抖幅上限 0.225m）。 */
+const SHAKE_TAU = 0.18;
+const SHAKE_MAX = 0.45;
+
 export class CameraRig {
   camera: THREE.PerspectiveCamera;
   mode: CameraMode = 'orbit';
@@ -442,7 +451,8 @@ export class CameraRig {
   }
 
   addShake(amount: number): void {
-    this.shake = Math.max(this.shake, amount);
+    // R110：保留「取大」合并语义（多源叠加），加幅度上限防爆幅
+    this.shake = Math.min(SHAKE_MAX, Math.max(this.shake, amount));
   }
 
   /** 拖拽增量：dx→偏航，dy→俯仰（外部机位为环绕惯例：上拖 = 相机升高俯视）。
@@ -557,7 +567,8 @@ export class CameraRig {
       );
       const lookPt = this.tmpOffset.copy(this.flyPos).add(dir);
       cam.position.copy(this.flyPos);
-      this.shake = Math.max(0, this.shake - dt * 1.4);
+      this.shake *= Math.exp(-dt / SHAKE_TAU);
+      if (this.shake < 1e-4) this.shake = 0;
       cam.lookAt(lookPt);
       if (cam.near !== pose.near) {
         cam.near = pose.near;
@@ -616,12 +627,17 @@ export class CameraRig {
     if (this.panOffset.x !== 0 || this.panOffset.y !== 0 || this.panOffset.z !== 0) {
       cam.position.add(this.panOffset);
     }
-    this.shake = Math.max(0, this.shake - dt * 1.4);
+    this.shake *= Math.exp(-dt / SHAKE_TAU);
+    if (this.shake < 1e-4) this.shake = 0;
     if (this.shake > 0) {
+      // R110 · 频率降 + 高频项缩幅 + 总幅值减半：主频 23.3→9.0、41.7→17.0、
+      // 29.1→10.5、47.9→19.0（≈1.4~3.0Hz，避开被读作僵硬的高频区）；
+      // 系数 0.6/0.4 → 0.72/0.28（低主频占比）；总幅值 ×0.5。
+      // 配合 SHAKE_MAX=0.45 ⇒ max 抖幅 ≈0.45×0.5=0.225m（旧 0.4m 更柔）。
       const t = this.time;
       const sh = this.shake;
-      cam.position.x += sh * (Math.sin(t * 23.3) * 0.6 + Math.sin(t * 41.7 + 1.3) * 0.4) * 0.5;
-      cam.position.y += sh * (Math.sin(t * 29.1 + 0.7) * 0.6 + Math.sin(t * 47.9 + 2.1) * 0.4) * 0.5;
+      cam.position.x += sh * (Math.sin(t * 9.0) * 0.72 + Math.sin(t * 17.0 + 1.3) * 0.28) * 0.5;
+      cam.position.y += sh * (Math.sin(t * 10.5 + 0.7) * 0.72 + Math.sin(t * 19.0 + 2.1) * 0.28) * 0.5;
     }
     // R30-D1（N2）：free 机位世界边界钳位 —— 判据可达性证明与公式推导见
     // 上方 FREE_CAM_MARGIN 注释块。顺序（先 z 后侧向）与 FreeDrive.resolveBounds

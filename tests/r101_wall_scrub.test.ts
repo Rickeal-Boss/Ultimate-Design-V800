@@ -114,7 +114,7 @@ describe('R101 wall scrub ② 贴墙含油门：刮擦 > 油门净加速（高�
 });
 
 describe('R101 wall scrub ③ 轻擦(fn≈0.1)：scrub 下限保证仍有可感减速（用户诉求：掠擦不滑）', () => {
-  it('20 m/s 轻擦：撞后 0.1s 仍 >9 m/s、1s 仍 >4 m/s（R109 WALL_SCRUB_FLOOR=8 让轻擦也刮，非瞬停）', () => {
+  it('20 m/s 轻擦：撞后 0.1s 仍 >9 m/s、1s 仍 >2 m/s（R110 WALL_TANGENT_FRICTION 压住掠擦滑开）', () => {
     const heading = headingFor(0.1); // fn≈0.0998 ⇒ impactN≈2；R109 下限 8 ⇒ scrub≈6.4
     const fd = driveToWallHeading(heading, 20);
     // 撞墙当帧：R108 法向 kick（∝fn 小）+ R109 总速 stun 0.35 ⇒ 当帧 ≈11.7（仍高、非瞬停）
@@ -122,7 +122,7 @@ describe('R101 wall scrub ③ 轻擦(fn≈0.1)：scrub 下限保证仍有可感�
     for (let i = 0; i < 12; i += 1) fd.step(DT); // 0.1 s
     expect(Math.abs(fd.state.speed)).toBeGreaterThan(9); // 刮擦下限持续减速（实测 10.97）
     for (let i = 0; i < 108; i += 1) fd.step(DT); // 累计 1 s
-    expect(Math.abs(fd.state.speed)).toBeGreaterThan(4); // 1s 仍 5.09，非瞬停、渐进减速
+    expect(Math.abs(fd.state.speed)).toBeGreaterThan(2); // 1s 实测 3.52（R110 切向摩擦自 5.09 压到 ~3.5，非瞬停、渐进减速）
   });
 });
 

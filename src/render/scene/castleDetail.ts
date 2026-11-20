@@ -663,15 +663,20 @@ function traceryWindow(o: TraceryOpts & { face: 'x' | 'z' }): DetailParts {
           : mullions === 2
             ? [-halfW * 0.36, halfW * 0.36]
             : [];
+  // R110 防窗框/竖棂前脸共面 z-fight：竖棂前脸原与窗框前 cap 同在 x=±frameOut 平面
+  // （塔楼窗「棂冠合拱」处偏置棂顶落入拱带，白棂与金框前脸共面 ⇒ 必闪 = R109 已修
+  //  sub-pixel 之外的残留「白棂/金饰交界」热点）。沿法向**后撤 0.015m**（前脸移到
+  //  frameOut−0.015），脱离窗框前 cap 平面；背脸仍嵌墙 plateBack·0.55，tri 不变。
+  //  ⚠ 不要用加宽 mullW 替代：加宽会**扩大**共面重叠区，闪烁反而更糟。
   const mullionsGeo: THREE.BufferGeometry[] = [];
   for (const off of offs) {
     if (faceX) {
       mullionsGeo.push(
-        box('ashlar', frameOut + plateBack * 0.55, mullH, mullW, (plateBack * 0.55 - frameOut) / 2, mullH / 2 + 0.12, off)
+        box('ashlar', frameOut + plateBack * 0.55 - 0.015, mullH, mullW, (plateBack * 0.55 - frameOut + 0.015) / 2, mullH / 2 + 0.12, off)
       );
     } else {
       mullionsGeo.push(
-        box('ashlar', mullW, mullH, frameOut + plateBack * 0.55, off, mullH / 2 + 0.12, (frameOut - plateBack * 0.55) / 2)
+        box('ashlar', mullW, mullH, frameOut + plateBack * 0.55 - 0.015, off, mullH / 2 + 0.12, (frameOut - 0.015 - plateBack * 0.55) / 2)
       );
     }
   }

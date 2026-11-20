@@ -293,7 +293,9 @@ describe('R102 ④ step() 集成：hit 时事件与速度口径（沿用 wall �
     // 直接摆到接近收紧线的位置：x=13.8（> 12.657 收紧线 ⇒ clampToFootprints 命中）
     fd.teleport(13.8, K0[0], -Math.PI / 6);
     fd.press('KeyW', true);
-    for (let i = 0; i < 5; i++) fd.step(1 / 120);
+    // R110 连续收敛：2D 位置修正按 WALL_2D_MAX_LATERAL_STEP 摊到多帧（不再一帧写死），
+    // 60 帧足以收敛到位（13.8 → 目标 ~12.657，差 1.14 m / 0.30 m 每帧 ≈ 4 帧）。
+    for (let i = 0; i < 60; i++) fd.step(1 / 120);
     // 验证 x 被钳到 ≤ 14.9 − dx（不嵌入基座）
     const dx = dxAt(-Math.PI / 6);
     expect(fd.snapshot().x).toBeLessThanOrEqual(CORNER_BASE_INNER - dx + 1e-6);

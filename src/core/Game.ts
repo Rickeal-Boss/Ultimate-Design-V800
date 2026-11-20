@@ -455,7 +455,7 @@ export class Game {
     this.crashWorld = new World(this.scene, (impact) => {
       this.lastImpactStrength = impact.strength;
       this.sfx.impact(impact.strength);
-      this.rig.addShake(0.25 * impact.strength);
+      this.rig.addShake(0.18 * impact.strength);
     });
 
     // ---- 车型视角接线 ----
@@ -1219,12 +1219,12 @@ export class Game {
         // 复用挑战模式「撞上主殿」文案（R28 换皮后的用户口径）
         this.hud.showToast('撞上主殿！', true, 1800);
         this.sfx.impact(0.6);
-        this.rig.addShake(0.45);
+        this.rig.addShake(0.32);
         vibrate([40, 30, 90]);
         break;
       case 'wall':
         this.sfx.impact(0.22);
-        this.rig.addShake(0.16);
+        this.rig.addShake(0.12);
         break;
       case 'reset':
         this.hud.showToast('已复位到城门外', false, 1400);
@@ -1572,7 +1572,7 @@ export class Game {
         this.car.flashBrakeSnap();
         this.car.snapPedal();
         this.brakeFlash = 0.85;
-        this.rig.addShake(0.5);
+        this.rig.addShake(0.35);
         vibrate([90, 40, 200]);
         this.hud.setRedundancyActive(true);
         this.hud.showToast(
@@ -1630,7 +1630,7 @@ export class Game {
         this.sfx.impact(1);
         this.fx.burstSparks(this.car.root.localToWorld(new THREE.Vector3(0, 0.6, -2.7)));
         this.brakeFlash = 0.5;
-        this.rig.addShake(0.8);
+        this.rig.addShake(0.5);
         this.hud.showToast('撞上主殿！', true, 2200);
         vibrate([90, 40, 200]);
         this.pendingResult = { result: event.result, delay: CRASH.resultDelaySeconds };
