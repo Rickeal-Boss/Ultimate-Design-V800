@@ -61,8 +61,9 @@ describe('R101 wall scrub ① 撞后松油：切向刮擦把车快速刮停（�
     // R106 撞墙首帧法向速度骤降：fn≈0.3 斜擦扣掉入射法向分量的 KICK_RATIO ⇒ 当帧从
     // 旧 ~53 降一截（仍高、非硬切）。切向刮擦从下一帧起作用，总速单调降到 <0.1 的
     // 意图不变。R108 比例 0.4→0.7（用户要求更硬撞击）⇒ 当帧 ~43.9，阈值随新手感从
-    // >48 重钉到 >40（仍 > 入射速 55.56 的 7 成、非硬切）。
-    expect(v0).toBeGreaterThan(40); // 斜擦扣一记法向分量后当帧仍 >40 m/s（非硬切）
+    // >48 重钉到 >40；R109 再乘 (1−STUN 0.35) 总速粘滞 ⇒ 当帧 28.2，阈值重钉到 >25
+    // （仍 > 入射速 55.56 的 4 成半、非硬切/非瞬移）。
+    expect(v0).toBeGreaterThan(25); // 斜擦扣一记法向分量+总速粘滞后当帧仍 >25 m/s（非硬切）
     // 松油持续 step：刮擦 scrub=min(55.56×0.3×0.8,12)=12 m/s² 持续耗散
     let dist = 0;
     let prev = Math.abs(fd.state.speed);
@@ -91,8 +92,8 @@ describe('R101 wall scrub ① 撞后松油：切向刮擦把车快速刮停（�
   });
 });
 
-describe('R101 wall scrub ② 贴墙含油门：刮擦 > 油门净加速，压不住必然停', () => {
-  it('贴墙(平行)+油门：speed 不再爬升，被刮到 <2 m/s（旧机制会爬到十几 km/h 蹭十几秒）', () => {
+describe('R101 wall scrub ② 贴墙含油门：刮擦 > 油门净加速（高速压不住，但低速可走）', () => {
+  it('贴墙(平行)+油门：高速被刮到低速带 1~3 m/s 不再爬升（旧机制会爬到十几 km/h 蹭十几秒）', () => {
     const heading = headingFor(0.3);
     const fd = driveToWallHeading(heading, 55.56);
     fd.press('KeyW', true); // 含油门：恒扭矩段 motor 净加速 ≈6.08 m/s²，< scrub 12
@@ -104,22 +105,24 @@ describe('R101 wall scrub ② 贴墙含油门：刮擦 > 油门净加速，压�
       peak = Math.max(peak, cur);
       expect(fd.state.x).toBeGreaterThanOrEqual(LIMIT - 1e-6); // 仍贴墙
     }
-    expect(Math.abs(fd.state.speed)).toBeLessThan(2); // 被刮到 <2 m/s
+    // R109 低速脱困：scrub×clamp(|v|/FADE_SPEED,0,1) 随速渐入 ⇒ 平衡点 ≈2.03 m/s
+    // （不再是旧 R101 的"被钉死到 <2 且 0"）——玩家持续给油可沿墙走、能转向脱困。
+    expect(Math.abs(fd.state.speed)).toBeGreaterThan(0.5); // 不再被钉死到 0（脱困）
+    expect(Math.abs(fd.state.speed)).toBeLessThan(3); // 被刮到低速带（不爬升）
     expect(peak).toBeLessThan(55.6); // 全程未爬升（含油门也压不住刮擦）
   });
 });
 
-describe('R101 wall scrub ③ 轻擦(fn≈0.1)：scrub≈1.6 不瞬间刹停（保留擦墙仍能滑）', () => {
-  it('20 m/s 轻擦：撞后 0.1s 仍 >18 m/s、1s 仍 >17 m/s（渐进减速而非瞬停）', () => {
-    const heading = headingFor(0.1); // fn≈0.0998 ⇒ impactN≈2 ⇒ scrub≈1.6
+describe('R101 wall scrub ③ 轻擦(fn≈0.1)：scrub 下限保证仍有可感减速（用户诉求：掠擦不滑）', () => {
+  it('20 m/s 轻擦：撞后 0.1s 仍 >9 m/s、1s 仍 >4 m/s（R109 WALL_SCRUB_FLOOR=8 让轻擦也刮，非瞬停）', () => {
+    const heading = headingFor(0.1); // fn≈0.0998 ⇒ impactN≈2；R109 下限 8 ⇒ scrub≈6.4
     const fd = driveToWallHeading(heading, 20);
-    // 撞墙当帧：speed 仍 ≈20（scrub 当帧未生效，r99 语义）。R108 比例 0.7 ⇒ 当帧略降，
-    //   阈值随新手感从 >19 重钉到 >18（仍 ≈20−0.7×2≈18.6，非硬切）。
-    expect(Math.abs(fd.state.speed)).toBeGreaterThan(18);
+    // 撞墙当帧：R108 法向 kick（∝fn 小）+ R109 总速 stun 0.35 ⇒ 当帧 ≈11.7（仍高、非瞬停）
+    expect(Math.abs(fd.state.speed)).toBeGreaterThan(9);
     for (let i = 0; i < 12; i += 1) fd.step(DT); // 0.1 s
-    expect(Math.abs(fd.state.speed)).toBeGreaterThan(17); // 没被瞬间刹停（R108 从 >18 重钉）
+    expect(Math.abs(fd.state.speed)).toBeGreaterThan(9); // 刮擦下限持续减速（实测 10.97）
     for (let i = 0; i < 108; i += 1) fd.step(DT); // 累计 1 s
-    expect(Math.abs(fd.state.speed)).toBeGreaterThan(16); // 仍沿墙滑行（R108 从 >17 重钉）
+    expect(Math.abs(fd.state.speed)).toBeGreaterThan(4); // 1s 仍 5.09，非瞬停、渐进减速
   });
 });
 
@@ -129,8 +132,9 @@ describe('R101 wall scrub ④ 撞墙当帧 speed 不破 r99 语义（R106 首帧
     const fd = driveToWallHeading(heading, 20);
     // R106：当帧扣掉入射法向分量的 KICK_RATIO ⇒ 斜擦 fn≈0.199 当帧降一截。仍远高于 0，
     // 切向保留 + 法向只扣一个比例 ⇒ R99 防硬切意图保留；R108 比例 0.4→0.7（更硬撞击）⇒
-    // 当帧 ~17.17，阈值随新手感从 >18 重钉到 >17（仍 > 0、非硬切/非瞬移）。
-    expect(fd.state.speed).toBeGreaterThan(17);
+    // 当帧 ~17.17，阈值随新手感从 >18 重钉到 >17；R109 再乘 (1−STUN 0.35) ⇒ 当帧 10.97，
+    // 阈值重钉到 >9（仍 > 0、非硬切/非瞬移）。
+    expect(fd.state.speed).toBeGreaterThan(9);
     expect(fd.state.x).toBeCloseTo(LIMIT, 9); // 几何钳位逐位不动
   });
 

@@ -919,8 +919,10 @@ export function makeViaduct(): StoneBuckets {
     const slabH = slabTop - slabBottom; // 0.8
     b.ashlar.push(box('ashlar', 2 * VIADUCT.totalHalf, slabH, zLen, 0, slabBottom + slabH / 2, zMid));
     // 桥脸金线（下层桥面外棱一道，读作"分层线"）
+    // R109 防 z-fight：金线外缘原 x=totalHalf 与桥面侧棱面完全共面 ⇒ 必闪（用户"贴片闪烁"）。
+    // 沿法向外移 0.015m（外缘凸出桥面 1.5cm），消除共面；金线读作"嵌在桥棱的装饰线"。
     for (const side of [-1, 1] as const) {
-      b.gold.push(box('gold', 0.14, 0.1, zLen, side * (VIADUCT.totalHalf - 0.07), slabBottom + 0.12, zMid));
+      b.gold.push(box('gold', 0.14, 0.1, zLen, side * (VIADUCT.totalHalf - 0.055), slabBottom + 0.12, zMid));
     }
   }
 

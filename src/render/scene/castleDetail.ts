@@ -648,7 +648,9 @@ function traceryWindow(o: TraceryOpts & { face: 'x' | 'z' }): DetailParts {
     (p.glass ??= []).push(gp);
   }
   // ④ 竖棂（石，2~5 枝；顶没入拱环即"棂冠合拱"）；低配档整组跳过
-  const mullW = Math.max(0.1, halfW * 0.18); // 实测棂宽 ≈0.18×窗宽
+  // R109 防远处细棂 sub-pixel 闪：下限 0.1 → 0.14（0.1m 在 >40m 处 <2px，无 MSAA 下随
+  // 相机移动爬动闪烁；0.14m 让临界距离外推 ~40%，仍读作石棂）。box 尺寸改动 tri 不变。
+  const mullW = Math.max(0.14, halfW * 0.18); // 实测棂宽 ≈0.18×窗宽（下限 0.14m）
   const mullH = rise * 0.74;
   // R36-A3：3–5 根竖棂的横向排布（对称、含中轴；2 根保持 R31 旧位）
   const offs =

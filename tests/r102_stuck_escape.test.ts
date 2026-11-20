@@ -47,16 +47,17 @@ function driveToWallAndPin(): FreeDrive {
     if (fd.state.x >= LIMIT - 1e-9) hit = true; // 已被几何钳到墙 ⇒ 接触
   }
   expect(hit).toBe(true);
-  // 含油门持续 step：scrub 封顶 12 > 净加速 6.08，速度被刮到接近 0 并钉住
+  // 含油门持续 step：R109 speedFade ⇒ scrub 随速渐入，速度被刮到低速带（≈2.03 平衡点）
+  // 并持续贴墙。旧 R102 是「刮到 <0.3 钉停」，R109 修复后不再钉停（低速可走）。
   fd.press('KeyW', true);
-  let pinnedAt = -1;
+  let lowAt = -1;
   for (let i = 0; i < 1440; i += 1) {
-    // 12 s：足够 55 m/s @ (12−6.08)≈5.9 m/s² 刮停
+    // 12 s：足够 55 m/s @ (12−6.08)≈5.9 m/s² 刮到低速带
     fd.step(DT);
-    if (pinnedAt < 0 && Math.abs(fd.state.speed) < 0.3) pinnedAt = i;
+    if (lowAt < 0 && Math.abs(fd.state.speed) < WALL_SCRUB_RELEASE_MS * 2) lowAt = i;
   }
-  expect(pinnedAt).toBeGreaterThanOrEqual(0); // 确实被刮到钉停（<0.3 m/s）
-  expect(Math.abs(fd.state.speed)).toBeLessThan(WALL_SCRUB_RELEASE_MS); // 处于脱困窗口
+  expect(lowAt).toBeGreaterThanOrEqual(0); // 确实被刮到低速带（<3 m/s）
+  expect(Math.abs(fd.state.speed)).toBeLessThan(WALL_SCRUB_RELEASE_MS * 2); // 处于低速带
   expect(fd.state.x).toBeGreaterThanOrEqual(LIMIT - 1e-6); // 仍贴墙
   return fd;
 }
@@ -72,16 +73,17 @@ describe('R102 贴墙低速脱困 · 常量', () => {
   });
 });
 
-describe('R102 脱困 ① 贴墙钉停 + 油门 + 转向：恢复最小转向权限、车头转离墙、wallScrub 清零脱困', () => {
-  it('KeyD(steerIn=−1)+油门：yawRate 获得 ≈−0.315 最小权限，车头转离 +X 墙，随后 x 掉到界内脱困', () => {
+describe('R102 脱困 ① 贴墙低速 + 油门 + 转向：车头转离墙、wallScrub 清零脱困', () => {
+  it('KeyD(steerIn=−1)+油门：yawRate 有转向权限（∝|v|，R109 后低速仍可转），车头转离 +X 墙后 x 掉到界内脱困', () => {
     const fd = driveToWallAndPin();
     const heading0 = fd.state.heading;
-    // 按住油门 + 右转（KeyD ⇒ steerIn=−1）：脱困门控应触发
+    // 按住油门 + 右转（KeyD ⇒ steerIn=−1）：车有 ~2 m/s 速度 ⇒ yawRateFor 有转向权限
     fd.press('KeyD', true);
-    // 第一帧即应获得最小转向权限（不等速度爬升，因为速度被 scrub 钉在 0）
     fd.step(DT);
-    const expectedYaw = -1 * 0.9 * 0.35; // steerIn=−1 × maxYawRate × 0.35，vAvg≥0 ⇒ 同号
-    expect(fd.state.yawRate).toBeCloseTo(expectedYaw, 6); // 恢复 0.35×maxYawRate 权限
+    // R109：低速带 v≈2.03（不再钉停 0）⇒ 常规 yawRateFor 已有转向（∝|v|），
+    // 不再依赖 R102 的 0.35 特殊门控（av<1.5 不再命中，但车本身能转）。
+    expect(fd.state.yawRate).toBeLessThan(0); // KeyD ⇒ 朝路内转向
+    expect(Math.abs(fd.state.yawRate)).toBeGreaterThan(0.001); // 有实际转向权限
     // 车头持续转离墙：heading 朝减小方向（f.x 由 +0.3 转向 ≤0 即指向路内）
     let escaped = false;
     for (let i = 0; i < 720; i += 1) {
@@ -101,34 +103,33 @@ describe('R102 脱困 ① 贴墙钉停 + 油门 + 转向：恢复最小转向权
   });
 });
 
-describe('R102 脱困 ② 无主动操作：钉停态零变化（不自行脱困，保持 r101 canEscape=false 语义）', () => {
-  it('钉停后不给转向/油门：yawRate 恒 0、heading 不变、x 不离墙（无输入零变化）', () => {
+describe('R102 脱困 ② 无主动操作：不自行脱困（保持 r101 canEscape=false 语义）', () => {
+  it('低速滑行态不给转向/油门：yawRate 恒 0、heading 不变、x 不自行离墙（无输入零转向）', () => {
     const fd = driveToWallAndPin();
     fd.press('KeyW', false); // 松油门：无任何主动操作
     const heading0 = fd.state.heading;
-    const x0 = fd.state.x;
     for (let i = 0; i < 240; i += 1) {
-      // 2 s：无输入应纹丝不动（既不被 scrub 推、也无转向权限）
+      // 2 s：无输入应无转向权限（yawRate 0）、不自行离墙（x 仍在墙）
       fd.step(DT);
       expect(fd.state.yawRate).toBeCloseTo(0, 6); // 无转向权限 ⇒ yawRate 0
       expect(fd.state.x).toBeGreaterThanOrEqual(LIMIT - 1e-6); // 不自行离墙
     }
     expect(fd.state.heading).toBeCloseTo(heading0, 6); // 车头不转
-    expect(fd.state.x).toBeCloseTo(x0, 6); // 位置不动
   });
 });
 
-describe('R102 脱困 ③ 只给转向不给油门/刹车：不触发（门控需油门/刹车同时按下）', () => {
-  it('钉停态只按 KeyD、无油门/刹车：yawRate 恒 0（门控 requires throttle>0||brakeIn>0）', () => {
+describe('R102 脱困 ③ 只给转向不给油门/刹车：不触发脱困特殊门控（但常规转向 ∝|v| 仍在）', () => {
+  it('低速滑行态只按 KeyD、无油门/刹车：无 0.315 特殊权限（常规 yawRateFor 小转向），不触发 R102 门控', () => {
     const fd = driveToWallAndPin();
     fd.press('KeyW', false); // 松油门
     fd.press('KeyD', true); // 只给转向
     for (let i = 0; i < 60; i += 1) {
       fd.step(DT);
-      // R104 撞击手感：钉停态建立时的撞墙 yaw 一次性短冲量（WALL_IMPACT_KICK_*）会留极小衰减残差
-      // （实测 |yawRate|≈1e-5 rad/s ≈ 0.0006°/s，物理等同不脱困）。门控仍需油门/刹车同时按下，
-      // 故断言「yawRate≈0（3 位小数）」而非钉死 5e-7 —— 残差远小于任何可感知脱困。
-      expect(fd.state.yawRate).toBeCloseTo(0, 3); // 无油门/刹车 ⇒ 门控不触发（残差 <5e-4 视为零）
+      // R109：v≈2.03（非钉停 0）⇒ 常规 yawRateFor(steer, v) 有 ∝|v| 的**小**转向权限，
+      // 但**不是** R102 的 0.35×maxYawRate≈0.315 特殊脱困权限（门控需油门/刹车同时按下）。
+      // 断言「无 0.315 级权限」——若门控误触发会 ≈0.315，常规量级实测 0.10 ≪ 0.15。
+      expect(Math.abs(fd.state.yawRate)).toBeLessThan(0.15);
+      expect(fd.state.x).toBeGreaterThanOrEqual(LIMIT - 0.05); // 不显著离墙（贴墙接触带 5cm 内）
     }
   });
 });

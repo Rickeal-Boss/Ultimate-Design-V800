@@ -142,9 +142,9 @@ describe('R99 ③ FreeDrive 写回：朝向一阶收敛 / 漂移态渐变 / 瞬�
     // R106 撞墙首帧法向速度骤降（顿挫）：斜擦 fn≈0.199 只扣入射法向分量的
     // WALL_IMPACT_SPEED_KICK_RATIO ⇒ 当帧从旧 ~19.73 降一截，仍远高于 0
     // ⇒ R99「防硬切/不瞬移」意图保留（切向分量完整 + 法向只扣一个比例）。R108 比例
-    //   0.4→0.7（用户要求更硬撞击）⇒ 斜擦当帧 ~17.17，阈值随新手感从 >18 重钉到 >17
-    //   （仍保留大部分切向速度、非硬切；若回单帧硬切/归零必红）。
-    expect(fd.state.speed).toBeGreaterThan(17);
+    //   0.4→0.7（用户要求更硬撞击）⇒ 斜擦当帧 ~17.17；R109 再乘 (1−STUN 0.35) 总速
+    //   粘滞 ⇒ 当帧 10.97，阈值重钉到 >9（仍保留相当速度、非硬切；若回单帧硬切/归零必红）。
+    expect(fd.state.speed).toBeGreaterThan(9);
     const dh = Math.abs(fd.state.heading - hBefore);
     expect(dh).toBeLessThan(0.05); // 旧版一帧转 0.2
   });
@@ -193,7 +193,9 @@ describe('R99 ③ FreeDrive 写回：朝向一阶收敛 / 漂移态渐变 / 瞬�
     //   （实测 β0≈0.119 → 8 帧后 ≈0.127，小幅上扬后再衰减），非严格单调。
     //   放宽为「β 有界且最终回落」——断言末值 < 首值 ×1.5（容纳硬撞击 transient），
     //   仍排除 β 卡死/发散（那会 ≫ 首值）。
-    expect(betas[betas.length - 1]).toBeLessThan(betas[0] * 1.5); // 有界（容纳硬撞击 transient）
+    //   R109 再乘 (1−STUN 0.35) 总速粘滞 ⇒ 撞墙帧速度骤降更狠、退出漂移层时序变化，
+    //   头 8 帧 β transient 升到 ≈0.192（实测，仍 < 首值×1.6、未发散）⇒ 边界放宽到 ×2.0。
+    expect(betas[betas.length - 1]).toBeLessThan(betas[0] * 2.0); // 有界（容纳硬撞击 transient）
   });
 
   it('瞬态包络：撞墙后 roll 出现可见瞬态并随包络指数衰减', () => {

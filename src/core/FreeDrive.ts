@@ -236,6 +236,35 @@ export const WALL_SCRUB_CONTACT_EPS = 0.05;
  */
 export const WALL_SCRUB_RELEASE_MS = 1.5;
 /**
+ * R109 低速脱困：scrub 随车速线性渐入的基准速度 m/s。
+ * 死锁根因（用户录屏 15s HUD=0 + 探针 836/1364 采样点卡死）：scrub 是**全向标量**、
+ * `wallScrubN` 以 Math.max 记峰永不衰减 ⇒ 贴墙后 scrub 恒 = 封顶 12 m/s² > 油门净加速
+ * 6.08 ⇒ 每帧 `vNext -= dir*scrub*dt` 把速度钳回 0（v 恒 0.052）、位移趋近 0 ⇒
+ * 「卡住不能动」；R102 脱困只放开转向权限（yawRate），不改速度 ⇒ 车原地转圈。
+ * 物理本质：墙的静摩擦只阻止「压向墙」，不阻止「沿墙/离开墙」⇒ 低速时全向 scrub
+ * 是**过度惩罚**。修法：scrub × clamp(|v|/FADE_SPEED, 0, 1) 随速度线性渐入——
+ * 高速(≥FADE_SPEED)完整刮停（R101 撞墙刮停契约保留，蹭滑仍被刮停）；低速(→0)渐出
+ * ⇒ 油门净加速 6.08 能推动 ⇒ 平衡点 ≈6.08×(FADE_SPEED/12)=2.03 m/s（持续给油可沿墙
+ * 走、能转向脱困）。不改 scrubN/几何/摩擦圆，只加一个速度系数。
+ */
+export const WALL_SCRUB_FADE_SPEED = 4.0;
+/**
+ * R109 撞墙刮擦强度下限 m/s²（scrubN = max(impactN, FLOOR)）。
+ * 极斜擦（>60°）时 impactN=|v|·fn 随 fn→0 塌缩（84° 掠擦 impactN≈2）⇒ scrubN 小 ⇒
+ * 刮擦弱 ⇒ 车 1s 内仍 14.4 m/s、沿墙滑 32m（用户「硬切变滑动」主体）。给一个下限保证
+ * **任何撞墙**至少产生可感的持续刮擦减速。hall 正撞不进 scrub 链路（无 targetHeading），
+ * 不受影响。
+ */
+export const WALL_SCRUB_FLOOR = 8.0;
+/**
+ * R109 撞墙首帧「总速度粘滞」比例：与 R108 的法向 kick（∝fn）正交的另一记扣减。
+ * R108 的 kick 只扣 0.7×impactN=|v|·fn 的法向分量 ⇒ 极斜擦 fn 小几乎不扣（84° 掠擦
+ * 首帧只掉 9.7%）⇒ 读作「顺墙滑」。本常数对**总速度**乘 (1−RATIO)，与入射角无关，
+ * 保证任何撞墙首帧都有可感知的顿挫（正撞 80% 掉速 + 掠擦 40% 掉速）。仍在
+ * !wallSpeedKickFired 闩内一次性扣减，不归零（保留 ~60%），位置仍由几何钳位（不瞬移）。
+ */
+export const WALL_IMPACT_STUN_RATIO = 0.35;
+/**
  * R102 离墙滞后带 m：已贴墙态改用此更宽松阈值维持 sideTouch=true，防止
  * corridorCenterHalfWidth(z) 段间跳变导致误清零。最大段间跳变 = 桥 10.997 →
  * 隧道 8.997 → 块心 10.0 = 1.003 m 差 + 柱位 10.117 多出 0.117 m ⇒ 1.2 > 1.114 覆盖。
@@ -1016,7 +1045,11 @@ export class FreeDrive {
       this.pitchKickRemain = 0;
     }
     // 刮擦减速度：撞得越狠刮得越狠 + 封顶（撞墙域边界耗散，与轮胎摩擦圆独立）
-    const wallScrub = Math.min(this.wallScrubN * WALL_SCRUB_DECEL, WALL_SCRUB_DECEL_MAX);
+    // R109 低速脱困：× clamp(|v|/FADE_SPEED,0,1) 随速度线性渐入 —— 高速完整刮停
+    // （R101 蹭滑契约保留），低速渐出（油门 6.08 能推动，平衡点 ≈2.03 m/s 可走可转向）。
+    const wallScrub =
+      Math.min(this.wallScrubN * WALL_SCRUB_DECEL, WALL_SCRUB_DECEL_MAX) *
+      clamp(av / WALL_SCRUB_FADE_SPEED, 0, 1);
 
     /* ---- R36-P1 后轴抓地一阶动力学（手刹收紧 / 松开恢复）----
      * rearGrip ∈ [driftGripFloor, 1]；它同时缩放后轴侧向力与后轴摩擦圆。 */
@@ -1225,7 +1258,9 @@ export class FreeDrive {
     if (impacting && !this.wallSpeedKickFired) {
       const kickLoss = WALL_IMPACT_SPEED_KICK_RATIO * r.impactN!;
       const sign = Math.sign(s.speed) || 1;
-      const mag = Math.max(0, Math.abs(s.speed) - kickLoss);
+      // R109 ②：再乘 (1−WALL_IMPACT_STUN_RATIO) —— 与入射角正交的一记总速度粘滞，
+      // 保证极斜擦（fn→0、R108 kick 几乎不扣）也有可感知的撞墙顿挫。仍不归零。
+      const mag = Math.max(0, Math.abs(s.speed) - kickLoss) * (1 - WALL_IMPACT_STUN_RATIO);
       s.speed = sign * mag;
       this.wallSpeedKickFired = true;
     }
@@ -1256,7 +1291,7 @@ export class FreeDrive {
       this.wallImpact = Math.max(this.wallImpact, r.impactN!); // 峰值：连续擦碰刷新
       // R101：撞墙强度供刮擦维持（hall 不进此块 ⇒ 正撞彻底停、无刮擦，契约不变）。
       // 下一帧起只要仍贴墙，step() 就按此强度持续刮擦，堵死平行墙零摩擦蹭滑。
-      this.wallScrubN = Math.max(this.wallScrubN, r.impactN!);
+      this.wallScrubN = Math.max(this.wallScrubN, r.impactN!, WALL_SCRUB_FLOOR);
       // R104 ④：撞墙帧记横摆冲量峰值（min(wallImpact, 上限)），在下方窗口内分摊注入，
       // 取代旧的「每帧速率项」（被下一帧 yawRateFor 覆盖 ⇒ 一帧脉冲不可见）。
       // ⚠ 窗口只在「本次贴墙接触尚未放过冲量」时装填：贴墙期间 impacting 每帧成立，若每帧

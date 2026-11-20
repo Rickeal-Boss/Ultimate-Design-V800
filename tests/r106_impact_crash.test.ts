@@ -24,6 +24,7 @@ import {
   WALL_IMPACT_PITCH_KICK_MAX,
   WALL_IMPACT_PITCH_KICK_MS,
   WALL_IMPACT_SPEED_KICK_RATIO,
+  WALL_IMPACT_STUN_RATIO,
   corridorCenterHalfWidth,
   resolveBounds
 } from '../src/core/FreeDrive';
@@ -115,8 +116,10 @@ describe('R106 ③ 防瞬移（保留 R99 底线：首帧不归零、不瞬移�
     const v0 = 20;
     const fd = driveHeadOn(v0);
     const vImpact = Math.abs(fd.state.speed);
-    // 真源下界：切向保留 + 法向只扣 KICK_RATIO ⇒ 当帧仍留大部分速度（实测 ~10.8 >> 0）
-    expect(vImpact).toBeGreaterThan(v0 * (1 - WALL_IMPACT_SPEED_KICK_RATIO) * 0.7);
+    // 真源下界：切向保留 + 法向只扣 KICK_RATIO + R109 总速 stun ⇒ 当帧仍留速度（实测 ~3.1）
+    expect(vImpact).toBeGreaterThan(
+      v0 * (1 - WALL_IMPACT_SPEED_KICK_RATIO) * (1 - WALL_IMPACT_STUN_RATIO) * 0.7
+    );
     expect(vImpact).toBeGreaterThan(0); // 绝不单帧归零（旧 R98 硬切必红）
   });
 
@@ -174,8 +177,9 @@ describe('R106 ⑤ 斜撞刮擦（fn 小 = 刮擦减速，非纯滑；fn 大 = �
     const vImpact = Math.abs(fd.state.speed);
     for (let i = 0; i < 24; i += 1) fd.step(DT); // 0.2 s
     const vAfter = Math.abs(fd.state.speed);
-    // 斜擦：speedKick 按 fn 加权（扣得少）+ wall scrub 持续刮 ⇒ 0.2s 明确减速，非纯滑
-    expect(vImpact).toBeGreaterThan(15); // 斜擦当帧仍高（切向保留，非硬切）
+    // 斜擦：speedKick 按 fn 加权（扣得少）+ wall scrub 持续刮 ⇒ 0.2s 明确减速，非纯滑。
+    // R109 总速 stun 0.35 + WALL_SCRUB_FLOOR=8 ⇒ 斜擦当帧也降一截（≈11.5），0.2s 后 ≈8.5。
+    expect(vImpact).toBeGreaterThan(9); // 斜擦当帧仍高（保留切向，非硬切）
     expect(vAfter).toBeLessThan(vImpact); // 刮擦减速
     expect(vImpact - vAfter).toBeGreaterThan(0.5); // 减速量可观（非纯滑）
   });
