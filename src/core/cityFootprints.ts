@@ -185,18 +185,24 @@ export function buildCityFootprints(): CityFootprint[] {
       });
     }
 
-    // ⑤ 拱廊柱（每侧 2n = 4，柱位 zc ± (i+0.5)·pitch；AABB 用柱心 ± (colR + 0.1 m 微稳定余量)）
+    // ⑤ 拱廊柱（每侧 2n = 4，柱位 zc ± (i+0.5)·pitch；AABB 用柱心 ± colR = 柱圆柱的包围盒）
     // R106：colAabbHalf 收到精确 colR（0.3）—— 消除 R104 遗留的 0.1m ghost 触发带（车在柱 z
     //   边缘外 0.1m 仍被误钳到柱内缘 = 周期性 0.1m 空气墙）。车宽 2.006（z 半 1.003）≫ 柱 0.3，
     //   SAT 重叠裕度充足，无边界抖动风险（R104 的 +0.1 余量过保守）。
+    // R114：colAabbXOuter 从「柱带结构外缘 14.62」收到「柱圆柱包围盒 11.72」（柱心 11.42 + colR）。
+    //   原 AABB x 深 3.5m 把柱子后方空廊（x∈[11.72,14.62]）也包进来 —— 车斜插车角进空廊
+    //   （SAT 判交但车缘距柱心 > colR，真没碰柱）被误挡 = 空气墙（违反 R100「看不见空隙不挡」，
+    //   R114 探针实测 maxAir 2~3m）。收窄后柱带占位 = 柱圆柱包围盒，车进空廊不再挡（空气墙消），
+    //   真碰柱（车缘进 [11.12,11.72]）仍挡（防穿柱）。
     const colAabbHalf = ARCADE_COL_R; // 0.3（真源 colR=0.3，castleDetail.ts:1397；精确贴柱无 ghost）
+    const colAabbXOuter = ARCADE_COL_INNER + 2 * ARCADE_COL_R; // 11.72 = 柱心 11.42 + colR
     for (let i = 0; i < ARCADE_COL_COUNT; i += 1) {
       const offset = (i + 0.5) * R30_ARCADE.pitch;
       for (const sign of [-1, 1] as const) {
         const pz = zc + sign * offset;
         list.push({
           xInner: ARCADE_COL_INNER,
-          xOuter: ARCADE_COL_INNER + R30_ARCADE.width,
+          xOuter: colAabbXOuter,
           zMin: pz - colAabbHalf,
           zMax: pz + colAabbHalf,
           kind: 'arcadeCol'
@@ -355,7 +361,7 @@ function obbMtvAxis(
   halfL: number,
   halfW: number,
   f: CityFootprint
-): { axis: 'x' | 'z' | 'lx' | 'lz' | 'separated'; depth: number } {
+): { axis: 'x' | 'z' | 'lx' | 'lz' | 'separated'; depth: number; az: number } {
   const c = Math.cos(heading);
   const s = Math.sin(heading);
   const side = cx < 0 ? -1 : 1;
@@ -371,18 +377,20 @@ function obbMtvAxis(
   ];
   let min = Infinity;
   let minAxis: 'x' | 'z' | 'lx' | 'lz' = 'x';
+  let minAz = 0;
   for (const a of axes) {
     const carR = halfL * Math.abs(a.ax * s + a.az * c) + halfW * Math.abs(a.ax * c - a.az * s);
     const fpR = fhx * Math.abs(a.ax) + fhz * Math.abs(a.az);
     const dist = Math.abs((cx - fcx) * a.ax + (cz - fcz) * a.az);
     const overlap = carR + fpR - dist;
-    if (overlap <= 0) return { axis: 'separated', depth: 0 };
+    if (overlap <= 0) return { axis: 'separated', depth: 0, az: 0 };
     if (overlap < min) {
       min = overlap;
       minAxis = a.axis;
+      minAz = a.az;
     }
   }
-  return { axis: minAxis, depth: min };
+  return { axis: minAxis, depth: min, az: minAz };
 }
 
 /**
@@ -459,7 +467,14 @@ export function clampToFootprints(
         //   （车此刻在带 x 内、z 上被 x-钳只推 x 无法消 z），必须用当前位置才能看到 z 重叠并沿 z 阻挡。
         if (!obbOverlapsAabb(x, cz, heading, CAR_HALF_L, CAR_HALF_W, f)) continue;
         const m = obbMtvAxis(x, cz, heading, CAR_HALF_L, CAR_HALF_W, f);
-        if (m.axis !== 'z') continue; // 只有 z 为最小穿透轴才沿 z 推（x 钳/迭代已处理 x/lx）
+        // R114：放宽到「min 轴的 z 分量显著」才沿 z 推。R113 只推 min 轴=z，但斜插（如 45°）
+        //   时 min 轴常为车局部轴（lx/lz，z 分量 = |sin h|/|cos h|，45° 时 0.707）——车头斜入
+        //   占位带（墩/柱/塔基）z 覆盖浅，MTV 最小分离沿局部轴，x 钳收敛 0.3m/帧太慢 ⇒ 车角深
+        //   嵌 0.5m 级（R113 判定接受的斜插收敛瞬态，R114 实测 0.547m）。把 z 钳扩展到「min 轴的
+        //   z 分量 ≥ 0.45」（覆盖 30°/45° 斜插；x 轴 az=0 仍交给 x 钳）⇒ 车头斜入时沿 z 推回带
+        //   外缘（同 R113 对柱带的机制），消除斜插穿墩瞬态。阈值 0.45：45°(0.707)/30°(0.5) 触发，
+        //   15°(0.259) 不触发（x-钳处理，15° 穿模本已微小）。只放宽 z-钳触发条件，目标/步长不变。
+        if (Math.abs(m.az) < 0.45) continue;
         const fcz = (f.zMin + f.zMax) / 2;
         if (cz >= fcz) {
           const zb = f.zMax + dz;
@@ -505,7 +520,12 @@ export function clampToFootprints(
     x: xClamped ? (x >= 0 ? xClamp.best : -xClamp.best) : x,
     z: zClamped ? zClamp.zLimit : z,
     hit: true,
-    kind: zClamped ? zClamp.zKind : xClamp.kind,
+    // R114：kind 反映**最紧 x 钳盒**（x 钳是主判据：bound=xInner−dx 取最紧界），z 钳盒仅当 x
+    //   未收紧时兜底。R113 原式 `zClamped ? zClamp.zKind : xClamp.kind` 在 z 钳触发（R114 扩展
+    //   到 min 轴 z 分量显著后斜插常见）时用 z 钳盒盖过 x 钳最紧盒（如墩位斜插 z 钳先扫到柱带
+    //   arcadeCol 而 x 钳最紧是墩 buttressBase）⇒ kind 语义错（r102/r103 断言钉「最紧盒」失败）。
+    //   改为 x 钳优先 ⇒ kind 恒为「最紧界」占位盒（测试钉的语义），z 钳只贡献 z/nz。
+    kind: xClamped ? xClamp.kind : zClamp.zKind,
     nx,
     nz: zClamp.zDir, // z 外法向：+1 = 推向 +z（可行驶侧）、−1 = 推向 −z
   };

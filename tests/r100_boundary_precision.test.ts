@@ -158,8 +158,10 @@ describe('R103 阶段二 · 柱位 z 1D=所在包络 / 柱·墩由 2D 兜底', (
         // R113：x-钳收紧到柱内缘 − dx(θ)（柱不穿模 2D 兜底，主护栏；z-钳可能同时触发）
         expect(r.x).toBeCloseTo(bound, 12);
         if (r.nz !== 0) {
-          // z-钳触发：车头入前排塔基带（frontBase z-binding），z 被收紧（车头被塔基阻挡，不再穿入）
-          expect(r.kind).toBe('frontBase');
+          // R114：z-钳触发（车头入前排塔基带 z-binding，z 被收紧——车头被塔基阻挡不再穿入），
+          //   但 kind 恒为**x 钳最紧盒**（柱带 arcadeCol，bound=11.12−dx 最紧；R114 统一 kind
+          //   语义 = 最紧界，z 钳盒不盖过 x 钳最紧盒，r102 同口径）。
+          expect(r.kind).toBe('arcadeCol');
           expect(r.z).not.toBeCloseTo(z, 6);
         } else {
           expect(r.kind).toBe('arcadeCol');
