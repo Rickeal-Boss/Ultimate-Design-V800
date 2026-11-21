@@ -155,8 +155,16 @@ describe('R103 阶段二 · 柱位 z 1D=所在包络 / 柱·墩由 2D 兜底', (
         const z = zc + sign * off;
         const r = clampToFootprints(OPEN_CAR_CENTER, z, OBLIQUE);
         expect(r.hit).toBe(true);
-        expect(r.kind).toBe('arcadeCol');
+        // R113：x-钳收紧到柱内缘 − dx(θ)（柱不穿模 2D 兜底，主护栏；z-钳可能同时触发）
         expect(r.x).toBeCloseTo(bound, 12);
+        if (r.nz !== 0) {
+          // z-钳触发：车头入前排塔基带（frontBase z-binding），z 被收紧（车头被塔基阻挡，不再穿入）
+          expect(r.kind).toBe('frontBase');
+          expect(r.z).not.toBeCloseTo(z, 6);
+        } else {
+          expect(r.kind).toBe('arcadeCol');
+          expect(r.z).toBeCloseTo(z, 12); // 无 z 收紧
+        }
       }
     }
   });

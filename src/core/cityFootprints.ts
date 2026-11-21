@@ -274,13 +274,17 @@ export function footprintsNear(
   return out;
 }
 
-/** clampToFootprints 返回：修正后的 x（可能等于入参 = 无收紧）、是否收紧、最紧占位盒 kind、外法向 nx */
+/** clampToFootprints 返回：修正后的 x/z（可能等于入参 = 无收紧）、是否收紧、最紧占位盒 kind、外法向 nx/nz */
 export interface FootprintClamp {
   x: number;
+  /** R113：z 钳位目标（车心 z），无 z 收紧时 = 入参 z */
+  z: number;
   hit: boolean;
   kind: CityFootprint['kind'] | null;
   /** 外法向（指向可行驶一侧）：x ≥ 0 时 −1（推向 −x）、x < 0 时 +1 */
   nx: number;
+  /** R113：z 外法向（指向可行驶一侧）：车从 +z 逼近（推 +z 离带）时 +1、从 −z 逼近时 −1；无 z 收紧时 0 */
+  nz: number;
 }
 
 /**
@@ -337,6 +341,51 @@ function obbOverlapsAabb(
 }
 
 /**
+ * R113：OBB-vs-AABB 的 MTV（最小平移向量）最小穿透轴判定。
+ *
+ * 返回 4 条候选轴（世界 x、世界 z、车局部 x、车局部 z）上穿透最浅的轴。若任一轴投影不重叠
+ * （overlap ≤ 0）⇒ 已分离，返回 axis='separated'。这是 clampToFootprints 决定「沿 x 还是沿 z
+ * 推离」的依据：车头先入占位带（z 覆盖浅、x 覆盖深）时 min 轴 = z（x 单向钳无法解决，必须沿 z
+ * 推）；车侧深嵌（x 覆盖浅）时 min 轴 = x（R112 迭代钳解决）；斜插时 min 轴 = 车局部轴。
+ */
+function obbMtvAxis(
+  cx: number,
+  cz: number,
+  heading: number,
+  halfL: number,
+  halfW: number,
+  f: CityFootprint
+): { axis: 'x' | 'z' | 'lx' | 'lz' | 'separated'; depth: number } {
+  const c = Math.cos(heading);
+  const s = Math.sin(heading);
+  const side = cx < 0 ? -1 : 1;
+  const fcx = (side * (f.xInner + f.xOuter)) / 2;
+  const fhx = (f.xOuter - f.xInner) / 2;
+  const fcz = (f.zMin + f.zMax) / 2;
+  const fhz = (f.zMax - f.zMin) / 2;
+  const axes: ReadonlyArray<{ axis: 'x' | 'z' | 'lx' | 'lz'; ax: number; az: number }> = [
+    { axis: 'x', ax: 1, az: 0 },
+    { axis: 'z', ax: 0, az: 1 },
+    { axis: 'lx', ax: c, az: -s },
+    { axis: 'lz', ax: s, az: c },
+  ];
+  let min = Infinity;
+  let minAxis: 'x' | 'z' | 'lx' | 'lz' = 'x';
+  for (const a of axes) {
+    const carR = halfL * Math.abs(a.ax * s + a.az * c) + halfW * Math.abs(a.ax * c - a.az * s);
+    const fpR = fhx * Math.abs(a.ax) + fhz * Math.abs(a.az);
+    const dist = Math.abs((cx - fcx) * a.ax + (cz - fcz) * a.az);
+    const overlap = carR + fpR - dist;
+    if (overlap <= 0) return { axis: 'separated', depth: 0 };
+    if (overlap < min) {
+      min = overlap;
+      minAxis = a.axis;
+    }
+  }
+  return { axis: minAxis, depth: min };
+}
+
+/**
  * 纯函数：把车 OBB 的 x 伸展钳到「不与城内 2D 占位相交」的最紧界（只收紧，不放宽）。
  *
  * dx(θ) = 半长·|sinθ| + 半宽·|cosθ| 是车 OBB 4 角点相对车心的 x 最大伸展
@@ -360,10 +409,10 @@ export function clampToFootprints(
    * （x 伸展 2dx=4.76m）扫过 buttress 带 [11.35,11.90] 落入其中，车局部横向轴（lx）穿透
    * 1.787m 残留。迭代用 clamp 后位置 cx 复查 SAT：若车 OBB 仍与占位盒相交则继续钳到更紧界
    * （buttress bound=8.971 比 frontBase 12.421 更紧）。实测全量扫 81 万例 maxIters=2 ⇒
-   * 上限 4（安全裕度）。**z 不动**（无 z 瞬移）；FreeDrive 的 WALL_2D_MAX_LATERAL_STEP=0.30m/帧
-   * 步长上限照旧（车逐步收敛到最终目标，无瞬移）；只收紧不放宽（每次 iterBest < |cx| 才更新）。
+   * 上限 4（安全裕度）。FreeDrive 的 WALL_2D_MAX_LATERAL_STEP=0.30m/帧步长上限照旧
+   * （车逐步收敛到最终目标，无瞬移）；只收紧不放宽（每次 iterBest < |cx| 才更新）。
    */
-  const limit = /* 最紧界，Infinity 表示无占位盒 */ (() => {
+  const xClamp = (() => {
     let best = Infinity;
     let kind: CityFootprint['kind'] | null = null;
     let cx = x;
@@ -387,10 +436,77 @@ export function clampToFootprints(
     }
     return { best, kind };
   })();
+  /* R113：z 钳**迭代复查**（正交于 x 钳）。车头先入占位带（如 arcadeCol 柱带 z-深仅 0.6m）
+   * 时，x 覆盖深而 z 覆盖浅 ⇒ MTV 最小穿透轴 = 世界 z，x 单向钳无法把车头沿 z 推离（R112
+   * 实驶探针 SB 直行穿柱带 0.797m/7帧即此）。此块对「min 轴 = z」的占位盒沿 z 推：车从 +z 逼近
+   * （cz ≥ 带心）⇒ 把车心 z 推到 f.zMax + dz（车头恰停在带 +z 外缘，不再穿入）；从 −z 逼近 ⇒
+   * 推到 f.zMin − dz（车尾停在带 −z 外缘）。迭代复查防「推 z 后重新落入另一占位盒」（z 方向
+   * 占位密集，单次推满会过头，R112 V1/V2 实测恶化 2.70m）。重叠判定用**入参 x**（车当前位置）：
+   * x-钳把车推出带 x 范围后车头 z 穿透仍在（车此刻在带 x 内、z 上只推 x 无法消 z），必须用
+   * 当前位置才看得到 z 重叠并沿 z 阻挡。车斜插时 x/z 钳都触发，逐帧由 FreeDrive 双轴步长收敛。
+   */
+  const zClamp = (() => {
+    let zLimit = Infinity;
+    let zKind: CityFootprint['kind'] | null = null;
+    let zDir = 0;
+    let cz = z;
+    for (let iter = 0; iter < 4; iter += 1) {
+      let iterZPos = -Infinity; // +z 最紧界（车头停在带 +z 外缘）
+      let iterZNeg = Infinity; // −z 最紧界（车尾停在带 −z 外缘）
+      let iterKind: CityFootprint['kind'] | null = null;
+      for (const f of footprintsNear(cz, dz)) {
+        // ⚠ 用**入参 x**（车当前位置）判定重叠：x-钳已把车推出带 x 范围时，车头 z 穿透仍在
+        //   （车此刻在带 x 内、z 上被 x-钳只推 x 无法消 z），必须用当前位置才能看到 z 重叠并沿 z 阻挡。
+        if (!obbOverlapsAabb(x, cz, heading, CAR_HALF_L, CAR_HALF_W, f)) continue;
+        const m = obbMtvAxis(x, cz, heading, CAR_HALF_L, CAR_HALF_W, f);
+        if (m.axis !== 'z') continue; // 只有 z 为最小穿透轴才沿 z 推（x 钳/迭代已处理 x/lx）
+        const fcz = (f.zMin + f.zMax) / 2;
+        if (cz >= fcz) {
+          const zb = f.zMax + dz;
+          if (zb > iterZPos) {
+            iterZPos = zb;
+            iterKind = f.kind;
+          }
+        } else {
+          const zb = f.zMin - dz;
+          if (zb < iterZNeg) {
+            iterZNeg = zb;
+            iterKind = f.kind;
+          }
+        }
+      }
+      let moved = false;
+      if (iterZPos > -Infinity && cz < iterZPos) {
+        cz = iterZPos;
+        zLimit = iterZPos;
+        zKind = iterKind;
+        zDir = 1;
+        moved = true;
+      }
+      if (iterZNeg < Infinity && cz > iterZNeg) {
+        cz = iterZNeg;
+        zLimit = iterZNeg;
+        zKind = iterKind;
+        zDir = -1;
+        moved = true;
+      }
+      if (!moved) break;
+    }
+    return { zLimit, zKind, zDir };
+  })();
   const ax = Math.abs(x);
-  if (ax <= limit.best) {
-    return { x, hit: false, kind: null, nx: 0 };
+  const xClamped = xClamp.best < Infinity && ax > xClamp.best;
+  const zClamped = zClamp.zLimit < Infinity;
+  if (!xClamped && !zClamped) {
+    return { x, z, hit: false, kind: null, nx: 0, nz: 0 };
   }
-  const nx = x >= 0 ? -1 : 1; // 外法向：指向路内（把车推离占位盒）
-  return { x: -nx * limit.best, hit: true, kind: limit.kind, nx };
+  const nx = x >= 0 ? -1 : 1; // x 外法向：指向路内（把车推离占位盒）
+  return {
+    x: xClamped ? (x >= 0 ? xClamp.best : -xClamp.best) : x,
+    z: zClamped ? zClamp.zLimit : z,
+    hit: true,
+    kind: zClamped ? zClamp.zKind : xClamp.kind,
+    nx,
+    nz: zClamp.zDir, // z 外法向：+1 = 推向 +z（可行驶侧）、−1 = 推向 −z
+  };
 }

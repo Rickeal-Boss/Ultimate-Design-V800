@@ -1227,6 +1227,10 @@ export class FreeDrive {
         // 每帧最多朝目标 x 走 WALL_2D_MAX_LATERAL_STEP，命中判定/impact 链路不受影响。
         mainClampDelta = clamp(fp.x - s.x, -WALL_2D_MAX_LATERAL_STEP, WALL_2D_MAX_LATERAL_STEP); // 只收紧 x：z 不动（占位盒 x 对称）
         s.x += mainClampDelta;
+        // R113：z 钳（车头先入占位带时 MTV 最小穿透轴 = 世界 z，x 单向钳无法解决）。
+        //   与 x 钳同一步长上限（0.30 m/帧 ⇒ 无 z 瞬移）；只收紧（fp.z 是带外缘，钳向它收敛）。
+        //   drift 态同样钳 z（位置钳不分层，堵死漂移态沿 z 穿占位带）。
+        s.z += clamp(fp.z - s.z, -WALL_2D_MAX_LATERAL_STEP, WALL_2D_MAX_LATERAL_STEP);
         if (driftActive) {
           /* R105 漂移态：位置钳 + 朝向贴墙收敛 + β/横摆回收，**不注入撞击/速度/刮擦**。
            * 2D 把车在建筑占位（柱 11.12 / 墩 11.35 / 基座 14.9）提前拦下后，车到不了前脸 1D 墙，
@@ -1258,15 +1262,21 @@ export class FreeDrive {
           if (fpRe.hit) {
             const reBudget = WALL_2D_MAX_LATERAL_STEP - Math.abs(mainClampDelta);
             s.x += clamp(fpRe.x - s.x, -reBudget, reBudget);
+            // R113：drift 态同样钳 z（共用剩余预算，总钳位 ≤ 0.30 m/帧）。
+            s.z += clamp(fpRe.z - s.z, -reBudget, reBudget);
           }
         } else {
           // 非漂移态：原撞击 / heading / scrub 链路照旧（逐位不变）。
           // R110 法向符号修：fp.nx 指向路内（x≥0 时 −1），与 resolveBounds :705 的 nx=x>=0?1:-1
           // （指向墙外/墙面）符号相反 ⇒ 旧 fnSide=fSide.x·fp.nx 恒 ≤0 ⇒ 2D 接触从不扣速 = 滑开。
           // 取 -fp.nx 与 1D 同约定 ⇒ 朝墙走 fnSide>0 ⇒ 真撞击进 impactN / slideHeading 法向也对了。
+          // R113：绑定接触法向扩展 —— z-钳触发（MTV min 轴 = z，车头沿 z 撞占位带）时用 z 法向
+          //   （nzSide=-fp.nz），否则沿用 x 法向。避免「车头直撞柱 fSide.x=0 ⇒ fnSide=0 从不扣速」：
+          //   车头撞柱带（如 arcadeCol 柱列）时 fSide.z 显著 ⇒ 沿 z 法向入射进 impactN ⇒ 车减速。
           const nxSide = -fp.nx;
+          const nzSide = -fp.nz;
           const fSide = forwardOf(s.heading);
-          const fnSide = fSide.x * nxSide;
+          const fnSide = fp.nz !== 0 ? fSide.z * nzSide : fSide.x * nxSide;
           // 法向入射强度复用 1D side 同口径 |v|·fn；若 1D 已撞出更大 impactN 则保留较大者
           const fpImpact = fnSide > 0 ? Math.abs(s.speed) * fnSide : 0;
           if (fpImpact > (r.impactN ?? 0)) r.impactN = fpImpact;
