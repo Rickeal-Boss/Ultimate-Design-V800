@@ -1235,7 +1235,11 @@ export class FreeDrive {
         // R113：z 钳（车头先入占位带时 MTV 最小穿透轴 = 世界 z，x 单向钳无法解决）。
         //   与 x 钳同一步长上限（0.30 m/帧 ⇒ 无 z 瞬移）；只收紧（fp.z 是带外缘，钳向它收敛）。
         //   drift 态同样钳 z（位置钳不分层，堵死漂移态沿 z 穿占位带）。
-        s.z += clamp(fp.z - s.z, -WALL_2D_MAX_LATERAL_STEP, WALL_2D_MAX_LATERAL_STEP);
+        // R116：z 步长上限动态化（对称 R115 xPen）——车已穿模（fp.zPen>0，车心到 z 钳目标 >0.30）
+        //   时单帧推回 zPen（让 z 轴相切，消 z/局部轴穿透收敛瞬态，R116 实测 0.398m 单帧残留）；
+        //   未穿模（zPen≤0.30）时保持 WALL_2D_MAX_LATERAL_STEP 平滑（无瞬移）。
+        const maxStepZ = Math.max(WALL_2D_MAX_LATERAL_STEP, fp.zPen);
+        s.z += clamp(fp.z - s.z, -maxStepZ, maxStepZ);
         if (driftActive) {
           /* R105 漂移态：位置钳 + 朝向贴墙收敛 + β/横摆回收，**不注入撞击/速度/刮擦**。
            * 2D 把车在建筑占位（柱 11.12 / 墩 11.35 / 基座 14.9）提前拦下后，车到不了前脸 1D 墙，

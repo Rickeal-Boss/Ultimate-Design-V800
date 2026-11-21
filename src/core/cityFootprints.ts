@@ -293,6 +293,8 @@ export interface FootprintClamp {
   nz: number;
   /** R115：车 OBB x 方向越界占位盒内缘的最大深度（m；0 = 未穿模）。FreeDrive 用 max(0.30, xPen) 作 x 步长上限，车已穿模时单帧推回消除，未穿模时保持 0.30 平滑 */
   xPen: number;
+  /** R116：车心 z 到 z 钳位目标（带外缘钳位线）的距离（m；0 = 无 z 收紧）。FreeDrive 用 max(0.30, zPen) 作 z 步长上限，车已穿模时单帧推回消除，未穿模时保持 0.30 平滑 */
+  zPen: number;
 }
 
 /**
@@ -516,13 +518,15 @@ export function clampToFootprints(
       }
       if (!moved) break;
     }
-    return { zLimit, zKind, zDir };
+    // R116：车心 z 到 z 钳位目标（带外缘钳位线）的距离 = 单帧推回量（车已穿模时让 z 轴相切）。
+    //   与 xPen 对称；zLimit<Infinity（有 z 收紧）时 = |入参 z − zLimit|，否则 0。
+    return { zLimit, zKind, zDir, zPen: zLimit < Infinity ? Math.abs(z - zLimit) : 0 };
   })();
   const ax = Math.abs(x);
   const xClamped = xClamp.best < Infinity && ax > xClamp.best;
   const zClamped = zClamp.zLimit < Infinity;
   if (!xClamped && !zClamped) {
-    return { x, z, hit: false, kind: null, nx: 0, nz: 0, xPen: 0 };
+    return { x, z, hit: false, kind: null, nx: 0, nz: 0, xPen: 0, zPen: 0 };
   }
   const nx = x >= 0 ? -1 : 1; // x 外法向：指向路内（把车推离占位盒）
   return {
@@ -538,5 +542,6 @@ export function clampToFootprints(
     nx,
     nz: zClamp.zDir, // z 外法向：+1 = 推向 +z（可行驶侧）、−1 = 推向 −z
     xPen: xClamp.xPen, // R115：车 OBB x 越界深度（FreeDrive 动态步长用）
+    zPen: zClamp.zPen, // R116：车心 z 到 z 钳目标距离（FreeDrive 动态步长用）
   };
 }
