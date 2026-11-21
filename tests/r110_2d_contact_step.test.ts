@@ -30,48 +30,40 @@ const DT = 1 / 120;
 const K0 = CITY_BLOCK_Z[0];
 const Z_TEST = -368.9;
 
-describe('R110 ① 2D 接触首帧单帧横向钳位 ≤ 步长上限（无空气墙/瞬移）', () => {
-  it('z=-368.9 墩带合法 1D 起点 x=12.0 直行：任意相邻帧 |Δx| ≤ WALL_2D_MAX_LATERAL_STEP', () => {
+describe('R110 ① 2D 接触首帧单帧横向钳位 ≤ max(0.30, 车角越界)（消除穿模，无空气墙）', () => {
+  it('z=-368.9 墩带合法 1D 起点 x=12.0 直行：单帧钳位 ≤ 车角越界 1.653，且确实被钳', () => {
     // R111：x=12.0 车缘 10.997 真嵌墩内缘 11.35（旧 x=13.5 是假阳性，已修正 SAT 不再判交）
     const fd = new FreeDrive({ start: { x: 12.0, z: Z_TEST, heading: 0 } });
     fd.press('KeyW', true);
     let prevX = fd.snapshot().x;
     let maxStep = 0;
-    let saw2DHit = false;
     for (let i = 0; i < 120; i += 1) {
       fd.step(DT);
       const s = fd.snapshot();
       maxStep = Math.max(maxStep, Math.abs(s.x - prevX));
       prevX = s.x;
-      if (clampToFootprints(s.x, s.z, s.heading).hit) saw2DHit = true;
     }
-    // 场景有效性：确实进入 2D 接触（否则断言空转）
-    expect(saw2DHit).toBe(true);
-    // 核心护栏：单帧横向钳位绝不超步长上限（旧版一帧写死会单帧 ≥5 m）
-    expect(maxStep).toBeLessThanOrEqual(WALL_2D_MAX_LATERAL_STEP + 1e-9);
+    // 场景有效性：车确实被 2D 钳位（车 x 从 12 收到贴墩，单帧钳位 = 车角越界 1.653 > 0.30）
+    expect(maxStep).toBeGreaterThan(0.30);
+    // R115 核心护栏：单帧横向钳位 ≤ max(0.30, 车角越界)。R110 定 0.30/帧防「单帧 6.34m
+    // 写死=瞬移」，但代价是收敛瞬态（车角嵌墩 0.3~1.3m 多帧，用户可见穿模）。R115 动态步长：
+    // 车已穿模（车角越界占位盒内缘，xPen>0）时单帧推回 xPen（恰让车角贴内缘，消除穿模）；
+    // 未穿模（xPen≤0.30）保持 0.30 平滑（无瞬移）。本场景车角越界 = x12.0 + dx(0)1.003
+    // − 墩内缘 11.35 = 1.653 ⇒ 单帧最大 1.653（旧版一帧写死 ≥5 m，R110 Bug1 已消）。
+    expect(maxStep).toBeLessThanOrEqual(1.7);
   });
 });
 
-describe('R110 ② 命中后多帧收敛到 clampToFootprints 目标（不再一帧到位）', () => {
-  it('z=-368.9 墩带 x=12.0 直行：hit 帧数 > 1（多帧收敛），运行中贴近目标到一步内', () => {
+describe('R110 ② 2D 接触单帧消除穿模（车心达 2D 目标，无残留）', () => {
+  it('z=-368.9 墩带 x=12.0 直行：末态车心贴 2D 目标（10.347），无穿模残留', () => {
     const fd = new FreeDrive({ start: { x: 12.0, z: Z_TEST, heading: 0 } });
     fd.press('KeyW', true);
-    let hitFrames = 0;
-    let minGap = Infinity;
-    for (let i = 0; i < 120; i += 1) {
-      fd.step(DT);
-      const s = fd.snapshot();
-      const fp = clampToFootprints(s.x, s.z, s.heading);
-      if (fp.hit) {
-        hitFrames += 1;
-        minGap = Math.min(minGap, Math.abs(s.x - fp.x));
-      }
-    }
-    // 收敛应摊到多帧（旧版一帧写死 ⇒ hitFrames 恰为 1 或首帧即到位）；实测 ~10 帧
-    expect(hitFrames).toBeGreaterThan(1);
-    // 收敛判定：运行中车心贴近过 clampToFootprints 目标到「一步收敛」精度内。车沿墙滑动 ⇒
-    // 目标随占位盒移动，实测最佳 ~0.153 m（< 一步 0.30），远低于旧版一帧 6.34 m 巨幅瞬移。
-    expect(minGap).toBeLessThan(WALL_2D_MAX_LATERAL_STEP);
+    for (let i = 0; i < 120; i += 1) fd.step(DT);
+    const s = fd.snapshot();
+    // R115：车已穿模（车角越界占位盒内缘）时单帧推回 xPen ⇒ 车心达 2D 目标（贴墩 10.347），
+    // 无穿模残留。旧版（R110 固定 0.30/帧）多帧收敛（~10帧）造成收敛瞬态（车角嵌墩 0.3~1.3m
+    // 多帧，用户可见）。R115 改为单帧消除穿模。旧版一帧写死（R110 Bug1）也已消（SAT 精确）。
+    expect(s.x).toBeLessThanOrEqual(11.35 - 1.003 + 0.01); // ≤ 2D 目标 10.347
   });
 });
 

@@ -1225,7 +1225,12 @@ export class FreeDrive {
       if (fp.hit) {
         // R110 连续收敛：不再一帧写死 s.x=fp.x（曾单帧钳位 6.34 m = 空气墙/瞬移）。
         // 每帧最多朝目标 x 走 WALL_2D_MAX_LATERAL_STEP，命中判定/impact 链路不受影响。
-        mainClampDelta = clamp(fp.x - s.x, -WALL_2D_MAX_LATERAL_STEP, WALL_2D_MAX_LATERAL_STEP); // 只收紧 x：z 不动（占位盒 x 对称）
+        // R115：x 步长上限动态化 —— 车已穿模（fp.xPen>0，车 OBB x 越界占位盒内缘）时单帧推回
+        //   xPen（恰让车角贴盒内缘），消除收敛瞬态（车角嵌墩 0.3~1.32m 多帧）；未穿模
+        //   （xPen≤0.30）时保持 WALL_2D_MAX_LATERAL_STEP 平滑（无瞬移）。R111 修 SAT 后
+        //   clamp 触发 = 真接触，推回 = 消除真穿模（非空气墙）。
+        const maxStepX = Math.max(WALL_2D_MAX_LATERAL_STEP, fp.xPen);
+        mainClampDelta = clamp(fp.x - s.x, -maxStepX, maxStepX); // 只收紧 x：z 不动（占位盒 x 对称）
         s.x += mainClampDelta;
         // R113：z 钳（车头先入占位带时 MTV 最小穿透轴 = 世界 z，x 单向钳无法解决）。
         //   与 x 钳同一步长上限（0.30 m/帧 ⇒ 无 z 瞬移）；只收紧（fp.z 是带外缘，钳向它收敛）。

@@ -291,6 +291,8 @@ export interface FootprintClamp {
   nx: number;
   /** R113：z 外法向（指向可行驶一侧）：车从 +z 逼近（推 +z 离带）时 +1、从 −z 逼近时 −1；无 z 收紧时 0 */
   nz: number;
+  /** R115：车 OBB x 方向越界占位盒内缘的最大深度（m；0 = 未穿模）。FreeDrive 用 max(0.30, xPen) 作 x 步长上限，车已穿模时单帧推回消除，未穿模时保持 0.30 平滑 */
+  xPen: number;
 }
 
 /**
@@ -424,13 +426,19 @@ export function clampToFootprints(
     let best = Infinity;
     let kind: CityFootprint['kind'] | null = null;
     let cx = x;
+    let xPenMax = 0; // R115：车 OBB x 方向越界占位盒内缘的最大深度（跨所有相交盒）
     for (let iter = 0; iter < 4; iter += 1) {
       let iterBest = Infinity;
       let iterKind: CityFootprint['kind'] | null = null;
+      let iterPen = 0;
       for (const f of footprintsNear(z, dz)) {
         // SAT 精确相交测试：车 OBB 真的与占位 AABB 相交才收紧（避免车 z 覆盖碰边即触发的误钳）
         if (!obbOverlapsAabb(cx, z, heading, CAR_HALF_L, CAR_HALF_W, f)) continue;
         const bound = f.xInner - dx;
+        // R115：车 OBB 最 x 角（|cx|+dx）越界盒内缘（f.xInner）的深度。SAT 相交 ⇒ 车角 x 真越界
+        //   （否则 x 轴分离），xPen>0 当且仅当车已穿模。推 x=xPen 恰让车角贴盒内缘（x 轴分离）。
+        const xPen = Math.abs(cx) + dx - f.xInner;
+        if (xPen > iterPen) iterPen = xPen;
         if (bound < iterBest) {
           iterBest = bound;
           iterKind = f.kind;
@@ -441,8 +449,9 @@ export function clampToFootprints(
       cx = cx >= 0 ? iterBest : -iterBest;
       best = iterBest;
       kind = iterKind;
+      xPenMax = Math.max(xPenMax, iterPen);
     }
-    return { best, kind };
+    return { best, kind, xPen: xPenMax };
   })();
   /* R113：z 钳**迭代复查**（正交于 x 钳）。车头先入占位带（如 arcadeCol 柱带 z-深仅 0.6m）
    * 时，x 覆盖深而 z 覆盖浅 ⇒ MTV 最小穿透轴 = 世界 z，x 单向钳无法把车头沿 z 推离（R112
@@ -513,7 +522,7 @@ export function clampToFootprints(
   const xClamped = xClamp.best < Infinity && ax > xClamp.best;
   const zClamped = zClamp.zLimit < Infinity;
   if (!xClamped && !zClamped) {
-    return { x, z, hit: false, kind: null, nx: 0, nz: 0 };
+    return { x, z, hit: false, kind: null, nx: 0, nz: 0, xPen: 0 };
   }
   const nx = x >= 0 ? -1 : 1; // x 外法向：指向路内（把车推离占位盒）
   return {
@@ -528,5 +537,6 @@ export function clampToFootprints(
     kind: xClamped ? xClamp.kind : zClamp.zKind,
     nx,
     nz: zClamp.zDir, // z 外法向：+1 = 推向 +z（可行驶侧）、−1 = 推向 −z
+    xPen: xClamp.xPen, // R115：车 OBB x 越界深度（FreeDrive 动态步长用）
   };
 }
