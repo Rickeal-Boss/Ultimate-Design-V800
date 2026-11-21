@@ -40,9 +40,10 @@ function headingForNegZ(fn: number): number {
   return -Math.asin(fn);
 }
 
-describe('R102 wall scrub 接触滞后 ① 跨段放宽跳变：隧道(8.997)→城内块心(13.997/14.497)，scrub 不被瞬间误清', () => {
-  it('200km/h 斜擦(fn≈0.3)贴隧道 +X 墙沿 -Z 滑进城内：跳变当帧 scrubN 不归零，离墙满 60 帧后才正常衰减', () => {
-    // 城门带（隧道）mid z，恒定车心限 8.997
+describe('R102 wall scrub 接触滞后 ① R118 门带 2D 门墩钳位：替代 1D 隧道墙，车被门墩提前拦下 + 2D 撞击减速', () => {
+  it('200km/h 斜擦(fn≈0.3) 贴门带 +X：R118 门墩 footprint 把车提前拦在 x≈8.22（<1D 隧道墙 8.997），2D 撞击链路持续减速', () => {
+    // 门带（隧道）mid z，1D 车心限 8.997。R118 前车贴此 1D 隧道墙建立 1D scrub；现门带=2D 门墩区
+    //（Fix 1 门墩 footprint + Fix 2 激活域扩到 gateFrontZ），车贴的是 2D 门墩实体占位，非 1D 隧道墙。
     const TUN_Z = -358.5;
     const tunLimit = corridorCenterHalfWidth(TUN_Z);
     expect(tunLimit).toBeCloseTo(10.0 - CAR_HALF, 6); // 8.997
@@ -50,39 +51,23 @@ describe('R102 wall scrub 接触滞后 ① 跨段放宽跳变：隧道(8.997)→
     const heading = headingForNegZ(0.3); // fn≈0.3 斜擦 +X 墙，沿 -Z 滑
     const fd = new FreeDrive({ start: { x: tunLimit - 0.5, z: TUN_Z, heading } });
     fd.state.speed = 55.56; // 200 km/h
-    let hit = false;
-    for (let i = 0; i < 400 && !hit; i += 1) {
+    let hit1D = false; // 是否达到 1D 隧道墙（R118 后应 false：车被 2D 门墩提前拦下）
+    let peakX = -Infinity;
+    let minSpeed = Infinity;
+    for (let i = 0; i < 400; i += 1) {
       fd.step(DT);
-      if (fd.state.x >= tunLimit - 1e-9) hit = true; // 撞隧道墙建立 scrub
+      peakX = Math.max(peakX, fd.state.x);
+      minSpeed = Math.min(minSpeed, fd.state.speed);
+      if (fd.state.x >= tunLimit - 1e-9) hit1D = true; // 到 1D 隧道墙（原「建立 1D scrub」前提）
     }
-    expect(hit).toBe(true);
-    expect(fd.scrubN).toBeGreaterThan(0); // 撞墙已建立 scrub
-
-    // 沿 -Z 滑进城内：halfW 从 8.997 跳到 13.997/14.497（放宽 ~4.9 m）
-    // 旧机制（纯 ε=0.05）：|8.997| < halfWnow−0.05 ⇒ sideTouch 闪断 ⇒ scrubN 当帧清零
-    // 新机制：latch=true 用 RELEASE_EPS 维持 + LATCH_FAR_FRAMES(60) 闸门 ⇒ 跳变当帧不闪断
-    let crossed = -1; // 进入城内（halfW 跳大）当帧
-    let firstZero = -1; // scrubN 首次归零帧
-    let minScrubInGrace = Infinity; // 跨越后宽限窗内 scrubN 最小值
-    for (let i = 0; i < 1440; i += 1) {
-      fd.step(DT);
-      const hw = corridorCenterHalfWidth(fd.state.z);
-      if (crossed < 0 && hw > tunLimit + 0.5) crossed = i;
-      if (crossed >= 0) {
-        // 宽限窗（跨越后 ~LATCH_FAR_FRAMES 帧内）scrub 应维持 >0
-        if (i - crossed <= WALL_SCRUB_LATCH_FAR_FRAMES / 2) {
-          minScrubInGrace = Math.min(minScrubInGrace, fd.scrubN);
-        }
-        if (firstZero < 0 && fd.scrubN <= 0) firstZero = i;
-      }
-    }
-
-    expect(crossed).toBeGreaterThanOrEqual(0); // 确实跨越了隧道→城内放宽跳变
-    // ① 跳变当帧 scrubN 未归零：宽限窗内 scrubN 全程 > 0（旧机制会当帧清零）
-    expect(minScrubInGrace).toBeGreaterThan(0);
-    // ② 不永久假维持：车在更宽走廊里真正离墙满 60 帧后 scrub 正常衰减归零
-    expect(firstZero).toBeGreaterThanOrEqual(0);
-    expect(firstZero).toBeGreaterThan(crossed + WALL_SCRUB_LATCH_FAR_FRAMES / 2); // 归零发生在宽限窗之后，非跳变当帧
+    // R118：门带用 2D 门墩实体占位（内缘 |x|=10）替代 1D 隧道墙。车 OBB x 伸展 dx = 2.7475·sin(0.3047)
+    // + 1.003·cos(0.3047) ≈ 1.78 ⇒ 2D 钳位目标 10−dx ≈ 8.22，车被提前拦下，到不了 1D 隧道墙 8.997。
+    // v800-developer tmp 探针实测：车 x 被钳到 8.2189、峰值 8.22-8.39（均 ≪ 8.997）。
+    expect(hit1D).toBe(false); // 车到不了 1D 隧道墙（原「建立 1D scrub」前提消失）
+    expect(peakX).toBeLessThan(8.5); // 被门墩钳位（8.22-8.39 < 8.5，远离 8.997）
+    // 2D 撞击链路（FreeDrive:1291-1298 fpImpact→impactN→impacting→speedKick/IMPACT_TAU/wallScrubN）：
+    // 帧0 扣速 ~27m/s、持续减速到近停（探针 v 55.56→28.53→…→0.62 帧23），非无摩擦滑开。
+    expect(minSpeed).toBeLessThan(28);
   });
 });
 

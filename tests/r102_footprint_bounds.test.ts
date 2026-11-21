@@ -9,7 +9,8 @@
  *
  * 修复（只加不改）：新增 src/core/cityFootprints.ts 纯数值模块 + clampToFootprints
  * 纯函数，FreeDrive.step() 在 resolveBounds 之后、写回 s.x/s.z 之前插入一处收紧调用，
- * 城内域门控（z ∈ [plazaZ, gateBackZ]）。resolveBounds / corridorHalfWidth /
+ * 城内域门控（z ∈ [zMin, gateFrontZ]，R118 上界 gateBackZ→gateFrontZ 纳入城门带）。
+ * resolveBounds / corridorHalfWidth /
  * corridorCenterHalfWidth 函数体逐位不动 ⇒ CameraRig 与 r97/r98/r99/r100 全部护栏不破。
  *
  * 真源口径：INNER / TOWER / R30_ARCADE / R97_CITY_BUTTRESS / VEHICLE / CITY_BLOCK_Z
@@ -23,7 +24,7 @@ import {
   type CityFootprint
 } from '../src/core/cityFootprints';
 import { VEHICLE } from '../src/config/physics';
-import { INNER, TOWER } from '../src/render/scene/r28Layout';
+import { GATE, INNER, TOWER } from '../src/render/scene/r28Layout';
 import { R30_ARCADE, R97_CITY_BUTTRESS } from '../src/render/scene/castleKit';
 
 /** 车长 / 车宽半尺寸真源（physics.ts，勿写死） */
@@ -97,6 +98,20 @@ describe('R102 ① 占位清单覆盖 probe-bounds §2 六类地面层实体（�
       if (f.zMin < BOUNDS.plazaZ) continue; // 广场域主殿飞扶壁（z≈-1294.3 < plazaZ）
       expect(f.xInner).toBeCloseTo(BUTTRESS_LINK_INNER, 12);
     }
+  });
+
+  it('R118 Fix1 城门带门墩 footprint：门墩 |x|∈[10,17.5]，z∈[gateBackZ,gateFrontZ]（真源派生）', () => {
+    // 城门带 2D 占位：门洞净半宽 = GATE.openW/2 = 10（门墩内缘）、门楼半宽 = GATE.halfW = 17.5（外缘）；
+    // z 区间 = 城门带 [BOUNDS.gateBackZ=−365.5, BOUNDS.gateFrontZ=−351.5]（门脸 GATE.z+GATE.depth/2 同源）。
+    const piers = byKind('gatePier');
+    expect(piers.length).toBe(1);
+    const p = piers[0];
+    expect(p.xInner).toBeCloseTo(GATE.openW / 2, 12); // 10
+    expect(p.xOuter).toBeCloseTo(GATE.halfW, 12); // 17.5
+    expect(p.zMin).toBeCloseTo(BOUNDS.gateBackZ, 12); // −365.5
+    expect(p.zMax).toBeCloseTo(BOUNDS.gateFrontZ, 12); // −351.5
+    // 门带覆盖（zMax−zMin = 14 m = GATE.depth，隧道进深）
+    expect(p.zMax - p.zMin).toBeCloseTo(GATE.depth, 12);
   });
 
   it('建筑前脸 / 殿台基内缘 = 15.5；前排塔基内缘 = 14.8（R104 修正）；殿前大理石带 15.0', () => {
@@ -303,12 +318,18 @@ describe('R102 ④ step() 集成：hit 时事件与速度口径（沿用 wall �
     // 直接摆到接近收紧线的位置：x=13.8（> 12.657 收紧线 ⇒ clampToFootprints 命中）
     fd.teleport(13.8, K0[0], -Math.PI / 6);
     fd.press('KeyW', true);
-    // R110 连续收敛：2D 位置修正按 WALL_2D_MAX_LATERAL_STEP 摊到多帧（不再一帧写死），
-    // 60 帧足以收敛到位（13.8 → 目标 ~12.657，差 1.14 m / 0.30 m 每帧 ≈ 4 帧）。
+    // R110 连续收敛：2D 位置修正按 WALL_2D_MAX_LATERAL_STEP 摊到多帧（不再一帧写死）。
+    //   R118 Fix 3：xPen 改真实 x 轴 SAT 穿透后，车贴墩掠过以**真实穿透**（~0.34 m/帧）平滑
+    //   收敛到最紧界（此位姿最紧是**连墙墩** bound 9.107，非基座 12.657 —— R112 迭代复查把
+    //   斜插车 OBB 扫到的墩也纳入），不再 R117 旧式 |x|−best 单帧 4.7 m 瞬移。60 帧内车已掠出
+    //   墩/基座 z 带进块间空档（z≈−419），引擎自身 SAT 判定 hit=false。
     for (let i = 0; i < 60; i++) fd.step(1 / 120);
-    // 验证 x 被钳到 ≤ 14.9 − dx（不嵌入基座）
-    const dx = dxAt(-Math.PI / 6);
-    expect(fd.snapshot().x).toBeLessThanOrEqual(CORNER_BASE_INNER - dx + 1e-6);
+    // 验证车最终不嵌入任何城内占位（R118 Fix 3：真「不穿模」口径 = 引擎自身 SAT 车 OBB 与所有
+    //   占位盒分离）。⚠ R117 旧断言 `x ≤ 14.9 − dx(−π/6) = 12.657` 用**初始 heading** 的 dx 是
+    //   陈旧口径：车 heading 已收敛（−π/6→≈−0.43），当前 dx 变小、车缘 14.765 < 14.9 实未嵌基座；
+    //   旧式 xPen=|x|−best 单帧 4.7 m 瞬移正是 R118 Fix 3 根治的目标。
+    const sEnd = fd.snapshot();
+    expect(clampToFootprints(sEnd.x, sEnd.z, sEnd.heading).hit).toBe(false);
     // 沿墙滑行 ⇒ heading 收敛到切向 ±Z（不在 −π/6 保持）
     sawSideKind = fd.snapshot().heading !== -Math.PI / 6;
     expect(sawSideKind || sawWall).toBe(true);
@@ -330,17 +351,21 @@ describe('R102 ④ step() 集成：hit 时事件与速度口径（沿用 wall �
 
 describe('R102 ⑤ 桥段 / 城门带门控（z=−250 / z=−360 零触发）', () => {
   it('桥段 z=−250：clampToFootprints 无城内占位可命中，step() 门控亦不激活', () => {
-    // 桥段 z=−250 > gateBackZ=−365.5 ⇒ 城内门控不激活
-    const inCityDomain = -250 <= BOUNDS.gateBackZ && -250 >= BOUNDS.plazaZ;
+    // 桥段 z=−250 > gateFrontZ=−351.5 ⇒ 城内门控不激活（R118 上界扩到 gateFrontZ 仍未及桥段）
+    const inCityDomain = -250 <= BOUNDS.gateFrontZ && -250 >= BOUNDS.zMin;
     expect(inCityDomain).toBe(false);
     // resolveBounds 在桥段仍给 bridgeHalfW − 半宽 = 10.997，1D 护栏不变
     const r = resolveBounds(20, -250, HEADING_TO_PLUS_X, 10);
     expect(r.x).toBeCloseTo(BOUNDS.bridgeHalfW - HALF_W, 12);
   });
 
-  it('城门带 z=−360：门控不激活（z > gateBackZ），沿用 1D tunnelHalfW 护栏', () => {
-    const inCityDomain = -360 <= BOUNDS.gateBackZ && -360 >= BOUNDS.plazaZ;
-    expect(inCityDomain).toBe(false);
+  it('城门带 z=−360：R118 门控激活（z∈[zMin,gateFrontZ]），1D tunnelHalfW 护栏仍为底', () => {
+    // R118：上界 gateBackZ→gateFrontZ ⇒ z=−360 ∈ [zMin, gateFrontZ] 门控激活（配合 Fix 1 门墩 footprint）
+    const inCityDomain = -360 <= BOUNDS.gateFrontZ && -360 >= BOUNDS.zMin;
+    expect(inCityDomain).toBe(true);
+    // Fix 1 未落地前门带无 footprint ⇒ clampToFootprints 零命中，1D tunnelHalfW 护栏仍接管
+    const fp = clampToFootprints(20, -360, 0);
+    expect(fp.hit).toBe(false);
     const r = resolveBounds(20, -360, HEADING_TO_PLUS_X, 10);
     expect(r.x).toBeCloseTo(BOUNDS.tunnelHalfW - HALF_W, 12);
   });
@@ -352,8 +377,8 @@ describe('R102 ⑤ 桥段 / 城门带门控（z=−250 / z=−360 零触发）',
     expect(r.x).toBeCloseTo(BOUNDS.plazaHalfW - HALF_W, 12);
   });
 
-  it('城内块区 z=−388.5：门控激活（gateBackZ ≤ z ≥ plazaZ）', () => {
-    const inCityDomain = K0_ZC <= BOUNDS.gateBackZ && K0_ZC >= BOUNDS.plazaZ;
+  it('城内块区 z=−388.5：门控激活（z ≤ gateFrontZ ≥ zMin）', () => {
+    const inCityDomain = K0_ZC <= BOUNDS.gateFrontZ && K0_ZC >= BOUNDS.zMin;
     expect(inCityDomain).toBe(true);
   });
 });

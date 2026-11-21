@@ -1209,13 +1209,14 @@ export class FreeDrive {
      * 11.12 m 处嵌柱 1.12 m，车尾 bbox（zc±2.75）合法待在钳位线外侧与 6.2 m 深台阶相交
      * ⇒「存在的建筑又穿模 / 车尾卡台阶缝隙」。clampToFootprints 把 OBB 4 角点的 x 伸展
      * dx(θ) = 半长|sinθ| + 半宽|cosθ| 与 z 覆盖重叠的城内占位盒取最紧界 |x| ≤ xInner − dx。
-     * 只在城内域 + 广场域（z ∈ [zMin, gateBackZ]）激活 —— 桥段 / 城门带沿用 1D 钳位，
+     * 只在城内域 + 广场域 + 城门带（z ∈ [zMin, gateFrontZ]）激活 —— R118 城门带改用 2D 门墩
+     * 钳位（配合 Fix 1 门墩 footprint，7 帧收敛替代 1 帧 2m/4.9m 瞬时）；桥段（z>gateFrontZ）仍 1D，
      * z=−250 桥段测试全程零触发，既有 r97/r98/r99/r100 护栏不破（resolveBounds 函数体未改）。
      * R105：下界从 plazaZ 扩到 zMin —— 主殿前排飞扶壁内墩落到广场 z≈-1294.3（< plazaZ=-1285.5，
      * 原激活带之外）却无 2D 兜底 ⇒ 车广场 1D 车缘≈16.5 直穿内墩基座（内缘 10.425）最多 ~3m。
      * 扩到 zMin 后该域内仅此一条 footprint（buildCityFootprints 广场段只建飞扶壁内墩）⇒ 不引入
      * 别处假钳位。 */
-    if (nz <= BOUNDS.gateBackZ && nz >= BOUNDS.zMin) {
+    if (nz <= BOUNDS.gateFrontZ && nz >= BOUNDS.zMin) {
       // R105：去掉外层 !driftActive 门控 —— 漂移态**也做位置钳**（s.x=fp.x），堵死漂移穿模。
       //   旧版整层被 !driftActive 关闭 ⇒ 漂移车能穿进建筑底部 3.5~5.6 m（全量几何扫最大穿模源）。
       //   R103 关掉它的真因是「位置钳 + 撞击/速度/heading 注入」会让 β 永不塌缩，而非位置钳本身；

@@ -19,7 +19,7 @@
  * 双侧镜像在 clampToFootprints 里按 |x| 处理。
  */
 import { VEHICLE } from '../config/physics';
-import { INNER, TOWER } from '../render/scene/r28Layout';
+import { GATE, INNER, TOWER } from '../render/scene/r28Layout';
 import { R30_ARCADE, R97_CITY_BUTTRESS } from '../render/scene/castleKit';
 import { CITY_BLOCK_Z } from './FreeDrive';
 
@@ -31,7 +31,14 @@ export interface CityFootprint {
   xOuter: number;
   zMin: number;
   zMax: number;
-  kind: 'cornerBase' | 'frontBase' | 'hallBase' | 'frontWall' | 'arcadeCol' | 'buttressBase';
+  kind:
+    | 'cornerBase'
+    | 'frontBase'
+    | 'hallBase'
+    | 'frontWall'
+    | 'arcadeCol'
+    | 'buttressBase'
+    | 'gatePier';
 }
 
 /** 车长 / 车宽半尺寸（physics.ts 真源，勿写死 2.7475 / 1.003） */
@@ -116,6 +123,24 @@ const PLAZA_BUTTRESS_Z =
   PLAZA_HALL_FRONT_Z + (PLAZA_BUTTRESS_REACH - PLAZA_BUTTRESS_PIER_W / 2); // -1294.3
 /** 基座世界 z 半宽 = (pierW+1.1)/2（castleDetail.ts:344 sx=pierW+1.1 → rotateY 后世界 z） */
 const PLAZA_BUTTRESS_Z_HALF = (PLAZA_BUTTRESS_PIER_W + 1.1) / 2; // 1.85
+
+/* ── R118 · 城门带门墩 2D 占位（Fix 1）───────────────────────────────────────
+ * 城门带（z ∈ [gateBackZ, gateFrontZ] = [−365.5, −351.5]）门墩实体 |x| ∈ [openHalf, halfW]。
+ * 根治：1D `corridorCenterHalfWidth` 在 gateFrontZ（桥 10.997 → 隧 8.997）/ gateBackZ
+ * （隧 8.997 → 块0 角塔带 13.897）硬阶跃 ⇒ 单帧横移 = 空气墙 + 瞬态穿模（探针 A/C/D）。
+ * 2D 门墩 footprint 让 clampToFootprints 在门带接管：7 帧收敛替代 1 帧 2m/4.9m 瞬时。
+ * 真源派生禁写死：openHalf = GATE.openW/2 = 10、门墩外缘 = GATE.halfW = 17.5；
+ * z 区间 = 城门脸 GATE.z+GATE.depth/2 = −351.5（BOUNDS.gateFrontZ 同源）/ 门带后沿
+ * INNER.zNear = −365.5（BOUNDS.gateBackZ 同源）。⚠ 不 import FreeDrive BOUNDS
+ * （FreeDrive.ts:37 已 import 本模块 ⇒ 反向 import 即成环；与 ARCADE_COL / BUTTRESS
+ * 常量同风格：真源派生而非反向 import）。 */
+/** 门墩内缘 |x|（= 门洞净半宽，makeGate openHalf = openW/2 = 10） */
+const GATE_PIER_INNER = GATE.openW / 2; // 10
+/** 门墩外缘 |x|（= 门楼半宽，含塔墩，halfW = 17.5） */
+const GATE_PIER_OUTER = GATE.halfW; // 17.5
+/** 门墩带 z 区间：[门带后沿（块0 端，= BOUNDS.gateBackZ）, 城门脸（= BOUNDS.gateFrontZ）] */
+const GATE_PIER_Z_MIN = INNER.zNear; // −365.5（gateBackZ）
+const GATE_PIER_Z_MAX = GATE.z + GATE.depth / 2; // −351.5（gateFrontZ）
 /** 连墙段 z 区间 castleKit.ts:3289-3292（塔→殿 / 殿→塔，避开前后排塔基 z 半延展 4.7 m）：
  *  `[-blockLen/2, -blockLen/4 - 4.7]` / `[blockLen/4 + 4.7, blockLen/2]`（local z）。
  *  飞扶壁墩落在段中点 lz（castleKit.ts:3478-3487 `const lz = (za + zb) / 2`）。 */
@@ -254,6 +279,20 @@ export function buildCityFootprints(): CityFootprint[] {
     kind: 'buttressBase'
   });
 
+  // ⑧ 城门带门墩（R118 Fix 1）：城门带 z∈[gateBackZ,gateFrontZ] 两侧门墩 |x|∈[10,17.5]。
+  //    Root cause：1D corridorCenterHalfWidth 在 gateFrontZ（桥 10.997→隧 8.997）/ gateBackZ
+  //    （隧 8.997→块0 角塔带 13.897）硬阶跃，单帧横移 2m/4.9m = 空气墙 + 瞬态穿模（探针 A/C/D）。
+  //    2D 门墩 footprint 让 clampToFootprints 在门带接管（7 帧收敛替代 1 帧瞬时，斜向有碰撞反馈）。
+  //    ⚠ 此 footprint 在 2D 激活带 [plazaZ,gateBackZ] 之外（z>gateBackZ）⇒ 需 FreeDrive step()
+  //    的 2D 门控上界从 gateBackZ 扩到 gateFrontZ 才被 consult（R118 Fix 2 同步改，本文件禁碰）。
+  list.push({
+    xInner: GATE_PIER_INNER,
+    xOuter: GATE_PIER_OUTER,
+    zMin: GATE_PIER_Z_MIN,
+    zMax: GATE_PIER_Z_MAX,
+    kind: 'gatePier'
+  });
+
   return list;
 }
 
@@ -291,7 +330,10 @@ export interface FootprintClamp {
   nx: number;
   /** R113：z 外法向（指向可行驶一侧）：车从 +z 逼近（推 +z 离带）时 +1、从 −z 逼近时 −1；无 z 收紧时 0 */
   nz: number;
-  /** R115：车心 x 到**最终钳位目标**（最紧界）的距离（m；0 = 无 x 收紧）。R117 修正：由「跨迭代最大单盒穿透」改为「到目标距离」（与 R116 zPen 对称），多盒收敛时单帧推回恰达目标。FreeDrive 用 max(0.30, xPen) 作 x 步长上限，车已穿模时单帧推回消除，未穿模时保持 0.30 平滑 */
+  /** R118 Fix 3：对**最紧钳位盒**的真实 x 轴 SAT 穿透（车 OBB x 投影与占位盒 x 区间的公共长度；
+   *  m；0 = 无 x 收紧或无 x 轴重叠）。R117 旧式 = |x|−best（车心到最终钳位目标的距离），在车 OBB
+   *  完全处于占位盒内缘外侧时高估真实穿透（N2/N4 广场墩单帧 4~5m，探针 D 7.4 倍）。FreeDrive 用
+   *  max(0.30, xPen) 作 x 步长上限：车已穿模时单帧推回真实穿透（消除穿模），未穿模时保持 0.30 平滑 */
   xPen: number;
   /** R116：车心 z 到 z 钳位目标（带外缘钳位线）的距离（m；0 = 无 z 收紧）。FreeDrive 用 max(0.30, zPen) 作 z 步长上限，车已穿模时单帧推回消除，未穿模时保持 0.30 平滑 */
   zPen: number;
@@ -426,10 +468,12 @@ export function clampToFootprints(
    */
   const xClamp = (() => {
     let best = Infinity;
+    let bestF: CityFootprint | null = null;
     let kind: CityFootprint['kind'] | null = null;
     let cx = x;
     for (let iter = 0; iter < 4; iter += 1) {
       let iterBest = Infinity;
+      let iterF: CityFootprint | null = null;
       let iterKind: CityFootprint['kind'] | null = null;
       for (const f of footprintsNear(z, dz)) {
         // SAT 精确相交测试：车 OBB 真的与占位 AABB 相交才收紧（避免车 z 覆盖碰边即触发的误钳）
@@ -437,6 +481,7 @@ export function clampToFootprints(
         const bound = f.xInner - dx;
         if (bound < iterBest) {
           iterBest = bound;
+          iterF = f;
           iterKind = f.kind;
         }
       }
@@ -444,15 +489,25 @@ export function clampToFootprints(
       if (Math.abs(cx) <= iterBest) break; // 已到最紧界（不再收紧）
       cx = cx >= 0 ? iterBest : -iterBest;
       best = iterBest;
+      bestF = iterF;
       kind = iterKind;
     }
-    // R117：xPen = 入参 x 到**最终钳位目标**（最紧界 best）的距离 = |x| − best。车已穿模（>0.30）
-    //   时单帧推回恰达目标（消除穿模），未穿模（≤0.30）时 FreeDrive 用 0.30 平滑。
-    //   ⚠ R115 旧式 `xPenMax`（跨迭代最大**单盒**穿透）有缺陷：车同时穿多个占位盒且最紧界需经
-    //   迭代收敛时，xPenMax < |x|−best（R117 诊断 f1616 实证：xPen=3.450 但 |x|−best=4.144）
-    //   ⇒ 单帧推回量不足、车停在中间收敛点，残留 2 帧瞬态（pen 0.263m）。本式与 R116 zPen
-    //   （|z−zLimit|，到目标距离）对称，单帧推回 = 实际到目标距离。
-    const xPen = best < Infinity ? Math.max(0, Math.abs(x) - best) : 0;
+    // R118 Fix 3：xPen = 对「决定最终 best 的占位盒 bestF」的**真实 x 轴 SAT 穿透** —— 车 OBB x 投影
+    //   [|x|−dx, |x|+dx] 与占位盒 x 区间 [xInner, xOuter] 的公共长度（SAT 世界 x 轴重叠），非 R117
+    //   旧式 `|x| − best`（车心到目标距离）。旧式在车 OBB 完全处于占位盒内缘**外侧**（|x|−dx ≥
+    //   xInner）时把「车心到目标」误读为「x 轴穿透」⇒ N2/N4 广场飞扶壁墩单帧推回 4~5m（探针 D：
+    //   cx=13.897 高估 4.475 vs 真实 0.606，7.4 倍）= 空气墙/瞬移。真实穿透语义核对：
+    //   ① 车在路侧（|x|−dx < xInner）⇒ 上式 = |x|+dx−xInner = |x|−best（R117 多盒收敛修复保留）；
+    //   ② 车越内缘（|x|−dx ≥ xInner）⇒ 给真实（较小）重叠 ⇒ N2/N4 单帧推回受限（FreeDrive 的
+    //      max(0.30, xPen) 回 0.30 平滑）；
+    //   ③ x 轴分离（min(|x|+dx, xOuter) ≤ max(|x|−dx, xInner)）⇒ 0。
+    const xPen =
+      best < Infinity && bestF
+        ? Math.max(
+            0,
+            Math.min(Math.abs(x) + dx, bestF.xOuter) - Math.max(Math.abs(x) - dx, bestF.xInner)
+          )
+        : 0;
     return { best, kind, xPen };
   })();
   /* R113：z 钳**迭代复查**（正交于 x 钳）。车头先入占位带（如 arcadeCol 柱带 z-深仅 0.6m）
