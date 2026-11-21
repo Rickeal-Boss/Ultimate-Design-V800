@@ -72,7 +72,9 @@ describe('R102 ① 占位清单覆盖 probe-bounds §2 六类地面层实体（�
     expect(CITY_BLOCK_Z.length).toBe(10);
     // 每块：1 前脸 + 2 殿台/大理石带 + 2 角塔基座 + 2 前排塔基 + 4 柱 + 2 飞扶壁墩 = 13
     expect(FOOTPRINTS.length).toBeGreaterThanOrEqual(10 * 6);
-    expect(byKind('frontWall').length).toBe(10);
+    // R121：+10 缺块 R99 补街 frontWall（10 采样块 + 10 缺块，前脸均 |x|=15.5）——R102 建表只认
+    //   采样块，从未同步 R99 补的缺块实体（空档斜插穿补墙 1.24~1.88m，R121 ⑥c 补 footprint）
+    expect(byKind('frontWall').length).toBe(20);
     expect(byKind('hallBase').length).toBe(20); // 10 块 × 殿台基 + 大理石带
     expect(byKind('cornerBase').length).toBe(20); // 10 块 × 2 座
     expect(byKind('frontBase').length).toBe(20); // 10 块 × 2 座
@@ -261,12 +263,17 @@ describe('R102 ② clampToFootprints 纯函数（直行 θ=0 回归不变 / 斜�
     expect(fp.x + dx).toBeLessThanOrEqual(BUTTRESS_LINK_INNER + 1e-9);
   });
 
-  it('斜插 θ=30° 无占位处（空档 z=−600，x=14.0）：不新增钳位', () => {
-    // 块 3 [−549.5,−503.5] 与块 4 [−641.5,−595.5] 之间空档 z=−600 附近 5 m 内无任何占位盒
+  it('斜插 θ=30° 空档 z=−600（R121 补街 frontWall）：收紧到 15.5 − 2.243（不穿补墙）', () => {
+    // R121 ⑥c：z=−600 在缺块 k=5 [−641.5,−595.5]，R99 补街殿身/连墙（前脸 |x|=15.5）已补
+    //   frontWall footprint ⇒ 斜插 θ=−30° 车角（dx=2.243）穿补墙被钳到 15.5−2.243=13.257
+    //   （原无 footprint ⇒ hit=false 原样放行 = 空档斜插穿模 1.24m 的固化缺陷）。
     const z = -600;
-    const fp = clampToFootprints(14.0, z, -Math.PI / 6);
-    expect(fp.hit).toBe(false);
-    expect(fp.x).toBe(14.0);
+    const h = -Math.PI / 6;
+    const fp = clampToFootprints(14.0, z, h);
+    expect(fp.hit).toBe(true);
+    expect(fp.kind).toBe('frontWall');
+    expect(fp.x).toBeCloseTo(15.5 - dxAt(h), 3);
+    expect(fp.x + dxAt(h)).toBeLessThanOrEqual(15.5 + 1e-9);
   });
 
   it('镜像对称：−X 侧 θ=30° 飞扶壁墩收紧到 −9.107（put side 镜像）', () => {

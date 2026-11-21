@@ -280,6 +280,14 @@ export const WALL_SCRUB_RELEASE_EPS = 1.2;
  */
 export const WALL_SCRUB_LATCH_FAR_FRAMES = 60;
 /**
+ * R121 离墙滞后带内「几何已离墙 + 低速」时 scrub 记峰渐出速率 1/s。
+ * RELEASE_EPS(1.2) 滞后带在稳定段过宽（车 x≈13.1 距墙 0.897m 仍被判贴墙）⇒ 骑墩斜切
+ * 20/24 组合 v 锁存 0.37~2.08 极限环。本常数只在 latch 未释放但几何已离墙（sideTouchRaw=
+ * false）且低速（av<WALL_SCRUB_RELEASE_MS）时把 wallScrubN 渐出（damp 一阶），scrub 解除、
+ * 油门可推动脱离 latch 带。非 WALL_SCRUB_* 常量值改动（新常量，值 4.0 与 R109 同级速率）。
+ */
+export const WALL_SCRUB_LATCH_DECAY_RATE = 4.0;
+/**
  * R110 城内 2D 接触每帧最大横向收敛步长 m。
  * 旧版一帧写死 s.x=fp.x（可单帧钳位最大 6.34 m ⇒ 玩家读作「空气墙/瞬移/穿模弹开」）。
  * 本常量把位置修正摊到多帧：120Hz 下 0.30 m/帧 = 36 m/s 横向收敛率，单帧不瞬移、
@@ -1076,6 +1084,15 @@ export class FreeDrive {
       s.z <= BOUNDS.zMin + WALL_SCRUB_CONTACT_EPS || s.z >= BOUNDS.zMax - WALL_SCRUB_CONTACT_EPS;
     if (sideTouch || endTouch) {
       // 仍与墙接触：维持撞击强度（由下方 impacting 块按 impactN 峰值刷新）
+      // R121：latch 未释放（sideTouch=true）但几何上已离墙（sideTouchRaw=false）且低速 ⇒
+      //   scrub 记峰渐出。根因：RELEASE_EPS(1.2) 离墙滞后带在稳定段过宽（车 x≈13.1 距墙
+      //   0.897m 仍被判贴墙，见 latch 带 [12.797,13.947]）⇒ wallScrubN 永不释放、v 锁存
+      //   0.37~2.08 极限环（骑墩斜切 20/24 组合）。WALL_SCRUB_RELEASE_MS(1.5) 是既有低速
+      //   脱困阈值（L1199 同口径）⇒ 低速 + 几何离墙时渐出记峰，scrub 解除、油门可推动。
+      //   撞墙场景（sideTouchRaw=true）不触发（维持原 R101/R109 刮擦契约）。
+      if (sideTouch && !sideTouchRaw && av < WALL_SCRUB_RELEASE_MS) {
+        this.wallScrubN = damp(this.wallScrubN, 0, WALL_SCRUB_LATCH_DECAY_RATE, dt);
+      }
     } else {
       this.wallScrubN = 0; // 已离墙：刮擦结束
       this.wallKickFired = false; // 已离墙：复位横摆冲量闩，下次撞墙再放一记

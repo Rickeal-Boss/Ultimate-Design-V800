@@ -224,11 +224,18 @@ describe('R105 漂移态 2D 启用：城内/广场 2D 唯一入口 = clampToFoot
     expect(src).toMatch(/clampToFootprints\(s\.x, s\.z, s\.heading\)/);
   });
 
-  it('clampToFootprints 纯函数行为：非漂移态语义（只收紧不放宽、无占位处不新增钳位）', () => {
-    // 空档 z=−600 附近无占位盒 ⇒ 2D 不新增约束（漂移豁免恢复后同样如此）
+  it('clampToFootprints 纯函数行为：非漂移态语义（只收紧不放宽、R121 缺块补街 frontWall 接管斜插）', () => {
+    // R121 ⑥c：空档 z=−600（缺块 k=5 [−641.5,−595.5]，R99 补街殿身/连墙前脸 |x|=15.5）已补
+    //   frontWall footprint ⇒ 斜插 θ=−30° 车角（dx=2.2424）穿补墙被钳到 15.5−2.2424=13.2576
+    //   （旧版无 footprint ⇒ hit=false 原样放行 = 空档斜插穿模 1.24m 的固化缺陷）。
     const fp = clampToFootprints(14.0, -600, -Math.PI / 6);
-    expect(fp.hit).toBe(false);
-    expect(fp.x).toBe(14.0);
+    expect(fp.hit).toBe(true);
+    expect(fp.kind).toBe('frontWall');
+    expect(fp.x).toBeCloseTo(15.5 - 2.2424, 3);
+    // 直行 θ=0 车缘 14.497+1.003=15.5 恰贴补墙 ⇒ 2D 零收紧（无新空气墙）
+    const fpStraight = clampToFootprints(14.0, -600, 0);
+    expect(fpStraight.hit).toBe(false);
+    expect(fpStraight.x).toBe(14.0);
     // 块心殿身无柱/墩（z=zc，zr=0）：2D 不新增钳位（1D 包络 13.997 已是最紧连续墙）
     const [zmin, zmax] = CITY_BLOCK_Z[0];
     const zc = (zmin + zmax) / 2;

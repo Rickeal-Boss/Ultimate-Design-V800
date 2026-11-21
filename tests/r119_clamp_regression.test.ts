@@ -345,5 +345,38 @@ describe('R120 ⑮ fix-A arcadeCol 柱带 xPen 特判：块边界连墙墩残余
     }
     // 单帧 x 横移 ≤0.30（fix-5 原 0.3416 → fix-A 0.2927；float 余量 1e-2）
     expect(maxDx).toBeLessThanOrEqual(0.31);
+    // R121：补末态无穿模断言（probe-C 薄弱点——⑮ 原只断言单帧横移，未钉末态 hit=false；
+    //   x=8.5 街心南行不触 gap frontWall（xInner 15.5），末态应无 2D 接触）
+    const sEnd = fd.snapshot();
+    expect(clampToFootprints(sEnd.x, sEnd.z, sEnd.heading).hit).toBe(false);
+  });
+});
+
+describe('R121 ⑯ fix-A 缺块 R99 补街 frontWall：空档中段斜插不再穿补墙（1.24~1.88m 清零）', () => {
+  it('clamp(14.0,−572.5,60°) → hit=true x=15.5−2.881=12.619（原 hit=false 穿补墙 1.88m）', () => {
+    // R121 ⑥c：R99 补街缺块殿身/连墙（前脸严格 |x|=15.5）只建视觉 mesh 无 footprint ⇒ 空档中段
+    //   斜插 θ=60° 车角（dx=2.881）越过 1D 车心限 14.497 穿补墙 1.88m、clamp 完全不激活（probe-A/D
+    //   交叉证实真穿模）。补 frontWall footprint 后钳到 15.5−2.881=12.619（车角贴补墙内缘）。
+    const fp = clampToFootprints(14.0, -572.5, Math.PI / 3);
+    expect(fp.hit).toBe(true);
+    expect(fp.kind).toBe('frontWall');
+    expect(fp.x).toBeCloseTo(15.5 - 2.881, 3);
+    // 车不穿模：钳后位置喂回 ⇒ 车 OBB 与所有占位盒分离（无 1.88m 残留）
+    expect(clampToFootprints(fp.x, fp.z, Math.PI / 3).hit).toBe(false);
+  });
+
+  it('直行 θ=0 空档车缘恰贴补墙：零收紧（无新空气墙）', () => {
+    // 车缘 14.497+1.003=15.5 恰贴补墙内缘 ⇒ 2D 零收紧（不引入空气墙）；x<14.497 更不触发
+    const fp = clampToFootprints(14.0, -572.5, 0);
+    expect(fp.hit).toBe(false);
+    expect(fp.x).toBe(14.0);
+  });
+
+  it('采样块（k=0 zc=−388.5）斜插行为不变（hallBase 收紧更紧，非 frontWall）', () => {
+    // 采样块本有 footprint，R121 只补缺块，采样块行为逐位不变（k=0 心 zc=−388.5 被 hallBase
+    //   xInner 收紧，非新增 frontWall）
+    const fp = clampToFootprints(14.0, -388.5, Math.PI / 6);
+    expect(fp.hit).toBe(true);
+    expect(fp.kind).not.toBe('frontWall');
   });
 });

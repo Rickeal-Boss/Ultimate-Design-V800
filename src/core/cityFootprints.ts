@@ -285,6 +285,30 @@ export function buildCityFootprints(): CityFootprint[] {
     }
   }
 
+  // ⑥c R121：10 个缺块（R99 补街殿身/连墙，前脸严格 |x| = INNER.faceHalf）—— R102 建表只认
+  //   采样块 CITY_BLOCK_Z，从未同步 R99 补的缺块实体（castleKit.ts:4086-4137 只 b.ashlar/wall.push
+  //   视觉几何，不注册 footprint）⇒ 空档中段斜插 θ=30° 车角穿补墙 1.24m / θ=60° 穿 1.88m，
+  //   clamp 完全不激活（probe-A/D 交叉证实真穿模）。补 frontWall footprint（kind 复用 ①，
+  //   xInner/xOuter 同 ①）。缺块判定 = 块区间 [zNear−(k+1)·blockLen, zNear−k·blockLen] 不在
+  //   CITY_BLOCK_Z 中（INNER 真源派生，禁写死 −549.5/−1239.5 等 z 值）。
+  //   ⚠ 不改 FreeDrive 门控：缺块 z∈[−1239.5,−549.5] 已在 2D 激活带
+  //   [BOUNDS.zMin, GATE_PIER_Z_MAX+CAR_HALF_L] 内（SAT 判交自动覆盖车角入补墙，无需扩带）。
+  const cityBlockTotal = Math.round(
+    (INNER.zNear - CITY_BLOCK_Z[CITY_BLOCK_Z.length - 1][0]) / INNER.blockLen
+  );
+  for (let k = 0; k < cityBlockTotal; k += 1) {
+    const gapZmin = INNER.zNear - (k + 1) * INNER.blockLen;
+    const kept = CITY_BLOCK_Z.some(([zm]) => Math.abs(zm - gapZmin) < 1e-6);
+    if (kept) continue;
+    list.push({
+      xInner: FRONT_WALL_INNER,
+      xOuter: FRONT_WALL_INNER + 8,
+      zMin: gapZmin,
+      zMax: gapZmin + INNER.blockLen,
+      kind: 'frontWall'
+    });
+  }
+
   // ⑦ 主殿前排飞扶壁内墩（广场域 z<plazaZ，块循环外 —— 主殿不在 CITY_BLOCK_Z 内）。
   //    R105：这是唯一「非漂移态也穿模」的缺陷点（全量扫证实）。内墩基座内缘 10.425，车广场
   //    1D 车缘 ≈16.5 直穿最多 ~3m（hi-detail 大脚）。外墩（wx≥21.5）内缘 >16.5 车不可达 ⇒

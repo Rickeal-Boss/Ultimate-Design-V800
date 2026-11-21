@@ -142,7 +142,8 @@ describe('R104 ③ 六类地面实体占位边界扫描（不穿 + 不过度挡�
   it('占位盒总数与六类齐备（10 块全量覆盖）', () => {
     expect(CITY_BLOCK_Z.length).toBe(10);
     expect(FOOTPRINTS.length).toBeGreaterThanOrEqual(10 * 6);
-    expect(byKind('frontWall').length).toBe(10);
+    // R121：+10 缺块 R99 补街 frontWall（10 采样块 + 10 缺块）——空档斜插穿补墙 1.24~1.88m 修复
+    expect(byKind('frontWall').length).toBe(20);
     expect(byKind('hallBase').length).toBe(20);
     expect(byKind('cornerBase').length).toBe(20);
     expect(byKind('frontBase').length).toBe(20);
