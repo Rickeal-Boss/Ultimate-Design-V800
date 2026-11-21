@@ -34,17 +34,21 @@ const PIER_CENTER = WX - PAIR_GAP / 2; // 11.9（内墩世界 |x|）
 const BASE_HALF_X = (DEPTH + 1.1) / 2; // 1.25（世界 x 半宽）
 const HI_EXTRA = 0.3; // hi-detail 大脚外扩
 const INNER = PIER_CENTER - BASE_HALF_X - HI_EXTRA; // 10.425
+/** 外墩基座外缘 |x| = wx + pairGap/2 + 基座半宽 + 大脚（R122 起 footprint 延展覆盖） */
+const OUTER_EDGE = WX + PAIR_GAP / 2 + BASE_HALF_X + HI_EXTRA; // 16.65
 const PIER_Z = Z_FRONT + (REACH - PIER_W / 2); // -1294.3
 const Z_HALF = (PIER_W + 1.1) / 2; // 1.85
 
 describe('R105 主殿前排飞扶壁内墩 2D 占位', () => {
-  it('广场域存在主殿飞扶壁内墩 footprint（真源派生内缘 10.425 / z -1294.3）', () => {
+  it('广场域存在主殿飞扶壁墩对 footprint（真源派生内缘 10.425 / 外缘 16.65 / z -1294.3）', () => {
     const fp = getCityFootprints().find(
       (f) => f.kind === 'buttressBase' && f.zMin > -1297 && f.zMax < -1290
     );
     expect(fp).toBeDefined();
     expect(fp!.xInner).toBeCloseTo(INNER, 6);
     expect(fp!.xInner).toBeLessThan(13.425 + 1e-9); // hi-detail 大脚内缘（保守防 hi 档穿模）
+    // R122：xOuter 延展到外墩外缘（覆盖整墩对，外墩不再纯视觉漏占位）
+    expect(fp!.xOuter).toBeCloseTo(OUTER_EDGE, 6);
     expect(fp!.zMin).toBeCloseTo(PIER_Z - Z_HALF, 6);
     expect(fp!.zMax).toBeCloseTo(PIER_Z + Z_HALF, 6);
     // 内墩在车可达 z 带（z 钳下界 zMin 之内）
@@ -65,16 +69,29 @@ describe('R105 主殿前排飞扶壁内墩 2D 占位', () => {
     }
   });
 
-  it('外墩（wx≥21.5）内缘 > 车可达车缘 ⇒ 不占位（免假空气墙）', () => {
+  it('R122 外墩车可达 ⇒ footprint 覆盖至外墩外缘（不再漏占位，免 x=14.4 穿 1.55m）', () => {
     const outerPierCenter = WX + PAIR_GAP / 2; // 15.1
-    const outerInner = outerPierCenter - BASE_HALF_X - HI_EXTRA; // 13.425
-    // 广场 1D 车缘最大 ≈ plazaHalfW 15.5 + 车半宽? 不 —— 车缘 = 车心限 + dx ≤ 15.5(面线)
-    // 此处只断言外墩内缘 > 内墩内缘（车先撞内墩），且外墩不必占位即可由内墩兜住近端。
-    expect(outerInner).toBeGreaterThan(INNER);
-    // 广场域 footprint 只应有内墩这一条 buttressBase（外墩不占位）
+    const outerInner = outerPierCenter - BASE_HALF_X - HI_EXTRA; // 13.55
+    // 外墩内缘 13.55 < 车右缘上限 15.5 ⇒ 车可达，R105「不可达不占位」判定对 wx=13.5 失效
+    expect(outerInner).toBeLessThan(15.5);
+    expect(outerInner).toBeGreaterThan(INNER); // 外墩比内墩更靠外
+    // 广场域 footprint 仍只 1 条（延展而非新增），xOuter ≥ 外墩外缘（整墩对覆盖）
     const plazaButtress = getCityFootprints().filter(
       (f) => f.kind === 'buttressBase' && f.zMin > -1297 && f.zMax < -1290
     );
     expect(plazaButtress.length).toBe(1);
+    expect(plazaButtress[0].xOuter).toBeGreaterThanOrEqual(outerPierCenter + BASE_HALF_X + HI_EXTRA - 1e-9);
+  });
+
+  it('R122 probe-B 复现：车在墩对 z 带外墩位（x=14.4）⇒ clamp 接管（原 hit=false 漏占位）', () => {
+    // probe-B：x=14.4 z=-1294.3 车 OBB x[13.397,15.403] 与外墩实体 [13.85,16.35] 重叠 1.55m，
+    // 原 inner footprint x[10.35,13.15] 覆盖不到（车 OBB 内缘 13.397 > 13.15）⇒ hit=false 穿外墩。
+    // R122 xOuter=16.65 延展后：车 OBB 重叠整墩对 ⇒ clamp 接管（远侧推 10.425−dx，车不穿）。
+    const hit = clampToFootprints(14.4, PIER_Z, 0);
+    expect(hit.hit).toBe(true);
+    expect(hit.kind).toBe('buttressBase');
+    expect(hit.x).toBeCloseTo(INNER - HALF_W, 6); // 10.425 - 1.003 = 9.422（远侧推，车右缘贴内墩内缘）
+    // 车右缘 = hit.x + HALF_W ≤ INNER ⇒ 车 OBB 不再重叠外墩（不穿模）
+    expect(hit.x + HALF_W).toBeLessThanOrEqual(INNER + 1e-9);
   });
 });

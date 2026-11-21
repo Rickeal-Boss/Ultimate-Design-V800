@@ -112,7 +112,7 @@ const PLAZA_BUTTRESS_REACH = 7.0;
 const PLAZA_BUTTRESS_PIER_W = 2.6;
 const PLAZA_BUTTRESS_DEPTH = 1.4;
 const PLAZA_BUTTRESS_PAIR_GAP = 3.2;
-/** 内墩世界 |x| = wx − pairGap/2（内侧墩，靠路心）；外墩 = wx + pairGap/2 = 15.1（车不可达） */
+/** 内墩世界 |x| = wx − pairGap/2（内侧墩，靠路心）= 11.9；外墩 = wx + pairGap/2 = 15.1（R122 起由 OUTER_EDGE 覆盖） */
 const PLAZA_BUTTRESS_PIER_CENTER = PLAZA_BUTTRESS_WX - PLAZA_BUTTRESS_PAIR_GAP / 2; // 11.9
 /** 基座世界 x 半宽 = (depth+1.1)/2（castleDetail.ts:344 sz=depth+1.1 → rotateY 后世界 x） */
 const PLAZA_BUTTRESS_BASE_HALF_X = (PLAZA_BUTTRESS_DEPTH + 1.1) / 2; // 1.25
@@ -123,6 +123,15 @@ const PLAZA_BUTTRESS_INNER =
   PLAZA_BUTTRESS_PIER_CENTER -
   PLAZA_BUTTRESS_BASE_HALF_X -
   PLAZA_BUTTRESS_HI_EXTRA; // 11.9 - 1.25 - 0.3 = 10.425
+/** 外墩基座外缘 |x|（wx + pairGap/2 + 基座半宽 + 大脚）——R122：外墩车可达（车心限 14.497、
+ *  车右缘 15.5 > 外墩内缘 13.55），R105「车不可达不占位」判定对 wx=13.5 失效（probe-B：外墩纯
+ *  视觉无 footprint，x=14.4 穿外墩 1.55m / x=12.0 近侧推 14.153 嵌外墩 1.31m，clamp 完全不激活）
+ *  ⇒ 延展覆盖整墩对（0.7m 缝隙车 OBB 2.006m 无法嵌入，AABB 并集语义正确）。 */
+const PLAZA_BUTTRESS_OUTER_EDGE =
+  PLAZA_BUTTRESS_WX +
+  PLAZA_BUTTRESS_PAIR_GAP / 2 + // 外墩世界 |x| 15.1
+  PLAZA_BUTTRESS_BASE_HALF_X + // 基座半宽 1.25
+  PLAZA_BUTTRESS_HI_EXTRA; // 大脚 0.3 ⇒ 16.65
 /** 内墩世界 z = zFront + pierX，pierX = reach − pierW/2（castleDetail.ts:337） */
 const PLAZA_BUTTRESS_Z =
   PLAZA_HALL_FRONT_Z + (PLAZA_BUTTRESS_REACH - PLAZA_BUTTRESS_PIER_W / 2); // -1294.3
@@ -293,8 +302,12 @@ export function buildCityFootprints(): CityFootprint[] {
   //   CITY_BLOCK_Z 中（INNER 真源派生，禁写死 −549.5/−1239.5 等 z 值）。
   //   ⚠ 不改 FreeDrive 门控：缺块 z∈[−1239.5,−549.5] 已在 2D 激活带
   //   [BOUNDS.zMin, GATE_PIER_Z_MAX+CAR_HALF_L] 内（SAT 判交自动覆盖车角入补墙，无需扩带）。
+  // R122（probe-C 维护性）：cityBlockTotal 由 INNER.zFar 真源派生（r28Layout.ts:434，与
+  //   CITY_BLOCK_Z 末项 zmin 同值 −1285.5，无功能变化）——原式依赖 CITY_BLOCK_Z 末项 = 块
+  //   k=total−1 的隐含假设，若 keep 集合变化导致末块≠k19 会算错 frontWall 数（漏补/多补 =
+  //   新穿模/新空气墙）。920/46=20 整除精确，舍入无风险。
   const cityBlockTotal = Math.round(
-    (INNER.zNear - CITY_BLOCK_Z[CITY_BLOCK_Z.length - 1][0]) / INNER.blockLen
+    (INNER.zNear - INNER.zFar) / INNER.blockLen
   );
   for (let k = 0; k < cityBlockTotal; k += 1) {
     const gapZmin = INNER.zNear - (k + 1) * INNER.blockLen;
@@ -309,15 +322,19 @@ export function buildCityFootprints(): CityFootprint[] {
     });
   }
 
-  // ⑦ 主殿前排飞扶壁内墩（广场域 z<plazaZ，块循环外 —— 主殿不在 CITY_BLOCK_Z 内）。
-  //    R105：这是唯一「非漂移态也穿模」的缺陷点（全量扫证实）。内墩基座内缘 10.425，车广场
-  //    1D 车缘 ≈16.5 直穿最多 ~3m（hi-detail 大脚）。外墩（wx≥21.5）内缘 >16.5 车不可达 ⇒
-  //    不占位（免假空气墙）。占位以 |x| 距离存储（双侧镜像由 clampToFootprints 按车侧处理）。
+  // ⑦ 主殿前排飞扶壁墩对（广场域 z<plazaZ，块循环外 —— 主殿不在 CITY_BLOCK_Z 内）。
+  //    R105：内墩基座内缘 10.425，车广场 1D 车缘 ≈16.5 直穿最多 ~3m（hi-detail 大脚）⇒ 占位。
+  //    R122：probe-B 证实外墩（wx+pairGap/2=15.1，实体 x[13.85,16.35]）车可达 —— 车心限 14.497、
+  //    车右缘 15.5 > 外墩内缘 13.55，R105「车不可达不占位」判定对 wx=13.5 失效（外墩纯视觉
+  //    无 footprint，x=14.4 穿外墩 1.55m / x=12.0 近侧推 14.153 嵌外墩 1.31m，clamp 完全不激活）。
+  //    ⇒ xOuter 延展到 OUTER_EDGE（16.65）覆盖整墩对：z-钳在墩对北脸统一接管（0.7m 缝隙车
+  //    OBB 2.006m 无法嵌入，AABB 并集语义正确）；wx≥21.5 外墩 x>18.65 仍车不可达 ⇒ 不占位（免
+  //    假空气墙）。占位以 |x| 距离存储（双侧镜像由 clampToFootprints 按车侧处理）。
   //    ⚠ 此 footprint 在 2D 激活带 [plazaZ,gateBackZ] 之外（z≈-1294.3<plazaZ）⇒ 需 FreeDrive
   //    step() 的 2D 门控下界从 plazaZ 扩到 zMin 才会真正被 consult（R105 同步改）。
   list.push({
     xInner: PLAZA_BUTTRESS_INNER,
-    xOuter: PLAZA_BUTTRESS_PIER_CENTER + PLAZA_BUTTRESS_BASE_HALF_X,
+    xOuter: PLAZA_BUTTRESS_OUTER_EDGE,
     zMin: PLAZA_BUTTRESS_Z - PLAZA_BUTTRESS_Z_HALF,
     zMax: PLAZA_BUTTRESS_Z + PLAZA_BUTTRESS_Z_HALF,
     kind: 'buttressBase'

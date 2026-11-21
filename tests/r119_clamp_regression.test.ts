@@ -24,7 +24,7 @@
  * 10 / 17.5 / 14 / 1.003 / 2.7475 / 8.997 / 12.903 等派生值。
  */
 import { describe, expect, it } from 'vitest';
-import { FreeDrive, BOUNDS, corridorCenterHalfWidth } from '../src/core/FreeDrive';
+import { FreeDrive, BOUNDS, corridorCenterHalfWidth, CITY_BLOCK_Z } from '../src/core/FreeDrive';
 import { clampToFootprints, getCityFootprints } from '../src/core/cityFootprints';
 import { VEHICLE } from '../src/config/physics';
 import { GATE, INNER } from '../src/render/scene/r28Layout';
@@ -111,22 +111,23 @@ describe('R119 ② fix-1 门墩急转：车不再持久卡死（末态穿透 0�
   });
 });
 
-describe('R119 ③ fix-2 广场墩外隙近侧外推：clamp 目标=近侧 xOuter+dx 而非远侧收紧', () => {
-  it('x0=13.4/14.0 南向广场墩：近侧外推 xOuter+dx，车缘不破 1D 面线', () => {
-    // 广场域主殿前排飞扶壁内墩（z≈−1294.3）是局部突出物（buttressBase）。车心 13.4/14.0 ≥
-    //   墩带中点（(10.35+13.15)/2=11.75）⇒ R119 改 a 按**近侧界** xOuter+dx 外推（车被推离墩
-    //   外缘），非远侧收紧（xInner−dx）。近侧界 ≤ 1D 车心面线走廊（防护①）且不与其它占位盒
-    //   相交（防护②）⇒ 合法。旧行为恒远侧收紧会让车被硬拉回路内（穿墩/柱带 yank）。
+describe('R119 ③ fix-2 广场墩外隙钳位（R122 起整墩对覆盖）：车越整墩对到自由走廊，不嵌外墩', () => {
+  it('x0=13.4/14.0 南向广场墩：远侧推 xInner−dx（原近侧 14.153 恰嵌外墩 1.31m，R122 修正）', () => {
+    // 广场域主殿前排飞扶壁墩对（z≈−1294.3）是局部突出物（buttressBase）。R122：xOuter 延展到
+    //   外墩外缘 16.65 覆盖整墩对。近侧界 xOuter+dx = 17.653 > 1D 车心面线走廊 14.497 ⇒ 近侧被
+    //   走廊阻塞（防护①），落到远侧 xInner−dx = 9.347（车越整墩对，OBB 不嵌内墩/外墩）。
+    //   旧行为（xOuter=13.15）：近侧 14.153 虽 ≤ 走廊，但恰嵌外墩实体 [13.85,16.35] 1.306m
+    //   （probe-B 变体，旧断言漏检）——R122 修正为远侧推，免外墩穿模。
     for (const x0 of [13.4, 14.0]) {
       const fp = clampToFootprints(x0, PLAZA_BUTT_Z, 0);
       expect(fp.hit).toBe(true);
       expect(fp.kind).toBe('buttressBase');
-      // 近侧界 = 墩外缘 + 半宽（直行 θ=0 dx=半宽 1.003）：13.15 + 1.003 = 14.153
-      const nearBound = PLAZA_BUTT.xOuter + HALF_W;
-      expect(fp.x).toBeCloseTo(nearBound, 9);
+      // 远侧界 = 内墩内缘 − 半宽（直行 θ=0 dx=半宽 1.003）：10.35 − 1.003 = 9.347
+      const farBound = PLAZA_BUTT.xInner - HALF_W;
+      expect(fp.x).toBeCloseTo(farBound, 9);
       // 车不穿模：clamp 后位置再喂回 ⇒ 车 OBB 与所有占位盒分离（hit=false）
       expect(clampToFootprints(fp.x, fp.z, 0).hit).toBe(false);
-      // 近侧防护①：近侧目标 ≤ 1D 车心面线走廊 corridorCenterHalfWidth(z)（= 14.497 广场）
+      // 近侧防护①：远侧目标 ≤ 1D 车心面线走廊 corridorCenterHalfWidth(z)（= 14.497 广场）
       expect(fp.x).toBeLessThanOrEqual(corridorCenterHalfWidth(PLAZA_BUTT_Z) + 1e-9);
       // 车缘不破 1D 可见面线（15.5 = 建筑前脸）：车心 + 半宽 ≤ 可见面线
       expect(fp.x + HALF_W).toBeLessThanOrEqual(BOUNDS.cityOpenHalfW + 1e-9);
@@ -378,5 +379,91 @@ describe('R121 ⑯ fix-A 缺块 R99 补街 frontWall：空档中段斜插不再�
     const fp = clampToFootprints(14.0, -388.5, Math.PI / 6);
     expect(fp.hit).toBe(true);
     expect(fp.kind).not.toBe('frontWall');
+  });
+});
+
+describe('R122 ⑰ fix 主殿飞扶壁外墩覆盖：车南行撞墩对被推到自由走廊，不穿外墩/不卡死', () => {
+  it('x=14.4 南行 500 帧：末态分离、单帧横移≤0.36、z-钳持脸不深穿、v 恢复', () => {
+    // R122：主殿飞扶壁 footprint xOuter 延展到外墩外缘 16.65（整墩对覆盖）。车 x=14.4 南行
+    //   撞墩对：z-钳持脸（车头停在墩对北脸外缘 −1289.7025），x-钳 0.35/帧推到自由走廊 9.347
+    //   （越整墩对），随后沿走廊南行 v 恢复。旧行为（xOuter=13.15）：车嵌外墩实体
+    //   [13.85,16.35] 1.55m 且 clamp 完全不激活（hit=false 永久穿模）。
+    const fd = new FreeDrive({ start: { x: 14.4, z: -1290, heading: 0 } });
+    fd.state.speed = 20;
+    fd.press('KeyW', true);
+    let maxDx = 0;
+    let prevX = fd.snapshot().x;
+    let minZAtPush = 0;
+    let maxV = 0;
+    for (let i = 0; i < 500; i += 1) {
+      fd.step(DT);
+      const s = fd.snapshot();
+      maxDx = Math.max(maxDx, Math.abs(s.x - prevX));
+      prevX = s.x;
+      maxV = Math.max(maxV, s.speed);
+      // x-钳期间（车仍在墩对 x 带内）车 z 不得深穿（z-钳持脸于北脸）
+      if (Math.abs(s.x) > 9.4) minZAtPush = Math.min(minZAtPush, s.z);
+    }
+    const sEnd = fd.snapshot();
+    // 末态不穿模（车 OBB 与所有占位盒分离）
+    expect(clampToFootprints(sEnd.x, sEnd.z, sEnd.heading).hit).toBe(false);
+    // 无空气墙：单帧 x 横移 ≤0.36（x-钳 0.35/帧平滑，非瞬移）
+    expect(maxDx).toBeLessThanOrEqual(0.36);
+    // 无深穿：x-钳期间车 z ≥ 墩对北脸外缘附近（−1289.817，不深入墩带 −1292.45 以北）
+    expect(minZAtPush).toBeGreaterThan(-1290.5);
+    // 不卡死：撞击后 v 恢复（>1.5），车沿走廊继续南行
+    expect(maxV).toBeGreaterThan(1.5);
+    expect(sEnd.speed).toBeGreaterThan(1.5);
+  });
+
+  it('x=12.0 南行 500 帧：不嵌外墩（旧近侧推 14.153 恰嵌外墩 1.31m，R122 修正）', () => {
+    // probe-B 变体：R119 近侧外推把 x=12.0 的车推到 14.153，车右缘 15.156 嵌外墩 1.31m。
+    //   R122 整墩对覆盖后：x=12.0 车撞墩对被推到自由走廊 9.347（越整墩对），不嵌外墩。
+    const fd = new FreeDrive({ start: { x: 12.0, z: -1290, heading: 0 } });
+    fd.state.speed = 20;
+    fd.press('KeyW', true);
+    let maxDx = 0;
+    let prevX = fd.snapshot().x;
+    let minZAtPush = 0;
+    let maxV = 0;
+    for (let i = 0; i < 500; i += 1) {
+      fd.step(DT);
+      const s = fd.snapshot();
+      maxDx = Math.max(maxDx, Math.abs(s.x - prevX));
+      prevX = s.x;
+      maxV = Math.max(maxV, s.speed);
+      if (Math.abs(s.x) > 9.4) minZAtPush = Math.min(minZAtPush, s.z);
+    }
+    const sEnd = fd.snapshot();
+    expect(clampToFootprints(sEnd.x, sEnd.z, sEnd.heading).hit).toBe(false);
+    expect(maxDx).toBeLessThanOrEqual(0.36);
+    expect(minZAtPush).toBeGreaterThan(-1290.5);
+    expect(maxV).toBeGreaterThan(1.5);
+    expect(sEnd.speed).toBeGreaterThan(1.5);
+  });
+});
+
+describe('R122 ⑱ 缺块 frontWall 直行零收紧泛扫：10 缺块全量，无新空气墙', () => {
+  it('对 10 缺块中点、θ=0、x=corridorCenterHalfWidth：hit=false（直行不被新 frontWall 误钳）', () => {
+    // probe-C note-3 覆盖缺口：R121 补 10 缺块 frontWall 只在 2 采样点（-572.5/-600）验证。
+    //   xInner=FRONT_WALL_INNER=INNER.faceHalf=15.5 与 1D 车心面线同源 ⇒ 直行（θ=0）车缘恰贴
+    //   前脸，SAT 边界相等时 xClamp 不触发（|ax−best|<1e-9 ⇒ xClamped=false）⇒ 零收紧无空气墙。
+    //   本测试对全部 10 缺块钉死该行为（真源派生缺块集合，禁写死）。
+    const total = Math.round((INNER.zNear - INNER.zFar) / INNER.blockLen);
+    let checked = 0;
+    for (let k = 0; k < total; k += 1) {
+      const gapZmin = INNER.zNear - (k + 1) * INNER.blockLen;
+      const kept = CITY_BLOCK_Z.some(([zm]) => Math.abs(zm - gapZmin) < 1e-6);
+      if (kept) continue; // 采样块，非缺块
+      const midZ = gapZmin + INNER.blockLen / 2;
+      const corridor = corridorCenterHalfWidth(midZ);
+      const fp = clampToFootprints(corridor, midZ, 0);
+      // 直行 θ=0 车缘恰贴前脸（corridor = 15.5 − 1.003 = 14.497），不越 ⇒ 不触发 frontWall 钳位
+      expect(fp.hit).toBe(false);
+      // 车缘 = corridor + 半宽 ≤ 前脸 15.5（不破可见面线，无空气墙）
+      expect(corridor + HALF_W).toBeLessThanOrEqual(INNER.faceHalf + 1e-9);
+      checked += 1;
+    }
+    expect(checked).toBe(10); // 全 10 缺块已扫
   });
 });
