@@ -42,6 +42,9 @@ import { isInteractiveTarget } from '../ui/dom';
 /** 计算质量（与 Vehicle.ts 同源：整备 3160 + 载荷 140） */
 const MASS = VEHICLE.totalMassKg;
 
+/** 车半长（physics.ts 真源，勿写死 2.7475）——R119：门带 2D 激活域上界北扩用的车头前伸半长 */
+const CAR_HALF_L = VEHICLE.lengthM / 2;
+
 /** 自由探索标定表（集中一处，便于复算） */
 export const FREE = {
   /** 最大偏航角速度 rad/s（打满方向盘、速度足够时的稳态值） */
@@ -1215,8 +1218,15 @@ export class FreeDrive {
      * R105：下界从 plazaZ 扩到 zMin —— 主殿前排飞扶壁内墩落到广场 z≈-1294.3（< plazaZ=-1285.5，
      * 原激活带之外）却无 2D 兜底 ⇒ 车广场 1D 车缘≈16.5 直穿内墩基座（内缘 10.425）最多 ~3m。
      * 扩到 zMin 后该域内仅此一条 footprint（buildCityFootprints 广场段只建飞扶壁内墩）⇒ 不引入
-     * 别处假钳位。 */
-    if (nz <= BOUNDS.gateFrontZ && nz >= BOUNDS.zMin) {
+     * 别处假钳位。
+     * R119：门带 2D 激活域上界北扩 CAR_HALF_L（gateFrontZ → gateFrontZ + CAR_HALF_L）——原判据
+     * 只看车心 nz ≤ gateFrontZ，南向车头前缘（nz − CAR_HALF_L）已伸过 −351.5、车心仍在桥段
+     * （nz ∈ (−351.5, −351.5+CAR_HALF_L]）时 2D 未激活，而 1D 桥限（10.997）不挡门墩内缘 10
+     * ⇒ 车 OBB 前角穿门墩 0.9~2.45m（入口穿模）。上界北扩 CAR_HALF_L 后车头一入墩 z 带
+     * （车心 ≤ gateFrontZ + CAR_HALF_L）2D 门墩钳位即接管，替代 1D 桥限漏洞；北侧无门墩实体，
+     * 扩带只引入「车头探入门带即被门墩 OBB 收紧」的接管，不改变城内/广场 2D 语义。
+     * R110 连续收敛 / R115-R116 x·z 步长动态化 / R105 漂移分流均逐位不变。 */
+    if (nz <= BOUNDS.gateFrontZ + CAR_HALF_L && nz >= BOUNDS.zMin) {
       // R105：去掉外层 !driftActive 门控 —— 漂移态**也做位置钳**（s.x=fp.x），堵死漂移穿模。
       //   旧版整层被 !driftActive 关闭 ⇒ 漂移车能穿进建筑底部 3.5~5.6 m（全量几何扫最大穿模源）。
       //   R103 关掉它的真因是「位置钳 + 撞击/速度/heading 注入」会让 β 永不塌缩，而非位置钳本身；

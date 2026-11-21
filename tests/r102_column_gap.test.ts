@@ -88,8 +88,8 @@ describe('R102 ② 设计 B：柱位 z 的 1D 不再收窄（无 10.117 窄带�
   });
 });
 
-describe('R102 ③ 柱不穿模改由 2D 断言：clampToFootprints 收紧到「柱内缘 − dx(θ)」', () => {
-  it('车在柱位 z 斜插：1D 放到包络(13.997)不挡，2D clampToFootprints 按 OBB 收到 11.12−dx(θ)', () => {
+describe('R102 ③ 柱不穿模改由 2D 断言：clampToFootprints 钳到不穿模位（近侧外推/远侧收紧）', () => {
+  it('车在柱位 z 斜插：1D 放到包络(13.997)不挡，2D clampToFootprints 按 OBB 钳到不穿模位', () => {
     const pillarZ = COLS.find(c => c.z > ZC)!.z; // 取块心外第 0 柱
     // 1D 在柱位不挡（放到包络），单靠 1D 会穿柱 ⇒ 必须 2D 兜底
     expect(corridorCenterHalfWidth(pillarZ)).toBeGreaterThan(PILLAR_INNER);
@@ -97,16 +97,27 @@ describe('R102 ③ 柱不穿模改由 2D 断言：clampToFootprints 收紧到「
     for (const h of [0, 0.3, Math.PI / 6, Math.PI / 4]) {
       // dx(θ) = 半长·|sinθ| + 半宽·|cosθ|：车 OBB 4 角点相对车心的 x 最大伸展（cityFootprints 同源）
       const dx = CAR_HALF_L * Math.abs(Math.sin(h)) + CAR_HALF * Math.abs(Math.cos(h));
-      const bound = PILLAR_INNER - dx; // 2D 最紧界
+      const bound = PILLAR_INNER - dx; // 2D 远侧最紧界
       // 车心放在界内 ⇒ 不收紧（hit=false）
       const inside = clampToFootprints(bound - 0.01, pillarZ, h);
       expect(inside.hit).toBe(false);
-      // 车心越到柱内缘之外 ⇒ OBB 与柱 AABB（R104 收紧到 colAabbHalf=0.4）真相交 ⇒ 收紧回 bound
-      // （旧 +0.5 偏移是按旧 0.9 宽柱校准的，收紧后斜插 h 的 SAT 会判不交，故改用车心过内缘 11.12）
+      // 车心越到柱内缘之外 ⇒ OBB 与柱 AABB（R104 收紧到 colAabbHalf=0.3）真相交 ⇒ clamp 触发。
+      // R119 改 a：柱带是局部突出物（arcadeCol），车心位于其外缘侧（cxAbs ≥ 带中点 11.42）时按
+      //   **近侧界** xOuter+dx 外推（车被推离柱外缘 11.72 之外），否则回退远侧 xInner−dx 收紧。
+      //   具体 x 依 h 与 1D 面线走廊而定（h=0 近侧 12.723；h=π/4 近侧 14.371 越 1D 走廊 13.997
+      //   ⇒ 回退远侧 8.468），不可写死单一 x，改断言「车不穿模」语义（优先，更鲁棒）。
       const outside = clampToFootprints(PILLAR_INNER + 0.3, pillarZ, h);
       expect(outside.hit).toBe(true);
       expect(outside.kind).toBe('arcadeCol');
-      expect(outside.x).toBeCloseTo(bound, 6);
+      // R119 车不穿模核心护栏：clamp 后位置再喂回 clampToFootprints ⇒ 车 OBB 与所有占位盒分离
+      //   （hit=false）。近侧外推（推离柱外缘）与远侧收紧（拉回路内）皆需满足，杜绝柱穿模。
+      const recheck = clampToFootprints(outside.x, outside.z, h);
+      expect(recheck.hit).toBe(false);
+      // 车缘不越 1D 可见面线（近侧防护①：nearBound ≤ 1D 车心面线走廊 ⇒ 车缘 ≤ 可见面线）。
+      //   1D 面线走廊 corridorCenterHalfWidth(pillarZ) + 半宽 = 可见面线（殿身大理石带 15.0）。
+      expect(Math.abs(outside.x) + dx).toBeLessThanOrEqual(
+        corridorCenterHalfWidth(pillarZ) + CAR_HALF + 1e-6
+      );
     }
   });
 });

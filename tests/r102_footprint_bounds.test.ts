@@ -45,6 +45,8 @@ const CORNER_BASE_INNER = INNER.faceHalf - 1.2 / 2;
 const ARCADE_COL_INNER = INNER.faceHalf - R30_ARCADE.width - 1.0 + 0.12;
 /** 飞扶壁连墙墩内缘 = faceHalf − reach − 0.55 = 11.35（pierW 抵消） */
 const BUTTRESS_LINK_INNER = INNER.faceHalf - R97_CITY_BUTTRESS.linkReach - 0.55;
+/** 飞扶壁连墙墩外缘 = faceHalf − reach = 11.9（castleKit.ts:262 同源；R119 近侧界基准，非写死） */
+const BUTTRESS_LINK_OUTER = INNER.faceHalf - R97_CITY_BUTTRESS.linkReach;
 /** 块长（INNER.blockLen = 46，castleKit.ts:3075 同源） */
 const BLOCK_LEN_LOCAL = INNER.blockLen;
 /** 前排塔基局部深度（castleKit.ts:3254 `box(9.4,1.2,9.4,depth/2,…)`，depth=8 ⇒ 局部 x 0..4.7） */
@@ -100,18 +102,26 @@ describe('R102 ① 占位清单覆盖 probe-bounds §2 六类地面层实体（�
     }
   });
 
-  it('R118 Fix1 城门带门墩 footprint：门墩 |x|∈[10,17.5]，z∈[gateBackZ,gateFrontZ]（真源派生）', () => {
-    // 城门带 2D 占位：门洞净半宽 = GATE.openW/2 = 10（门墩内缘）、门楼半宽 = GATE.halfW = 17.5（外缘）；
-    // z 区间 = 城门带 [BOUNDS.gateBackZ=−365.5, BOUNDS.gateFrontZ=−351.5]（门脸 GATE.z+GATE.depth/2 同源）。
+  it('R119 改 b 城门带门墩 footprint：门墩 |x|∈[10,17.5]，z∈[GATE.z±(GATE.depth+1.2)/2]（塔基实体范围，真源派生）', () => {
+    // 城门带 2D 占位：门洞净半宽 = GATE.openW/2 = 10（门墩内缘）、门楼半宽 = GATE.halfW = 17.5（外缘）。
+    // R119 改 b：z 区间 = 门楼**塔基实体**范围 [GATE.z−(GATE.depth+1.2)/2=−366.1, GATE.z+(GATE.depth+1.2)/2=−350.9]
+    //   （makeGate 塔基台基 box(depth+1.2)，zMid=GATE.z，半深 (depth+1.2)/2=7.6），比城门带
+    //   [gateBackZ,gateFrontZ]=[−365.5,−351.5] 各超 0.6m —— 原 footprint 漏掉塔基 0.6m（车头/车尾入塔基漏网）。
+    //   ⚠ 不扩 CAR_HALF_L（zMin→−368.2475 / zMax→−348.7525）：SAT 判交（车 OBB↔footprint）已自动覆盖
+    //   「车心带外、车头/尾已入塔基实体」的车，扩 CAR_HALF_L 反使 footprint>实体，块 0 北缘合法位车
+    //   被 gatePier 误钳（r110 实测 clamp(12.0,−368.9) 被硬拉到 8.997 单帧 2.006m）。
     const piers = byKind('gatePier');
     expect(piers.length).toBe(1);
     const p = piers[0];
     expect(p.xInner).toBeCloseTo(GATE.openW / 2, 12); // 10
     expect(p.xOuter).toBeCloseTo(GATE.halfW, 12); // 17.5
-    expect(p.zMin).toBeCloseTo(BOUNDS.gateBackZ, 12); // −365.5
-    expect(p.zMax).toBeCloseTo(BOUNDS.gateFrontZ, 12); // −351.5
-    // 门带覆盖（zMax−zMin = 14 m = GATE.depth，隧道进深）
-    expect(p.zMax - p.zMin).toBeCloseTo(GATE.depth, 12);
+    expect(p.zMin).toBeCloseTo(GATE.z - (GATE.depth + 1.2) / 2, 12); // −366.1（塔基南界）
+    expect(p.zMax).toBeCloseTo(GATE.z + (GATE.depth + 1.2) / 2, 12); // −350.9（塔基北界）
+    // 塔基实体 z 带长（zMax−zMin = GATE.depth+1.2 = 15.2，塔基进深含台基外扩 1.2）
+    expect(p.zMax - p.zMin).toBeCloseTo(GATE.depth + 1.2, 12);
+    // 塔基实体比城门带各超 0.6m（覆盖车头/车尾入塔基漏网），而非等于城门带长 14
+    expect(p.zMin).toBeLessThan(BOUNDS.gateBackZ); // −366.1 < −365.5
+    expect(p.zMax).toBeGreaterThan(BOUNDS.gateFrontZ); // −350.9 > −351.5
   });
 
   it('建筑前脸 / 殿台基内缘 = 15.5；前排塔基内缘 = 14.8（R104 修正）；殿前大理石带 15.0', () => {
@@ -136,20 +146,28 @@ describe('R102 ① 占位清单覆盖 probe-bounds §2 六类地面层实体（�
 });
 
 describe('R102 ② clampToFootprints 纯函数（直行 θ=0 回归不变 / 斜插 θ=30,45 收紧）', () => {
-  it('直行 θ=0 飞扶壁墩位：车长 z 覆盖命中飞扶壁墩（内缘 11.35 < 基座 14.9）⇒ 2D 收紧到 10.347', () => {
+  it('直行 θ=0 飞扶壁墩位：车长 z 覆盖命中飞扶壁墩（内缘 11.35 < 基座 14.9）⇒ 2D 近侧外推 12.903', () => {
     // 墩世界 z = zc − 19.6 = −408.125（连墙段中点 lz=−19.6），墩 z 覆盖 [−409.15,−407.05]。
     // 1D resolveBounds 在墩位 z 给块心 10.0；我们绕过 1D 直接喂 x 验证 2D。
     // R111：旧 SAT 车世界 x 半径误用 halfL ⇒ x=13.897 被假阳性判交；修正后 x=13.897 车缘
     //   12.894 距墩外缘 11.9 有 ~1m 空隙、根本不接触。改喂 x=12.0（车缘 10.997 真嵌墩 11.35
     //   内缘 0.35m）⇒ 真命中。θ=0 时 dx = 半宽 1.003，车长 bbox z ∈ [−410.87,−405.38] 落进墩
-    //   z 覆盖 ⇒ 墩内缘 11.35 − 1.003 = 10.347 比基座 13.897 更紧 ⇒ 2D 取墩。
-    // 这正是 probe-bounds §3.1 P1「车尾卡台阶缝隙」根因：1D 在车心 z 求值、不采样车尾 z 覆盖。
+    //   z 覆盖 ⇒ 与墩 OBB 真相交。
+    // R119 改 a：墩是局部突出物（buttressBase），车心 12.0 ≥ 墩带中点（11.625）⇒ 按**近侧界**
+    //   xOuter+dx 外推（车被推离墩外缘 11.9 之外），非远侧收紧 10.347。近侧界 12.903 ≤ 1D
+    //   面线走廊 14.497（防护①）且不与其它占位盒相交（防护②）⇒ 合法。
+    // 这正是 probe-bounds §3.1 P1「车尾卡台阶缝隙」根因的 R119 解法：车合法停在墩与前脸之间，
+    //   不再被硬拉回路内（旧 10.347 收紧会瞬移车 1.55m 内推）。
     const z = BUTTRESS_Z; // −408.125 墩位
     const fp = clampToFootprints(12.0, z, 0);
     expect(fp.hit).toBe(true);
     expect(fp.kind).toBe('buttressBase');
-    expect(fp.x).toBeCloseTo(BUTTRESS_LINK_INNER - HALF_W, 12); // 10.347
-    expect(fp.x).toBeLessThan(13.897);
+    // 近侧界 = 墩外缘 + 半宽 = 11.9 + 1.003 = 12.903（车被推离墩外缘，非硬拉回路内 10.347）
+    expect(fp.x).toBeCloseTo(BUTTRESS_LINK_OUTER + HALF_W, 12); // 12.903
+    // 车不穿模核心护栏：clamp 后位置再喂回 ⇒ 车 OBB 与所有占位盒分离（hit=false）
+    expect(clampToFootprints(fp.x, fp.z, 0).hit).toBe(false);
+    // 车缘不越 1D 可见面线（近侧防护①：nearBound ≤ 1D 车心面线走廊 14.497 ⇒ 车缘 ≤ 15.5 前脸）
+    expect(fp.x + HALF_W).toBeLessThanOrEqual(BOUNDS.cityOpenHalfW + 1e-9);
   });
 
   it('直行 θ=0 块心：1D = 殿身包络 13.997，2D 在殿前大理石带 z 收紧到 12.2525', () => {

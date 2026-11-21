@@ -21,7 +21,10 @@
 import { VEHICLE } from '../config/physics';
 import { GATE, INNER, TOWER } from '../render/scene/r28Layout';
 import { R30_ARCADE, R97_CITY_BUTTRESS } from '../render/scene/castleKit';
-import { CITY_BLOCK_Z } from './FreeDrive';
+// R119 改 a：导入 corridorCenterHalfWidth（1D 车心面线走廊）供近侧界防护①比较。
+//   ⚠ 反向 import 即成环（FreeDrive.ts:37 已 import 本模块）；与 CITY_BLOCK_Z 同风格：
+//   corridorCenterHalfWidth 是函数声明（提升），仅在 clampToFootprints 函数体内惰性访问 ⇒ 安全。
+import { CITY_BLOCK_Z, corridorCenterHalfWidth } from './FreeDrive';
 
 /** 单个地面层占位盒（世界坐标；|x| 对称，xInner = 靠路中心一侧） */
 export interface CityFootprint {
@@ -138,9 +141,24 @@ const PLAZA_BUTTRESS_Z_HALF = (PLAZA_BUTTRESS_PIER_W + 1.1) / 2; // 1.85
 const GATE_PIER_INNER = GATE.openW / 2; // 10
 /** 门墩外缘 |x|（= 门楼半宽，含塔墩，halfW = 17.5） */
 const GATE_PIER_OUTER = GATE.halfW; // 17.5
-/** 门墩带 z 区间：[门带后沿（块0 端，= BOUNDS.gateBackZ）, 城门脸（= BOUNDS.gateFrontZ）] */
-const GATE_PIER_Z_MIN = INNER.zNear; // −365.5（gateBackZ）
-const GATE_PIER_Z_MAX = GATE.z + GATE.depth / 2; // −351.5（gateFrontZ）
+/**
+ * 门墩带 z 区间（R119 改 b：**footprint = 塔基实体 z 范围**，非扩 CAR_HALF_L）。
+ * 原区间 [gateBackZ, gateFrontZ] = [−365.5, −351.5] 只覆盖门墩（塔身）实体；但门楼塔基（台基）
+ * 实体 z∈[−366.1, −350.9]（castleKit makeGate `box(towerW,1.0,depth+1.2,…)` L1351，zMid=GATE.z，
+ * 半深 = (depth+1.2)/2 = 7.6）比门带各超 0.6m ⇒ 原 footprint 漏掉塔基 0.6m（车头/车尾入塔基漏网）。
+ * 故 footprint z 区间改为 = 塔基实体范围（南北各超门带 0.6m）：
+ *   zMin = GATE.z − (depth+1.2)/2 = −358.5 − 7.6 = −366.1（塔基南界）；
+ *   zMax = GATE.z + (depth+1.2)/2 = −358.5 + 7.6 = −350.9（塔基北界）。
+ * ⚠ 不扩 CAR_HALF_L：clampToFootprints 的 SAT 判交（车 OBB ↔ footprint AABB）已自动覆盖「车心在
+ * 带外、车头/车尾已入塔基实体」的车（车 OBB z 伸展与 footprint 重叠即触发），无需把 footprint
+ * 扩到实体之外；若扩 CAR_HALF_L（zMin→−368.2475 / zMax→−348.7525）会让 footprint 大于实体，
+ * 车 OBB 与 footprint 相交而**与塔基实体不相交**（如块 0 北缘 x≥10 合法位车心 z∈[−368.25,−365.5]）
+ * 时被 gatePier 误钳（实测 r110 场景 clamp(12.0,−368.9) 被硬拉到 8.997，单帧 2.006m）。
+ * xInner/xOuter（10/17.5）不变（门墩实体 |x| 区间）。⚠ 此 z 区间在 FreeDrive step() 2D 激活域
+ * [zMin, gateFrontZ+CAR_HALF_L]（fix-1 北扩）内：车心 nz ≤ gateFrontZ+CAR_HALF_L 才 consult。
+ */
+const GATE_PIER_Z_MIN = GATE.z - (GATE.depth + 1.2) / 2; // −366.1（塔基南界，门带南超 0.6m）
+const GATE_PIER_Z_MAX = GATE.z + (GATE.depth + 1.2) / 2; // −350.9（塔基北界，门带北超 0.6m）
 /** 连墙段 z 区间 castleKit.ts:3289-3292（塔→殿 / 殿→塔，避开前后排塔基 z 半延展 4.7 m）：
  *  `[-blockLen/2, -blockLen/4 - 4.7]` / `[blockLen/4 + 4.7, blockLen/2]`（local z）。
  *  飞扶壁墩落在段中点 lz（castleKit.ts:3478-3487 `const lz = (za + zb) / 2`）。 */
@@ -279,12 +297,16 @@ export function buildCityFootprints(): CityFootprint[] {
     kind: 'buttressBase'
   });
 
-  // ⑧ 城门带门墩（R118 Fix 1）：城门带 z∈[gateBackZ,gateFrontZ] 两侧门墩 |x|∈[10,17.5]。
+  // ⑧ 城门带门墩（R118 Fix 1 / R119 改 b）：城门带两侧门墩 |x|∈[10,17.5]。
   //    Root cause：1D corridorCenterHalfWidth 在 gateFrontZ（桥 10.997→隧 8.997）/ gateBackZ
   //    （隧 8.997→块0 角塔带 13.897）硬阶跃，单帧横移 2m/4.9m = 空气墙 + 瞬态穿模（探针 A/C/D）。
   //    2D 门墩 footprint 让 clampToFootprints 在门带接管（7 帧收敛替代 1 帧瞬时，斜向有碰撞反馈）。
+  //    R119 改 b：z 区间 = 塔基实体范围（GATE_PIER_Z_MIN/MAX 已含）——原 [gateBackZ,gateFrontZ] 只
+  //    覆盖门墩塔身实体，漏掉「门楼塔基 z 超 0.6m」（塔基 z∈[−366.1,−350.9]，castleKit 台基
+  //    box(depth+1.2)）。SAT 判交（车 OBB↔footprint）自然覆盖车头/车尾入塔基实体，无需扩 CAR_HALF_L；
+  //    扩 CAR_HALF_L 反使 footprint>实体，块 0 北缘合法位车被 gatePier 误钳（r110 实测 2.006m）。
   //    ⚠ 此 footprint 在 2D 激活带 [plazaZ,gateBackZ] 之外（z>gateBackZ）⇒ 需 FreeDrive step()
-  //    的 2D 门控上界从 gateBackZ 扩到 gateFrontZ 才被 consult（R118 Fix 2 同步改，本文件禁碰）。
+  //    的 2D 门控上界从 gateBackZ 扩到 gateFrontZ+CAR_HALF_L（R118 Fix 2 / R119 fix-1 同步改，本文件禁碰）。
   list.push({
     xInner: GATE_PIER_INNER,
     xOuter: GATE_PIER_OUTER,
@@ -440,15 +462,45 @@ function obbMtvAxis(
 }
 
 /**
- * 纯函数：把车 OBB 的 x 伸展钳到「不与城内 2D 占位相交」的最紧界（只收紧，不放宽）。
+ * R119 改 a 防护②：近侧目标（f.xOuter+dx 外推）处车 OBB 是否与**其它**占位盒相交。
+ *
+ * 近侧界是外推（放宽 R112「只收紧不放宽」）：若把车外推到 nearBound 会让车 OBB 落入另一占位盒
+ * （如外推后车角嵌进前排塔基 / 连墙墩），则近侧界不可用（回退远侧 f.xInner−dx）。用与主钳位
+ * 同一 SAT 精确判交（obbOverlapsAabb），排除自身 f（近侧界恰贴 f 外缘，边界判交不算「其它」）。
+ */
+function nearSideBlocked(
+  nearBound: number,
+  z: number,
+  heading: number,
+  dz: number,
+  exclude: CityFootprint
+): boolean {
+  for (const g of footprintsNear(z, dz)) {
+    if (g === exclude) continue;
+    if (obbOverlapsAabb(nearBound, z, heading, CAR_HALF_L, CAR_HALF_W, g)) return true;
+  }
+  return false;
+}
+
+/**
+ * 纯函数：把车 OBB 的 x 伸展钳到「不与城内 2D 占位相交」的最紧界（默认只收紧，不放宽）。
  *
  * dx(θ) = 半长·|sinθ| + 半宽·|cosθ| 是车 OBB 4 角点相对车心的 x 最大伸展
  * （heading=0 时车头朝 −Z，前向 (−sin h, −cos h)，车长沿 z、车宽沿 x ⇒ dx(0)=半宽）。
  * 对所有与车 OBB 做 SAT 相交的占位盒取 |x| ≤ xInner − dx(θ) 的最紧界。
  *
- * ⚠ 只收紧不放宽：调用方在 resolveBounds 之后 step() 里调用本函数，入参 x 已经是
+ * ⚠ 只收紧不放宽（默认）：调用方在 resolveBounds 之后 step() 里调用本函数，入参 x 已经是
  * 1D 车心钳位结果，本函数只会把它进一步往路中心拉，绝不外推 ⇒ CameraRig 与 r97/r98/r99/r100
  * 全部 1D 护栏在几何上不会破（新钳位只会更紧，不会更松）。
+ *
+ * R119 改 a 近侧界例外（唯一外推情形）：对凸出宽走廊的**局部突出物**（buttressBase / arcadeCol
+ * —— 飞扶壁墩、拱廊柱带，车可合法停在其与前脸之间的空隙），当车心位于其外缘侧（|x| ≥ mid）时，
+ * 改按近侧界 |x| ≥ xOuter + dx 外推（车被推离突出物外缘，非硬拉回路内 ⇒ 消除 R119 恒推远侧的
+ * 穿墩/柱带 yank）。必须同时通过两道防护才外推，否则回退远侧 f.xInner−dx：
+ *   ① 近侧目标 ≤ 1D 车心面线走廊 corridorCenterHalfWidth(z)（不越 1D 护栏，车缘不破可见面线）；
+ *   ② 近侧目标处车 OBB 不与**其它**占位盒相交（nearSideBlocked，外推不落入另一实体）。
+ * gatePier 漏斗恒远侧（车不可能在门墩 xOuter(17.5) 外侧 —— x∈[0,±8] 洞内走线，近侧界会把
+ * 进洞车弹出 +7.5m ⇒ 明确排除）。
  */
 export function clampToFootprints(
   x: number,
@@ -470,27 +522,67 @@ export function clampToFootprints(
     let best = Infinity;
     let bestF: CityFootprint | null = null;
     let kind: CityFootprint['kind'] | null = null;
+    let expanded = false; // R119 改 a：本次是否走近侧界（外推/放宽）而非远侧收紧
     let cx = x;
     for (let iter = 0; iter < 4; iter += 1) {
-      let iterBest = Infinity;
-      let iterF: CityFootprint | null = null;
-      let iterKind: CityFootprint['kind'] | null = null;
+      // R119 改 a：近/远侧选择。本迭代分两组收集相交占位盒的目标界：
+      //   - 远侧（收紧/内推）：bound = f.xInner − dx，R112 只收紧不放宽（默认）。取**最小**界
+      //     （farBest = min，最紧内推）。
+      //   - 近侧（外推/放宽）：bound = f.xOuter + dx，仅局部突出物（buttressBase/arcadeCol）且车心
+      //     在外缘侧（cxAbs ≥ mid）时候选，且必须通过两道防护（① 近侧目标 ≤ 1D 车心面线走廊
+      //     corridorCenterHalfWidth(z)；② 近侧目标处车 OBB 不与**其它**占位盒相交 nearSideBlocked），
+      //     否则回退远侧。取**最大**界（nearBest = max，最远外推才清所有近侧占位）。gatePier 恒远侧
+      //     （车不可能在门墩外缘外侧）。
+      //   选择规则：优先远侧（硬边界/墙——车必须内推清墙，近侧外推会让车落入墙区）；无远侧时才用
+      //   近侧（局部突出物外推，位移最小，消除 R119 恒推远侧 yank）。
+      let farBest = Infinity;
+      let farF: CityFootprint | null = null;
+      let nearBest = -Infinity;
+      let nearF: CityFootprint | null = null;
+      const cxAbs = Math.abs(cx);
       for (const f of footprintsNear(z, dz)) {
         // SAT 精确相交测试：车 OBB 真的与占位 AABB 相交才收紧（避免车 z 覆盖碰边即触发的误钳）
         if (!obbOverlapsAabb(cx, z, heading, CAR_HALF_L, CAR_HALF_W, f)) continue;
-        const bound = f.xInner - dx;
-        if (bound < iterBest) {
-          iterBest = bound;
-          iterF = f;
-          iterKind = f.kind;
+        const mid = (f.xInner + f.xOuter) / 2;
+        const useNear =
+          (f.kind === 'buttressBase' || f.kind === 'arcadeCol') && cxAbs >= mid;
+        if (useNear) {
+          const nearBound = f.xOuter + dx;
+          if (
+            nearBound <= corridorCenterHalfWidth(z) &&
+            !nearSideBlocked(nearBound, z, heading, dz, f)
+          ) {
+            if (nearBound > nearBest) {
+              nearBest = nearBound;
+              nearF = f;
+            }
+          } else {
+            const farBound = f.xInner - dx;
+            if (farBound < farBest) {
+              farBest = farBound;
+              farF = f;
+            }
+          }
+        } else {
+          const farBound = f.xInner - dx;
+          if (farBound < farBest) {
+            farBest = farBound;
+            farF = f;
+          }
         }
       }
-      if (iterBest === Infinity) break; // 无相交占位盒
-      if (Math.abs(cx) <= iterBest) break; // 已到最紧界（不再收紧）
+      // 选择：优先远侧（硬边界），无远侧才用近侧
+      const useNearSel = farBest === Infinity && nearBest > -Infinity;
+      const iterBest = useNearSel ? nearBest : farBest;
+      const iterF = useNearSel ? nearF : farF;
+      const iterKind = iterF ? iterF.kind : null;
+      if (iterBest === Infinity || iterBest === -Infinity) break; // 无相交占位盒
+      if (Math.abs(cxAbs - iterBest) < 1e-9) break; // 已到目标界（收敛，无需再动）
       cx = cx >= 0 ? iterBest : -iterBest;
       best = iterBest;
       bestF = iterF;
       kind = iterKind;
+      expanded = useNearSel;
     }
     // R118 Fix 3：xPen = 对「决定最终 best 的占位盒 bestF」的**真实 x 轴 SAT 穿透** —— 车 OBB x 投影
     //   [|x|−dx, |x|+dx] 与占位盒 x 区间 [xInner, xOuter] 的公共长度（SAT 世界 x 轴重叠），非 R117
@@ -508,7 +600,7 @@ export function clampToFootprints(
             Math.min(Math.abs(x) + dx, bestF.xOuter) - Math.max(Math.abs(x) - dx, bestF.xInner)
           )
         : 0;
-    return { best, kind, xPen };
+    return { best, kind, xPen, expanded, bestF };
   })();
   /* R113：z 钳**迭代复查**（正交于 x 钳）。车头先入占位带（如 arcadeCol 柱带 z-深仅 0.6m）
    * 时，x 覆盖深而 z 覆盖浅 ⇒ MTV 最小穿透轴 = 世界 z，x 单向钳无法把车头沿 z 推离（R112
@@ -577,13 +669,73 @@ export function clampToFootprints(
     //   与 xPen 对称；zLimit<Infinity（有 z 收紧）时 = |入参 z − zLimit|，否则 0。
     return { zLimit, zKind, zDir, zPen: zLimit < Infinity ? Math.abs(z - zLimit) : 0 };
   })();
+  /* R119 fix-5 · 单帧推回平滑上限（m）。
+   * xPen / zPen 是「车已穿模时的单帧推回量」（FreeDrive 动态步长 maxStep=max(0.30, pen)，
+   * R115/R116：车穿模时单帧推回 pen 恰贴内缘/带外缘消除穿模）。当车**斜切入/骑上**占位盒且
+   * 持续深入（门墩斜切 h=−0.2 车头入塔基、广场墩骑墩车角深嵌）时，2D 激活时车 OBB 已深嵌
+   * 占位盒（xPen 实测 1.5~2.3m）⇒ 单帧推回大深度 = 2.3m/1.8m 瞬移 yank（fix-4 报告 1/2 号）。
+   *
+   * ⚠ 不能一刀切限幅：车**穿洞/急转**（门墩 h=90° 车前进沿 x，x 钳与前进同向）和**漂移贴墙**
+   * （车深入 z 带，z 钳大）必须保留「单帧消除穿模」（车快速过洞/贴墙收敛，R119 ② 门墩接触
+   * ≤2 帧、r105 漂移收敛尾部零穿模）。条件限幅（**只平滑「车横向深嵌 > 车头纵向深入」且
+   * 车前进沿 z 为主（x 钳横向拉回路内）」）：
+   *   xPen 平滑：xPen>0.35（已穿模）且 |sin heading|≤0.5（车前进 z 为主；r119 ② 门墩急转
+   *     |sin h|≈0.99>0.5 保留单帧消除）且 zOv<xPen（车**横向**深嵌，z 轴重叠浅；r105 漂移
+   *     车纵向深嵌 z 带 zOv≈2.1>xPen≈0.53 反向 ⇒ 保留单帧消除，不重演收敛尾部穿模）；
+   *   zPen 平滑：zPen>0.35 且 xPen>zPen（车横向深嵌 > 车头纵向深入，问题 1 号 2.3>0.73；
+   *     r105 漂移 zPen≈3.79 > xPen≈0.53 反向 ⇒ 保留单帧消除 z）。
+   * 语义：clamp 的目标 x/z 不变（best / zLimit 逐位保留），只限「FreeDrive 单帧推回上限」⇒
+   * R112/R117 静态收敛（clamp 后喂回 hit=false）不受影响，R110 连续收敛（≤max(0.30,pen)）仍满足。
+   * 值 0.35 = 报告「yank ≤0.35/帧平滑」上限（>WALL_2D_MAX_LATERAL_STEP=0.30，未穿模仍 0.30）。
+   * 注：问题 3 号（块边界连墙墩 h=±0.5 v=55）yank 来自 FreeDrive 内部（车斜插高速 1D 撞击
+   * 链路，2D clamp 全程零触发，新旧 bundle 2D-hit 帧=0）——非 2D 占位收敛，本限幅不适用。 */
+  const X_Z_PEN_SMOOTH_CAP = 0.35;
+  const xPenRaw = xClamp.xPen; // 未限幅真实 x 轴穿透（供限幅判据 / zPen 比较）
+  const zPenRaw = zClamp.zPen; // 未限幅车心 z 到 z 钳目标距离
+  const sinHAbs = Math.abs(Math.sin(heading));
+  // 车 OBB z 投影与「x 钳最紧盒」的 z 轴重叠（车头/车尾纵向深入占位盒的深度；问题 1 号门墩
+  //   斜切 = 0.73m（车头入塔基）、广场墩骑墩 = 0（车 z 贴边）、r105 漂移贴墙 = 2.1m（纵向深嵌）。
+  //   zOv < xPen ⇒ 车横向深嵌 > 纵向深入（斜切/骑墩特征，需要横向平滑拉回路内）。
+  const zOv =
+    xClamp.bestF && xClamp.best < Infinity
+      ? Math.max(0, Math.min(z + dz, xClamp.bestF.zMax) - Math.max(z - dz, xClamp.bestF.zMin))
+      : 0;
+  /* R119 fix-5b · 入激活域横向推回类占位盒特判（门墩/墩/柱/殿台基斜切第一帧）。
+   * fix-5 的 zOv<xPenRaw 判据把「门墩斜切入激活域第一帧」误判为「纵向深嵌」：
+   *   门墩斜切第一帧车 OBB 刚与 gatePier z 带重叠（zOv≈xPenRaw，实测 zOv/xPen=1.09）而非
+   *   r105 漂移深嵌（zOv≈2.1 >> xPen≈0.53，比值≈4）⇒ zOv<xPenRaw=false ⇒ 不限幅 ⇒ 单帧
+   *   横向推回 0.41-0.64m（fix-6 任务① 21/48 残留）。本特判：**入激活域类**占位盒
+   *   （gatePier 门墩 / buttressBase 墩 / arcadeCol 柱 / hallBase 殿台基 —— 车斜切入其 z 带
+   *   第一帧需横向平滑拉回路内，非纵向深嵌漂移）且车前进 z 为主（sinH≤0.5）且已穿模
+   *   （xPenRaw>0.35）时限幅，**不再依赖 zOv<xPenRaw**。
+   *   ⚠ r105 漂移贴墙是 cornerBase/frontBase（角塔基座/前排塔基，车纵向深嵌 z 带）——
+   *   不在入激活域类 ⇒ 保留 zOv<xPenRaw 判据 ⇒ zOv≈2.1>>xPen≈0.53 不触发平滑，单帧消除
+   *   保留（不重演收敛尾部穿模/卡死）。r105 漂移实测命中 kind 恒为 cornerBase/arcadeCol/
+   *   frontBase，其中 arcadeCol 帧 sinH≥0.9>0.5（sinH 判据已排除），故不影响。
+   *   R119 ② 门墩急转 sinH≈0.99>0.5 ⇒ sinH 判据排除，单帧消除保留（穿洞收敛不破）。 */
+  const isEntryKind =
+    xClamp.bestF != null &&
+    (xClamp.bestF.kind === 'gatePier' ||
+      xClamp.bestF.kind === 'buttressBase' ||
+      xClamp.bestF.kind === 'arcadeCol' ||
+      xClamp.bestF.kind === 'hallBase');
+  const xPenSmooth =
+    xPenRaw > 0.35 && sinHAbs <= 0.5 && (isEntryKind || zOv < xPenRaw); // 车横深嵌且前进 z 为主
+  const zPenSmooth = zPenRaw > 0.35 && xPenRaw > zPenRaw; // 车横向深嵌 > 车头纵向深入
   const ax = Math.abs(x);
-  const xClamped = xClamp.best < Infinity && ax > xClamp.best;
+  // R119 改 a：xClamped 方向感知。远侧（收紧，best < ax）与近侧（外推，best > ax）都需要
+  //   车移到 best；仅当车已恰在目标界（边界接触，best == ax）才不钳（保留 R112 收敛语义）。
+  const xClamped =
+    xClamp.best < Infinity && Math.abs(ax - xClamp.best) > 1e-9;
   const zClamped = zClamp.zLimit < Infinity;
   if (!xClamped && !zClamped) {
     return { x, z, hit: false, kind: null, nx: 0, nz: 0, xPen: 0, zPen: 0 };
   }
-  const nx = x >= 0 ? -1 : 1; // x 外法向：指向路内（把车推离占位盒）
+  // R119 改 a：nx 外法向指向车被推离占位盒的方向（可行驶侧）。远侧（收紧/内推）→ 指向路内
+  //   （x≥0 时 −1）；近侧（外推/放宽）→ 指向路外/突出物外侧（x≥0 时 +1）。FreeDrive 的
+  //   nxSide=−fp.nx 与 resolveBounds 同约定（指向墙外），近侧时 fnSide 才能对「从外侧撞入」的车
+  //   给正法向入射（否则 2D 接触从不扣速 = 滑开）。
+  const nx = x >= 0 ? (xClamp.expanded ? 1 : -1) : xClamp.expanded ? -1 : 1;
   return {
     x: xClamped ? (x >= 0 ? xClamp.best : -xClamp.best) : x,
     z: zClamped ? zClamp.zLimit : z,
@@ -596,7 +748,11 @@ export function clampToFootprints(
     kind: xClamped ? xClamp.kind : zClamp.zKind,
     nx,
     nz: zClamp.zDir, // z 外法向：+1 = 推向 +z（可行驶侧）、−1 = 推向 −z
-    xPen: xClamp.xPen, // R115：车 OBB x 越界深度（FreeDrive 动态步长用）
-    zPen: zClamp.zPen, // R116：车心 z 到 z 钳目标距离（FreeDrive 动态步长用）
+    // R115：车 OBB x 越界深度（FreeDrive 动态步长用）。R119 fix-5 条件限幅（见上方注释）：
+    //   车深嵌且前进 z 为主（x 钳横向）时限幅到平滑上限，否则保留单帧消除穿模。
+    xPen: xPenSmooth ? Math.min(xPenRaw, X_Z_PEN_SMOOTH_CAP) : xPenRaw,
+    // R116：车心 z 到 z 钳目标距离（FreeDrive 动态步长用）。R119 fix-5 条件限幅：
+    //   车横向深嵌 > 车头纵向深入时限幅，否则保留单帧消除（r105 漂移 z 深嵌不限）。
+    zPen: zPenSmooth ? Math.min(zPenRaw, X_Z_PEN_SMOOTH_CAP) : zPenRaw,
   };
 }

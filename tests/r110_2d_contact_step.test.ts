@@ -23,8 +23,15 @@
 import { describe, expect, it } from 'vitest';
 import { FreeDrive, CITY_BLOCK_Z, WALL_2D_MAX_LATERAL_STEP } from '../src/core/FreeDrive';
 import { clampToFootprints } from '../src/core/cityFootprints';
+import { VEHICLE } from '../src/config/physics';
+import { INNER } from '../src/render/scene/r28Layout';
+import { R97_CITY_BUTTRESS } from '../src/render/scene/castleKit';
 
 const DT = 1 / 120;
+/** 车半宽（physics.ts 真源，勿写死 1.003） */
+const HALF_W = VEHICLE.widthM / 2;
+/** 飞扶壁连墙墩外缘 = faceHalf − reach = 11.9（R119 近侧界基准，真源派生非写死） */
+const BUTTRESS_LINK_OUTER = INNER.faceHalf - R97_CITY_BUTTRESS.linkReach;
 
 /** 块 0（z ∈ [−411.5, −365.5]）近 gateBack 侧飞扶壁外墩 z 带 [−369.95,−367.85]，取中心 */
 const K0 = CITY_BLOCK_Z[0];
@@ -55,15 +62,19 @@ describe('R110 ① 2D 接触首帧单帧横向钳位 ≤ max(0.30, 车角越界)
 });
 
 describe('R110 ② 2D 接触单帧消除穿模（车心达 2D 目标，无残留）', () => {
-  it('z=-368.9 墩带 x=12.0 直行：末态车心贴 2D 目标（10.347），无穿模残留', () => {
+  it('z=-368.9 墩带 x=12.0 直行：末态车心达 2D 近侧目标（12.903），无穿模残留', () => {
     const fd = new FreeDrive({ start: { x: 12.0, z: Z_TEST, heading: 0 } });
     fd.press('KeyW', true);
     for (let i = 0; i < 120; i += 1) fd.step(DT);
     const s = fd.snapshot();
-    // R115：车已穿模（车角越界占位盒内缘）时单帧推回 xPen ⇒ 车心达 2D 目标（贴墩 10.347），
-    // 无穿模残留。旧版（R110 固定 0.30/帧）多帧收敛（~10帧）造成收敛瞬态（车角嵌墩 0.3~1.3m
-    // 多帧，用户可见）。R115 改为单帧消除穿模。旧版一帧写死（R110 Bug1）也已消（SAT 精确）。
-    expect(s.x).toBeLessThanOrEqual(11.35 - 1.003 + 0.01); // ≤ 2D 目标 10.347
+    // R119 改 a：墩是局部突出物（buttressBase），车心 12.0 ≥ 墩带中点（11.625）⇒ 2D 目标从
+    //   远侧 10.347 改为**近侧外推** 12.903（车被推离墩外缘 11.9+半宽 1.003，非硬拉回路内）。
+    //   R115 单帧消除穿模（车已穿模时推回真实 xPen）保持：末态车心达近侧目标，无穿模残留。
+    //   旧版一帧写死（R110 Bug1）也已消（SAT 精确）。
+    // 车不穿模核心护栏：末态车 OBB 与所有城内占位盒分离（hit=false），非仅贴目标。
+    expect(clampToFootprints(s.x, s.z, s.heading).hit).toBe(false);
+    // 车心达 2D 近侧目标 12.903（= 墩外缘 11.9 + 半宽 1.003），不再被硬拉到远侧 10.347
+    expect(s.x).toBeCloseTo(BUTTRESS_LINK_OUTER + HALF_W, 2); // 12.903
   });
 });
 
