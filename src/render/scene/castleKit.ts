@@ -328,8 +328,9 @@ export const R97_CITY_BUTTRESS = {
 } as const;
 /** 街区角塔（每街区每侧 2 座，落在块两端 ∓22.5；深 5 只咬连墙外端 3m，窗已避让） */
 const R30_CORNER = { h: 31, w: 8, d: 5 } as const;
-/** 跨街封闭拱顶连廊 z（块心 k=3/8/13，确定性；避开门洞带与广场带） */
-const R30_CROSSINGS = [-526.5, -756.5, -986.5] as const;
+/** 跨街封闭拱顶连廊 z（块心 k=3/8/13，确定性；避开门洞带与广场带）。
+ *  R123：导出供 cityFootprints 承托柱 footprint 同源派生（最近跨街 z）。 */
+export const R30_CROSSINGS = [-526.5, -756.5, -986.5] as const;
 
 /* ═══════════════════ R31 内部建筑群加密（A 线自有常量；数字出处 .qa/r31_a_report.md） ═══════════════════
  * 用户令：①「加大内部建筑群并检查内部建筑高度与材料丰富度」②「构建时长无限制、
@@ -443,8 +444,9 @@ const R32_WALL_RHYTHM = {
   /** 后排长墙 5 龛节拍块筛选（k%8===0 ⇒ 每 8 块一面，控预算） */
   rearMod: 8
 } as const;
-/** 街巷连拱廊 / 跨街廊加密（R32：二进院落 + 侧廊更密） */
-const R32_CORRIDOR = {
+/** 街巷连拱廊 / 跨街廊加密（R32：二进院落 + 侧廊更密）。
+ *  R123：导出供 cityFootprints 承托柱 footprint 同源派生（extraCrossings）。 */
+export const R32_CORRIDOR = {
   /** 院内中景体量连拱廊块筛选（k%4===1 且非 apse/钟楼位） */
   cloisterMod: 4,
   /** 新增跨街封闭拱顶廊 z（块心 k=1/15；既有 3 座在 R30_CROSSINGS） */

@@ -31,6 +31,9 @@ import { R30_ARCADE } from '../src/render/scene/castleKit';
 const HALF_L = VEHICLE.lengthM / 2; // 2.7475
 const HALF_W = VEHICLE.widthM / 2; // 1.003
 
+/** R123：墙根/街面火盆占位内缘 = 前脸 15.5 − 探出 0.7 − 半宽 0.45 = 14.35（cityFootprints 同源派生） */
+const FIRE_BASIN_INNER = INNER.faceHalf - 0.7 - 0.45; // 14.35
+
 /** 块 0 便于断言 */
 const K0 = CITY_BLOCK_Z[0];
 const K0_ZC = (K0[0] + K0[1]) / 2; // −388.5
@@ -74,19 +77,22 @@ describe('R104 ① P1 前排塔基真实内缘 14.8（真源派生，防回退�
     }
   });
 
-  it('车缘 ≤ 14.8 不穿塔基（θ=0 车缘 = xInner + 半宽 = 15.803 命中 ⇒ 2D 收紧到 13.797）', () => {
+  it('车缘 ≤ 14.8 不穿塔基（θ=0 车缘 = xInner + 半宽 = 15.803 命中 ⇒ 2D 收紧）', () => {
     // 取块 0 近端塔基带内、但避开拱廊柱 z 带（柱 zc+13.2=−375.3）的 z：车长 z 覆盖（半长 2.7475）
     // 在塔基带中心 zc+blockLen/4=−377 会伸到柱带 ⇒ 修正 SAT 后柱（内缘 11.12）比塔基更紧先绑。
     // R111：车 z 半径由旧 halfW=1.003 修正为半长 2.7475 ⇒ z=−377 时车尾 bbox 真伸到柱带 −375.3，
     //   柱绑 10.117（非塔基 13.797）。改 z=−379.5（=塔基中心 −2.5，仍在塔基带 [−381.7,−372.3] 内、
     //   车长 z 覆盖 [−382.25,−376.75] 避开两柱带 −375.3/−384.1）⇒ 塔基独绑 13.797，守「不穿塔基」意图。
-    const towerZ = K0_ZC + INNER.blockLen / 4 - 2.5; // −379.5（塔基带内、避开柱带）
+    // R123 Fix 3：块 0 此 z（−379.5）新增墙根火盆（zc+8=−380.5，带 [−380.95,−380.05]，xInner=14.35）
+    //   比前排塔基（14.8）更靠内 ⇒ 火盆为最紧界，收到 14.35 − 半宽 = 13.347。车缘 14.35 ≤ 14.8
+    //   ⇒ 「不穿前排塔基」不变式保持（火盆是塔基前真实实体，车被挡在盆外，合理）。
+    const towerZ = K0_ZC + INNER.blockLen / 4 - 2.5; // −379.5（塔基带内、原避开柱带，R123 起火盆在此带）
     const fp = clampToFootprints(14.0, towerZ, 0);
     expect(fp.hit).toBe(true);
-    expect(fp.kind).toBe('frontBase');
-    // 2D 收紧线 = 14.8 − 半宽 1.003 = 13.797（车缘恰贴塔基真实内缘 14.8，不穿）
-    expect(fp.x).toBeCloseTo(FRONT_TOWER_INNER - HALF_W, 12);
-    expect(fp.x + HALF_W).toBeCloseTo(FRONT_TOWER_INNER, 12); // 车缘 ≤ 14.8
+    expect(fp.kind).toBe('frontWall'); // R123：墙根火盆（比前排塔基更靠内）
+    // 2D 收紧线 = 14.35 − 半宽 1.003 = 13.347（车缘恰贴火盆内缘 14.35，< 14.8 不穿塔基）
+    expect(fp.x).toBeCloseTo(FIRE_BASIN_INNER - HALF_W, 12);
+    expect(fp.x + HALF_W).toBeCloseTo(FIRE_BASIN_INNER, 12); // 车缘 = 14.35 < 14.8
   });
 });
 
@@ -126,15 +132,24 @@ describe('R104 ③ 六类地面实体占位边界扫描（不穿 + 不过度挡�
       arcadeCol: ARCADE_COL_INNER, // 11.12 拱廊柱
       buttressBase: INNER.faceHalf - 2.15 - 0.55 // 11.35 飞扶壁墩（linkReach=2.15）
     } as const;
-    const lowerBound = 9.0; // 合理下界：城内最内实体（柱/墩 11.12/11.35）不应被占位推到 9.0 以内
+    // 合理下界（不过度挡）：城内最内实体（柱/墩 11.12/11.35）不应被占位推到 9.0 以内；
+    //   R123 跨街连廊承托柱（xInner=8.7，Fix 2）是城内最内真实实体，buttressBase 下界降到 8.6
+    const lowerBound: Record<keyof typeof innerBy, number> = {
+      frontWall: 9.0,
+      hallBase: 9.0,
+      cornerBase: 9.0,
+      frontBase: 9.0,
+      arcadeCol: 9.0,
+      buttressBase: 8.6
+    };
     for (const kind of Object.keys(innerBy) as (keyof typeof innerBy)[]) {
       const rows = byKind(kind);
       expect(rows.length).toBeGreaterThan(0);
       for (const f of rows) {
         // 不穿：占位内缘 ≤ 真源可见内缘（占位不比真实材料更靠外）
         expect(f.xInner).toBeLessThanOrEqual(innerBy[kind] + 1e-9);
-        // 不过度挡：占位内缘 ≥ 合理下界
-        expect(f.xInner).toBeGreaterThanOrEqual(lowerBound);
+        // 不过度挡：占位内缘 ≥ 该 class 合理下界
+        expect(f.xInner).toBeGreaterThanOrEqual(lowerBound[kind]);
       }
     }
   });
@@ -143,11 +158,12 @@ describe('R104 ③ 六类地面实体占位边界扫描（不穿 + 不过度挡�
     expect(CITY_BLOCK_Z.length).toBe(10);
     expect(FOOTPRINTS.length).toBeGreaterThanOrEqual(10 * 6);
     // R121：+10 缺块 R99 补街 frontWall（10 采样块 + 10 缺块）——空档斜插穿补墙 1.24~1.88m 修复
-    expect(byKind('frontWall').length).toBe(20);
+    // R123：+25 墙根/街面火盆（Fix 3）= 45
+    expect(byKind('frontWall').length).toBe(45);
     expect(byKind('hallBase').length).toBe(20);
     expect(byKind('cornerBase').length).toBe(20);
     expect(byKind('frontBase').length).toBe(20);
     expect(byKind('arcadeCol').length).toBe(40);
-    expect(byKind('buttressBase').length).toBe(25); // 连墙 20 + 角塔 4（hero 块）+ 主殿前排飞扶壁 1（R105 广场域）
+    expect(byKind('buttressBase').length).toBe(26); // 连墙 20 + 角塔 4（hero 块）+ 主殿前排飞扶壁 1（R105 广场域）+ 跨街承托柱 1（R123）
   });
 });

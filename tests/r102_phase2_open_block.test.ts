@@ -180,10 +180,11 @@ describe('R103 阶段二 ④ 角塔飞扶壁墩 hero-only（k<2）', () => {
     );
   }
 
-  it('真源派生：角塔墩内缘 11.35（非写死）；连墙墩与角塔墩同为 buttressBase 共 25 座（含主殿前排飞扶壁）', () => {
+  it('真源派生：角塔墩内缘 11.35（非写死）；连墙墩与角塔墩同为 buttressBase 共 26 座（含主殿前排飞扶壁 + 跨街承托柱）', () => {
     expect(BUTTRESS_CORNER_INNER).toBeCloseTo(11.35, 12);
     // 20 连墙墩（10 块 × 2 段）+ 4 角塔墩（hero 块 k=0,1 各 2 角）+ 1 主殿前排飞扶壁内墩（R105 广场域）
-    expect(FOOTPRINTS.filter((f) => f.kind === 'buttressBase').length).toBe(25);
+    // + 1 跨街连廊承托柱（R123 Fix 2）
+    expect(FOOTPRINTS.filter((f) => f.kind === 'buttressBase').length).toBe(26);
   });
 
   it('hero 块（k=0,1）每块有 2 个角塔墩 2D 占位（内缘 11.35，z 同角塔中心）', () => {

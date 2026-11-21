@@ -31,6 +31,9 @@ import { R30_ARCADE, R97_CITY_BUTTRESS } from '../src/render/scene/castleKit';
 const HALF_L = VEHICLE.lengthM / 2; // 2.7475
 const HALF_W = VEHICLE.widthM / 2; // 1.003
 
+/** R123：墙根/街面火盆占位内缘 = 前脸 15.5 − 探出 0.7 − 半宽 0.45 = 14.35（cityFootprints 同源派生） */
+const FIRE_BASIN_INNER = INNER.faceHalf - 0.7 - 0.45; // 14.35
+
 /** 朝 +X 直行（heading=−π/2 ⇒ forward.x=+1 ⇒ fn>0 ⇒ kind='side'） */
 const HEADING_TO_PLUS_X = -Math.PI / 2;
 
@@ -74,14 +77,16 @@ describe('R102 ① 占位清单覆盖 probe-bounds §2 六类地面层实体（�
     expect(FOOTPRINTS.length).toBeGreaterThanOrEqual(10 * 6);
     // R121：+10 缺块 R99 补街 frontWall（10 采样块 + 10 缺块，前脸均 |x|=15.5）——R102 建表只认
     //   采样块，从未同步 R99 补的缺块实体（空档斜插穿补墙 1.24~1.88m，R121 ⑥c 补 footprint）
-    expect(byKind('frontWall').length).toBe(20);
+    // R123：+25 墙根/街面火盆（Fix 3，10 块 × 3 减 5 奇块街面盆）= 45
+    expect(byKind('frontWall').length).toBe(45);
     expect(byKind('hallBase').length).toBe(20); // 10 块 × 殿台基 + 大理石带
     expect(byKind('cornerBase').length).toBe(20); // 10 块 × 2 座
     expect(byKind('frontBase').length).toBe(20); // 10 块 × 2 座
     expect(byKind('arcadeCol').length).toBe(40); // 10 块 × 4 柱
     // R103 阶段二：连墙墩 20（10 块 × 2 连墙段）+ 角塔墩 4（hero 块 k<2 各 2 座）= 24；
-    // R105：+ 主殿前排飞扶壁内墩 1（广场域，双侧镜像单条）= 25
-    expect(byKind('buttressBase').length).toBe(25);
+    // R105：+ 主殿前排飞扶壁内墩 1（广场域，双侧镜像单条）= 25；
+    // R123：+ 跨街连廊承托柱 1（Fix 2，最近跨街 z=−427.5）= 26
+    expect(byKind('buttressBase').length).toBe(26);
   });
 
   it('角塔基座内缘 = 14.9（真源派生，非写死）', () => {
@@ -97,9 +102,11 @@ describe('R102 ① 占位清单覆盖 probe-bounds §2 六类地面层实体（�
   });
 
   it('飞扶壁连墙墩内缘 = 11.35（真源派生，非写死）', () => {
-    // R105：排除广场域主殿前排飞扶壁内墩（xInner 10.425，z<plazaZ，另测）——此处只钉城内连墙/角塔墩
+    // R105：排除广场域主殿前排飞扶壁内墩（xInner 10.425，z<plazaZ，另测）
+    // R123：排除跨街连廊承托柱（xInner 8.7，z≈-427.5，Fix 2，另测）——承托柱非连墙墩，内缘更靠内
     for (const f of byKind('buttressBase')) {
       if (f.zMin < BOUNDS.plazaZ) continue; // 广场域主殿飞扶壁（z≈-1294.3 < plazaZ）
+      if (Math.abs(f.xInner - BUTTRESS_LINK_INNER) > 1e-9) continue; // 跨街承托柱（8.7）
       expect(f.xInner).toBeCloseTo(BUTTRESS_LINK_INNER, 12);
     }
   });
@@ -127,7 +134,19 @@ describe('R102 ① 占位清单覆盖 probe-bounds §2 六类地面层实体（�
   });
 
   it('建筑前脸 / 殿台基内缘 = 15.5；前排塔基内缘 = 14.8（R104 修正）；殿前大理石带 15.0', () => {
-    for (const f of byKind('frontWall')) expect(f.xInner).toBeCloseTo(INNER.faceHalf, 12);
+    // R123：frontWall 含前脸 20（xInner=15.5）+ 墙根/街面火盆 25（xInner=14.35，Fix 3）——火盆是贴墙
+    //   突出实体（比前脸更靠内），须单独钉；此处前脸只筛 15.5（缺块 R99 补街前脸同值）
+    const faces = byKind('frontWall').filter(
+      (f) => Math.abs(f.xInner - INNER.faceHalf) < 1e-9
+    );
+    expect(faces.length).toBe(20); // 10 采样块 + 10 缺块（R121 补街）
+    for (const f of faces) expect(f.xInner).toBeCloseTo(INNER.faceHalf, 12);
+    // R123：火盆 25 处（10 块 × 3 − 5 奇块街面盆），内缘 = 前脸 − 1.15 = 14.35（比前脸更靠内）
+    const basins = byKind('frontWall').filter(
+      (f) => Math.abs(f.xInner - FIRE_BASIN_INNER) < 1e-9
+    );
+    expect(basins.length).toBe(25);
+    for (const f of basins) expect(f.xInner).toBeCloseTo(FIRE_BASIN_INNER, 12);
     // R104 修正：前排塔基真实可见内缘 = faceHalf − (boxW/2 − depth/2) = 15.5 − 0.7 = 14.8（原误 15.5 穿模）
     for (const f of byKind('frontBase')) expect(f.xInner).toBeCloseTo(INNER.faceHalf - 0.7, 12);
     const hallBases = byKind('hallBase');
@@ -289,15 +308,18 @@ describe('R102 ③ 车长 z 覆盖采样（2D vs 1D 核心差异）', () => {
   it('车心在钳位线内、车角 bbox 越过基座内缘 ⇒ 2D 收紧、1D 漏过', () => {
     // 用非 hero 块 k=3（z∈[−549.5,−503.5]，无角塔飞扶壁墩）隔离角塔基座：基座伸进空档
     //   z 覆盖 [zmin−2.6, zmin+2.6] = [−506.1,−500.9]。选 z=−503.5（块下边界，车长 z 覆盖
-    //   [−506.25,−500.75] 仅命中角塔基座 ⇒ kind='cornerBase'）。
+    //   [−506.25,−500.75] 命中角塔基座 + 北邻块 2（zc=−480.5）墙根火盆）。
     //   不用块 0/1/2：hero 块 k<2 的角塔墩（xInner 11.35）与块 1/2 边界墩恒更紧、会盖过基座。
     // 绕过 1D 直接喂 x=14.2（> 1D 空档角塔覆盖带收紧线 13.897）验证 2D 越基座场景：
-    // θ=0：dx = 半宽 1.003，2D 限 = 14.9 − 1.003 = 13.897 < 14.2 ⇒ hit（车缘 15.203 嵌基座 0.3 m）
+    // θ=0：dx = 半宽 1.003，车缘 15.203 嵌基座 0.3 m ⇒ hit。
+    //   R123：块 2 墙根火盆（zc−21=−501.5，带 [−501.95,−501.05]，xInner=14.35）也在车长 z 覆盖内，
+    //   比角塔基座（14.9）更靠内 ⇒ 火盆为最紧界，收到 14.35−1.003=13.347（原 cornerBase 13.897 被遮蔽；
+    //   车缘 14.35 ≤ 14.9 仍不穿基座，不变式保持）。
     const z = -503.5;
     const fp0 = clampToFootprints(14.2, z, 0);
     expect(fp0.hit).toBe(true);
-    expect(fp0.kind).toBe('cornerBase');
-    expect(fp0.x).toBeCloseTo(CORNER_BASE_INNER - HALF_W, 12); // 13.897
+    expect(fp0.kind).toBe('frontWall'); // R123：块 2 墙根火盆（比角塔基座更靠内）
+    expect(fp0.x).toBeCloseTo(FIRE_BASIN_INNER - HALF_W, 12); // 13.347
     // θ=30°：车角 dx=2.243 > 半宽 1.003，单次 2D 收到 14.9 − 2.243 = 12.657（比 θ=0 再紧 1.24 m）。
     //   R112 x 钳迭代复查：clamp 到 12.657 后车 OBB（斜插）与块 3 连墙墩（buttressBase，z 带
     //   [−507.95,−505.85] 与车 z 覆盖 [−506.38,−500.62] 重叠 0.53m、x 带 [11.35,11.9] 被车横向

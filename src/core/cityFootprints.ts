@@ -20,7 +20,7 @@
  */
 import { VEHICLE } from '../config/physics';
 import { GATE, INNER, TOWER } from '../render/scene/r28Layout';
-import { R30_ARCADE, R97_CITY_BUTTRESS } from '../render/scene/castleKit';
+import { R30_ARCADE, R97_CITY_BUTTRESS, R89_CITY_TRIM_ON, R30_CROSSINGS, R32_CORRIDOR } from '../render/scene/castleKit';
 // R119 改 a：导入 corridorCenterHalfWidth（1D 车心面线走廊）供近侧界防护①比较。
 //   ⚠ 反向 import 即成环（FreeDrive.ts:37 已 import 本模块）；与 CITY_BLOCK_Z 同风格：
 //   corridorCenterHalfWidth 是函数声明（提升），仅在 clampToFootprints 函数体内惰性访问 ⇒ 安全。
@@ -137,6 +137,27 @@ const PLAZA_BUTTRESS_Z =
   PLAZA_HALL_FRONT_Z + (PLAZA_BUTTRESS_REACH - PLAZA_BUTTRESS_PIER_W / 2); // -1294.3
 /** 基座世界 z 半宽 = (pierW+1.1)/2（castleDetail.ts:344 sx=pierW+1.1 → rotateY 后世界 z） */
 const PLAZA_BUTTRESS_Z_HALF = (PLAZA_BUTTRESS_PIER_W + 1.1) / 2; // 1.85
+
+/* ── R123 · 跨街连廊承托柱 + 墙根/街面火盆 2D 占位（探针-B 缺口）────────────
+ * 承托柱（castleKit.ts:4190-4192）：R89_CITY_TRIM_ON 时最近跨街 z 两端柱
+ *   `box('ashlar',1.8,11.75,4.4, sx*9.6, ..., nearestCrossing)`，世界 |x|∈[8.7,10.5]
+ *   z∈[nearestCrossing±2.2]。nearestCrossing = Math.max(R30_CROSSINGS,
+ *   R32_CORRIDOR.extraCrossings)（与 castleKit:4184-4188 同派生，禁写死 −427.5）。
+ * 火盆（castleKit.ts:4048-4060）：`box('ashlar',0.9/0.85,0.8,0.9,−0.7,..,bz)` 世界
+ *   |x| = 前脸 15.5 − 0.7 探出 ± 半宽 = [14.35,15.25]，z = 块心 zc + bz（bz∈{−21,8}
+ *   墙根 / −11 街面偶块）。y[0,0.8] 车高 1.85 ⇒ 车可撞。 */
+const GALLERY_COL_CENTER_X = 9.6; // castleKit:4191 sx*9.6
+const GALLERY_COL_HALF_X = 1.8 / 2; // 0.9（box 宽 1.8）
+const GALLERY_COL_HALF_Z = 4.4 / 2; // 2.2（box 深 4.4）
+const FIRE_BASIN_INNER = INNER.faceHalf - 0.7 - 0.45; // 前脸 15.5 − 探出 0.7 − 半宽 0.45 = 14.35
+const FIRE_BASIN_OUTER = INNER.faceHalf - 0.7 + 0.45; // 15.25
+const FIRE_BASIN_HALF_Z = 0.9 / 2; // 0.45（box 深 0.9）
+const FIRE_BASIN_Z_OFFSETS = [
+  -(INNER.blockLen / 2 - 2), // −21 墙根（castleKit:4048）
+  8, // +8 墙根
+  -(INNER.blockLen / 2 - 12) // −11 街面（castleKit:4056，偶块）
+] as const;
+const FIRE_BASIN_STREET_Z = FIRE_BASIN_Z_OFFSETS[2]; // −11
 
 /* ── R118 · 城门带门墩 2D 占位（Fix 1）───────────────────────────────────────
  * 城门带（z ∈ [gateBackZ, gateFrontZ] = [−365.5, −351.5]）门墩实体 |x| ∈ [openHalf, halfW]。
@@ -320,6 +341,51 @@ export function buildCityFootprints(): CityFootprint[] {
       zMax: gapZmin + INNER.blockLen,
       kind: 'frontWall'
     });
+  }
+
+  // ⑥d R123：跨街连廊承托柱（castleKit.ts:4190-4192，R89_CITY_TRIM_ON 时最近跨街 z 两端
+  //   柱 `box('ashlar',1.8,11.75,4.4, sx*9.6, ..., nearestCrossing)`）。探针-B 实证：柱实体
+  //   |x|∈[8.7,10.5] z∈[−429.7,−425.3]（nearestCrossing=Math.max(R30_CROSSINGS,
+  //   extraCrossings)=−427.5，块 k=1 内）纯视觉无 footprint，1D 车心限 14.497 放行车心 9.6 ⇒
+  //   车穿柱 1.8m 且 clamp 完全不激活（hit=false）。补 buttressBase（结构性墩，近/远侧推 +
+  //   R123 fix-1 全 sinH 平滑）。⚠ 仅 R89_CITY_TRIM_ON（默认 true，`#r89city=off` 关闭）时
+  //   柱才建 ⇒ footprint 需同门控，否则 `#r89city=off` 出空气墙。nearestCrossing 用与
+  //   castleKit:4184-4188 相同的「最近跨街」派生（R30_CROSSINGS 与 extraCrossings 合并取 max，
+  //   禁写死 −427.5）。z 带 −429.7..−425.3 已在 2D 激活带内，不改 FreeDrive 门控。 */
+  if (R89_CITY_TRIM_ON) {
+    const nearestCrossing = Math.max(
+      ...R30_CROSSINGS,
+      ...R32_CORRIDOR.extraCrossings
+    );
+    list.push({
+      xInner: GALLERY_COL_CENTER_X - GALLERY_COL_HALF_X,
+      xOuter: GALLERY_COL_CENTER_X + GALLERY_COL_HALF_X,
+      zMin: nearestCrossing - GALLERY_COL_HALF_Z,
+      zMax: nearestCrossing + GALLERY_COL_HALF_Z,
+      kind: 'buttressBase'
+    });
+  }
+
+  // ⑥e R123：墙根/街面火盆（castleKit.ts:4048-4060，`box('ashlar',0.9/0.85,..,−0.7,..,bz)`）。
+  //   探针-B 实证：盆实体 |x|∈[14.35,15.25]（= 前脸 15.5 − 0.7 探出 ± 半宽），z = 块心 zc +
+  //   bz（bz∈{−blockLen/2+2, 8} 墙根 / −blockLen/2+12 街面 k%2==0），y[0,0.8] 车高 1.85 ⇒ 车可撞，
+  //   纯视觉无 footprint ⇒ 车贴墙缘（1D 车缘 14.9~15.5）穿盆 0.45~0.55m 且 clamp 不激活。
+  //   补 frontWall（贴墙突出物，车心恒 < 盆心 14.8 ⇒ 恒远侧推 14.35−dx，近侧不需）。逐采样块
+  //   （缺块 R99 补街不生成火盆）按 bz 推。kind 复用 frontWall ⇒ 近/远侧 + isEntryKind 行为同墙。
+  //   ⚠ 盆 xInner=14.35 < 相邻墙/基座 footprint（15.0/15.5）⇒ 盆为最紧界，车贴墙时先被盆钳
+  //   （车缘 14.35 = 盆内缘，不穿盆），正确（盆是真实突出实体）。 */
+  for (const [k, [bzMin, bzMax]] of CITY_BLOCK_Z.entries()) {
+    const zc = (bzMin + bzMax) / 2;
+    for (const bz of FIRE_BASIN_Z_OFFSETS) {
+      if (bz === FIRE_BASIN_STREET_Z && k % 2 !== 0) continue; // 街面盆仅偶块（castleKit:4055）
+      list.push({
+        xInner: FIRE_BASIN_INNER,
+        xOuter: FIRE_BASIN_OUTER,
+        zMin: zc + bz - FIRE_BASIN_HALF_Z,
+        zMax: zc + bz + FIRE_BASIN_HALF_Z,
+        kind: 'frontWall'
+      });
+    }
   }
 
   // ⑦ 主殿前排飞扶壁墩对（广场域 z<plazaZ，块循环外 —— 主殿不在 CITY_BLOCK_Z 内）。
@@ -762,8 +828,27 @@ export function clampToFootprints(
       xClamp.bestF.kind === 'buttressBase' ||
       xClamp.bestF.kind === 'arcadeCol' ||
       xClamp.bestF.kind === 'hallBase');
+  /* R123 fix-1 · 实体无洞类占位盒全 sinH 平滑（R122 展宽副作用修复）。
+   *   R122 把主殿飞扶壁 footprint xOuter 13.15→16.65 覆盖整墩对后，墩盒展宽（6.3m）。车斜插
+   *   深嵌（sinH>0.5，如 θ=60° sinH=0.866）时车 OBB x 投影几乎整体落入盒 ⇒ xPen 从旧 2.03m
+   *   放大到 5.53m；此时 sinHAbs>0.5 ⇒ 原 xPenSmooth 不生效 ⇒ xPen=5.53 ⇒ maxStepX=5.53 ⇒
+   *   单帧横移 5.53m 瞬移（probe-C 2b：R118 Fix3「xPen 较小」假设因盒展宽失效，无测试覆盖）。
+   *   R123 fix-1b（cornerBase/frontBase 斜插同病，探针验证）：θ=60° 车 OBB 深嵌块 0 角塔基座
+   *   （cornerBase x[14.9,24.7]）xPen=1.98 ⇒ 单帧 14.0→12.019 瞬移 —— cornerBase 不在
+   *   isSolidEntryKind 且 sinH>0.5 ⇒ 原式不平滑。扩展：**非门墩实体横向深嵌**（zOv<xPenRaw，
+   *   车 OBB 横向深入 > 纵向深入）恒平滑（覆盖 cornerBase/frontBase 斜插）。门墩（gatePier，
+   *   有门洞）保留 sinH 门控（R119 ② 急转 sinH≈0.99 需单帧消除过洞收敛）；r105 漂移纵向
+   *   深嵌（zOv≈2.1>>xPen≈0.53）zOv<xPenRaw=false ⇒ 不触发平滑，单帧消除穿模保留（不重演
+   *   收敛尾部穿模/卡死）；arcadeCol 柱窄（0.60m）自然 xPen≤0.6，zOv 判别亦安全。 */
+  const isSolidEntryKind =
+    xClamp.bestF != null &&
+    (xClamp.bestF.kind === 'buttressBase' || xClamp.bestF.kind === 'hallBase');
+  const isGatePierKind = xClamp.bestF != null && xClamp.bestF.kind === 'gatePier';
   const xPenSmooth =
-    xPenRaw > 0.35 && sinHAbs <= 0.5 && (isEntryKind || zOv < xPenRaw); // 车横深嵌且前进 z 为主
+    xPenRaw > 0.35 &&
+    (isSolidEntryKind ||
+      (!isGatePierKind && zOv < xPenRaw) ||
+      (sinHAbs <= 0.5 && isEntryKind)); // 车横深嵌（实体无洞 / 非门墩横向深嵌 / 入域类低角）
   const zPenSmooth = zPenRaw > 0.35 && xPenRaw > zPenRaw; // 车横向深嵌 > 车头纵向深入
   const ax = Math.abs(x);
   // R119 改 a：xClamped 方向感知。远侧（收紧，best < ax）与近侧（外推，best > ax）都需要
