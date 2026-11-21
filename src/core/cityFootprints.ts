@@ -291,7 +291,7 @@ export interface FootprintClamp {
   nx: number;
   /** R113：z 外法向（指向可行驶一侧）：车从 +z 逼近（推 +z 离带）时 +1、从 −z 逼近时 −1；无 z 收紧时 0 */
   nz: number;
-  /** R115：车 OBB x 方向越界占位盒内缘的最大深度（m；0 = 未穿模）。FreeDrive 用 max(0.30, xPen) 作 x 步长上限，车已穿模时单帧推回消除，未穿模时保持 0.30 平滑 */
+  /** R115：车心 x 到**最终钳位目标**（最紧界）的距离（m；0 = 无 x 收紧）。R117 修正：由「跨迭代最大单盒穿透」改为「到目标距离」（与 R116 zPen 对称），多盒收敛时单帧推回恰达目标。FreeDrive 用 max(0.30, xPen) 作 x 步长上限，车已穿模时单帧推回消除，未穿模时保持 0.30 平滑 */
   xPen: number;
   /** R116：车心 z 到 z 钳位目标（带外缘钳位线）的距离（m；0 = 无 z 收紧）。FreeDrive 用 max(0.30, zPen) 作 z 步长上限，车已穿模时单帧推回消除，未穿模时保持 0.30 平滑 */
   zPen: number;
@@ -428,19 +428,13 @@ export function clampToFootprints(
     let best = Infinity;
     let kind: CityFootprint['kind'] | null = null;
     let cx = x;
-    let xPenMax = 0; // R115：车 OBB x 方向越界占位盒内缘的最大深度（跨所有相交盒）
     for (let iter = 0; iter < 4; iter += 1) {
       let iterBest = Infinity;
       let iterKind: CityFootprint['kind'] | null = null;
-      let iterPen = 0;
       for (const f of footprintsNear(z, dz)) {
         // SAT 精确相交测试：车 OBB 真的与占位 AABB 相交才收紧（避免车 z 覆盖碰边即触发的误钳）
         if (!obbOverlapsAabb(cx, z, heading, CAR_HALF_L, CAR_HALF_W, f)) continue;
         const bound = f.xInner - dx;
-        // R115：车 OBB 最 x 角（|cx|+dx）越界盒内缘（f.xInner）的深度。SAT 相交 ⇒ 车角 x 真越界
-        //   （否则 x 轴分离），xPen>0 当且仅当车已穿模。推 x=xPen 恰让车角贴盒内缘（x 轴分离）。
-        const xPen = Math.abs(cx) + dx - f.xInner;
-        if (xPen > iterPen) iterPen = xPen;
         if (bound < iterBest) {
           iterBest = bound;
           iterKind = f.kind;
@@ -451,9 +445,15 @@ export function clampToFootprints(
       cx = cx >= 0 ? iterBest : -iterBest;
       best = iterBest;
       kind = iterKind;
-      xPenMax = Math.max(xPenMax, iterPen);
     }
-    return { best, kind, xPen: xPenMax };
+    // R117：xPen = 入参 x 到**最终钳位目标**（最紧界 best）的距离 = |x| − best。车已穿模（>0.30）
+    //   时单帧推回恰达目标（消除穿模），未穿模（≤0.30）时 FreeDrive 用 0.30 平滑。
+    //   ⚠ R115 旧式 `xPenMax`（跨迭代最大**单盒**穿透）有缺陷：车同时穿多个占位盒且最紧界需经
+    //   迭代收敛时，xPenMax < |x|−best（R117 诊断 f1616 实证：xPen=3.450 但 |x|−best=4.144）
+    //   ⇒ 单帧推回量不足、车停在中间收敛点，残留 2 帧瞬态（pen 0.263m）。本式与 R116 zPen
+    //   （|z−zLimit|，到目标距离）对称，单帧推回 = 实际到目标距离。
+    const xPen = best < Infinity ? Math.max(0, Math.abs(x) - best) : 0;
+    return { best, kind, xPen };
   })();
   /* R113：z 钳**迭代复查**（正交于 x 钳）。车头先入占位带（如 arcadeCol 柱带 z-深仅 0.6m）
    * 时，x 覆盖深而 z 覆盖浅 ⇒ MTV 最小穿透轴 = 世界 z，x 单向钳无法把车头沿 z 推离（R112
