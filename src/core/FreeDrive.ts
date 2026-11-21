@@ -357,6 +357,16 @@ export const BOUNDS = {
   hallBounce: 0.8
 } as const;
 
+/** R120：门墩塔基实体北界（= GATE.z + (GATE.depth+1.2)/2 = −350.9，cityFootprints GATE_PIER_Z_MAX
+ * 同源）。由 BOUNDS 派生（BOUNDS 由 GATE 派生：gateFrontZ = GATE.z + depth/2）⇒ 免 import
+ * cityFootprints 的 const 成 TDZ 环（cityFootprints 已 import FreeDrive 的 CITY_BLOCK_Z）。
+ * 用途：2D 激活域上界须覆盖到「车头前缘触塔基北界」——车心 nz ≤ GATE_PIER_Z_MAX + CAR_HALF_L。
+ *   R119 用 gateFrontZ + CAR_HALF_L（−348.7525）比塔基北界 + CAR_HALF_L（−348.1525）窄 0.6m：
+ *   车心 nz ∈ (−348.7525, −348.1525] 时车头已入塔基北 0.6m 条带但 2D 门控关闭 ⇒ 车头切塔基
+ *   0.3~0.6m 无碰撞反馈（probe-D 缺口 1；实测 ⑧ 场景末态车心 −348.4784 处 SAT 残余 0.1987m）。 */
+const GATE_PIER_Z_MAX =
+  (BOUNDS.gateBackZ + BOUNDS.gateFrontZ) / 2 + (BOUNDS.gateFrontZ - BOUNDS.gateBackZ + 1.2) / 2;
+
 /**
  * 城内大街 keep=10 街区的 z 区间（块心 zc = zNear − 23 − 46k，块长 46，zc±23）。
  * ⚠ **单一真源约束**：与 castleKit `cityBlockIndices(20, R91_CITY_KEEP_BLOCKS=10)` 的
@@ -1225,8 +1235,15 @@ export class FreeDrive {
      * ⇒ 车 OBB 前角穿门墩 0.9~2.45m（入口穿模）。上界北扩 CAR_HALF_L 后车头一入墩 z 带
      * （车心 ≤ gateFrontZ + CAR_HALF_L）2D 门墩钳位即接管，替代 1D 桥限漏洞；北侧无门墩实体，
      * 扩带只引入「车头探入门带即被门墩 OBB 收紧」的接管，不改变城内/广场 2D 语义。
-     * R110 连续收敛 / R115-R116 x·z 步长动态化 / R105 漂移分流均逐位不变。 */
-    if (nz <= BOUNDS.gateFrontZ + CAR_HALF_L && nz >= BOUNDS.zMin) {
+     * R110 连续收敛 / R115-R116 x·z 步长动态化 / R105 漂移分流均逐位不变。
+     * R120：上界再北扩到 GATE_PIER_Z_MAX + CAR_HALF_L（−348.1525，塔基实体北界 + 半长）——
+     *   R119 的 gateFrontZ + CAR_HALF_L（−348.7525）未同步塔基实体北界（GATE_PIER_Z_MAX=−350.9
+     *   比门脸 gateFrontZ=−351.5 北伸 0.6m）：车心 nz ∈ (−348.7525, −348.1525] 时车头前缘已入
+     *   塔基北 0.6m 条带但 2D 门控关闭 ⇒ 车头切塔基 0.3~0.6m 且无碰撞反馈（probe-D 缺口 1，
+     *   实测 ⑧ 场景末态车心 −348.4784 处 SAT 残余 0.1987m）。北扩后车头一触塔基北界 2D 门墩
+     *   钳位即接管（SAT 判交覆盖车头入塔基）；桥段（z>gateFrontZ）北侧无其它 footprint，
+     *   扩带只引入「车头探入塔基即被 gatePier 收紧」的接管，不改变城内/广场 2D 语义。 */
+    if (nz <= GATE_PIER_Z_MAX + CAR_HALF_L && nz >= BOUNDS.zMin) {
       // R105：去掉外层 !driftActive 门控 —— 漂移态**也做位置钳**（s.x=fp.x），堵死漂移穿模。
       //   旧版整层被 !driftActive 关闭 ⇒ 漂移车能穿进建筑底部 3.5~5.6 m（全量几何扫最大穿模源）。
       //   R103 关掉它的真因是「位置钳 + 撞击/速度/heading 注入」会让 β 永不塌缩，而非位置钳本身；
@@ -1280,7 +1297,11 @@ export class FreeDrive {
           // 0.60 m（+漂移运动），被 r105 的 maxXStep 护栏抓到。用剩余预算重钳，总钳位 ≤ 0.30。
           const fpRe = clampToFootprints(s.x, s.z, s.heading);
           if (fpRe.hit) {
-            const reBudget = WALL_2D_MAX_LATERAL_STEP - Math.abs(mainClampDelta);
+            // R120：reBudget 不为负 —— 主钳位因 X_Z_PEN_SMOOTH_CAP=0.35 限幅可走满 0.35（>0.30），
+            //   reBudget = 0.30 − 0.35 = −0.05 ⇒ clamp(v,0.05,−0.05) 恒等于 −0.05 ⇒ 二次钳固定
+            //   −x 位移 0.05m/帧（drift+入域类深嵌组合，probe-C 边缘副作用）。max(0,…) 让预算
+            //   耗尽时二次钳零位移（不反向推回），语义正确（总钳位已 ≥0.30 预算）。
+            const reBudget = Math.max(0, WALL_2D_MAX_LATERAL_STEP - Math.abs(mainClampDelta));
             s.x += clamp(fpRe.x - s.x, -reBudget, reBudget);
             // R113：drift 态同样钳 z（共用剩余预算，总钳位 ≤ 0.30 m/帧）。
             s.z += clamp(fpRe.z - s.z, -reBudget, reBudget);
@@ -1313,13 +1334,21 @@ export class FreeDrive {
     const impacting =
       r.impactN !== undefined && r.impactN > 0 && r.targetHeading !== undefined;
     s.speed = impacting ? damp(s.speed, r.speed, 1 / IMPACT_TAU, dt) : r.speed;
-    // R110 掠擦接触期连续切向摩擦：贴墙（wallScrubN>0，离墙即清零）期间施加恒定减速度
+    // R110 掠擦接触期连续切向摩擦：贴墙（wallScrubN>0，离墙即清零）期间施加减速度
     // FRICTION×wallScrubN，模拟墙面对切向的真实摩擦，压住「撞击后车沿墙自动滑开」残速
     // （84° 掠擦 1s 仍滑 ~5 m/s）。模型 ∝ wallScrubN（非 ∝ 当前速度）⇒ 轻擦/硬擦同额摩擦，
     // r106⑤「越正撞击越狠」单调性靠 speedKick（∝ fn）保留。门控 !driftActive 同 wallScrub；
     // 钳到不反向 ⇒ 不归零/不瞬停；仅接触期作用。
+    // R120：切向摩擦加**速度渐出**（clamp(|v|/WALL_SCRUB_FADE_SPEED)，与 wallScrub L1080 同口径）
+    //   ——WALL_TANGENT_FRICTION×wallScrubN 原为恒定 5.4 m/s² 不随速度衰减，低速时几乎抵消油门
+    //   净加速（6.08），把「斜切骑墩侧撞」车钉死在 0.24~1.45 m/s 永久卡死（R109 修过、R110 引入
+    //   WALL_TANGENT_FRICTION 后以更低平衡速度复发，实测 1200 帧 v 恒 0.238 不恢复）。渐出后低速
+    //   摩擦归零、油门能推动车，平衡点回到 ~2 m/s（R109 口径）；高速（掠擦 14.4 m/s）FADE=1
+    //   不受影响（R110 掠擦语义保留）。WALL_TANGENT_FRICTION 值（0.25）与 WALL_SCRUB_FADE_SPEED
+    //   值（4.0）均未动，只改本表达式（非 WALL_SCRUB_* 常量值）。 */
     if (this.wallScrubN > 0 && !driftActive) {
-      const tangentDecel = WALL_TANGENT_FRICTION * this.wallScrubN;
+      const tangentDecel =
+        WALL_TANGENT_FRICTION * this.wallScrubN * clamp(Math.abs(s.speed) / WALL_SCRUB_FADE_SPEED, 0, 1);
       const sign = Math.sign(s.speed) || 1;
       const reduced = Math.abs(s.speed) - tangentDecel * dt;
       s.speed = sign * Math.max(0, reduced);

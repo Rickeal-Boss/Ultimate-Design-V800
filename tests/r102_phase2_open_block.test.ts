@@ -216,9 +216,10 @@ describe('R105 漂移态 2D 启用：城内/广场 2D 唯一入口 = clampToFoot
       resolve(__dirname, '../src/core/FreeDrive.ts'),
       'utf8'
     );
-    // step() 2D 门控：城内+广场+城门带域 [zMin, gateFrontZ]（R118 上界 gateBackZ→gateFrontZ
-    //   纳入城门带门墩；R105 下界 plazaZ→zMin，纳入主殿飞扶壁）
-    expect(src).toMatch(/nz <= BOUNDS\.gateFrontZ[\s\S]{0,40}&& nz >= BOUNDS\.zMin/);
+    // step() 2D 门控：城内+广场+城门带域 [zMin, 塔基北界+半长]（R118 上界 gateBackZ→gateFrontZ
+    //   纳入城门带门墩；R105 下界 plazaZ→zMin，纳入主殿飞扶壁；R119 北扩 CAR_HALF_L；R120 上界
+    //   再北扩到 GATE_PIER_Z_MAX + CAR_HALF_L（门墩塔基实体北界，车头一触塔基即 2D 接管））
+    expect(src).toMatch(/nz <= GATE_PIER_Z_MAX \+ CAR_HALF_L && nz >= BOUNDS\.zMin/);
     // 非漂移 + 漂移两处都调 clampToFootprints（漂移态不再被整体跳过）
     expect(src).toMatch(/clampToFootprints\(s\.x, s\.z, s\.heading\)/);
   });

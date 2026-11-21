@@ -267,6 +267,10 @@ describe('R119 ⑧ fix-5 门墩斜切平滑：车斜切入墩单帧推回平滑�
     expect(edge).toBeLessThanOrEqual(GATE_PIER_INNER + 1e-2);
     // z 不持续深入：末态车停在门脸附近（z > 塔基南界 −366.1），旧 bundle 深入门楼 −363.47 残留
     expect(sEnd.z).toBeGreaterThan(GATE_PIER_Z_MIN);
+    // R120 fix-C：末态车 OBB 与所有占位盒分离（R119 ⑧ 未钉 hit 断言 —— 盲区漏判：车心
+    //   −348.4784 ∈ (−348.7525, −348.1525] 处车头入塔基北 0.6m 条带、gatePier SAT 残余
+    //   0.1987m；fix-C 激活域上界北扩到 GATE_PIER_Z_MAX + CAR_HALF_L 后 2D 接管、残余清零）。
+    expect(clampToFootprints(sEnd.x, sEnd.z, sEnd.heading).hit).toBe(false);
   });
 });
 
@@ -300,5 +304,46 @@ describe('R119 ⑨ fix-5 广场墩骑墩平滑：车骑墩单帧≤0.35、末态
     expect(endHit).toBe(false);
     // v 不卡死：收敛后恢复 >1.5（f400 v≈8.21，非永久卡死）
     expect(sEnd.speed).toBeGreaterThan(1.5);
+  });
+});
+
+describe('R120 ⑭ fix-C 门墩塔基北端 2D 门控盲区：车头入塔基北 0.6m 条带即 2D 接管', () => {
+  it('x=10.5 z=−348.3 v=20 南行 240 帧：末态无塔基穿模、车缘不深穿门墩', () => {
+    // fix-C：R119 激活域上界 gateFrontZ+CAR_HALF_L（−348.7525）未同步塔基实体北界
+    //   GATE_PIER_Z_MAX（−350.9，北伸 0.6m）⇒ 车心 nz ∈ (−348.7525, −348.1525] 时车头前缘已入
+    //   塔基北条带但 2D 门控关闭、车头切塔基 0.3~0.6m 无碰撞反馈（probe-D 缺口 1）。fix-C 上界
+    //   北扩到 GATE_PIER_Z_MAX + CAR_HALF_L（−348.1525）⇒ 车头一触塔基北界即 2D 门墩钳位接管。
+    const fd = new FreeDrive({ start: { x: 10.5, z: -348.3, heading: 0 } });
+    fd.state.speed = 20;
+    fd.press('KeyW', true);
+    for (let i = 0; i < 240; i += 1) fd.step(DT);
+    const sEnd = fd.snapshot();
+    // 末态车 OBB 与所有占位盒分离（车头不再切塔基北条带，R119 盲区残余 0.1987m 清零）
+    expect(clampToFootprints(sEnd.x, sEnd.z, sEnd.heading).hit).toBe(false);
+    // 车缘不深穿门墩（车被 2D 收紧到门洞内 / 隧道 1D 限，edge ≤ 10 贴墩容差）
+    expect(Math.abs(sEnd.x) + HALF_W).toBeLessThanOrEqual(GATE_PIER_INNER + 1e-2);
+  });
+});
+
+describe('R120 ⑮ fix-A arcadeCol 柱带 xPen 特判：块边界连墙墩残余 ≤0.30 平滑带', () => {
+  it('x=8.5 z=−401 h=0.5 v=55 南行 300 帧：单帧 x 横移 ≤0.30（原 fix-5 0.34）', () => {
+    // fix-A：arcadeCol 柱带宽仅 0.60m（x∈[11.12,11.72]），fix-5 用 X_Z_PEN_SMOOTH_CAP=0.35 上限
+    //   仍使块边界连墙墩 1D 残余 0.34m（>0.30 平滑带）；柱带是周期窄突出物，特判收紧到
+    //   WALL_2D_MAX_LATERAL_STEP（0.30）⇒ 残余 →0.29、无 yank（probe-A 根因：2D arcadeCol
+    //   xPen 经 R115 动态步长单帧推回，非 1D corridor 收窄）。
+    const fd = new FreeDrive({ start: { x: 8.5, z: -401, heading: 0.5 } });
+    fd.state.speed = 55;
+    fd.press('KeyW', true);
+    let maxDx = 0;
+    let prevX = fd.snapshot().x;
+    for (let i = 0; i < 300; i += 1) {
+      fd.step(DT);
+      const s = fd.snapshot();
+      const dx = Math.abs(s.x - prevX);
+      prevX = s.x;
+      if (dx > maxDx) maxDx = dx;
+    }
+    // 单帧 x 横移 ≤0.30（fix-5 原 0.3416 → fix-A 0.2927；float 余量 1e-2）
+    expect(maxDx).toBeLessThanOrEqual(0.31);
   });
 });

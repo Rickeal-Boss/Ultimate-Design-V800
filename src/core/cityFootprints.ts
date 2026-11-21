@@ -24,7 +24,9 @@ import { R30_ARCADE, R97_CITY_BUTTRESS } from '../render/scene/castleKit';
 // R119 改 a：导入 corridorCenterHalfWidth（1D 车心面线走廊）供近侧界防护①比较。
 //   ⚠ 反向 import 即成环（FreeDrive.ts:37 已 import 本模块）；与 CITY_BLOCK_Z 同风格：
 //   corridorCenterHalfWidth 是函数声明（提升），仅在 clampToFootprints 函数体内惰性访问 ⇒ 安全。
-import { CITY_BLOCK_Z, corridorCenterHalfWidth } from './FreeDrive';
+// R120：加 WALL_2D_MAX_LATERAL_STEP（arcadeCol 柱带 xPen 特判，见 L753）——同样惰性访问，
+//   CITY_BLOCK_Z / WALL_2D_MAX_LATERAL_STEP 均只在函数体内引用（const 不提升，不可顶层用）。
+import { CITY_BLOCK_Z, corridorCenterHalfWidth, WALL_2D_MAX_LATERAL_STEP } from './FreeDrive';
 
 /** 单个地面层占位盒（世界坐标；|x| 对称，xInner = 靠路中心一侧） */
 export interface CityFootprint {
@@ -750,7 +752,14 @@ export function clampToFootprints(
     nz: zClamp.zDir, // z 外法向：+1 = 推向 +z（可行驶侧）、−1 = 推向 −z
     // R115：车 OBB x 越界深度（FreeDrive 动态步长用）。R119 fix-5 条件限幅（见上方注释）：
     //   车深嵌且前进 z 为主（x 钳横向）时限幅到平滑上限，否则保留单帧消除穿模。
-    xPen: xPenSmooth ? Math.min(xPenRaw, X_Z_PEN_SMOOTH_CAP) : xPenRaw,
+    // R120：arcadeCol 柱带 xPen 特判 —— 柱带宽仅 0.60m（x∈[11.12,11.72]），fix-5 用 0.35 上限
+    //   仍使块边界连墙墩 1D 残余 0.34m（>0.30 平滑带）；柱带是「周期窄突出物」，车斜切深嵌时
+    //   单帧推回可收紧到 WALL_2D_MAX_LATERAL_STEP（0.30，与未穿模同额）⇒ 残余 →0.29 且无 yank。
+    //   其余 kind 保持 X_Z_PEN_SMOOTH_CAP=0.35（⑧门墩斜切末态车缘 10.0055 断言依赖 0.35，
+    //   全局降 0.30 会恶化到 10.2785 破坏 edge≤10.01 ⇒ 必须按 kind 特判，不可全局降）。
+    xPen: xPenSmooth
+      ? Math.min(xPenRaw, xClamp.kind === 'arcadeCol' ? WALL_2D_MAX_LATERAL_STEP : X_Z_PEN_SMOOTH_CAP)
+      : xPenRaw,
     // R116：车心 z 到 z 钳目标距离（FreeDrive 动态步长用）。R119 fix-5 条件限幅：
     //   车横向深嵌 > 车头纵向深入时限幅，否则保留单帧消除（r105 漂移 z 深嵌不限）。
     zPen: zPenSmooth ? Math.min(zPenRaw, X_Z_PEN_SMOOTH_CAP) : zPenRaw,
