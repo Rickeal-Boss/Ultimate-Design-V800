@@ -258,12 +258,15 @@ describe('R102 ③ 车长 z 覆盖采样（2D vs 1D 核心差异）', () => {
     expect(fp0.hit).toBe(true);
     expect(fp0.kind).toBe('cornerBase');
     expect(fp0.x).toBeCloseTo(CORNER_BASE_INNER - HALF_W, 12); // 13.897
-    // θ=30°：车角 dx=2.243 > 半宽 1.003，2D 收到 14.9 − 2.243 = 12.657（比 θ=0 再紧 1.24 m）
+    // θ=30°：车角 dx=2.243 > 半宽 1.003，单次 2D 收到 14.9 − 2.243 = 12.657（比 θ=0 再紧 1.24 m）。
+    //   R112 x 钳迭代复查：clamp 到 12.657 后车 OBB（斜插）与块 3 连墙墩（buttressBase，z 带
+    //   [−507.95,−505.85] 与车 z 覆盖 [−506.38,−500.62] 重叠 0.53m、x 带 [11.35,11.9] 被车横向
+    //   覆盖）相交 ⇒ 继续钳到更紧界 11.35 − 2.243 = 9.107（消除车 OBB 斜插穿墩，非空气墙）。
     const h = -Math.PI / 6;
     const fp30 = clampToFootprints(14.2, z, h);
     expect(fp30.hit).toBe(true);
-    expect(fp30.kind).toBe('cornerBase');
-    expect(fp30.x).toBeCloseTo(CORNER_BASE_INNER - dxAt(h), 12); // 12.657
+    expect(fp30.kind).toBe('buttressBase');
+    expect(fp30.x).toBeCloseTo(BUTTRESS_LINK_INNER - dxAt(h), 12); // 9.107
     expect(fp30.x).toBeLessThan(fp0.x); // 2D 看 heading，1D 从不看
   });
 

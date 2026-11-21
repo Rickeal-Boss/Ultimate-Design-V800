@@ -354,17 +354,36 @@ export function clampToFootprints(
 ): FootprintClamp {
   const dx = CAR_HALF_L * Math.abs(Math.sin(heading)) + CAR_HALF_W * Math.abs(Math.cos(heading));
   const dz = CAR_HALF_L * Math.abs(Math.cos(heading)) + CAR_HALF_W * Math.abs(Math.sin(heading));
+  /* R112：x 钳**迭代复查**。单次 x 钳到最紧界后，车 OBB 可能**重新落入**另一占位盒——
+   * 典型案例（r112 诊断 11/16 实测）：入参 x=14.30 时 buttress 恰在 x 轴分离边缘
+   * （0.021m 间隙），单次 clamp 只看到 frontBase（bound=12.421），把车推到 12.421 时车 OBB
+   * （x 伸展 2dx=4.76m）扫过 buttress 带 [11.35,11.90] 落入其中，车局部横向轴（lx）穿透
+   * 1.787m 残留。迭代用 clamp 后位置 cx 复查 SAT：若车 OBB 仍与占位盒相交则继续钳到更紧界
+   * （buttress bound=8.971 比 frontBase 12.421 更紧）。实测全量扫 81 万例 maxIters=2 ⇒
+   * 上限 4（安全裕度）。**z 不动**（无 z 瞬移）；FreeDrive 的 WALL_2D_MAX_LATERAL_STEP=0.30m/帧
+   * 步长上限照旧（车逐步收敛到最终目标，无瞬移）；只收紧不放宽（每次 iterBest < |cx| 才更新）。
+   */
   const limit = /* 最紧界，Infinity 表示无占位盒 */ (() => {
     let best = Infinity;
     let kind: CityFootprint['kind'] | null = null;
-    for (const f of footprintsNear(z, dz)) {
-      // SAT 精确相交测试：车 OBB 真的与占位 AABB 相交才收紧（避免车 z 覆盖碰边即触发的误钳）
-      if (!obbOverlapsAabb(x, z, heading, CAR_HALF_L, CAR_HALF_W, f)) continue;
-      const bound = f.xInner - dx;
-      if (bound < best) {
-        best = bound;
-        kind = f.kind;
+    let cx = x;
+    for (let iter = 0; iter < 4; iter += 1) {
+      let iterBest = Infinity;
+      let iterKind: CityFootprint['kind'] | null = null;
+      for (const f of footprintsNear(z, dz)) {
+        // SAT 精确相交测试：车 OBB 真的与占位 AABB 相交才收紧（避免车 z 覆盖碰边即触发的误钳）
+        if (!obbOverlapsAabb(cx, z, heading, CAR_HALF_L, CAR_HALF_W, f)) continue;
+        const bound = f.xInner - dx;
+        if (bound < iterBest) {
+          iterBest = bound;
+          iterKind = f.kind;
+        }
       }
+      if (iterBest === Infinity) break; // 无相交占位盒
+      if (Math.abs(cx) <= iterBest) break; // 已到最紧界（不再收紧）
+      cx = cx >= 0 ? iterBest : -iterBest;
+      best = iterBest;
+      kind = iterKind;
     }
     return { best, kind };
   })();
