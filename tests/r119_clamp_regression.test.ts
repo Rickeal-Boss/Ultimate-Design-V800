@@ -56,13 +56,15 @@ describe('R119 ① fix-1 门带入口：车心窗口 z∈(−351.5,−348.7525] 
     const winMin = BOUNDS.gateFrontZ; // −351.5
     const winMax = BOUNDS.gateFrontZ + HALF_L; // −348.7525
     for (const z of [winMin + 0.5, winMin + 1.5, winMin + 2.5, winMax - 0.5, winMax]) {
-      // 车心 x=9.6（车缘 10.603 真嵌门墩内缘 10 0.6m）⇒ 2D gatePier 真相交 ⇒ clamp 收紧
+      // 车心 x=9.6（车缘 10.603 真嵌门墩内缘 10 0.6m）⇒ 2D 门墩真相交 ⇒ clamp 收紧。
+      // R124：车缘 10.603 亦真嵌门扇（x∈[9.0,9.4]，车缘 10.603 > 门扇内缘 9.0），门扇
+      //   （far 界 9.0−dx=7.997）比门墩（far 界 10−dx=8.997）更紧 ⇒ 门扇为最紧界（doorLeaf）。
       const fp = clampToFootprints(9.6, z, 0);
       expect(fp.hit).toBe(true);
-      expect(fp.kind).toBe('gatePier'); // 门墩漏斗激活（非 1D 桥限漏洞）
-      // 车 OBB 前缘不穿门墩内缘 10（maxGatePen=0）：clamp 后车缘 = 8.997+1.003 = 10.0 恰贴墩内缘
+      expect(fp.kind).toBe('doorLeaf'); // 门扇（洞内折靠侧墙实体）为最紧钳位（非 1D 桥限漏洞）
+      // 车 OBB 前缘不穿门扇内缘 9.0（maxDoorPen=0）：clamp 后车缘 = 7.997+1.003 = 9.0 恰贴门内缘
       const edge = Math.abs(fp.x) + HALF_W;
-      expect(edge).toBeLessThanOrEqual(GATE_PIER_INNER + 1e-9);
+      expect(edge).toBeLessThanOrEqual(GATE_PIER_INNER + 1e-9); // 9.0 ≤ 10（更紧，不穿门墩/门扇）
     }
   });
 
@@ -226,15 +228,27 @@ describe('R119 ⑥ R112/R117 回归：静止态深穿 clamp 与多盒收敛 fina
 });
 
 describe('R119 ⑦ 门墩进洞不被弹出：x0=±8 过洞 clamp 不出现 +7.5m 外推（gatePier 恒远侧）', () => {
-  it('x0=±8 门洞内直行：clamp 零收紧（车缘 |x|+1.003 < 10 不触门墩），无 +7.5m 外推弹出', () => {
-    // 门墩 footprint |x|∈[10,17.5]。车 x0=±8 车缘 8+1.003=9.003 < 10（洞内走线），与门墩
-    //   x 分离 ⇒ SAT 判不相交 ⇒ clamp 零收紧（hit=false）。若 gatePier 误走近侧界会把进洞车
-    //   外推到 xOuter+dx = 17.5+1.003 = 18.503（+7.5m 弹出）。cityFootprints 明确排除 gatePier
-    //   于近侧界（恒远侧）⇒ 车过洞不被弹出。
-    for (const x0 of [8, -8]) {
+  it('x0=±7 门洞内直行：clamp 零收紧（车缘 7+1.003=8.003 < 门扇内缘 9.0 不触门），无 +7.5m 外推弹出', () => {
+    // 门墩 footprint |x|∈[10,17.5]、门扇 footprint |x|∈[9.0,9.4]（R124）。车 x0=±7 车缘
+    //   8.003 < 9.0（洞内走线，避开折靠门扇），与门墩/门扇 x 分离 ⇒ SAT 判不相交 ⇒ clamp 零收紧
+    //   （hit=false）。若 gatePier 误走近侧界会把进洞车外推到 xOuter+dx = 17.5+1.003 = 18.503
+    //   （+7.5m 弹出）。cityFootprints 明确排除 gatePier 于近侧界（恒远侧）⇒ 车过洞不被弹出。
+    //   R124 边界补充：x0=±8（车缘 9.003 恰擦门扇内缘 9.0，0.003m 擦）⇒ 门扇钳 7.997（0.003m 推回，
+    //   仍无 +7.5m 弹出；见下例）。
+    for (const x0 of [7, -7]) {
       const fp = clampToFootprints(x0, GATE.z, 0); // 门楼中心 z=−358.5
       expect(fp.hit).toBe(false);
       expect(fp.x).toBeCloseTo(x0, 12); // 原样放行，无 +7.5m 外推弹出
+    }
+  });
+
+  it('x0=±8 门扇边界擦碰：0.003m 擦门扇内缘 ⇒ 门扇钳 7.997（0.003m 推回，无 +7.5m 弹出）', () => {
+    for (const x0 of [8, -8]) {
+      const fp = clampToFootprints(x0, GATE.z, 0);
+      expect(fp.hit).toBe(true);
+      expect(fp.kind).toBe('doorLeaf');
+      expect(fp.x).toBeCloseTo(Math.sign(x0) * (9.0 - HALF_W), 12); // ±7.997（车缘 9.0 恰贴门扇内缘）
+      expect(Math.abs(fp.x - x0)).toBeLessThan(0.01); // 推回 <1cm（微小擦碰修正，非弹出）
     }
   });
 });

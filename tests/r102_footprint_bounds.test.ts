@@ -133,6 +133,21 @@ describe('R102 ① 占位清单覆盖 probe-bounds §2 六类地面层实体（�
     expect(p.zMax).toBeGreaterThan(BOUNDS.gateFrontZ); // −350.9 > −351.5
   });
 
+  it('门洞门扇（R124）：x∈[9.0,9.4] z∈[zFront−8.22, zFront+0.22]，双侧镜像单条，比门墩更靠内', () => {
+    // castleKit:1328-1333 doorLeaf({w:8,h:7}) rotateY(∓π/2) translate(side*9.2,0,zFront−4)。
+    //   框柱厚 0.4 → x∈[9.2±0.2]=[9.0,9.4]；w=8 → 框柱外缘 w/2+0.22=4.22 → z∈[zFront±4.22±...]。
+    //   门扇折靠门洞侧墙，在洞内 |x|<openHalf=10（gatePier xInner=10 不覆盖 ⇒ R123 探针-B 穿门
+    //   1.0m 残留）。双侧镜像 ⇒ |x| 距离存储单条。
+    const doors = byKind('doorLeaf');
+    expect(doors.length).toBe(1);
+    const d = doors[0];
+    expect(d.xInner).toBeCloseTo(9.2 - 0.2, 12); // 9.0（门扇内缘 = 框柱内面）
+    expect(d.xOuter).toBeCloseTo(9.2 + 0.2, 12); // 9.4（门扇外缘）
+    expect(d.zMin).toBeCloseTo(GATE.z + GATE.depth / 2 - 4 - 4.22, 12); // zFront−8.22 = −359.72
+    expect(d.zMax).toBeCloseTo(GATE.z + GATE.depth / 2 - 4 + 4.22, 12); // zFront+0.22 = −351.28
+    expect(d.xInner).toBeLessThan(GATE.openW / 2); // 9.0 < 10（洞内实体，比门墩更靠内）
+  });
+
   it('建筑前脸 / 殿台基内缘 = 15.5；前排塔基内缘 = 14.8（R104 修正）；殿前大理石带 15.0', () => {
     // R123：frontWall 含前脸 20（xInner=15.5）+ 墙根/街面火盆 25（xInner=14.35，Fix 3）——火盆是贴墙
     //   突出实体（比前脸更靠内），须单独钉；此处前脸只筛 15.5（缺块 R99 补街前脸同值）

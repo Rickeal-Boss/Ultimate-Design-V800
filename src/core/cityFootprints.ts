@@ -43,7 +43,8 @@ export interface CityFootprint {
     | 'frontWall'
     | 'arcadeCol'
     | 'buttressBase'
-    | 'gatePier';
+    | 'gatePier'
+    | 'doorLeaf';
 }
 
 /** 车长 / 车宽半尺寸（physics.ts 真源，勿写死 2.7475 / 1.003） */
@@ -191,6 +192,22 @@ const GATE_PIER_OUTER = GATE.halfW; // 17.5
  */
 const GATE_PIER_Z_MIN = GATE.z - (GATE.depth + 1.2) / 2; // −366.1（塔基南界，门带南超 0.6m）
 const GATE_PIER_Z_MAX = GATE.z + (GATE.depth + 1.2) / 2; // −350.9（塔基北界，门带北超 0.6m）
+
+/* ── R124 · 门洞门扇（castleKit.ts:1328-1333，doorLeaf({w:8,h:7}) rotateY(∓π/2)
+ *   translate(side*9.2, 0, zFront−4)）───────────────────────────────────────────
+ * 门扇折靠门洞侧墙，世界 AABB（castleDetail.ts:1346-1379 真源派生）：
+ *   框柱厚 0.4 → x ∈ [9.2−0.2, 9.2+0.2] = [9.0, 9.4]；
+ *   w=8 → 框柱外缘 w/2+0.22 = 4.22 → z ∈ [(zFront−4)−4.22, (zFront−4)+4.22]。
+ * 门扇在洞内 |x| < openHalf(=GATE.openW/2=10)，gatePier xInner=10 不覆盖 ⇒ 车心 1D 隧限
+ * 8.997 时车缘 10.0 穿门扇 ~1.0m（探针-A2 实证，clamp 激活域内无 footprint hit=false 残留）。
+ * 补 doorLeaf footprint（xInner=9.0 贴门扇内缘，车缘 9.0 恰贴门不穿；恒远侧推 + isSolidEntryKind
+ * 恒平滑防单帧瞬移）。⚠ 不扩 CAR_HALF_L：SAT 判交（车 OBB↔footprint AABB）自动覆盖「车心在
+ * 带外、车头已入门扇实体」的车；z 区间在 2D 激活带 [zMin, gateFrontZ+CAR_HALF_L] 内，不改
+ * FreeDrive 门控（R118 Fix 2 已把 2D 上界扩到 gateFrontZ+CAR_HALF_L）。 */
+const DOOR_LEAF_X_INNER = 9.2 - 0.2; // 9.0（门扇内缘 = 框柱内面）
+const DOOR_LEAF_X_OUTER = 9.2 + 0.2; // 9.4（门扇外缘）
+const DOOR_LEAF_Z_MIN = GATE.z + GATE.depth / 2 - 4 - 4.22; // zFront−8.22 = −359.72（门南沿）
+const DOOR_LEAF_Z_MAX = GATE.z + GATE.depth / 2 - 4 + 4.22; // zFront+0.22 = −351.28（门北沿）
 /** 连墙段 z 区间 castleKit.ts:3289-3292（塔→殿 / 殿→塔，避开前后排塔基 z 半延展 4.7 m）：
  *  `[-blockLen/2, -blockLen/4 - 4.7]` / `[blockLen/4 + 4.7, blockLen/2]`（local z）。
  *  飞扶壁墩落在段中点 lz（castleKit.ts:3478-3487 `const lz = (za + zb) / 2`）。 */
@@ -422,6 +439,18 @@ export function buildCityFootprints(): CityFootprint[] {
     zMin: GATE_PIER_Z_MIN,
     zMax: GATE_PIER_Z_MAX,
     kind: 'gatePier'
+  });
+
+  // ⑨ R124 · 门洞门扇（双侧镜像，|x| 距离存储由 clampToFootprints 按车侧处理）：
+  //    门扇折靠侧墙 x∈[9.0,9.4]（探针-A：gatePier 限 8.997 车缘 10.0 穿门 1.0m，hit=false 残留）。
+  //    补 doorLeaf 占位让 clamp 在门扇 z 带接管：车缘 9.0 恰贴门内缘不穿。恒远侧推（车心恒 <
+  //    门心 9.2 ⇒ 不近侧），isSolidEntryKind 恒平滑（R123 fix-1 语义，防单帧瞬移）。
+  list.push({
+    xInner: DOOR_LEAF_X_INNER,
+    xOuter: DOOR_LEAF_X_OUTER,
+    zMin: DOOR_LEAF_Z_MIN,
+    zMax: DOOR_LEAF_Z_MAX,
+    kind: 'doorLeaf'
   });
 
   return list;
@@ -842,7 +871,9 @@ export function clampToFootprints(
    *   收敛尾部穿模/卡死）；arcadeCol 柱窄（0.60m）自然 xPen≤0.6，zOv 判别亦安全。 */
   const isSolidEntryKind =
     xClamp.bestF != null &&
-    (xClamp.bestF.kind === 'buttressBase' || xClamp.bestF.kind === 'hallBase');
+    (xClamp.bestF.kind === 'buttressBase' ||
+      xClamp.bestF.kind === 'hallBase' ||
+      xClamp.bestF.kind === 'doorLeaf');
   const isGatePierKind = xClamp.bestF != null && xClamp.bestF.kind === 'gatePier';
   const xPenSmooth =
     xPenRaw > 0.35 &&
