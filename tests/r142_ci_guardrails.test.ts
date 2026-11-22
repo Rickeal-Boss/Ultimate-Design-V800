@@ -1,0 +1,101 @@
+/**
+ * R142 · 深度审查报告 P1-5「补 4 条 CI 判据」前三条：把 R138 已达标的关键物理契约钉进回归，
+ * 防未来改动回归（空气墙/穿模精细化收尾护栏）。
+ *
+ * 依据：V800_R110-R138 深度审查报告 §8 P1-5 —— 建议补 CI 判据：
+ *   · `−Z 15 s 不反弹 >5 m/s`（主诉方向速度不反弹，自由驾驶末速高）
+ *   · `贴墙 W 10 s 位移 ≥10 m`（贴墙低速脱困契约）
+ *   · `2D 接触单帧横移 ≤0.30 m`（本测试用渲染后轨迹口径 ≤ X_Z_PEN_SMOOTH_CAP=0.35，
+ *     WALL_2D_MAX_LATERAL_STEP=0.30 为静态步长，R115 车已穿模时动态放大到 0.35 为设计值）
+ *
+ * 探针实测（HEAD=86eef24=R141，FreeDrive.step() 真源码仿真，DT=1/120）：
+ *   ① 中线自由驾驶 15s：endV=55.148 m/s，minV=20（起始），bounced=false
+ *   ② 贴墙 +X W 10s：位移 14.785 m（报告 R138 实测 14.79），endV=1.509 m/s（报告 1.509）
+ *   ③ 贴墙直行 max|Δx|/帧 = 0.3500 m（X_Z_PEN_SMOOTH_CAP）
+ *
+ * 红线：本测试只新增，不碰 src/；resolveBounds 函数体 / WALL_* / IMPACT_TAU / 灵魂12 / 摩擦圆
+ *       全未动。断言值含裕量，防浮点/版本漂移误报。
+ */
+import { describe, expect, it } from 'vitest';
+import {
+  IMPACT_TAU,
+  WALL_2D_MAX_LATERAL_STEP,
+  WALL_IMPACT_SPEED_KICK_RATIO,
+  WALL_SCRUB_DECEL,
+  WALL_TANGENT_FRICTION,
+  FreeDrive,
+  corridorCenterHalfWidth,
+  FREE_START
+} from '../src/core/FreeDrive';
+
+const DT = 1 / 120;
+
+describe('R142 CI 判据 ① 中线自由驾驶 15s：速度不反弹 + 末速高', () => {
+  it('主诉方向（−Z）速度从不显著掉速（不反弹），15s 末速 >5 m/s，且自由加速正常（>40 m/s）', () => {
+    const fd = new FreeDrive({ start: { x: FREE_START.x, z: FREE_START.z, heading: FREE_START.heading } });
+    fd.state.speed = 20;
+    fd.press('KeyW', true);
+    let bounced = false;
+    let prevV = 20;
+    let minV = 20;
+    for (let i = 0; i < 1800; i += 1) {
+      fd.step(DT);
+      const v = fd.state.speed;
+      if (v < prevV - 0.5) bounced = true; // 显著掉速（撞墙反弹）
+      if (v < minV) minV = v;
+      prevV = v;
+    }
+    expect(bounced).toBe(false); // 不反弹（自由驾驶不撞墙）
+    expect(fd.state.speed).toBeGreaterThan(5); // 契约：15s 末速 >5 m/s
+    expect(fd.state.speed).toBeGreaterThan(40); // 自由加速正常（探针 55.1）
+    expect(minV).toBeGreaterThanOrEqual(19.9); // 从不显著掉速
+    expect(fd.state.z).toBeLessThan(-400); // 确实在 −Z 南行
+  });
+});
+
+describe('R142 CI 判据 ② 贴墙 W 10s 位移 ≥10m（贴墙低速脱困）', () => {
+  it('贴 +X 墙沿 +Z 刮擦后含油门 10s，位移 ≥10m，末速处于低速带（蹭墙平衡），仍贴墙', () => {
+    const IMPACT_Z = -250;
+    const LIMIT = corridorCenterHalfWidth(IMPACT_Z); // 10.997
+    const START_X = LIMIT - 0.5;
+    const heading = Math.PI + Math.asin(0.3); // 斜擦 +X 墙且沿 +Z 滑（r101/r102 同口径）
+    const fd = new FreeDrive({ start: { x: START_X, z: IMPACT_Z, heading } });
+    fd.state.speed = 55.56; // 200 km/h 冲进墙
+    for (let i = 0; i < 400; i += 1) fd.step(DT); // 撞墙 + 刮到低速带
+    fd.press('KeyW', true);
+    const z0 = fd.state.z;
+    for (let i = 0; i < 1200; i += 1) fd.step(DT); // 10s
+    const disp = Math.abs(fd.state.z - z0);
+    expect(disp).toBeGreaterThanOrEqual(10); // 契约：≥10m（探针 14.785）
+    expect(Math.abs(fd.state.speed)).toBeGreaterThanOrEqual(0.5); // 低速带下限（可走不卡死）
+    expect(Math.abs(fd.state.speed)).toBeLessThanOrEqual(3.0); // 低速带上限（蹭墙平衡 ~1.5）
+    expect(fd.state.x).toBeGreaterThanOrEqual(LIMIT - 1e-6); // 仍贴墙
+  });
+});
+
+describe('R142 CI 判据 ③ 2D 接触单帧横移 ≤ X_Z_PEN_SMOOTH_CAP（渲染后轨迹口径）', () => {
+  it('贴墙直行（承托柱接触场景）全程单帧 |Δx| ≤0.35m（X_Z_PEN_SMOOTH_CAP 平滑上限）', () => {
+    const fd = new FreeDrive({ start: { x: 10.0, z: -415.0, heading: 0 } });
+    fd.state.speed = 30;
+    fd.press('KeyW', true);
+    let maxDx = 0;
+    let prevX = 10.0;
+    for (let i = 0; i < 300; i += 1) {
+      fd.step(DT);
+      const dx = Math.abs(fd.state.x - prevX);
+      if (dx > maxDx) maxDx = dx;
+      prevX = fd.state.x;
+    }
+    expect(maxDx).toBeLessThanOrEqual(0.35); // 探针 0.3500（X_Z_PEN_SMOOTH_CAP 设计值）
+  });
+});
+
+describe('R142 结构断言：空气墙红线常量仍在（防误改）', () => {
+  it('WALL_2D_MAX_LATERAL_STEP=0.30 / WALL_SCRUB_DECEL=0.8 / WALL_TANGENT_FRICTION=0.25 / WALL_IMPACT_SPEED_KICK_RATIO=0.7 / IMPACT_TAU=0.12', () => {
+    expect(WALL_2D_MAX_LATERAL_STEP).toBe(0.30);
+    expect(WALL_SCRUB_DECEL).toBe(0.8);
+    expect(WALL_TANGENT_FRICTION).toBe(0.25);
+    expect(WALL_IMPACT_SPEED_KICK_RATIO).toBe(0.7);
+    expect(IMPACT_TAU).toBe(0.12);
+  });
+});
