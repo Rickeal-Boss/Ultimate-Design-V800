@@ -59,8 +59,13 @@ export const FREE = {
   /** 转角收窄区间（km/h）：18 → 60 线性 */
   steerLowKmh: 18,
   steerHighKmh: 60,
-  /** 转向输入一阶平滑时间常数 s */
-  steerTau: 0.10,
+  /** 转向输入一阶平滑时间常数 s（低速 ≤ steerLowKmh = 轻快；高速 ≥ steerHighKmh = 沉稳；
+   *  中间随 steerLimitFor 同斜率线性插值，见 steerTauFor）——R129 随速转向权重 */
+  steerTauLow: 0.07,
+  steerTauHigh: 0.14,
+  /** 横摆响应一阶滞后 s（轮胎侧偏力载荷渐进：打舵后横摆率按此 τ 建起，非瞬时 kinematic）
+   *  ——R129 ② 转向驱动横摆载荷渐进，撞墙横摆冲量（R104）与贴墙脱困（0.35 直写）不经此通道 */
+  yawResponseTau: 0.07,
   /** 倒车限速 m/s（≈28.8 km/h） */
   reverseMaxMs: 8,
   /** 倒车驱动力占前进驱动力的比例（倒车不需要全扭矩） */
@@ -639,6 +644,21 @@ export function steerLimitFor(speedKmh: number): number {
 }
 
 /**
+ * R129 纯函数：速度相关的转向输入平滑时间常数（随速转向权重）。
+ * ≤ steerLowKmh = steerTauLow（轻快）；≥ steerHighKmh = steerTauHigh（沉稳）；中间与
+ * steerLimitFor 同斜率线性插值。⚠ 只改转向角轨迹的建角/回正速率（s.steer 一阶阻尼），
+ * 不改转向目标（steerTarget）、稳态横摆（yawRateFor）与横摆上限（maxYawRate）——单调、无过冲。
+ */
+export function steerTauFor(speedKmh: number): number {
+  const t = clamp(
+    (speedKmh - FREE.steerLowKmh) / (FREE.steerHighKmh - FREE.steerLowKmh),
+    0,
+    1
+  );
+  return FREE.steerTauLow + (FREE.steerTauHigh - FREE.steerTauLow) * t;
+}
+
+/**
  * 纯函数：偏航角速度。低速转向减弱（|v|/refSpeed 线性），倒车时方向反向。
  */
 export function yawRateFor(steer: number, speedMs: number): number {
@@ -815,6 +835,10 @@ export class FreeDrive {
   /** R36-P1 漂移动力学状态：体轴侧向速度 m/s / 动态偏航角速度 rad/s */
   private vy = 0;
   private yawDyn = 0;
+  /** R129 ② 转向驱动横摆响应一阶滞后状态 rad/s：打舵后按 yawResponseTau 建起（轮胎载荷
+   *  渐进），非瞬时 kinematic。撞墙横摆冲量（R104，积分后注入 s.yawRate）与贴墙脱困
+   *  （0.35 直写）不经此通道；漂移态用 yawDyn，此通道在漂移态同步跟随（无缝退出）。 */
+  private steerYawRate = 0;
   /** R99 撞墙瞬态包络 [m/s]：撞击时置为法向入射峰值，随后指数衰减，驱动横摆/侧倾余韵 */
   private wallImpact = 0;
   /**
@@ -942,6 +966,7 @@ export class FreeDrive {
     };
     this.vy = 0;
     this.yawDyn = 0;
+    this.steerYawRate = 0;
     this.wallImpact = 0;
     this.wallScrubN = 0;
     this.wallKick = 0;
@@ -1003,6 +1028,7 @@ export class FreeDrive {
     s.rearGrip = 1;
     this.vy = 0;
     this.yawDyn = 0;
+    this.steerYawRate = 0;
     this.wallImpact = 0;
     this.wallScrubN = 0;
     this.wallKick = 0;
@@ -1034,6 +1060,7 @@ export class FreeDrive {
     s.rearGrip = 1;
     this.vy = 0;
     this.yawDyn = 0;
+    this.steerYawRate = 0;
     this.wallImpact = 0;
     this.wallScrubN = 0;
     this.wallKick = 0;
@@ -1099,10 +1126,10 @@ export class FreeDrive {
     s.brake = brakeIn;
     s.handbrake = handbrake;
 
-    // ---- 转向输入一阶平滑（τ 0.15s）+ 高速转角收窄 ----
+    // ---- 转向输入一阶平滑（随速 τ：低速轻快/高速沉稳）+ 高速转角收窄 ----
     const speedKmh = Math.abs(s.speed) * MS_TO_KMH;
     const steerTarget = steerIn * steerLimitFor(speedKmh);
-    s.steer = damp(s.steer, steerTarget, 1 / FREE.steerTau, dt);
+    s.steer = damp(s.steer, steerTarget, 1 / steerTauFor(speedKmh), dt);
 
     // ---- 纵向力（复用主线力函数）----
     const v = s.speed;
@@ -1252,12 +1279,25 @@ export class FreeDrive {
       this.yawDyn = clamp(this.yawDyn, -FREE.maxYawRate, FREE.maxYawRate);
       s.beta = Math.atan2(this.vy, ax);
       yawRate = this.yawDyn;
+      // R129 ②：漂移态同步转向横摆滞后通道 ⇒ 松手刹退出漂移时 steerYawRate 从 yawDyn
+      // 续起，横摆率连续（旧式 kinematic yawRateFor 与 yawDyn=0 之间的阶跃在漂移退出残留）。
+      this.steerYawRate = this.yawDyn;
       moveHeading = s.heading + s.beta; // 速度方向 = 航向 + 侧滑角（车尾外滑的运动学产物）
     } else {
       this.vy = 0;
       this.yawDyn = 0;
       s.beta = 0;
-      yawRate = yawRateFor(s.steer, vAvg !== 0 ? vAvg : v);
+      // R129 ② 横摆响应一阶滞后：轮胎侧偏力载荷渐进，打舵后横摆率按 yawResponseTau 建起
+      //（非瞬时 kinematic——旧式点舵后航向瞬时锁定、无「载荷渐进」；回正也按此 τ 平滑，
+      //  一次一阶无过冲 ⇒ 无横摆动量、无穿墙风险）。只作用于转向驱动横摆：
+      //  撞墙横摆冲量（R104，下方积分后注入 s.yawRate）与贴墙脱困（下方 0.35 直写）不经此通道。
+      this.steerYawRate = damp(
+        this.steerYawRate,
+        yawRateFor(s.steer, vAvg !== 0 ? vAvg : v),
+        1 / FREE.yawResponseTau,
+        dt
+      );
+      yawRate = this.steerYawRate;
       // ---- R102 贴墙低速脱困：恢复最小转向权限 ----
       // 死锁闭环：wallScrubN 贴墙期间以 Math.max 记峰、永不衰减（封顶 12 m/s²），
       // 12 > 前进净加速 6.11 > 倒车 2.08 ⇒ scrub 单帧把 vNext 钳回 0（速度 0）；
@@ -1275,6 +1315,8 @@ export class FreeDrive {
         av < WALL_SCRUB_RELEASE_MS
       ) {
         yawRate = steerIn * FREE.maxYawRate * 0.35 * (vAvg >= 0 ? 1 : -1);
+        // R129 ②：脱困直写旁路横摆滞后 ⇒ 同步滞后状态，避免脱困结束瞬间横摆回跳。
+        this.steerYawRate = yawRate;
       }
       moveHeading = s.heading;
     }
