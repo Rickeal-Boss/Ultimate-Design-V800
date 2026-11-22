@@ -968,6 +968,23 @@ export function clampToFootprints(
       xClamp.bestF.kind === 'hallBase' ||
       xClamp.bestF.kind === 'doorLeaf');
   const isGatePierKind = xClamp.bestF != null && xClamp.bestF.kind === 'gatePier';
+  /* R140 · 非门墩实体陡角深嵌恒平滑（补 R123 fix-1b 斜插浅嵌 + R138+ Fix-2 低角项均未覆盖的
+   *   「陡角纵向深嵌」空档）。根因（探针实证）：cornerBase/frontBase/frontWall（角塔基座/前排
+   *   塔基/火盆，均**非** isSolidEntryKind 亦**非** isGatePierKind）在车斜插陡角（sinH>0.5）且
+   *   纵向深嵌（zOv≥xPenRaw）时，原式 `(!isGatePierKind && zOv<xPenRaw)` 判据为 false（纵向
+   *   深嵌反向）且 `sinHAbs<=0.5` 低角项不命中（陡角）⇒ xPenSmooth=false ⇒ 单帧推回 = 真实
+   *   穿透 2.42~2.52m（cornerBase 2.416 / frontBase 2.516 / frontWall 1.816，>X_Z_PEN_SMOOTH_CAP
+   *   =0.35）= 潜在单帧瞬移（latent 空气墙）。⚠ 自然驾驶不可达（clamp 浅层 catch，实测最大单帧
+   *   |Δx|=0.35），为 teleport 伪影；本项是**防御性硬化**：若玩家极端操纵/未来改动可达深嵌
+   *   陡角态即单帧瞬移 2.42~2.52m，恒平滑到 ≤0.35 消除此隐患。
+   *   仅纳入 cornerBase/frontBase/frontWall（非门洞类、非 r105 漂移类）——gatePier（门洞通行
+   *   R119 有意保留单帧消除）与 arcadeCol（r105 漂移收敛单帧消除）**不纳入**，护 R119 ⑧ / r105。
+   *   最终 clamp 目标（best）不变，仅限单帧推回到 X_Z_PEN_SMOOTH_CAP=0.35（收敛速率）。 */
+  const isSteepNonEntryKind =
+    xClamp.bestF != null &&
+    (xClamp.bestF.kind === 'cornerBase' ||
+      xClamp.bestF.kind === 'frontBase' ||
+      xClamp.bestF.kind === 'frontWall');
   /* R138+ Fix-2 · 直行/近直行贴墙恒平滑（补 R123 fix-1b 未覆盖的「直行空档」）。
    *   根因（探针实证）：cornerBase/frontBase/frontWall（角塔基座/前排塔基/火盆，均**非**
    *   isSolidEntryKind 亦**非** isEntryKind）在车直行贴墙（heading=0，sinH=0，车头沿 z 为主）
@@ -985,9 +1002,12 @@ export function clampToFootprints(
    *   （≤14.497+1.003=15.5）零穿透 ⇒ 对主墙面为 no-op，只处理探出 0.7m 的火盆（xInner=14.35）。
    *   最终 clamp 目标（best）不变，仅限单帧推回到 X_Z_PEN_SMOOTH_CAP=0.35（收敛速率，
    *   车 2~3 帧内收敛到贴界，无残留、无卡死）。 */
+  // R140：非门墩实体陡角深嵌恒平滑（cornerBase/frontBase/frontWall；gatePier/arcadeCol 不纳入，
+  //   门洞通行 R119 / r105 漂移单帧消除保留）。见上方 isSteepNonEntryKind 定义注释。
   const xPenSmooth =
     xPenRaw > 0.35 &&
     (isSolidEntryKind ||
+      isSteepNonEntryKind ||
       (!isGatePierKind && zOv < xPenRaw) ||
       sinHAbs <= 0.5); // 车横深嵌（实体无洞 / 非门墩横向深嵌 / 低角含直行贴墙恒平滑）
   const zPenSmooth = zPenRaw > 0.35 && xPenRaw > zPenRaw; // 车横向深嵌 > 车头纵向深入

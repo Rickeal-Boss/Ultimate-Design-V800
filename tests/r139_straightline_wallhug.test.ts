@@ -145,11 +145,18 @@ describe('R139 ⑥ 结构断言 · cityFootprints.ts 无 isEntryKind 残留、xP
     expect(SRC).not.toMatch(/\bisEntryKind\s*=\s*/);
   });
 
-  it('g2 xPenSmooth 条件 = isSolidEntryKind || (!isGatePierKind && zOv<xPenRaw) || sinHAbs<=0.5', () => {
+  it('g2 xPenSmooth 条件 = isSolidEntryKind || isSteepNonEntryKind || (!isGatePierKind && zOv<xPenRaw) || sinHAbs<=0.5', () => {
     // Fix-2 核心：低角项从 `sinHAbs<=0.5 && isEntryKind` 改为 `sinHAbs<=0.5`（去 isEntryKind 门控）。
-    //   多行正则钉死 xPenSmooth 赋值块（防注释/历史匹配）。
-    expect(SRC).toMatch(
-      /const\s+xPenSmooth\s*=\s*xPenRaw\s*>\s*0\.35\s*&&\s*\(\s*isSolidEntryKind\s*\|\|\s*\(!isGatePierKind\s*&&\s*zOv\s*<\s*xPenRaw\)\s*\|\|\s*sinHAbs\s*<=\s*0\.5\s*\)/s
+    //   R140：插入 isSteepNonEntryKind（cornerBase/frontBase/frontWall 陡角深嵌恒平滑，见
+    //   tests/r140_steep_nonentry_smooth.test.ts）。多行正则钉死 xPenSmooth 赋值块（防注释/历史匹配）。
+    //   ⚠ 条件内 R140 加了行内 `// R140：...` 注释，先剥离 `/* */` 与 `//` 注释再匹配代码主体
+    //   （与 g3 同法），否则注释文本打断正则。
+    const codeBody = SRC.replace(/\/\*[\s\S]*?\*\//g, '')
+      .split('\n')
+      .filter((l) => !l.trimStart().startsWith('//'))
+      .join('\n');
+    expect(codeBody).toMatch(
+      /const\s+xPenSmooth\s*=\s*xPenRaw\s*>\s*0\.35\s*&&\s*\(\s*isSolidEntryKind\s*\|\|\s*isSteepNonEntryKind\s*\|\|\s*\(!isGatePierKind\s*&&\s*zOv\s*<\s*xPenRaw\)\s*\|\|\s*sinHAbs\s*<=\s*0\.5\s*\)/s
     );
   });
 
