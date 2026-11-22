@@ -1,12 +1,13 @@
 /**
- * R137 · 高精度 GLB 按 GPU 类别默认门控（数据驱动）。
+ * R137 · 高精度 GLB 按 GPU 类别默认门控（数据驱动）→ **R141 撤销（用户指令：不回落程序化）**。
  *
  * 背景（本机 Arc iGPU + 生产 #perfhud 实测）：高精度外部壳 `body 966,484 + 4 轮 303,521
  * = 1,270,005 tri`，整帧 `tris 1,503,898`；`#highDetail=off` 对照 `tris 145,900` ⇒
- * **车模 GLB 是核显几何成本主因（8.7×），非建筑**。R137 处方：核显默认回落程序化车模
- * （82k），显式 `#highDetail=on` / localStorage='on' 仍可强制。
+ * **车模 GLB 是核显几何成本主因（8.7×），非建筑**。R137 曾处方：核显默认回落程序化车模
+ * （82k）。**R141（用户裁决）：默认一律不回落程序化模型，GPU 类别无关**，显式
+ * `#highDetail=off` / localStorage='off' 仍让位。
  *
- * 断言焦点（优先级不可倒置）：`URL hash > localStorage > (gpuClass==='integrated' ? off : on)`。
+ * 断言焦点（优先级不可倒置）：`URL hash > localStorage > 恒 on（GPU 无关）`。
  * highDetail.ts 是 Node-safe 配置模块（`import type { GpuClass }` 被 TS 擦除，不求值 quality），
  * 故只需 shim `window.location.hash` + `localStorage`，无需完整 DOM/quality shim。
  */
@@ -57,25 +58,25 @@ afterEach(() => {
   setActiveGpuClass('unknown');
 });
 
-describe('R137 GPU 感知默认（无 hash / 无存储）', () => {
-  it('核显默认回落程序化车模（off）', () => {
+describe('R141 默认不回落程序化（无 hash / 无存储，GPU 无关）', () => {
+  it('核显默认保持高精度（on，R141 不回落）', () => {
     setActiveGpuClass('integrated');
-    expect(isHighDetailEnabled()).toBe(false);
+    expect(isHighDetailEnabled()).toBe(true);
   });
 
-  it('离散独显默认保持高精度（on，行为逐位不变）', () => {
+  it('离散独显默认保持高精度（on）', () => {
     setActiveGpuClass('discrete');
     expect(isHighDetailEnabled()).toBe(true);
   });
 
-  it('未知 GPU 默认保持高精度（on，兼容旧行为）', () => {
+  it('未知 GPU 默认保持高精度（on）', () => {
     setActiveGpuClass('unknown');
     expect(isHighDetailEnabled()).toBe(true);
   });
 
-  it('软件渲染默认回落程序化车模（off）', () => {
+  it('软件渲染默认保持高精度（on，R141 不回落）', () => {
     setActiveGpuClass('software');
-    expect(isHighDetailEnabled()).toBe(false);
+    expect(isHighDetailEnabled()).toBe(true);
   });
 });
 

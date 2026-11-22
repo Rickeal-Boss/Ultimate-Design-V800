@@ -9,8 +9,8 @@ import { formatPerfHudText } from './ui/perfHud';
 
 const container = byId('app');
 const quality = createQualitySettings();
-// R137：把运行时 GPU 类别注入 highDetail 配置（quality.gpuClass = #gpufake ?? detectGpuClass()，
-// 故核显默认回落程序化车模；显式 #highDetail=on 仍可强制高精度）。
+// R137：把运行时 GPU 类别注入 highDetail（quality.gpuClass = #gpufake ?? detectGpuClass()）。
+// R141 起该类别不再门控高精度默认（恒 on，GPU 无关），仅作诊断/遥测。
 setActiveGpuClass(quality.gpuClass);
 const game = new Game(container, quality, () => {
   byId('loading').classList.add('done');
