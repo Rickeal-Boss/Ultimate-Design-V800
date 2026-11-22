@@ -61,7 +61,7 @@ describe('R100 hall ② 集成：speed=0 彻底停、无二次 hall、heading �
     fd.state.speed = 25;
     let hallHits = 0;
     fd.onEvent = (e) => {
-      if (e === 'hall') hallHits += 1;
+      if (typeof e === 'object' && e.kind === 'hall') hallHits += 1;
     };
     for (let i = 0; i < 900; i += 1) fd.step(DT); // 7.5s ≈ 4.7×hallCd
 
@@ -110,7 +110,7 @@ describe('R100 hall ④ 姿态瞬态：yawRate / roll 被顶一下后指数衰�
     fd.state.speed = 25;
     let hallHits = 0;
     fd.onEvent = (e) => {
-      if (e === 'hall') hallHits += 1;
+      if (typeof e === 'object' && e.kind === 'hall') hallHits += 1;
     };
     const yawTrace: number[] = [];
     const rollTrace: number[] = [];

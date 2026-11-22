@@ -406,7 +406,7 @@ describe('R102 ④ step() 集成：hit 时事件与速度口径（沿用 wall �
     let sawWall = false;
     let sawSideKind = false;
     fd.onEvent = (e) => {
-      if (e === 'wall') sawWall = true;
+      if (typeof e === 'object' && e.kind === 'wall') sawWall = true;
     };
     // 直接摆到接近收紧线的位置：x=13.8（> 12.657 收紧线 ⇒ clampToFootprints 命中）
     fd.teleport(13.8, K0[0], -Math.PI / 6);
@@ -433,7 +433,7 @@ describe('R102 ④ step() 集成：hit 时事件与速度口径（沿用 wall �
     const fd = new FreeDrive({ start: { x: 0, z: -600, heading: Math.PI } }); // 朝 +Z
     let wallCount = 0;
     fd.onEvent = (e) => {
-      if (e === 'wall') wallCount++;
+      if (typeof e === 'object' && e.kind === 'wall') wallCount++;
     };
     fd.press('KeyW', true);
     for (let i = 0; i < 120; i++) fd.step(1 / 120); // 1 s

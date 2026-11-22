@@ -34,7 +34,7 @@ function traceAfterHit(
   fd.state.speed = speed;
   let hits = 0;
   fd.onEvent = (e) => {
-    if (e === event) hits += 1;
+    if (typeof e === 'object' && e.kind === event) hits += 1;
   };
   const roll: number[] = [];
   const yaw: number[] = [];
@@ -108,7 +108,7 @@ describe('R100 Phase3 ③ 低速撞击瞬态行为不变（clamp 不绑定）', 
     fd.state.speed = HIGH_SPEED;
     let wallHits = 0;
     fd.onEvent = (e) => {
-      if (e === 'wall') wallHits += 1;
+      if (typeof e === 'object' && e.kind === 'wall') wallHits += 1;
     };
     let minRoll = 0;
     let maxRoll = 0;

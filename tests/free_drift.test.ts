@@ -223,7 +223,7 @@ describe('R37-D 自回正项符号（零油门绕圈 bug 回归）', () => {
     const fd = new FreeDrive({ start: { x: -10.3, z: -250, heading: 0 } });
     let hits = 0;
     fd.onEvent = (e) => {
-      if (e === 'wall' || e === 'hall') hits += 1;
+      if (typeof e === 'object') hits += 1;
     };
     accelerateTo(fd, 16);
     fd.press('Space', true);

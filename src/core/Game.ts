@@ -1214,18 +1214,24 @@ export class Game {
 
   /** 自由探索事件（撞击 / 复位 / 退出 / 帮助卡），由 FreeDrive 去抖后派发 */
   private onFreeEvent(e: FreeDriveEvent): void {
-    switch (e) {
-      case 'hall':
+    // R127 撞墙/撞主殿事件对象化：携带撞击强度（0~1）供视觉/听觉缩放。
+    //   满幅保持 R110 基线不回归（wall 0.12 / hall 0.32），强度缩放 ⇒ 撞得越狠越震、
+    //   擦过去（strength≈0）近乎无感（与 R109 刮擦强度衰减一致）；与 crashWorld
+    //   撞车 `0.18 × strength` 同一缩放口径。音效加小地板防掠擦静音。
+    if (typeof e === 'object') {
+      if (e.kind === 'hall') {
         // 复用挑战模式「撞上主殿」文案（R28 换皮后的用户口径）
         this.hud.showToast('撞上主殿！', true, 1800);
-        this.sfx.impact(0.6);
-        this.rig.addShake(0.32);
+        this.sfx.impact(Math.max(0.15, 0.6 * e.strength));
+        this.rig.addShake(0.32 * e.strength);
         vibrate([40, 30, 90]);
-        break;
-      case 'wall':
-        this.sfx.impact(0.22);
-        this.rig.addShake(0.12);
-        break;
+      } else {
+        this.sfx.impact(Math.max(0.08, 0.22 * e.strength));
+        this.rig.addShake(0.12 * e.strength);
+      }
+      return;
+    }
+    switch (e) {
       case 'reset':
         this.hud.showToast('已复位到城门外', false, 1400);
         break;

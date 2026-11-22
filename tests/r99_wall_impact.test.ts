@@ -130,7 +130,7 @@ describe('R99 ③ FreeDrive 写回：朝向一阶收敛 / 漂移态渐变 / 瞬�
     fd.state.speed = 20;
     let wallHits = 0;
     fd.onEvent = (e) => {
-      if (e === 'wall') wallHits += 1;
+      if (typeof e === 'object' && e.kind === 'wall') wallHits += 1;
     };
     let hBefore = fd.state.heading;
     for (let i = 0; i < 200 && wallHits === 0; i += 1) {

@@ -98,7 +98,7 @@ describe('R110 ④ 离墙不误触发（无 2D 接触时零 wall 事件、零减
     const fd = new FreeDrive({ start: { x: 0, z: -600, heading: Math.PI } });
     let wallCount = 0;
     fd.onEvent = (e) => {
-      if (e === 'wall') wallCount += 1;
+      if (typeof e === 'object' && e.kind === 'wall') wallCount += 1;
     };
     fd.press('KeyW', true);
     const v0 = fd.snapshot().speed;

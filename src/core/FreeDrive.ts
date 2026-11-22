@@ -521,11 +521,28 @@ export function corridorCenterHalfWidth(z: number): number {
 /** 自由探索起点：城门外（城门洞 z = −358.5）以北 28.5 m，车头朝城门 */
 export const FREE_START = Object.freeze({ x: 0, z: -330, heading: 0 });
 
+/**
+ * R127 撞墙/撞主殿事件（去抖后派发）：携带撞击强度供视觉反馈缩放。
+ * strength ∈ [0,1]，由 impactN（m/s 法向入射强度）经 FREE_IMPACT_STRENGTH_N_REF 归一化，
+ * 与 crashWorld CrashImpact.strength（0~1）同一口径 ⇒ Game 侧 `gain × strength` 与撞车一致。
+ */
+export interface FreeDriveImpactEvent {
+  kind: 'wall' | 'hall';
+  /** 撞击强度 0~1（0 = 掠擦无感，1 = 正面满幅） */
+  strength: number;
+}
+
+/**
+ * R127 撞击强度归一化基准 [m/s]：法向入射强度达到此值即满幅（strength=1）。
+ * 真源标定：R99/R106 撞墙被顶可感标定 20m/s ≈ 0.8 幅、25m/s（90km/h）满幅封顶；
+ * 低速蹭墙（<8m/s）≈ 0.3 幅以下近乎无感，掠擦（fn→0 ⇒ impactN→0）归零 ⇒
+ * 「撞得越狠抖越大、擦过去不抖」口径，与 R109 刮擦强度衰减一致。
+ */
+export const FREE_IMPACT_STRENGTH_N_REF = 25;
+
 export type FreeDriveEvent =
-  /** 撞上主殿正面 */
-  | 'hall'
-  /** 撞侧向护栏 / 纵向尽头 */
-  | 'wall'
+  /** 撞墙/撞主殿（带撞击强度，kind 判别 wall/hall） */
+  | FreeDriveImpactEvent
   /** 已复位到起点 */
   | 'reset'
   /** 请求退出自由探索（Esc） */
@@ -1521,14 +1538,19 @@ export class FreeDrive {
     // ---- 事件去抖 ----
     this.hallCd = Math.max(0, this.hallCd - dt);
     this.wallCd = Math.max(0, this.wallCd - dt);
+    // R127 撞击事件携带归一化强度（0~1）：impactN 为当帧法向入射强度 [m/s]
+    //（hall=|speed|、wall=|v|·fn，掠擦 fn→0 自然归零）。归一化与 crashWorld 同口径，
+    //   Game 侧 `gain × strength` 缩放松放 —— 撞得越狠抖越大、擦过去不抖。
+    const impactStrength = (n?: number): number =>
+      clamp(n ?? 0, 0, FREE_IMPACT_STRENGTH_N_REF) / FREE_IMPACT_STRENGTH_N_REF;
     if (r.kind === 'hall') {
       if (this.hallCd === 0) {
         this.hallCd = 1.6;
-        this.emit('hall');
+        this.emit({ kind: 'hall', strength: impactStrength(r.impactN) });
       }
     } else if (r.kind !== 'none' && this.wallCd === 0) {
       this.wallCd = 0.5;
-      this.emit('wall');
+      this.emit({ kind: 'wall', strength: impactStrength(r.impactN) });
     }
   }
 
