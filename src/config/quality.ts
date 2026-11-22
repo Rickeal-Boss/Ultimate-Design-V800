@@ -137,23 +137,46 @@ export function detectGpuClass(): GpuClass {
       : String(gl.getParameter(gl.RENDERER) ?? '');
     // 不主动 loseContext：临时 context 交由 GC（主动 lose 在部分驱动上会连带
     // 影响随后创建的主 context，表现为页面直接崩溃，得不偿失）
-    const name = raw.toLowerCase();
-    if (!name) return 'unknown';
-    if (/swiftshader|llvmpipe|software|basic render|microsoft basic/.test(name)) return 'software';
-    // Intel 核显（Iris/UHD/HD）；Arc 是独显，不算
-    if (name.includes('intel') && !name.includes('arc')) return 'integrated';
-    // AMD APU：Radeon(TM) Graphics / Vega 8 / Radeon 780M 之类；RX/Navi/Pro 是独显
-    if (
-      /(radeon|amd)/.test(name) &&
-      /(graphics|vega \d|\d+m\b)/.test(name) &&
-      !/(rx \d|navi|pro w|firepro|instinct)/.test(name)
-    ) {
-      return 'integrated';
-    }
-    return 'discrete';
+    return classifyGpuByName(raw);
   } catch {
     return 'unknown';
   }
+}
+
+/**
+ * 纯函数：由 GPU 渲染器字符串分类（从 detectGpuClass 提取，便于单测钉死分类表）。
+ * ⚠ R133 修复（承 R43 像素预算）：**Intel Arc 核显误判为独显**。
+ *   · 病根：Intel Core Ultra（Meteor/Lunar/Arrow，带 NPU）的核显就是 Arc iGPU，
+ *     GL 渲染器串形如 `Intel(R) Arc(TM) Graphics`（**无型号**）或 `Arc(TM) 140V`
+ *     （Lunar Lake 带 V 后缀型号）。旧式 `intel && !arc` 把它排除 ⇒ 落回 `'discrete'`
+ *     ⇒ `createQualitySettings` 不调 `applyIntegratedBudget` ⇒ 核显跑 high 档
+ *     （MSAA4 + bloom1 + shadow1024 + 画布 antialias）——**核显的填充率必然越 vsync
+ *     预算**（R43 顶注已判过这类机器）。本机实锤：`Intel(R) Arc(TM) Graphics` +
+ *     `Core Ultra 5 125H`（14 核，NPU）。
+ *   · 修法：Arc 一族再按**型号串**分——核显无 `A###/B###` 离散型号（A770/A580/B580
+ *     Alchemist/Battlemage），V 后缀（140V/130V）是 Lunar Lake iGPU ⇒
+ *     `arc && !/\b[ab]\d{3,4}\b/` = 核显；含 `A###/B###` = 真独显（仍 high 档）。
+ *   · 只改 Arc 一族；Iris/UHD/HD（intel && !arc）与 AMD APU 逻辑逐位不动。
+ */
+export function classifyGpuByName(raw: string): GpuClass {
+  // trim：GL 返回纯空白串时旧逻辑会落到 'discrete'（误超调），trim 后空 → 'unknown'（不改档）
+  const name = raw.trim().toLowerCase();
+  if (!name) return 'unknown';
+  if (/swiftshader|llvmpipe|software|basic render|microsoft basic/.test(name)) return 'software';
+  // Intel 核显（Iris/UHD/HD）
+  if (name.includes('intel') && !name.includes('arc')) return 'integrated';
+  // R133：Intel Arc——无 A###/B### 离散型号串 ⇒ 核显（Core Ultra 的 Arc iGPU）；
+  // 含 A###/B###（A770/A580/B580 等）⇒ 独显。
+  if (name.includes('arc') && !/\b[ab]\d{3,4}\b/.test(name)) return 'integrated';
+  // AMD APU：Radeon(TM) Graphics / Vega 8 / Radeon 780M 之类；RX/Navi/Pro 是独显
+  if (
+    /(radeon|amd)/.test(name) &&
+    /(graphics|vega \d|\d+m\b)/.test(name) &&
+    !/(rx \d|navi|pro w|firepro|instinct)/.test(name)
+  ) {
+    return 'integrated';
+  }
+  return 'discrete';
 }
 
 /** auto 检测：软件渲染→low；核显→medium 预算；其余按 UA/屏宽/核数（原版口径） */
