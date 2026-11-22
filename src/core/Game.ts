@@ -46,7 +46,7 @@ import { Menu } from '../ui/Menu';
 import { Result } from '../ui/Result';
 import { Sliders } from '../ui/Sliders';
 import { Loop } from './Loop';
-import { FREE_START, FreeDrive, type FreeDriveEvent } from './FreeDrive';
+import { FREE_START, FreeDrive, freeImpactStrength, type FreeDriveEvent } from './FreeDrive';
 import type { GameEvent, RunResult, Sample, SessionInput } from './StateMachine';
 import { StateMachine } from './StateMachine';
 
@@ -1626,6 +1626,10 @@ export class Game {
         // 翻滚演出只留给撞主殿撞击面（CrashReason='barrier' 枚举冻结；断裂已改为
         // 冗余接管，不再有凭空的翻滚能量来源）
         const speedMs = this.sm.vehicle.speed;
+        // R128 撞毁反馈随撞击强度缩放（与 R127 free 探索 wall/hall 同口径）：
+        //   freeImpactStrength 单一真源归一化（25 m/s 满幅）。撞得越狠震得越大、
+        //   低速撞毁（溜过去撞）反馈轻；撞毁音保底 0.3（翻车演出始终显著）。
+        const crashN = freeImpactStrength(speedMs);
         this.rig.setMode('crash');
         this.hud.setActiveView('crash');
         this.settleTimer = 0;
@@ -1633,10 +1637,10 @@ export class Game {
         this.car.body.rotation.set(0, MODEL_BASE_YAW, 0); // 保留基准偏航 π，只清俯仰/横滚
         this.crashWorld.begin(this.car.root, speedMs); // 主殿实心撞击，无飞散路障块
         this.crashElapsed = 0;
-        this.sfx.impact(1);
+        this.sfx.impact(Math.max(0.3, crashN));
         this.fx.burstSparks(this.car.root.localToWorld(new THREE.Vector3(0, 0.6, -2.7)));
         this.brakeFlash = 0.5;
-        this.rig.addShake(0.5);
+        this.rig.addShake(0.5 * crashN);
         this.hud.showToast('撞上主殿！', true, 2200);
         vibrate([90, 40, 200]);
         this.pendingResult = { result: event.result, delay: CRASH.resultDelaySeconds };

@@ -540,6 +540,16 @@ export interface FreeDriveImpactEvent {
  */
 export const FREE_IMPACT_STRENGTH_N_REF = 25;
 
+/**
+ * R127/R128 撞击强度归一化（单一真源）：法向/纵向入射强度 [m/s] → 强度 [0,1]。
+ * clamp 到 [0, REF] 再除 REF ⇒ 0→0、REF→1、超 REF 封顶 1、负值归 0。
+ * 供 FreeDrive 去抖派发（wall/hall 事件）与挑战撞主殿（crash 演出）共用，
+ * 保证「撞得越狠反馈越大」在所有撞击通道同一口径。
+ */
+export function freeImpactStrength(n: number): number {
+  return clamp(n, 0, FREE_IMPACT_STRENGTH_N_REF) / FREE_IMPACT_STRENGTH_N_REF;
+}
+
 export type FreeDriveEvent =
   /** 撞墙/撞主殿（带撞击强度，kind 判别 wall/hall） */
   | FreeDriveImpactEvent
@@ -1539,18 +1549,17 @@ export class FreeDrive {
     this.hallCd = Math.max(0, this.hallCd - dt);
     this.wallCd = Math.max(0, this.wallCd - dt);
     // R127 撞击事件携带归一化强度（0~1）：impactN 为当帧法向入射强度 [m/s]
-    //（hall=|speed|、wall=|v|·fn，掠擦 fn→0 自然归零）。归一化与 crashWorld 同口径，
+    //（hall=|speed|、wall=|v|·fn，掠擦 fn→0 自然归零）。归一化与 crashWorld 同口径
+    //（freeImpactStrength 单一真源，挑战撞主殿 crash 演出也复用），
     //   Game 侧 `gain × strength` 缩放松放 —— 撞得越狠抖越大、擦过去不抖。
-    const impactStrength = (n?: number): number =>
-      clamp(n ?? 0, 0, FREE_IMPACT_STRENGTH_N_REF) / FREE_IMPACT_STRENGTH_N_REF;
     if (r.kind === 'hall') {
       if (this.hallCd === 0) {
         this.hallCd = 1.6;
-        this.emit({ kind: 'hall', strength: impactStrength(r.impactN) });
+        this.emit({ kind: 'hall', strength: freeImpactStrength(r.impactN ?? 0) });
       }
     } else if (r.kind !== 'none' && this.wallCd === 0) {
       this.wallCd = 0.5;
-      this.emit({ kind: 'wall', strength: impactStrength(r.impactN) });
+      this.emit({ kind: 'wall', strength: freeImpactStrength(r.impactN ?? 0) });
     }
   }
 
