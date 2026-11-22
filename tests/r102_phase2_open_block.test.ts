@@ -180,11 +180,11 @@ describe('R103 阶段二 ④ 角塔飞扶壁墩 hero-only（k<2）', () => {
     );
   }
 
-  it('真源派生：角塔墩内缘 11.35（非写死）；连墙墩与角塔墩同为 buttressBase 共 30 座（含主殿前排飞扶壁 + 跨街承托柱 + 广场列阵火盆）', () => {
+  it('真源派生：角塔墩内缘 11.35（非写死）；连墙墩与角塔墩同为 buttressBase 共 32 座（含主殿前排飞扶壁 + 跨街承托柱 + 广场列阵火盆 + 门楼飞扶壁）', () => {
     expect(BUTTRESS_CORNER_INNER).toBeCloseTo(11.35, 12);
     // 20 连墙墩（10 块 × 2 段）+ 4 角塔墩（hero 块 k=0,1 各 2 角）+ 1 主殿前排飞扶壁内墩（R105 广场域）
-    // + 1 跨街连廊承托柱（R123 Fix 2）+ 4 广场列阵火盆（R125 ⑦b）
-    expect(FOOTPRINTS.filter((f) => f.kind === 'buttressBase').length).toBe(30);
+    // + 1 跨街连廊承托柱（R123 Fix 2）+ 4 广场列阵火盆（R125 ⑦b）+ 2 门楼飞扶壁内/外墩（R138 御桥段）
+    expect(FOOTPRINTS.filter((f) => f.kind === 'buttressBase').length).toBe(32);
   });
 
   it('hero 块（k=0,1）每块有 2 个角塔墩 2D 占位（内缘 11.35，z 同角塔中心）', () => {
@@ -219,8 +219,9 @@ describe('R105 漂移态 2D 启用：城内/广场 2D 唯一入口 = clampToFoot
     );
     // step() 2D 门控：城内+广场+城门带域 [zMin, 塔基北界+半长]（R118 上界 gateBackZ→gateFrontZ
     //   纳入城门带门墩；R105 下界 plazaZ→zMin，纳入主殿飞扶壁；R119 北扩 CAR_HALF_L；R120 上界
-    //   再北扩到 GATE_PIER_Z_MAX + CAR_HALF_L（门墩塔基实体北界，车头一触塔基即 2D 接管））
-    expect(src).toMatch(/nz <= GATE_PIER_Z_MAX \+ CAR_HALF_L && nz >= BOUNDS\.zMin/);
+    //   再北扩到 GATE_PIER_Z_MAX + CAR_HALF_L（门墩塔基实体北界，车头一触塔基即 2D 接管）；
+    //   R138 上界再北扩到 max(塔基北界, 门楼飞扶壁墩带北界)+CAR_HALF_L（御桥段门楼飞扶壁墩接管））
+    expect(src).toMatch(/nz <= Math\.max\(GATE_PIER_Z_MAX, GATE_FLY_Z_MAX\) \+ CAR_HALF_L && nz >= BOUNDS\.zMin/);
     // 非漂移 + 漂移两处都调 clampToFootprints（漂移态不再被整体跳过）
     expect(src).toMatch(/clampToFootprints\(s\.x, s\.z, s\.heading\)/);
   });

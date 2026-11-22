@@ -53,9 +53,11 @@ describe('R119 ① fix-1 门带入口：车心窗口 z∈(−351.5,−348.7525] 
     // fix-1 北扩：2D 激活域上界 gateFrontZ → gateFrontZ+CAR_HALF_L=−348.7525。车心落在此窗口
     //   （车头前缘已伸过 −351.5 门脸、车心仍在桥段）时 2D 门墩钳位接管，替代 1D 桥限（10.997）
     //   漏洞（1D 桥限不挡门墩内缘 10 ⇒ 车 OBB 前角穿门墩 0.9~2.45m）。
+    // R138：窗口北半（z≥−350.4975，车 OBB 与门楼飞扶壁墩 z 带 [−347.75,−344.95] 重叠）最紧界
+    //   被门楼飞扶壁内墩（xInner 7.8 < 门扇 9.0）接管（r138 补测），故本测试 z 值取窗口南半
+    //   （z ≤ −350.55 < −350.4975，车 OBB 与门楼飞扶壁墩 z 分离）以钉死 doorLeaf 最紧语义。
     const winMin = BOUNDS.gateFrontZ; // −351.5
-    const winMax = BOUNDS.gateFrontZ + HALF_L; // −348.7525
-    for (const z of [winMin + 0.5, winMin + 1.5, winMin + 2.5, winMax - 0.5, winMax]) {
+    for (const z of [winMin + 0.2, winMin + 0.4, winMin + 0.6, winMin + 0.8, winMin + 0.95]) {
       // 车心 x=9.6（车缘 10.603 真嵌门墩内缘 10 0.6m）⇒ 2D 门墩真相交 ⇒ clamp 收紧。
       // R124：车缘 10.603 亦真嵌门扇（x∈[9.0,9.4]，车缘 10.603 > 门扇内缘 9.0），门扇
       //   （far 界 9.0−dx=7.997）比门墩（far 界 10−dx=8.997）更紧 ⇒ 门扇为最紧界（doorLeaf）。

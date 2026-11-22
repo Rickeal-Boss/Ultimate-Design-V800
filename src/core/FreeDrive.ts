@@ -35,7 +35,7 @@ import { clamp, damp } from '../util/math';
 // R102：城内地面实体（角塔基座 / 柱础 / 飞扶壁墩 / 殿台基 / 前脸）2D 占位 + 车 OBB 收紧。
 //   纯数值模块（无 three/DOM），只提供 clampToFootprints(x,z,heading)；1D 钳位
 //   resolveBounds / corridorCenterHalfWidth / corridorHalfWidth 函数体逐位不动。
-import { clampToFootprints } from './cityFootprints';
+import { clampToFootprints, GATE_FLY_Z_MAX } from './cityFootprints';
 // B6 a11y（R30-D2）：与 Sliders.onKey 共用「交互目标放行」判据（同一定义，
 // 避免两处选择器列表漂移）。dom.ts 是无依赖叶子工具，不构成循环依赖。
 import { isInteractiveTarget } from '../ui/dom';
@@ -1405,7 +1405,15 @@ export class FreeDrive {
      *   实测 ⑧ 场景末态车心 −348.4784 处 SAT 残余 0.1987m）。北扩后车头一触塔基北界 2D 门墩
      *   钳位即接管（SAT 判交覆盖车头入塔基）；桥段（z>gateFrontZ）北侧无其它 footprint，
      *   扩带只引入「车头探入塔基即被 gatePier 收紧」的接管，不改变城内/广场 2D 语义。 */
-    if (nz <= GATE_PIER_Z_MAX + CAR_HALF_L && nz >= BOUNDS.zMin) {
+    /* R138：激活域上界再北扩覆盖**门楼飞扶壁墩**（z∈[−347.75,−344.95]，御桥段）——
+     *   R120 的 GATE_PIER_Z_MAX+CAR_HALF_L（−348.1525）只盖门墩塔基（北界 −350.9），
+     *   漏掉门楼前脸步道的飞扶壁双墩（z 上界 −344.95 > 塔基北界）：御桥段 1D 限车心
+     *   10.997（车缘 12.0 贴桥沿）不挡外墩（|x|∈[10.2,12.4]），车贴桥沿经过穿外墩最多
+     *   1.8m（R125 defer「桥段 2D 红线」）。上界取 max(塔基北界, 墩带北界)+CAR_HALF_L
+     *   = −344.95+2.7475 = −342.2025，车头一探墩带 2D 钳位即接管；墩带北侧（z>−344.95）
+     *   无其它 footprint，扩带只引入「车头探入门楼飞扶壁墩即被收紧」的接管，不改
+     *   城内/广场 2D 语义（桥段正常通行 x 中线不碰墩）。 */
+    if (nz <= Math.max(GATE_PIER_Z_MAX, GATE_FLY_Z_MAX) + CAR_HALF_L && nz >= BOUNDS.zMin) {
       // R105：去掉外层 !driftActive 门控 —— 漂移态**也做位置钳**（s.x=fp.x），堵死漂移穿模。
       //   旧版整层被 !driftActive 关闭 ⇒ 漂移车能穿进建筑底部 3.5~5.6 m（全量几何扫最大穿模源）。
       //   R103 关掉它的真因是「位置钳 + 撞击/速度/heading 注入」会让 β 永不塌缩，而非位置钳本身；

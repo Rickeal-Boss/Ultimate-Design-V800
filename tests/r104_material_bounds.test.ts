@@ -134,14 +134,15 @@ describe('R104 ③ 六类地面实体占位边界扫描（不穿 + 不过度挡�
     } as const;
     // 合理下界（不过度挡）：城内最内实体（柱/墩 11.12/11.35）不应被占位推到 9.0 以内；
     //   R123 跨街连廊承托柱（xInner=8.7，Fix 2）是城内最内真实实体，buttressBase 下界降到 8.6；
-    //   R125 主殿广场列阵火盆（xInner=8.45，⑦b）更靠内，下界再降到 8.4
+    //   R125 主殿广场列阵火盆（xInner=8.45，⑦b）更靠内，下界再降到 8.4；
+    //   R138 门楼飞扶壁内墩（御桥段 z>−351.5，不在城内块）真实内缘 7.8，下界再降到 7.8
     const lowerBound: Record<keyof typeof innerBy, number> = {
       frontWall: 9.0,
       hallBase: 9.0,
       cornerBase: 9.0,
       frontBase: 9.0,
       arcadeCol: 9.0,
-      buttressBase: 8.4
+      buttressBase: 7.8
     };
     for (const kind of Object.keys(innerBy) as (keyof typeof innerBy)[]) {
       const rows = byKind(kind);
@@ -165,6 +166,6 @@ describe('R104 ③ 六类地面实体占位边界扫描（不穿 + 不过度挡�
     expect(byKind('cornerBase').length).toBe(20);
     expect(byKind('frontBase').length).toBe(20);
     expect(byKind('arcadeCol').length).toBe(40);
-    expect(byKind('buttressBase').length).toBe(30); // 连墙 20 + 角塔 4（hero 块）+ 主殿前排飞扶壁 1（R105 广场域）+ 跨街承托柱 1（R123）+ 广场列阵火盆 4（R125 ⑦b，双侧镜像 1 条/座）
+    expect(byKind('buttressBase').length).toBe(32); // 连墙 20 + 角塔 4（hero 块）+ 主殿前排飞扶壁 1（R105 广场域）+ 跨街承托柱 1（R123）+ 广场列阵火盆 4（R125 ⑦b，双侧镜像 1 条/座）+ 门楼飞扶壁内/外墩 2（R138 御桥段）
   });
 });

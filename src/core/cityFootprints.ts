@@ -208,6 +208,42 @@ const DOOR_LEAF_X_INNER = 9.2 - 0.2; // 9.0（门扇内缘 = 框柱内面）
 const DOOR_LEAF_X_OUTER = 9.2 + 0.2; // 9.4（门扇外缘）
 const DOOR_LEAF_Z_MIN = GATE.z + GATE.depth / 2 - 4 - 4.22; // zFront−8.22 = −359.72（门南沿）
 const DOOR_LEAF_Z_MAX = GATE.z + GATE.depth / 2 - 4 + 4.22; // zFront+0.22 = −351.28（门北沿）
+
+/* ── R138 · 门楼飞扶壁双墩（御桥段 z>gateFrontZ，桥段 1D 限不挡墩）──────────
+ * 门楼飞扶壁（castleKit.ts:1544-1558 `flyingButtress({reach:6,depth:1.1,pierW:1.7,
+ * pairGap:2.4}).rotateY(-π/2).translate(±10.1,0,zFront)`）双墩立御桥段 z≈−346.35
+ * （门楼前脸之前步道位）。御桥段 1D 限车心 10.997（车缘 12.0 贴桥沿）不挡墩：外墩
+ * 世界 |x|∈[10.2,12.4]，车贴桥沿经过穿外墩最多 1.8m —— R125 defer「桥段 2D 红线」。
+ * 坐标映射（R105 同式，rotateY(−π/2)：世界 x = ±10.1 − z_local，世界 z = zFront + x_local）：
+ *   墩对 pierZs=[−pairGap/2,+pairGap/2] ⇒ 世界 |x| = 10.1 ± pairGap/2（内墩 8.9 / 外墩 11.3）；
+ *   基座 box(pierW+1.1,0.5,depth+1.1) ⇒ 世界 x 半宽 (depth+1.1)/2=1.1、z 半宽 (pierW+1.1)/2=1.4；
+ *   墩心 z = zFront + (reach−pierW/2) = −351.5+5.15 = −346.35。
+ *   ⚠ 门楼飞扶壁调用**无 detail**（castleKit.ts:1544-1557 未传 detail）⇒ 无 R42-P1-D+
+ *   hi 大脚，基座最宽 = 第一级（pierW+1.1 × depth+1.1），无需 HI_EXTRA。
+ *   内墩 [7.8,10.0] / 外墩 [10.2,12.4] 间 0.2m 缝隙 < 车宽 2.006 ⇒ 车不可只占缝隙；
+ *   但**不做 AABB 并集**（并集 [7.8,12.4] 会让贴桥沿车（x=10.997）单帧推回 4.2m=空气墙，
+ *   R110 教训），拆两条独立 footprint ⇒ 贴桥沿车穿外墩 1.8m 单帧推回（R115/R117 收敛
+ *   瞬态语义，接受）。kind=buttressBase（实体无洞类 ⇒ isSolidEntryKind 恒平滑）。
+ *   ⚠ footprint z∈[−347.75,−344.95] 在 2D 激活带上界（GATE_PIER_Z_MAX+CAR_HALF_L=−348.1525）
+ *   之外 ⇒ 需 FreeDrive 激活域上界扩到 GATE_FLY_Z_MAX+CAR_HALF_L=−342.2025（R138 同步改）。 */
+const GATE_FRONT_Z = GATE.z + GATE.depth / 2; // −351.5（门楼前脸，castleKit zFront 同源）
+const GATE_FLY_WX = 10.1; // castleKit.ts:1558 translate(side*10.1,…)
+const GATE_FLY_REACH = 6; // :1548
+const GATE_FLY_DEPTH = 1.1; // :1549
+const GATE_FLY_PIER_W = 1.7; // :1551
+const GATE_FLY_PAIR_GAP = 2.4; // :1555
+const GATE_FLY_INNER_CENTER = GATE_FLY_WX - GATE_FLY_PAIR_GAP / 2; // 8.9（内墩世界 |x|）
+const GATE_FLY_OUTER_CENTER = GATE_FLY_WX + GATE_FLY_PAIR_GAP / 2; // 11.3（外墩世界 |x|）
+const GATE_FLY_BASE_HALF_X = (GATE_FLY_DEPTH + 1.1) / 2; // 1.1（world x 半宽，depth 轴转世界 x）
+const GATE_FLY_BASE_HALF_Z = (GATE_FLY_PIER_W + 1.1) / 2; // 1.4（world z 半宽，pierW 轴转世界 z）
+const GATE_FLY_Z = GATE_FRONT_Z + (GATE_FLY_REACH - GATE_FLY_PIER_W / 2); // −346.35（墩心 z）
+const GATE_FLY_INNER_X_INNER = GATE_FLY_INNER_CENTER - GATE_FLY_BASE_HALF_X; // 7.8（内墩内缘）
+const GATE_FLY_INNER_X_OUTER = GATE_FLY_INNER_CENTER + GATE_FLY_BASE_HALF_X; // 10.0（内墩外缘）
+const GATE_FLY_OUTER_X_INNER = GATE_FLY_OUTER_CENTER - GATE_FLY_BASE_HALF_X; // 10.2（外墩内缘）
+const GATE_FLY_OUTER_X_OUTER = GATE_FLY_OUTER_CENTER + GATE_FLY_BASE_HALF_X; // 12.4（外墩外缘）
+const GATE_FLY_Z_MIN = GATE_FLY_Z - GATE_FLY_BASE_HALF_Z; // −347.75（墩带南界）
+/** 墩带 z 上界（导出供 FreeDrive 激活域上界派生；z 半宽 = (pierW+1.1)/2） */
+export const GATE_FLY_Z_MAX = GATE_FLY_Z + GATE_FLY_BASE_HALF_Z; // −344.95（墩带北界）
 /** 连墙段 z 区间 castleKit.ts:3289-3292（塔→殿 / 殿→塔，避开前后排塔基 z 半延展 4.7 m）：
  *  `[-blockLen/2, -blockLen/4 - 4.7]` / `[blockLen/4 + 4.7, blockLen/2]`（local z）。
  *  飞扶壁墩落在段中点 lz（castleKit.ts:3478-3487 `const lz = (za + zb) / 2`）。 */
@@ -491,6 +527,26 @@ export function buildCityFootprints(): CityFootprint[] {
     zMin: DOOR_LEAF_Z_MIN,
     zMax: DOOR_LEAF_Z_MAX,
     kind: 'doorLeaf'
+  });
+
+  // ⑩ R138 · 门楼飞扶壁双墩（御桥段 z>gateFrontZ）：拆内/外墩两条独立 footprint
+  //    （不做 AABB 并集 [7.8,12.4]，并集令贴桥沿车（x=10.997）单帧推 4.2m=空气墙）。
+  //    内墩 [7.8,10.0] / 外墩 [10.2,12.4]，z∈[−347.75,−344.95]，双侧镜像（|x| 距离存储）。
+  //    ⚠ z 带在 2D 激活域（上界 GATE_PIER_Z_MAX+CAR_HALF_L=−348.1525）之外 ⇒ FreeDrive
+  //    激活域上界须扩到 GATE_FLY_Z_MAX+CAR_HALF_L=−342.2025（R138 同步改，本文件禁碰门控）。
+  list.push({
+    xInner: GATE_FLY_INNER_X_INNER,
+    xOuter: GATE_FLY_INNER_X_OUTER,
+    zMin: GATE_FLY_Z_MIN,
+    zMax: GATE_FLY_Z_MAX,
+    kind: 'buttressBase'
+  });
+  list.push({
+    xInner: GATE_FLY_OUTER_X_INNER,
+    xOuter: GATE_FLY_OUTER_X_OUTER,
+    zMin: GATE_FLY_Z_MIN,
+    zMax: GATE_FLY_Z_MAX,
+    kind: 'buttressBase'
   });
 
   return list;
