@@ -2131,13 +2131,16 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
     // —— R65：R7 轮拱内衬（此前 R7 无衬板）——
     // 病灶（用户 11-10 截图）：R7 轮辐条间隙可斜视穿到舱内座椅（cabin occluder 座椅
     // seat-driver-cushion 等，line 916-925）。修法同 V800 R36-C1：拱腔内顶补哑光黑衬板，
-    // 180° 弧段封死看穿路径（几何见 parts/wheelArchLiner.ts 头注；内凹封、不外凸）。
+    // 270° 弧段封死看穿路径（R143-C 由 R65 210° 再扩至 270°；几何见 parts/wheelArchLiner.ts
+    // 头注；内凹封、不外凸）。
     // 落在轮胎(0.383)与拱(0.452)之间余量带，不碰轮/拱几何本体；body-local 挂 body（随 rotY π）。
     {
       const linerMat = new THREE.MeshStandardMaterial({
-        color: 0x101114,
+        // R143-C：0x101114/rough0.85 在环境光读灰(125,113,99)强化「片状」观感；
+        // 压暗到 0x0a0b0d + rough 1.0（关金属/镜面）读哑光黑护板。
+        color: 0x0a0b0d,
         metalness: 0.05,
-        roughness: 0.85,
+        roughness: 1.0,
         side: THREE.DoubleSide // 掠射/腔内双面可见，防背面剔除漏色
       });
       linerMat.userData.sculptMaterial = { id: WHEEL_ARCH_LINER_MATERIAL_ID };
@@ -2161,10 +2164,52 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
       const r68ArchOn = !/(?:^|[#&])r68arch=off/i.test(
         typeof window === 'undefined' ? '' : window.location.hash
       );
+      // R143-C2 · 轮内侧内挡板（Phase3 打回：270°/90°/0.40 挡下拱但后轮拱**上右橙斑
+      // persist**——经拱口内缘/轮辐外侧隙漏舱内 cognac）。内板缘平面置 r0.43 实心圆盘
+      // 封死斜视穿舱路径。`#r143disc=off` ⇒ 隐藏挡板（消去法 A/B 复现橙斑，证挡板堵路）。
+      // ⚠ R143-C2 终验：该盘被轮胎角径全遮蔽（16.8°<20.6°）⇒ A/B 逐字节不变 ⇒ 无效。
+      const r143DiscOn = !/(?:^|[#&])r143disc=off/i.test(
+        typeof window === 'undefined' ? '' : window.location.hash
+      );
+      // R143-C3 · 内衬半径扩带（Phase3 打回根因）：0.415–0.437 与轮胎 0.38 / 拱 0.452
+      // 各留 35mm/15mm 径向隙 ⇒ 上右斜视穿舱。扩到 0.383–0.449（各留 3mm 亚像素缝、
+      // 藏阴影），零 tri 增量（同拓扑 270° 弧）。`#r143rin=/#r143rout=` 可扫（默认
+      // 修复值；传 0.415/0.437 即回 R143-C1 泄漏态作 A/B 对照）。约束：0.38<rIn<rOut<0.452。
+      const hash = typeof window === 'undefined' ? '' : window.location.hash;
+      const hashNum = (key: string, dflt: number): number => {
+        const m = new RegExp(`[#&]${key}=([0-9.]+)`).exec(hash);
+        return m ? Number(m[1]) : dflt;
+      };
+      const r143Rin = hashNum('r143rin', 0.383);
+      const r143Rout = hashNum('r143rout', 0.449);
+      // R143-C4 · 内板缘挡板半径（Phase3 终审：橙斑在 rOut0.449 与拱缘≈0.49 之间的
+      // 41mm 环带；0.415 够不到、0.48 封此环带（拱缘 0.49 内 10mm 安全余量）。
+      // `#r143discr=` 可扫（默认修复值）。约束 < 拱缘 0.49（留 10mm）、> 轮胎 0.383。
+      const r143DiscR = hashNum('r143discr', 0.48);
       const r68HubScale = shell.manifest.scale;
       for (const corner of ['fl', 'fr', 'rl', 'rr'] as const) {
         const c = WHEEL_HUB_CENTERS[corner];
-        const mesh = new THREE.Mesh(createWheelArchLiner(c.side), linerMat);
+        // R143-C：扩角 210→270（封下部 ~150° 斜下象限）+ 弧心 95→90（对称正上）+
+        // 加宽 0.335→0.40（向舱内收 65mm 封轴向侧隙）。V800 前拱仍走 ARCH_LINER
+        // 默认（createWheelArchLiner 缺省分支，逐位不变）——本覆盖只作用于 R7。
+        // 半径带 rIn0.415/rOut0.437 不变 ⇒ 仍落在轮胎 0.382 与拱 0.452 之间 70mm
+        // 余量带，不碰胎/不穿拱；segs 保持 10 ⇒ 零 tri 增量（挡板 tri 见下）。
+        // R143-C4：`baffleRadius r143DiscR(0.48)` = 内板缘挡板（> 轮胎 0.383、
+        // < 拱缘 0.49 内 10mm；扇面底缘世界 y≈0.037 不穿地），置内板缘平面
+        // （藏胎后、只从背面剔除角露出 ⇒ 封「拱口环带 0.449–0.49 + 轮心 0–0.383」
+        // 斜视透舱路径）。扇面角域同壳面 a0→a1（270°）。
+        const mesh = new THREE.Mesh(
+          createWheelArchLiner(c.side, {
+            spanDeg: 270,
+            centerDeg: 90,
+            width: 0.4,
+            // R143-C3：半径扩带封径向隙（胎0.38→内3mm / 拱0.452→内3mm）。
+            rIn: r143Rin,
+            rOut: r143Rout,
+            ...(r143DiscOn ? { baffleRadius: r143DiscR } : {})
+          }),
+          linerMat
+        );
         mesh.name = `r22-arch-liner-${corner}`;
         const hub = shell.manifest.hubs[corner];
         if (r68ArchOn && hub) {
@@ -2177,7 +2222,7 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
         body.add(mesh);
         linerCount += 1;
       }
-      console.info(`[R7Adapter] R65 轮拱内衬接线完成（${linerCount} 角 ×哑光黑 180°）`);
+      console.info(`[R7Adapter] R65 轮拱内衬接线完成（${linerCount} 角 ×哑光黑 270° R143-C）`);
     }
     console.info(
       `[R7Adapter] R44 外部壳就绪：body ${shell.manifest.tri.body} tri + 4 轮，` +

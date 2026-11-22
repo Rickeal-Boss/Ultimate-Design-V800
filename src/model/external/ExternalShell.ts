@@ -398,6 +398,12 @@ const R62_PROC_PAINT_TWEAK: Record<string, { chroma: number; metal: number }> = 
 export const R62_PAINT_CLEARCOAT = r56HashNum('r62clearcoat') ?? 0.7;
 /** 程序化车漆清漆层粗糙度（默认 0.12；`#r62clearcoatrough=` 可扫参） */
 export const R62_PAINT_CLEARCOAT_ROUGH = r56HashNum('r62clearcoatrough') ?? 0.12;
+// R143-F3（未改，仅注释）：顶轨白点与玻璃同源（R62 清漆层 0.7/0.12 反射 env）。本波未降——
+// R62 原提交为贴官图刻意把 clearcoat 抬到 0.7 / roughness 0.12 出「湿润清漆高光」+ 色度饱和，
+// 降到 0.5/0.25 会整体衰减车身漆光泽（整车主导材质），判定属「过度衰减」。且玻璃本波
+// roughness 0.06→0.22 已大幅收敛最尖锐 firefly 源；漆面 0.12 粗糙度本已比玻璃旧值更宽，
+// 白点强度弱一个量级。若 Phase 3 审查线仍见顶轨白点，再单独把 0.7→0.5、0.12→0.25
+// （须同步 r62_wheel_brake.test.ts:130-131 与 r64_variant_consistency.test.ts:71-72/171-172）。
 
 /**
  * R45：外部壳是异步懒加载，且 V800 单车资产 ~49MB（gzip 传输 ~25MB）。慢网络下
@@ -1451,13 +1457,17 @@ function r61BuildSideTrim(
   const merged = mergeSafe(geos);
   // 亮银饰条：中银色 + 适度金属度 + 微 emissive 兜底（SwiftShader 弱反射下也读作亮银，
   // 真机核显反光更佳）。避免纯金属在近白车漆上因暗环境反射发黑、对比度丢失。
+  // R143-F2 白腰带读作白：原 color 0xccd1d8（近白）+ env 1.3 + emissive 0.22 在亮环境下
+  // 整体读作纯白而非铬银。银铬化：color 降到中冷灰 0x8a9299、env 降到 0.5、emissive 降到
+  // 0.08（emissive 色保持 0x3a3d44）。V800/R7 共用本材质 ⇒ 全局生效（V800 侧饰条同为亮银，
+  // 中冷灰读作铬银不暗过头；若后续审查线判 V800 需更亮，再拆 car 分支只改 R7）。
   const chromeMat = new THREE.MeshStandardMaterial({
-    color: 0xccd1d8,
+    color: 0x8a9299,
     metalness: 0.55,
     roughness: 0.28,
-    envMapIntensity: 1.3,
+    envMapIntensity: 0.5,
     emissive: new THREE.Color(0x3a3d44),
-    emissiveIntensity: 0.22,
+    emissiveIntensity: 0.08,
     side: THREE.DoubleSide
   });
   const mesh = new THREE.Mesh(merged, chromeMat);
@@ -2325,11 +2335,14 @@ export async function loadExternalShell(
       color: 0x0b1016,
       transparent: true,
       opacity: 0.55,
-      roughness: 0.06,
+      // R143-F1 玻璃白点火点：超光滑暗玻璃（rough 0.06 + clearcoat 1/0.05 + env 1.6）镜面
+      // 反射程序化天空/env 产生离散 2-4px 近纯白 fireflies。抬高 roughness 到 0.22、清漆层
+      // 降到 0.5/0.15、env 降到 1.0 ⇒ 反射展宽 + 减强度，治白点但保湿润反光观感不过度衰减。
+      roughness: 0.22,
       metalness: 0,
-      envMapIntensity: 1.6,
-      clearcoat: 1,
-      clearcoatRoughness: 0.05,
+      envMapIntensity: 1.0,
+      clearcoat: 0.5,
+      clearcoatRoughness: 0.15,
       side: THREE.DoubleSide,
       depthWrite: false
     });
@@ -2358,6 +2371,42 @@ export async function loadExternalShell(
       glassMat.depthWrite = true;
     }
     collectNamed(glassGltf, glassMeshes, glassMode === 'off' ? null : glassMat, manifest.scale);
+    // ══ R143-F1b · 天窗玻璃独立 `glass` 材质反射抑制（审查打回项①）════════════════
+    // 背景（verify/r143_sunroof/VERDICT.md，probe-sunroof-dots）：天窗白点 = 环境反射
+    // fireflies 真缺陷。F1 只降了 `glass-clear`（glass.glb 的风挡/侧窗，侧窗 11→5 改善），
+    // **天窗用独立 `glass` 材质**（sculptMaterial.id='glass'，count=1，roughness 0.06 极光滑
+    // 暗面板）未被触及 ⇒ 天窗白点 328→328 未减。该材质**不来自 glass.glb**（glass.glb 全部
+    // mesh 已被上方 glassMat 覆盖，若天窗在其内 F1 早已生效），而是 body.glb 内独立 mesh
+    // （comp='sunroof-glass'）的 GLB 直出材质 —— 故这里对 body 场景内 sculptMaterial.id==='glass'
+    // 的材质应用与 F1 玻璃同值反射抑制（roughness 0.22 / clearcoat 0.5 / clearcoatRoughness 0.15 /
+    // envMapIntensity 1.0），展宽反射 + 减强度，治天窗白点。
+    bodyGltf.scene.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      const m = (Array.isArray(mesh.material) ? mesh.material[0] : mesh.material) as
+        | (THREE.MeshPhysicalMaterial & { userData?: { sculptMaterial?: { id?: string } } })
+        | undefined;
+      if (!m || m.userData?.sculptMaterial?.id !== 'glass') return;
+      m.roughness = 0.22;
+      m.clearcoat = 0.5;
+      m.clearcoatRoughness = 0.15;
+      m.envMapIntensity = 1.0;
+      m.needsUpdate = true;
+    });
+    // ── R143-F1b（defer）车顶板 paint-upper 残留 fireflies ────────────────────────
+    // 审查打回项①辅修（可选）：车顶板 `paint-upper`（metalness 1.0 / roughness 0.28 全金属暗面）
+    // 在天窗玻璃后方同样产 fireflies（dec_nothin_paintup 93 点 / 射线首击 paint-upper）。
+    // 本波**有意不局部化**：paint-upper 是 body.glb 内**全车共用材质实例**（车顶板 / 车顶扰流
+    // 尾翼 / 尾角 D 柱回包 / 车身下半壳体同实例），改其 roughness 或 envMapIntensity 会全局哑化
+    // 整车漆面（主理人禁）；安全局部化需**按 mesh 克隆材质**（find sculptComponent==='roof-panel'
+    // → clone → 仅该实例 set roughness 0.45），但克隆会脱离 GLB 材质实例共享与 dispose 追踪，
+    // 本波无渲染验证条件（dist 为基线快照禁重建），判定「无法安全局部化」⇒ defer。
+    // 若 Phase 3 审查线仍见车顶板白点，应用如下配方并做渲染 A/B：
+    //   bodyGltf.scene.traverse(o => { const mesh=o as THREE.Mesh; if(!mesh.isMesh) return;
+    //     const c=(mesh.userData as {sculptComponent?: string})?.sculptComponent;
+    //     if(c!=='roof-panel') return; const src=mesh.material as THREE.MeshPhysicalMaterial;
+    //     const m=src.clone(); m.roughness=0.45; m.envMapIntensity=Math.min(m.envMapIntensity,0.7);
+    //     m.needsUpdate=true; mesh.material=m; });
     // lamp-rear：刹车灯 emissive 随 brakeLevel（适配器 update() 驱动）
     // lamp-front：DRL 常亮冷白，setHeadlights 联动。
     let lampRearMat: THREE.MeshStandardMaterial | null = null;

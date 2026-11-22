@@ -120,6 +120,37 @@ function applyPaintVariant(materials: Iterable<THREE.Material>, paintId: string 
 }
 
 /**
+ * R143-D · 车身镜面反射降载（默认香槟金）。
+ *
+ * ── 根因（Phase1 复现 + three.js 渲染实锤，非贴图错色）──
+ * Material.001 是 MeshPhysicalMaterial（KHR_materials_specular），metalness≈1、roughness 由
+ * metallicRoughness 贴图驱动 ⇒ 车身如镜面般反射亮天空：引擎盖朝上正对天空读作「白引擎盖」，
+ * 前挡玻璃反射暖地平线读作「暖棕前挡」。basecolor 贴图本身已是香槟金
+ * （引擎盖主体岛 UV(0.466,0.317) = RGB[93,78,71]，车尾 [80,42,38]），非烘焙错色；
+ * 纯像素重着色既无效又产生伪影（Phase2 已试）。
+ *
+ * ── 修法 ──
+ * 只对默认香槟金车身：specularIntensity 1→0.3（KHR_materials_specular 系数，直接压反射强度）
+ * + roughness 1→0.5（×roughnessMap 贴图值，软化天空镜面峰值），使引擎盖显香槟金底、前挡显
+ * 深色+轻微反光，而车身侧仍保金属光泽（0.3/0.5 为中档试值，Phase3 可微调）。
+ * 仅动材质标量，零几何 / 零新增 DC / 不换贴图；只影响本车车身材质实例
+ * （wheel 用独立 yangwang-wheel 材质 + 顶点色，不在 bodyMaterials 内，不受影响）。
+ *
+ * ── 隔离性 ──
+ * 仅在 GLB 加载回调、paintId 为 null/'champagne' 时调用；其余变体由 applyPaintVariant 自行
+ * 设定 metalness/roughness，互不覆盖。回滚：删调用即逐位回到原反射。
+ */
+function tuneYangwangBodySpecular(materials: Iterable<THREE.Material>): void {
+  for (const mat of materials) {
+    const phys = mat as THREE.MeshPhysicalMaterial;
+    if (!phys.isMeshPhysicalMaterial) continue;
+    phys.specularIntensity = 0.3;
+    phys.roughness = 0.5;
+    phys.needsUpdate = true; // roughness/specular 参与着色器 uniform，无需重编译 program
+  }
+}
+
+/**
  * @param tier 质量档（透传给 V800 内饰适配器）
  * @param paintId 外观变体；null / 'champagne' = 原厂香槟金（与 resolveAssemblyPaintId 语义一致）
  */
@@ -157,6 +188,9 @@ export function createYangwangCarAdapter(tier: QualityTier = 'high', paintId: st
   body.add(interiorRoot);
   // R94 · 车内态「米黄色光面中间隔板」根治（只动材质 visible，零几何 / 零新增 DC）。
   cullV800ExteriorMaterials(interiorRoot);
+  // R143-B · 车内态「前排三联屏背面看穿」根治（只动 screen-ui 材质 side，零几何）。
+  // 必须在 cull 之后执行：cull 只写 visible 不碰 side，顺序无关，但同处装配期便于回滚。
+  makeScreenUiDoubleSided(interiorRoot);
 
   // ---- 四轮 rig：anchor → deform（爆胎形变）→ spin（唯一滚动轴）→ mesh ----
   const rigs: WheelRig[] = [];
@@ -318,6 +352,12 @@ export function createYangwangCarAdapter(tier: QualityTier = 'high', paintId: st
           }
           fallbackBody.visible = false;
           applyPaintVariant(bodyMaterials, paintId);
+          // R143-D · 车身镜面反射降载（默认香槟金）：白引擎盖/暖棕前挡 = Material.001
+          // 反射亮天空（KHR_materials_specular + 低粗糙度），非贴图错色。只对默认香槟金
+          // 生效；其余变体由 applyPaintVariant 自设 metalness/roughness，互不覆盖。
+          if (paintId === null || paintId === 'champagne') {
+            tuneYangwangBodySpecular(bodyMaterials);
+          }
           shellReady = true;
           setYangwangShellStatus({
             state: 'ready',
@@ -592,6 +632,50 @@ function cullV800ExteriorMaterials(scope: THREE.Object3D): void {
   });
   for (const [mt, keep] of verdict) mt.visible = keep;
 }
+
+/**
+ * R143-B · 仰望车内态「前排三联屏背面看穿」根治。
+ *
+ * ── 根因（Phase1 探针实锤 + probe-yangwang 定向复核）──
+ * V800 程序化座舱的屏幕类材质未设 `side` ⇒ three 默认 `FrontSide`（`createSculptMaterial`
+ * 只在 `spec.doubleSided===true` 时才 DoubleSide；screen-ui / gauge-ui 均无该标记）。
+ * V800Adapter N1 段（L2305-2313）已把屏面绕局部 Y 旋转 π，使 UI 面向乘员（+风挡反方向），
+ * 所以**主驾正面看屏完整**；但仰望去掉外壳后，从后排（cabinRear）看前排三联屏**背面**：
+ *   · `screen-ui` / `gauge-ui` 是 FrontSide ⇒ 背面整体剔除，屏面「消失」；
+ *   · 车内态 `shell.visible=false`（扫描壳隐藏）+ 外壳件被 `cullV800ExteriorMaterials`
+ *     裁掉 ⇒ 屏背后零遮挡 ⇒ 透过屏幕开口直接看到车外。
+ *
+ * ── 修法 ──
+ * 对本车复用的 V800 座舱子树内**仅**屏幕类材质（`screen-ui` 三联屏/后排控制屏/扶手屏 +
+ * `gauge-ui` 仪表屏）设 `side = DoubleSide`。两者皆为**平面卡、无厚度** ⇒ 双面零
+ * z-fighting 风险；正反面同图（背面镜像 UI 属可接受），重点是不再空洞。其它内饰件一律
+ * 不动，避免破坏单面件观感（勿全舱 DoubleSide —— 那会把仪表台 / 座椅等单面件背面一起点亮）。
+ *
+ * ── 隔离性 ──
+ * 这些材质实例由本车 `createV800CarAdapter` 调用各自新造
+ * （V800Adapter L2075 每调用 `createZunjieV800LuxuryMPVModel` 一次 ⇒ L2121 的 `matById`
+ * 逐次新建），改这里**只影响 yangwang 座舱**，V800 自身座舱 / R7 座舱零影响。
+ * 匹配键与 V800Adapter 同源：`userData.sculptMaterial.id`（勿按组件 ID / mesh 名，会漏）。
+ */
+function makeScreenUiDoubleSided(scope: THREE.Object3D): void {
+  const seen = new Set<THREE.Material>();
+  scope.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    const arr = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    for (const mt of arr) {
+      if (!mt || seen.has(mt)) continue;
+      const id = (mt.userData as { sculptMaterial?: { id?: string } })?.sculptMaterial?.id ?? null;
+      if (id === null || !SCREEN_DOUBLE_SIDED_IDS.has(id)) continue;
+      seen.add(mt);
+      mt.side = THREE.DoubleSide;
+      mt.needsUpdate = true; // side 参与着色器 program 缓存键，须标记重编译
+    }
+  });
+}
+
+/** R143-B · 需双面化的屏幕类材质 id（均为平面卡无厚度；新增屏幕 id 在此追加即可）。 */
+const SCREEN_DOUBLE_SIDED_IDS: ReadonlySet<string> = new Set(['screen-ui', 'gauge-ui']);
 
 function disposeGltf(scene: THREE.Object3D): void {
   scene.traverse((o) => {

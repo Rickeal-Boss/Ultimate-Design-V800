@@ -298,6 +298,26 @@ describe('R98 · 仰望高精度 GLB 加载反馈链路', () => {
     expect(ledger()?.state).toBe('ready');
   });
 
+  it('R143-D 成功加载（默认香槟金）⇒ 车身材质镜面反射降载（specularIntensity 0.3 / roughness 0.5）', async () => {
+    const { build, calls } = await freshModules();
+    const car = build();
+    calls[0].onProgress({ loaded: 40 * 1024 * 1024, total: 40 * 1024 * 1024 });
+    // 真车 Material.001 是 MeshPhysicalMaterial（KHR_materials_specular）；用 Physical 伪材
+    // 质确保 tuneYangwangBodySpecular 的 isMeshPhysicalMaterial 判词命中。
+    const scene = new THREE.Group();
+    const bodyMat = new THREE.MeshPhysicalMaterial();
+    const body = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), bodyMat);
+    body.name = 'yangwang-body';
+    scene.add(body);
+    calls[0].onLoad({ scene });
+
+    expect(car.shellReady).toBe(true);
+    expect(bodyMat.specularIntensity).toBe(0.3);
+    expect(bodyMat.roughness).toBe(0.5);
+    // 兜底车身隐藏（真 GLB 已挂树）
+    expect(car.root.getObjectByName('yangwang-fallback-body')?.visible).toBe(false);
+  });
+
   it('失败 ⇒ failed + 可读 error、HUD err 文案、fallback 保留、终态注销', async () => {
     const { hw, build, calls } = await freshModules();
     const car = build();
@@ -306,8 +326,7 @@ describe('R98 · 仰望高精度 GLB 加载反馈链路', () => {
 
     expect(ledger()?.state).toBe('failed');
     expect(ledger()?.error).toContain('HTTP 404 yangwang.glb');
-    expect(ledger()?.bytes).toBe(3 * 1024 * 1024);
-    expect(hudText()).toContain('加载失败');
+    expect(ledger()?.bytes).toBe(3 * 1024 * 1024);    expect(hudText()).toContain('加载失败');
     expect(hudText()).toContain('HTTP 404');
     expect(car.shellReady).toBe(false);
     expect(car.root.getObjectByName('yangwang-fallback-body')?.visible).toBe(true);
