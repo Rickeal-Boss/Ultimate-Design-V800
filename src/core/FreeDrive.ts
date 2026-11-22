@@ -63,6 +63,10 @@ export const FREE = {
    *  中间随 steerLimitFor 同斜率线性插值，见 steerTauFor）——R129 随速转向权重 */
   steerTauLow: 0.07,
   steerTauHigh: 0.14,
+  /** R130 caster 自回正：回正方向 τ 相对建角 τ 的比率（<1 = 回正更快）。
+   *  真实 caster 前束/主销内倾产生自回正力矩，松舵/向心回正快于手动打舵；
+   *  回正加速随速继承（高速回正仍比低速慢，保持沉稳）。0.7 ⇒ 30km/h 回正 90% ≈0.15s vs 建角 ≈0.21s。 */
+  steerReturnRatio: 0.7,
   /** 横摆响应一阶滞后 s（轮胎侧偏力载荷渐进：打舵后横摆率按此 τ 建起，非瞬时 kinematic）
    *  ——R129 ② 转向驱动横摆载荷渐进，撞墙横摆冲量（R104）与贴墙脱困（0.35 直写）不经此通道 */
   yawResponseTau: 0.07,
@@ -644,18 +648,21 @@ export function steerLimitFor(speedKmh: number): number {
 }
 
 /**
- * R129 纯函数：速度相关的转向输入平滑时间常数（随速转向权重）。
+ * R129/R130 纯函数：速度相关的转向输入平滑时间常数（随速转向权重）。
  * ≤ steerLowKmh = steerTauLow（轻快）；≥ steerHighKmh = steerTauHigh（沉稳）；中间与
  * steerLimitFor 同斜率线性插值。⚠ 只改转向角轨迹的建角/回正速率（s.steer 一阶阻尼），
  * 不改转向目标（steerTarget）、稳态横摆（yawRateFor）与横摆上限（maxYawRate）——单调、无过冲。
+ * R130：`returning=true`（松舵/向心回正，|target|<|steer|）时叠加 caster 自回正比率
+ * `FREE.steerReturnRatio`（<1 ⇒ 回正更快）；默认为建角路径（1 参调用逐位不变）。
  */
-export function steerTauFor(speedKmh: number): number {
+export function steerTauFor(speedKmh: number, returning = false): number {
   const t = clamp(
     (speedKmh - FREE.steerLowKmh) / (FREE.steerHighKmh - FREE.steerLowKmh),
     0,
     1
   );
-  return FREE.steerTauLow + (FREE.steerTauHigh - FREE.steerTauLow) * t;
+  const base = FREE.steerTauLow + (FREE.steerTauHigh - FREE.steerTauLow) * t;
+  return returning ? base * FREE.steerReturnRatio : base;
 }
 
 /**
@@ -1129,7 +1136,16 @@ export class FreeDrive {
     // ---- 转向输入一阶平滑（随速 τ：低速轻快/高速沉稳）+ 高速转角收窄 ----
     const speedKmh = Math.abs(s.speed) * MS_TO_KMH;
     const steerTarget = steerIn * steerLimitFor(speedKmh);
-    s.steer = damp(s.steer, steerTarget, 1 / steerTauFor(speedKmh), dt);
+    // R130 caster 自回正：仅正常（非漂移）路径——|目标| < |当前| 即松舵/向心回正方向，
+    // 用更快 τ（自回正力矩）；反向满舵（counter-steer）|目标| ≥ |当前| 走建角 τ 不误加速。
+    // ⚠ 漂移恢复期（R37-D 契约）drift 模型自对齐动力学主导：回正加速会提前撤掉转向阻尼项、
+    //   让残余横摆重饱和到限幅（0.898→0.900 单次微瞬态）破坏单调恢复契约 ⇒ 漂移态用建角 τ。
+    //   判定用上一帧 beta/yawDyn（转向阻尼点在 driftActive 之前，一帧滞后可接受）。
+    const driftLike =
+      Math.abs(s.speed) >= 1.5 &&
+      (s.handbrake || Math.abs(s.beta) > 0.002 || Math.abs(this.yawDyn) > 0.02);
+    const steerReturning = !driftLike && Math.abs(steerTarget) < Math.abs(s.steer);
+    s.steer = damp(s.steer, steerTarget, 1 / steerTauFor(speedKmh, steerReturning), dt);
 
     // ---- 纵向力（复用主线力函数）----
     const v = s.speed;
