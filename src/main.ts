@@ -4,6 +4,7 @@ import type { WebGLRenderer } from 'three';
 import { createQualitySettings } from './config/quality';
 import { Game } from './core/Game';
 import { byId } from './ui/dom';
+import { formatPerfHudText } from './ui/perfHud';
 
 const container = byId('app');
 const quality = createQualitySettings();
@@ -29,10 +30,13 @@ if (import.meta.hot) {
 }
 
 /**
- * QA 钩子（仅 DEV + URL hash 含 perfhud 时启用，构建产物不含）：
- * 屏幕角标显示实测 FPS / draw call / 三角面数（renderer.info），供性能验收截图用。
+ * QA 钩子（URL hash 含 perfhud 时启用）：
+ * 屏幕角标显示实测 FPS / draw call / 三角面数（renderer.info）+ 质量档，供性能验收截图用。
+ * R136：移除 `import.meta.env.DEV` 门控 ⇒ **生产构建亦可用**（与 Renderer.ts R68_GLDIAG
+ * 钩子对齐）。`window.location.hash` 始终可用，默认（无 hash）零开销；质量档行让用户
+ * 线上 `#perfhud` 一眼确认 R133-R135 生效（GPU integrated / msaa 2 / bloom 0.375 / shadow 768）。
  */
-if (import.meta.env.DEV && window.location.hash.includes('perfhud')) {
+if (window.location.hash.includes('perfhud')) {
   const renderer = (game as unknown as { renderer: WebGLRenderer }).renderer;
   // 关键：EffectComposer 一帧内多次 renderer.render()，autoReset 会让 info 只剩最后一个 pass。
   // 关闭 autoReset、由本钩子每帧末尾读取后手动清零 → 读数为「整帧累计」
@@ -57,9 +61,13 @@ if (import.meta.env.DEV && window.location.hash.includes('perfhud')) {
       frames = 0;
       last = now;
       const prog = performance.now() / 1000;
-      const text =
-        `FPS ${fps} | DPR ${renderer.getPixelRatio().toFixed(2)} | ` +
-        `calls(frame) ${calls} | tris(frame) ${tris} | t=${prog.toFixed(1)}s`;
+      const text = formatPerfHudText(quality, {
+        fps,
+        dpr: renderer.getPixelRatio(),
+        calls,
+        tris,
+        t: prog
+      });
       hud.textContent = text;
       // 同步写标题：QA 自动化可经 tab_title 读取（无 JS eval 通道时的实测出口）
       document.title = `[${text}]`;
