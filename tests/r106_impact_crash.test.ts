@@ -21,13 +21,12 @@ import {
   FREE,
   FreeDrive,
   IMPACT_TAU,
-  WALL_IMPACT_PITCH_KICK_MAX,
-  WALL_IMPACT_PITCH_KICK_MS,
   WALL_IMPACT_SPEED_KICK_RATIO,
   WALL_IMPACT_STUN_RATIO,
   corridorCenterHalfWidth,
   resolveBounds
 } from '../src/core/FreeDrive';
+import { FREE_BODY_IMPACT_OSC } from '../src/config/freeBodyFeel';
 import { damp } from '../src/util/math';
 
 const DT = 1 / 120;
@@ -74,13 +73,18 @@ function driveOblique(fn: number, speed: number): FreeDrive {
 }
 
 describe('R106 ① 撞墙域常量（真源派生，有界）', () => {
-  it('speedKick 比例 ∈ (0,1)；pitch 点头常量为正且 pitchKickMax ≤ 灵魂俯仰上限', () => {
+  it('speedKick 比例 ∈ (0,1)；撞墙晃动常量有界（ω>0、0<ζ<1、gains>0，正撞 20m/s 注入不越灵魂上限）', () => {
     expect(WALL_IMPACT_SPEED_KICK_RATIO).toBeGreaterThan(0);
     expect(WALL_IMPACT_SPEED_KICK_RATIO).toBeLessThan(1); // 有界：只扣一个比例，绝不归零
-    expect(WALL_IMPACT_PITCH_KICK_MS).toBeGreaterThan(0);
-    expect(WALL_IMPACT_PITCH_KICK_MAX).toBeGreaterThan(0);
-    // 俯仰冲量峰值不越过灵魂俯仰上限（注入后仍有 ±pitchMaxRad clamp 兜底）
-    expect(WALL_IMPACT_PITCH_KICK_MAX).toBeLessThanOrEqual(FREE.pitchMaxRad);
+    // R126：旧俯仰位置冲量（WALL_IMPACT_PITCH_KICK_*）已被欠阻尼晃动通道取代。
+    //   晃动常量有界：ω>0、0<ζ<1（欠阻尼且不持续振荡）、gains>0；
+    //   pitchGain×20（正撞 20m/s 的 impactN）注入后峰 ≈0.030 rad < pitchMaxRad（clamp 兜底）。
+    expect(FREE_BODY_IMPACT_OSC.omega).toBeGreaterThan(0);
+    expect(FREE_BODY_IMPACT_OSC.zeta).toBeGreaterThan(0);
+    expect(FREE_BODY_IMPACT_OSC.zeta).toBeLessThan(1);
+    expect(FREE_BODY_IMPACT_OSC.rollGain).toBeGreaterThan(0);
+    expect(FREE_BODY_IMPACT_OSC.pitchGain).toBeGreaterThan(0);
+    expect(FREE_BODY_IMPACT_OSC.pitchGain * 20).toBeLessThanOrEqual(FREE.pitchMaxRad * 30);
   });
 });
 

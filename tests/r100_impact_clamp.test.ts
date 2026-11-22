@@ -92,8 +92,10 @@ describe('R100 Phase3 ③ 低速撞击瞬态行为不变（clamp 不绑定）', 
     const t = hallTrace(25);
     expect(t.hits).toBeGreaterThan(0);
     const peakRoll = peak(t.roll);
-    // 低速下注入从未触顶 ⇒ clamp 是 no-op，行为与修复前逐位一致（≈0.0491 rad）
-    expect(peakRoll).toBeGreaterThan(0.04);
+    // R126：roll 注入由「每帧速率项」改为「被顶晃动欠阻尼二阶」（撞墙帧注入角速度）。
+    //   低速下 osc 峰≈pitchGain×25×0.0683≈0.0376 rad（2.15°，≈0.61×上限），clamp 是 no-op；
+    //   瞬态仍可见（>0.03）且远低于上限（<0.9×rollMaxRad），行为有界。
+    expect(peakRoll).toBeGreaterThan(0.03);
     expect(peakRoll).toBeLessThan(FREE.rollMaxRad * 0.9);
     expect(peak(t.yaw)).toBeGreaterThan(0.01);
     expect(countAbove(t.roll, 1e-3)).toBeGreaterThanOrEqual(5);

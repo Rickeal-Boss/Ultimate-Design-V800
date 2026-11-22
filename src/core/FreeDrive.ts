@@ -28,7 +28,8 @@ import { INNER, TOWER } from '../render/scene/r28Layout';
 // R103 阶段二：拱廊柱列（R30_ARCADE）已下沉到 cityFootprints.ts 的 2D 占位，此处不再 import
 //   （castleKit 模块加载无 DOM 副作用，r97_bounds_clearance 在 beforeAll 前已 import 同源）。
 // R98：车身回正阻尼抽成独立配置（6/4 → 3.8/3.2），漂移灵魂参数与纵向力不受影响。
-import { FREE_BODY_DAMPING } from '../config/freeBodyFeel';
+// R126：撞墙「被顶晃动」欠阻尼二阶通道（独立于常态一阶阻尼，只叠加视觉姿态）。
+import { FREE_BODY_DAMPING, FREE_BODY_IMPACT_OSC } from '../config/freeBodyFeel';
 import { dragForce, motorForce, rollForce } from '../physics/Vehicle';
 import { clamp, damp } from '../util/math';
 // R102：城内地面实体（角塔基座 / 柱础 / 飞扶壁墩 / 殿台基 / 前脸）2D 占位 + 车 OBB 收紧。
@@ -116,8 +117,9 @@ export const FREE = {
 export const IMPACT_TAU = 0.12;
 /** 法向入射冲量 → 视觉横摆角速度瞬态增益（rad·s/m，小值起始） */
 export const IMPACT_YAW_GAIN = 0.02;
-/** 法向入射冲量 → 视觉侧倾瞬态增益（rad·s/m，小值起始） */
-export const IMPACT_ROLL_GAIN = 0.004;
+// R126：旧「法向入射冲量 → 视觉侧倾瞬态增益」（IMPACT_ROLL_GAIN=0.004，每帧速率项、
+//   单调回正无过冲）已由 FREE_BODY_IMPACT_OSC 欠阻尼晃动通道取代 —— 撞墙帧注入角速度、
+//   二阶积分过冲回摆，读作「被顶晃一下」而非单调钉回。
 
 /* ── R104 · 撞墙「顿挫感」通道（impact feel）独立标定 ─────────────────────
  * 不放进 FREE 灵魂表，也不改任何既有常量（IMPACT_TAU / IMPACT_YAW_GAIN /
@@ -177,16 +179,10 @@ export const WALL_IMPACT_KICK_MAX = 1.2;
  * 撞墙域边界常量，不入灵魂表。
  */
 export const WALL_IMPACT_SPEED_KICK_RATIO = 0.7;
-/**
- * R106 撞墙俯仰「点头」冲量窗口 s：撞墙帧一次性记有符号 pitchKick 峰值，在此窗口内
- * 每帧分摊 pitchKick·(dt/WALL_IMPACT_PITCH_KICK_MS) 加到 s.pitch，窗口走完即放完。
- */
-export const WALL_IMPACT_PITCH_KICK_MS = 0.12;
-/**
- * R106 撞墙俯仰「点头」冲量峰值上限 rad（真源 / 产品标定：min(法向冲量, 此值) 记为
- * pitchKick，符号朝墙面点头）。受 FREE.pitchMaxRad(2.0°) 硬 clamp 兜底，绝不越灵魂上限。
- */
-export const WALL_IMPACT_PITCH_KICK_MAX = 0.03;
+// R126：旧「俯仰点头一次性位置冲量」（WALL_IMPACT_PITCH_KICK_MS=0.12 /
+//   WALL_IMPACT_PITCH_KICK_MAX=0.03，注入 s.pitch 后一阶单调回正）已由
+//   FREE_BODY_IMPACT_OSC 欠阻尼晃动通道取代 —— 撞墙帧注入 pitch 角速度（负=车头朝墙点头）、
+//   二阶积分过冲回摆，读作「车身被顶晃一下」而非单调钉回。
 
 /* ── R105 · 漂移态 2D 防穿模（位置钳 + 朝向贴墙收敛，不注入撞击/速度/刮擦）──────
  * 不放进 FREE 灵魂表，也不改任何既有常量（IMPACT_TAU / WALL_IMPACT_HEADING_TAU /
@@ -819,13 +815,32 @@ export class FreeDrive {
    * 一次接触只扣一记，离墙复位（wallScrubN 清零处同点复位）再撞才扣下一记。
    */
   private wallSpeedKickFired = false;
-  /** R106 撞墙俯仰「点头」冲量峰值 [rad]（有符号，朝墙面点头） */
-  private pitchKick = 0;
-  /** R106 撞墙俯仰冲量剩余窗口 [s]：>0 时每帧分摊 pitchKick·(dt/WALL_IMPACT_PITCH_KICK_MS) */
-  private pitchKickRemain = 0;
+  /**
+   * R126 常态视觉姿态内部状态（一阶 damp 目标，R98 契约零改）：侧倾/俯仰 rad。
+   *  与撞击晃动（impact*Osc）分离 —— 常态一阶回正不被晃动侵蚀，晃动回摆不被常态阻尼抵消。
+   */
+  private rollBody = 0;
+  private pitchBody = 0;
+  /**
+   * R126 撞墙「被顶晃动」欠阻尼二阶状态：侧倾位移 rad / 角速度 rad/s。
+   *  撞墙帧一次性注入角速度（rollGain×impactN），随后弹簧-阻尼二阶积分，过冲回摆一次再稳定。
+   */
+  private impactRollOsc = 0;
+  private impactRollOscVel = 0;
+  /** R126 撞墙「被顶晃动」欠阻尼二阶状态：俯仰位移 rad / 角速度 rad/s（负 = 车头朝墙点头） */
+  private impactPitchOsc = 0;
+  private impactPitchOscVel = 0;
   /** R102 只读观测口：供测试纯数值断言「贴墙期间 scrub 不被段间跳变误清零」（不暴露写权限） */
   get scrubN(): number {
     return this.wallScrubN;
+  }
+  /** R126 只读观测口：撞墙「被顶晃动」俯仰位移 rad（供测试断言 osc 本身过零回摆，不暴露写权限） */
+  get impactPitchOscValue(): number {
+    return this.impactPitchOsc;
+  }
+  /** R126 只读观测口：撞墙「被顶晃动」侧倾位移 rad（供测试断言 osc 本身过零回摆） */
+  get impactRollOscValue(): number {
+    return this.impactRollOsc;
   }
   /**
    * R102 贴墙滞后锁存：撞墙帧 sideTouch=true 时置 true；|x| 掉到 halfWnow−RELEASE_EPS
@@ -906,8 +921,12 @@ export class FreeDrive {
     this.wallKickRemain = 0;
     this.wallKickFired = false;
     this.wallSpeedKickFired = false;
-    this.pitchKick = 0;
-    this.pitchKickRemain = 0;
+    this.rollBody = 0;
+    this.pitchBody = 0;
+    this.impactRollOsc = 0;
+    this.impactRollOscVel = 0;
+    this.impactPitchOsc = 0;
+    this.impactPitchOscVel = 0;
     this.wallSideTouchLatch = false;
     this.wallSideTouchFarFrames = 0;
   }
@@ -963,8 +982,12 @@ export class FreeDrive {
     this.wallKickRemain = 0;
     this.wallKickFired = false;
     this.wallSpeedKickFired = false;
-    this.pitchKick = 0;
-    this.pitchKickRemain = 0;
+    this.rollBody = 0;
+    this.pitchBody = 0;
+    this.impactRollOsc = 0;
+    this.impactRollOscVel = 0;
+    this.impactPitchOsc = 0;
+    this.impactPitchOscVel = 0;
     this.wallSideTouchLatch = false;
     this.keys.clear();
     this.emit('reset');
@@ -990,8 +1013,12 @@ export class FreeDrive {
     this.wallKickRemain = 0;
     this.wallKickFired = false;
     this.wallSpeedKickFired = false;
-    this.pitchKick = 0;
-    this.pitchKickRemain = 0;
+    this.rollBody = 0;
+    this.pitchBody = 0;
+    this.impactRollOsc = 0;
+    this.impactRollOscVel = 0;
+    this.impactPitchOsc = 0;
+    this.impactPitchOscVel = 0;
     this.wallSideTouchLatch = false;
     this.wallSideTouchFarFrames = 0;
   }
@@ -1027,8 +1054,12 @@ export class FreeDrive {
     this.wallKickRemain = 0;
     this.wallKickFired = false;
     this.wallSpeedKickFired = false;
-    this.pitchKick = 0;
-    this.pitchKickRemain = 0;
+    this.rollBody = 0;
+    this.pitchBody = 0;
+    this.impactRollOsc = 0;
+    this.impactRollOscVel = 0;
+    this.impactPitchOsc = 0;
+    this.impactPitchOscVel = 0;
     this.wallSideTouchLatch = false;
     this.wallSideTouchFarFrames = 0;
       return;
@@ -1097,8 +1128,9 @@ export class FreeDrive {
       this.wallScrubN = 0; // 已离墙：刮擦结束
       this.wallKickFired = false; // 已离墙：复位横摆冲量闩，下次撞墙再放一记
       this.wallSpeedKickFired = false; // 已离墙：复位首帧速度骤降闩，下次撞墙再扣一记
-      this.pitchKick = 0; // 已离墙：清俯仰点头冲量
-      this.pitchKickRemain = 0;
+      // R126：撞墙「被顶晃动」（osc）是**姿态余韵**，独立于本次接触 —— 离墙后仍按二阶
+      //   自然衰减回零（ζ=0.5 ⇒ ~0.8s 内衰减），**不在此硬清**（否则 hall「一次停」离墙
+      //   下一帧就把刚注入的晃动抹掉，读作无晃动）。reset() 才全清。
     }
     // 刮擦减速度：撞得越狠刮得越狠 + 封顶（撞墙域边界耗散，与轮胎摩擦圆独立）
     // R109 低速脱困：× clamp(|v|/FADE_SPEED,0,1) 随速度线性渐入 —— 高速完整刮停
@@ -1401,10 +1433,10 @@ export class FreeDrive {
       // 速度仍 r.speed=0 彻底停、heading 原样、无 targetHeading ⇒ hall 契约不变。
       this.wallKick = Math.min(this.wallImpact, WALL_IMPACT_KICK_MAX);
       this.wallKickRemain = WALL_IMPACT_KICK_MS;
-      // R106 ②：hall 正撞同样放一记俯仰「点头」冲量（与 side/end 同通道），保留「被顶一下」
-      // 的可见俯仰瞬态；速度仍 r.speed=0 彻底停、heading 原样、无 targetHeading ⇒ hall 契约不变。
-      this.pitchKick = -Math.min(this.wallImpact, WALL_IMPACT_PITCH_KICK_MAX);
-      this.pitchKickRemain = WALL_IMPACT_PITCH_KICK_MS;
+      // R126：hall 正撞同样注入「被顶晃动」角速度（与 side/end 同通道），保留「被顶一下」
+      // 的可见俯仰/侧倾瞬态；速度仍 r.speed=0 彻底停、heading 原样、无 targetHeading ⇒ hall 契约不变。
+      this.impactRollOscVel += FREE_BODY_IMPACT_OSC.rollGain * (r.impactN ?? 0);
+      this.impactPitchOscVel += -FREE_BODY_IMPACT_OSC.pitchGain * (r.impactN ?? 0);
       s.beta = damp(s.beta, 0, 1 / IMPACT_TAU, dt);
       this.yawDyn = damp(this.yawDyn, 0, 1 / IMPACT_TAU, dt);
     }
@@ -1426,14 +1458,13 @@ export class FreeDrive {
       if (!this.wallKickFired) {
         this.wallKickRemain = WALL_IMPACT_KICK_MS;
         this.wallKickFired = true;
-        // R106 ② 俯仰「点头」冲量（与横摆冲量同闩、同一次性机制）：撞墙帧一次性记有符号
-        // pitchKick 峰值（负 = 车头朝墙面点头），在下方窗口内分摊注入 s.pitch。补齐「车身被
-        // 顶」的俯仰维度——横摆走 R104 yaw 冲量、侧倾走 R99 roll 包络，俯仰此前只有
-        // accel×pitchPerAccel（很弱、不可感）。幅值有界：min(impactN, PITCH_KICK_MAX)，
-        // 且注入后紧跟 ±pitchMaxRad clamp。闩在 !wallKickFired 内 ⇒ 一次接触只放一记，
-        // 不会每帧重置窗口退化成「持续点头」。
-        this.pitchKick = -Math.min(r.impactN!, WALL_IMPACT_PITCH_KICK_MAX);
-        this.pitchKickRemain = WALL_IMPACT_PITCH_KICK_MS;
+        // R126 ② 撞墙「被顶晃动」欠阻尼冲量（与横摆冲量同闩、同一次性机制）：撞墙帧一次性
+        // 注入角速度（impactN 加权；pitch 负 = 车头朝墙面点头），下方二阶积分过冲回摆一次。
+        // 取代 R106 俯仰位置冲量与 R99 roll 速率项（二者单调回正、无过冲）。幅值有界：
+        // 由 rollGain/pitchGain×impactN 给出，注入后紧跟 ±rollMaxRad/±pitchMaxRad clamp。
+        // 闩在 !wallKickFired 内 ⇒ 一次接触只放一记，不会每帧重置退化成「持续顶晃」。
+        this.impactRollOscVel += FREE_BODY_IMPACT_OSC.rollGain * r.impactN!;
+        this.impactPitchOscVel += -FREE_BODY_IMPACT_OSC.pitchGain * r.impactN!;
       }
       // R104 ③：朝向一阶收敛改用更慢的 WALL_IMPACT_HEADING_TAU（独立于速度用的 IMPACT_TAU）——
       // 车头多指向墙一会儿 ⇒ fn=f·n 停留更大 ⇒ 撞后几帧持续刮擦减速（顿挫感）；
@@ -1447,16 +1478,8 @@ export class FreeDrive {
     // 包络指数衰减：撞击结束后仍有短暂「被顶一下、带惯性回正」余韵。
     this.wallImpact = damp(this.wallImpact, 0, 1 / IMPACT_TAU, dt);
     if (this.wallImpact < 1e-4) this.wallImpact = 0;
-    if (this.wallImpact > 0) {
-      // R104 ④：yaw 注入改为下方「一次性短冲量」——旧的每帧速率项在下一帧被 yawRateFor
-      // 整体覆盖 ⇒ 只是一帧脉冲、不可见。roll 仍走每帧速率项（持久状态、被 roll 阻尼
-      // 徐徐衰减 ⇒ 累积成可见侧倾），保持原样。
-      s.roll += IMPACT_ROLL_GAIN * this.wallImpact * (dt / IMPACT_TAU);
-      // R100 Phase3：注入发生在下游 clamp(rollTarget) 之前，灵魂上限只约束 target
-      // 不约束 state 注入量 ⇒ 高速撞击 roll 峰随 |v| 线性涨（55m/s 达 0.109rad，超 3.5° 约 79%）。
-      // 紧跟注入做硬 clamp：保留「被顶一下」体感，只是幅度收进真车合理包络。
-      s.roll = clamp(s.roll, -FREE.rollMaxRad, FREE.rollMaxRad);
-    }
+    // R126：旧 roll 每帧速率项注入（s.roll += IMPACT_ROLL_GAIN·wallImpact·dt/τ，单调回正无
+    //   过冲）已由「被顶晃动」欠阻尼通道取代 —— 撞墙帧注入角速度、二阶积分过冲回摆（见下方）。
     // R104 ④ 撞墙横摆冲量：撞墙帧记 wallKick 峰值，在 WALL_IMPACT_KICK_MS 窗口内每帧分摊
     // wallKick·(dt/WALL_IMPACT_KICK_MS) 加到 yawRate，窗口走完即放完（不再每帧累加 / 被覆盖）。
     // ⇒ 撞墙瞬间有一记稳定、可见的「被顶一下」横摆，而非旧的一帧脉冲。
@@ -1469,27 +1492,30 @@ export class FreeDrive {
       s.yawRate = clamp(s.yawRate, -FREE.maxYawRate, FREE.maxYawRate);
     }
 
-    // ---- 视觉姿态（侧倾 × 俯仰，都做平滑，避免阶跃）----
+    // ---- 视觉姿态（侧倾 × 俯仰）----
+    // 常态一阶阻尼（R98 契约零改）：转向/加减速的侧倾/俯仰目标，独立内部状态 rollBody/pitchBody。
     const latAccel = yawRate * vAvg;
     const rollTarget = clamp(
       (-latAccel * FREE.rollMaxRad) / FREE.rollRefMs2,
       -FREE.rollMaxRad,
       FREE.rollMaxRad
     );
-    s.roll = damp(s.roll, rollTarget, FREE_BODY_DAMPING.roll, dt);
+    this.rollBody = damp(this.rollBody, rollTarget, FREE_BODY_DAMPING.roll, dt);
     const pitchTarget = clamp(s.accel * FREE.pitchPerAccel, -FREE.pitchMaxRad, FREE.pitchMaxRad);
-    s.pitch = damp(s.pitch, pitchTarget, FREE_BODY_DAMPING.pitch, dt);
-    // R106 ② 撞墙俯仰「点头」冲量：撞墙帧记 pitchKick 峰值（负=车头朝墙点头），在
-    // WALL_IMPACT_PITCH_KICK_MS 窗口内每帧分摊 pitchKick·(dt/WINDOW) 加到 s.pitch，窗口走完
-    // 即放完（与 R104 yaw 冲量同「一次性短冲量」机制，不再被每帧覆盖）。注入放在 pitch 阻尼
-    // 之后 ⇒ 冲量当帧不被同帧阻尼抵消，点头清晰可见。紧跟 ±pitchMaxRad clamp ⇒ 不越灵魂上限。
-    if (this.pitchKickRemain > 0 && this.pitchKick !== 0) {
-      const pKickDt = Math.min(dt, this.pitchKickRemain);
-      s.pitch += this.pitchKick * (pKickDt / WALL_IMPACT_PITCH_KICK_MS);
-      this.pitchKickRemain = Math.max(0, this.pitchKickRemain - dt);
-      if (this.pitchKickRemain <= 0) this.pitchKick = 0; // 冲量放完即止
-      s.pitch = clamp(s.pitch, -FREE.pitchMaxRad, FREE.pitchMaxRad);
-    }
+    this.pitchBody = damp(this.pitchBody, pitchTarget, FREE_BODY_DAMPING.pitch, dt);
+    // R126 撞墙「被顶晃动」欠阻尼二阶：撞墙帧注入角速度（impactRollOscVel / impactPitchOscVel），
+    //   此处按弹簧-阻尼（FREE_BODY_IMPACT_OSC）积分，过冲回摆一次再稳定。独立于常态一阶
+    //   （osc 不被 rollBody damp 侵蚀、回摆不被常态阻尼抵消），只叠加在最终视觉姿态上。
+    //   注入放在姿态积分之前 ⇒ 撞墙帧起就按二阶被顶，清晰可见。紧跟 ±灵魂上限 clamp。
+    const osc = FREE_BODY_IMPACT_OSC;
+    const rollOscAcc = osc.omega * osc.omega * -this.impactRollOsc - 2 * osc.zeta * osc.omega * this.impactRollOscVel;
+    this.impactRollOscVel += rollOscAcc * dt;
+    this.impactRollOsc += this.impactRollOscVel * dt;
+    const pitchOscAcc = osc.omega * osc.omega * -this.impactPitchOsc - 2 * osc.zeta * osc.omega * this.impactPitchOscVel;
+    this.impactPitchOscVel += pitchOscAcc * dt;
+    this.impactPitchOsc += this.impactPitchOscVel * dt;
+    s.roll = clamp(this.rollBody + this.impactRollOsc, -FREE.rollMaxRad, FREE.rollMaxRad);
+    s.pitch = clamp(this.pitchBody + this.impactPitchOsc, -FREE.pitchMaxRad, FREE.pitchMaxRad);
     s.odometer += Math.abs(vAvg) * dt;
 
     // ---- 事件去抖 ----
