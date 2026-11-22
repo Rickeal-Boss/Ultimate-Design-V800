@@ -54,8 +54,23 @@ export const FREE = {
   refSpeedMs: 5.5,
   /** 低速最大前轮转角 rad（≈35.5°，≤18 km/h） */
   steerMaxLow: 0.62,
-  /** 高速最大前轮转角 rad（≈6.9°，≥60 km/h） */
-  steerMaxHigh: 0.12,
+  /**
+   * 高速最大前轮转角 rad（≈27.5°，≥60 km/h）。
+   * R131：0.12 → **0.48** —— 根治正常路径横向抓地「推头」。
+   *   旧 0.12 使 latAccel=yawRate·v 包络**非单调**：20km/h≈0.31g → 72km/h **0.22g**（凹坑，
+   *   高速反而比中速弱）→ 200km/h 0.61g（靠舵角硬给，无抓地上限）。0.48 让舵角包络
+   *   在 60km/h 处与抓地包络（gripLatFactor·tyreMu·g）**相切** ⇒ 包络单调升到 0.74g 后
+   *   平坦（真车恒定附着），中速不再推头、高速有界（配合 yawRateFor 抓地钳）。
+   */
+  steerMaxHigh: 0.48,
+  /**
+   * R131 正常路径横向抓地上限系数（× tyreMu·g = 可用侧向附着 m/s²）。
+   *   · 0.80 = 稳定控制/悬架极限对轮胎附着 μ·g 的利用率（重型行政 SUV 干地 ESC 限幅量级，
+   *     μ=0.92 ⇒ ≈0.74g），低于 1.0 留稳定裕度 ⇒ 高速不甩尾（只推头）。
+   *   · 只作用于**正常运动学路径**的 yawRateFor 钳位；漂移模型（摩擦圆 decelAvail）独立，
+   *     本常数不碰其灵魂值（tyreMu 未动）。
+   */
+  gripLatFactor: 0.80,
   /** 转角收窄区间（km/h）：18 → 60 线性 */
   steerLowKmh: 18,
   steerHighKmh: 60,
@@ -637,6 +652,9 @@ export function headingOf(fx: number, fz: number): number {
 /**
  * 纯函数：速度相关的最大前轮转角（高速收窄，避免高速打死翻车感）。
  * 18 km/h 以下 = steerMaxLow；60 km/h 以上 = steerMaxHigh；中间线性。
+ * R131：高速端 0.12 → 0.48（与 yawRateFor 的抓地钳联动——高速「打死」不再靠收窄舵角
+ * 防翻车，而是由横向抓地上限（gripLatFactor·tyreMu·g）在 yawRateFor 处钳横摆率：
+ * 前轮饱和 → 推头而非甩尾，更接近真实转向物理）。
  */
 export function steerLimitFor(speedKmh: number): number {
   const t = clamp(
@@ -667,12 +685,22 @@ export function steerTauFor(speedKmh: number, returning = false): number {
 
 /**
  * 纯函数：偏航角速度。低速转向减弱（|v|/refSpeed 线性），倒车时方向反向。
+ * R131：横向抓地极限钳位 —— 正常运动学路径此前**无侧向附着上限**（latAccel=yawRate·v
+ * 可随舵角无限增大，包络非单调：72km/h 仅 0.22g 推头、200km/h 靠舵角硬给 0.61g）。
+ * 加抓地钳 `|yawRate| ≤ gripLat / max(av, refSpeedMs)`（gripLat = gripLatFactor·tyreMu·g）：
+ *   · av < refSpeedMs：cap = gripLat/refSpeedMs（常量 ≥ maxYawRate ⇒ 不钳，低速全舵敏捷不变）；
+ *   · av ≥ refSpeedMs：cap = gripLat/av ⇒ latAccel ≡ gripLat（附着上限，平坦）——超过即前轮
+ *     侧偏饱和 ⇒ 更打舵不再增大横摆率（车头比速度方向转得慢、向外推 = 推头/understeer），
+ *     单调、有界、无甩尾（gripLatFactor=0.80 < 1 留稳定裕度）。漂移模型（yawDyn）不经此通道。
  */
 export function yawRateFor(steer: number, speedMs: number): number {
   const av = Math.abs(speedMs);
   const factor = clamp(av / FREE.refSpeedMs, 0, 1);
   const dir = speedMs > 0 ? 1 : speedMs < 0 ? -1 : 0;
-  return steer * FREE.maxYawRate * factor * dir;
+  const kin = steer * FREE.maxYawRate * factor * dir;
+  const gripLat = FREE.tyreMu * 9.81 * FREE.gripLatFactor;
+  const cap = gripLat / Math.max(av, FREE.refSpeedMs);
+  return clamp(kin, -cap, cap);
 }
 
 /**
