@@ -19,7 +19,7 @@
  * 双侧镜像在 clampToFootprints 里按 |x| 处理。
  */
 import { VEHICLE } from '../config/physics';
-import { GATE, INNER, TOWER } from '../render/scene/r28Layout';
+import { GATE, HALL_BRAZIER, INNER, MAIN_HALL, ROAD_HALF, TOWER } from '../render/scene/r28Layout';
 import { R30_ARCADE, R97_CITY_BUTTRESS, R89_CITY_TRIM_ON, R30_CROSSINGS, R32_CORRIDOR } from '../render/scene/castleKit';
 // R119 改 a：导入 corridorCenterHalfWidth（1D 车心面线走廊）供近侧界防护①比较。
 //   ⚠ 反向 import 即成环（FreeDrive.ts:37 已 import 本模块）；与 CITY_BLOCK_Z 同风格：
@@ -422,6 +422,46 @@ export function buildCityFootprints(): CityFootprint[] {
     zMax: PLAZA_BUTTRESS_Z + PLAZA_BUTTRESS_Z_HALF,
     kind: 'buttressBase'
   });
+
+  // ⑦b 主殿前广场列阵火盆（makeMainHall ⑪ 列阵，块循环外 —— 主殿不在 CITY_BLOCK_Z 内）。
+  //    R125 探针（全域残余缺口扫描 + clamp 决定性复核）实证：内列 |x|=ROAD_HALF+arrayInset=8.9、
+  //    外列 |x|=ROAD_HALF+arrayInset+1.6=10.5（z 自 plazaNear+3.5 起节拍 arrayPitch=5）共 4 座/侧
+  //    （2 内 + 2 外，交错 z），底座 box 0.9×0.8×0.9 在车高（y∈[0,0.95]），纯视觉无 footprint ⇒
+  //    车心 1D 14.497/13.997（车缘 15.5/15.0）直穿火盆最多 ~0.99m（probe @(x=8.40,z=-1278.5)）。
+  //    ⇒ 补 4 条占位（正 |x|，双侧镜像由 clampToFootprints 按车侧处理）。kind=buttressBase（实体
+  //    无洞类 ⇒ isSolidEntryKind 恒平滑，无单帧瞬移）。2D 激活带 [zMin,gateFrontZ+CAR_HALF_L] 内
+  //    （z∈[-1278.95,-1263.05] ⊂ 带），FreeDrive 门控已覆盖，无需改。近侧外推（xOuter+dx=10.353）
+  //    与外列（10.05-10.95）相撞 ⇒ nearSideBlocked 自动回退远侧（xInner−dx=7.447，绕行中心）。
+  //    ⚠ 几何派生逐位对齐 castleKit makeMainHall ⑪（L3021-3033），禁写死错配。
+  {
+    const brazierBaseHalf = 0.9 / 2; // 列阵火盆底座 box('ashlar',0.9,0.8,0.9) → 半宽 0.45
+    const brazierZStart = 3.5; // 首座自 plazaNear+3.5（makeMainHall 列阵）
+    const brazierOuterOffset = 1.6; // 外列相对内列 +1.6（makeMainHall ⑪）
+    const brazierExtraCount = 2; // ⑪ 外列追加 2 座/侧
+    const plazaNear = MAIN_HALL.z + MAIN_HALL.plazaDepth; // -1300 + 18 = -1282（主殿前方可见侧）
+    const innerCx = ROAD_HALF + HALL_BRAZIER.arrayInset; // 8.9
+    const outerCx = innerCx + brazierOuterOffset; // 10.5
+    for (let i = 0; i < HALL_BRAZIER.arrayCount; i += 1) {
+      const cz = plazaNear + brazierZStart + i * HALL_BRAZIER.arrayPitch;
+      list.push({
+        xInner: innerCx - brazierBaseHalf,
+        xOuter: innerCx + brazierBaseHalf,
+        zMin: cz - brazierBaseHalf,
+        zMax: cz + brazierBaseHalf,
+        kind: 'buttressBase'
+      });
+    }
+    for (let i = 0; i < brazierExtraCount; i += 1) {
+      const cz = plazaNear + brazierZStart + (HALL_BRAZIER.arrayCount + i) * HALL_BRAZIER.arrayPitch;
+      list.push({
+        xInner: outerCx - brazierBaseHalf,
+        xOuter: outerCx + brazierBaseHalf,
+        zMin: cz - brazierBaseHalf,
+        zMax: cz + brazierBaseHalf,
+        kind: 'buttressBase'
+      });
+    }
+  }
 
   // ⑧ 城门带门墩（R118 Fix 1 / R119 改 b）：城门带两侧门墩 |x|∈[10,17.5]。
   //    Root cause：1D corridorCenterHalfWidth 在 gateFrontZ（桥 10.997→隧 8.997）/ gateBackZ

@@ -24,7 +24,7 @@ import {
   type CityFootprint
 } from '../src/core/cityFootprints';
 import { VEHICLE } from '../src/config/physics';
-import { GATE, INNER, TOWER } from '../src/render/scene/r28Layout';
+import { GATE, HALL_BRAZIER, INNER, MAIN_HALL, ROAD_HALF, TOWER } from '../src/render/scene/r28Layout';
 import { R30_ARCADE, R97_CITY_BUTTRESS } from '../src/render/scene/castleKit';
 
 /** 车长 / 车宽半尺寸真源（physics.ts，勿写死） */
@@ -85,8 +85,9 @@ describe('R102 ① 占位清单覆盖 probe-bounds §2 六类地面层实体（�
     expect(byKind('arcadeCol').length).toBe(40); // 10 块 × 4 柱
     // R103 阶段二：连墙墩 20（10 块 × 2 连墙段）+ 角塔墩 4（hero 块 k<2 各 2 座）= 24；
     // R105：+ 主殿前排飞扶壁内墩 1（广场域，双侧镜像单条）= 25；
-    // R123：+ 跨街连廊承托柱 1（Fix 2，最近跨街 z=−427.5）= 26
-    expect(byKind('buttressBase').length).toBe(26);
+    // R123：+ 跨街连廊承托柱 1（Fix 2，最近跨街 z=−427.5）= 26；
+    // R125：+ 主殿广场列阵火盆 4（⑦b，内列 2 + 外列 2，双侧镜像 1 条/座）= 30
+    expect(byKind('buttressBase').length).toBe(30);
   });
 
   it('角塔基座内缘 = 14.9（真源派生，非写死）', () => {
@@ -146,6 +147,36 @@ describe('R102 ① 占位清单覆盖 probe-bounds §2 六类地面层实体（�
     expect(d.zMin).toBeCloseTo(GATE.z + GATE.depth / 2 - 4 - 4.22, 12); // zFront−8.22 = −359.72
     expect(d.zMax).toBeCloseTo(GATE.z + GATE.depth / 2 - 4 + 4.22, 12); // zFront+0.22 = −351.28
     expect(d.xInner).toBeLessThan(GATE.openW / 2); // 9.0 < 10（洞内实体，比门墩更靠内）
+  });
+
+  it('主殿广场列阵火盆（R125 ⑦b）：内列 |x|=ROAD_HALF+arrayInset=8.9 / 外列 +1.6=10.5，z 自 plazaNear+3.5 节拍 5，4 条（双侧镜像单条/座）', () => {
+    // castleKit makeMainHall ⑪（L3021-3033）：内列 cx=±(ROAD_HALF+arrayInset)、外列 cx=±(ROAD_HALF+arrayInset+1.6)；
+    //   z 自 plazaNear+3.5 起节拍 arrayPitch=5，内列 arrayCount=2 + 外列 2（交错 z）。底座 box 0.9×0.9 →
+    //   半宽 0.45。火盆在车高（y≤1.95）且车心 1D 14.497/13.997 可达 ⇒ R125 探针实证穿 0.9~1m，补占位。
+    const plazaNear = MAIN_HALL.z + MAIN_HALL.plazaDepth; // −1282
+    const innerCx = ROAD_HALF + HALL_BRAZIER.arrayInset; // 8.9
+    const outerCx = innerCx + 1.6; // 10.5
+    const braziers = byKind('buttressBase').filter(
+      (f) => f.xInner >= 8.4 && f.xInner <= 8.6 // 内列 8.45（xInner = 8.9 − 0.45）
+    ).concat(
+      byKind('buttressBase').filter((f) => f.xInner >= 10.0 && f.xInner <= 10.1) // 外列 10.05
+    );
+    expect(braziers.length).toBe(4);
+    // 覆盖 z ∈ [plazaNear+3.5, plazaNear+3.5+18.5+0.45]（内列 2 座节拍 5 + 外列 2 座接续），真源派生
+    const zMaxLimit = plazaNear + 3.5 + (HALL_BRAZIER.arrayCount + 2) * HALL_BRAZIER.arrayPitch + 0.45 + 0.5;
+    for (const f of braziers) {
+      expect(f.zMin).toBeGreaterThan(plazaNear + 3.5 - 0.5);
+      expect(f.zMax).toBeLessThan(zMaxLimit);
+      expect(f.zMax - f.zMin).toBeCloseTo(0.9, 9); // 底座 0.9 深
+      expect(f.xOuter - f.xInner).toBeCloseTo(0.9, 9); // 底座 0.9 宽
+      expect(f.kind).toBe('buttressBase');
+    }
+    // 内列（8.45）比外列（10.05）更靠内，且内列 z 更北（交错）
+    const inner = braziers.filter((f) => f.xInner < 8.6);
+    const outer = braziers.filter((f) => f.xInner > 9.0);
+    expect(inner).toHaveLength(2);
+    expect(outer).toHaveLength(2);
+    expect(Math.min(...outer.map((f) => f.zMin))).toBeGreaterThan(Math.max(...inner.map((f) => f.zMax)));
   });
 
   it('建筑前脸 / 殿台基内缘 = 15.5；前排塔基内缘 = 14.8（R104 修正）；殿前大理石带 15.0', () => {
