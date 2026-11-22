@@ -486,8 +486,22 @@ const FADE_COLOR_UNIFORM = { value: new THREE.Color(ACTIVE_ENV.fog.color) };
  * 0.3m 物体在 400m 处 ≈0.43px（1080p / fov55° 下 19.6px每度）⇒ 高低档差异在切换
  * 点已降到亚像素，换档本身不可见；主体几何（墙身/拱/塔/金带 ≥0.5m）两档都保留。
  * ⚠ 再压低（<350m）中段收益不变（近区仍须高档）而边界处差异开始可辨，不取。
+ *
+ * ══ R132（用户「继续改善建筑渲染距离及性能优化」）：400 → **550** ══════════════
+ * 渲染距离延伸：高档（全装饰）档位覆盖从 400m 推到 **550m**（= ZONE_VIEW_RANGE，
+ * 与淡入/显隐闸门同参），中段建筑保持「近 FBX 级」细节的行程 +150m。
+ * · 换档点更远 ⇒ 高低档差异更亚像素（550m 处 0.3m 物 ≈0.31px，比 400m 的 0.43px
+ *   更不可辨）⇒ **换档不会因推远而变得可见**（反而更隐蔽）。
+ * · 峰值成本实测（`tests/r32_budget.test.ts` R33_SAMPLES 同源扫，20m 步长全采样）：
+ *   peakSphereTri 180,042 → **185,042**（+5,000，+2.8%），峰值帧视锥只含 ≤~520m 的区，
+ *   再往上推（520/550/560/600 全同 185,042）峰值**饱和** ⇒ 550 是「推到闸门」的自然极值。
+ * · 预算核验：185,042 ≤ visibleTri 240,000（余量 **23%**），整帧估算
+ *   ≈185k+车82k+terrain6.8k+road23k ≈297k ≤ frameTri 465,000；fullVisibleTri 221,974
+ *   与 DC 29 均不变（不新增几何，只挪换档阈值）⇒ **性能零回归**，护栏全部留裕。
+ * · 代价：550m 内高档区更多 ⇒ 每帧多递 ~5k tri（2.8%）——用户令「面数可抬高只要
+ *   不掉帧」明确授权，且在预算内。
  */
-const LOD_NEAR_DIST = 400;
+const LOD_NEAR_DIST = 550;
 /** 档位滞回：> D+20 才换远档、< D−20 才换近档，380~420 带内保持原档（防摇摆） */
 const LOD_HYSTERESIS = 20;
 
@@ -1512,6 +1526,17 @@ export class Castle {
   getZoneZMin(name: string): number {
     const zv = this.zoneViews.find((v) => v.mesh.name === name);
     return zv ? zv.zMin : Number.NaN;
+  }
+
+  /**
+   * R132 门禁 D · 机读接口：按 mesh 名读该区**当前挂载档**（'hi' | 'lo'，只读）。
+   * 读的是 `zoneViews[].tier`（换档即更新，与 mesh.geometry 恒一致——见 setZoneTier）。
+   * 用途：钉死 LOD_NEAR_DIST 换档边界（测试夹具必须与实现同判据，不得各自用距离
+   * 推断档位）。返回 'none' = 未找到该区 ⇒ 调用方必须显式 fail，禁止 skip 吞掉。
+   */
+  getZoneTier(name: string): 'hi' | 'lo' | 'none' {
+    const zv = this.zoneViews.find((v) => v.mesh.name === name);
+    return zv ? zv.tier : 'none';
   }
 
   /**

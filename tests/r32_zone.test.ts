@@ -261,15 +261,15 @@ describe('R32 C-5 · 距离衰减运行时语义（显隐 + 远档 LOD + 滞回�
       expect(triOf(zFarHi)).toBeGreaterThan(0);
       expect(triOf(zNearHi)).toBeGreaterThan(0);
 
-      // carZ=−900 ⇒ 相机 z=−891.8：z5 塔冠中心 ≈−1373（距 ≈481m）> D+滞回 ⇒ 远档；
-      // z1 中心 ≈−388（距 ≈504m）⇒ 近档；两区都在 R=650 带内可见。
-      castle.updateViewerZ(-891.8);
+      // carZ=−730（R132：LOD_NEAR_DIST 400→550）：z5 塔冠中心 ≈−1334~−1373（距 ≈600m）
+      // > D+滞回(570) ⇒ 远档；z1 中心 ≈−388（距 ≈342m）⇒ 近档；两区都在带内可见。
+      castle.updateViewerZ(-730);
       expect(zFar!.visible).toBe(true);
       expect(zFar!.geometry).not.toBe(zFarHi); // z5 仍有远档 LOD 变体（同 mesh，DC 不变）
       expect(triOf(zFar!.geometry)).toBeLessThan(triOf(zFarHi)); // 远档只主体（铁律 33）
       // R97：显隐判据已从「区心距 <550」改为「z > zMin − H（车前方含脚下恒显，只剔车后）」。
-      // 车开到 z=−891.8 时 z1（第一排入口街区，bbox.min.z≈−460）已在**车后方** ⇒
-      // 按新判据正确剔除（旧判据 |cz−z|≈504<550 才判可见）。这不是回归，是新设计语义；
+      // 车开到 z=−730 时 z1（第一排入口街区，bbox.min.z≈−460）已在**车后方** ⇒
+      // 按新判据正确剔除（旧判据 |cz−z|≈342<550 才判可见）。这不是回归，是新设计语义；
       // 「近区恒显」的覆盖移到起点机位（见 r97_city_visible.test.ts ①）。
       expect(zNear!.visible).toBe(false);
       // 驶近（距 373m < D−滞回）⇒ 换回近档（LOD 段 R97 未改，仍按区心距）
@@ -312,7 +312,7 @@ describe('R32 C-5 · 距离衰减运行时语义（显隐 + 远档 LOD + 滞回�
       const z5 = castleMesh(scene, 'castle-ashlar-z5');
       expect(z5).toBeDefined();
       const z5hi = z5!.geometry;
-      castle.updateViewerZ(-891.8); // 先把 z5 打成远档
+      castle.updateViewerZ(-730); // 先把 z5 打成远档（距 ≈600m > D+滞回 570）
       expect(z5!.geometry).not.toBe(z5hi);
       castle.revealAllZones();
       expect(z5!.visible).toBe(true);
