@@ -2,12 +2,16 @@
 import './ui/styles.css';
 import type { WebGLRenderer } from 'three';
 import { createQualitySettings } from './config/quality';
+import { setActiveGpuClass } from './config/highDetail';
 import { Game } from './core/Game';
 import { byId } from './ui/dom';
 import { formatPerfHudText } from './ui/perfHud';
 
 const container = byId('app');
 const quality = createQualitySettings();
+// R137：把运行时 GPU 类别注入 highDetail 配置（quality.gpuClass = #gpufake ?? detectGpuClass()，
+// 故核显默认回落程序化车模；显式 #highDetail=on 仍可强制高精度）。
+setActiveGpuClass(quality.gpuClass);
 const game = new Game(container, quality, () => {
   byId('loading').classList.add('done');
 });

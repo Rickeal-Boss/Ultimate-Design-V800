@@ -13,8 +13,20 @@
  * 所有读写入口都在函数内带 `typeof window/localStorage === 'undefined'` 守卫 + try/catch。
  * `ExternalShell.inTestEnv()` 是 `loadExternalShell` 的第一条语句，测试环境下新门禁根本
  * 不会被执行，故不会触碰本地存储、也不会发 fetch。
+ *
+ * ══ R137 · 高精度 GLB 按 GPU 类别默认门控（数据驱动，承 R133 核显像素预算）══════
+ * 实测（本机 Arc iGPU + 生产构建 #perfhud）：高精度外部壳 `body.glb 966,484 + 4 轮 303,521
+ * = 1,270,005 tri`（V800Adapter.ts:5598），整帧 `tris(frame) 1,503,898`（车 1.27M + 城 185k
+ * + 地形/路 ~30k）；`#highDetail=off` 对照整帧 `tris 145,900` ⇒ **车模 GLB 是核显几何成本主因**
+ * （8.7×），非建筑。R132–R136 优化的是城市填充率（185k），车模 1.27M 才是帧时大头。
+ * 处方：**核显默认不自动加载高精度 GLB（回落程序化 82k 车模），显式 `#highDetail=on` /
+ * localStorage='on' 仍可强制开启**——P0=运行时流畅度、R43 瓶颈=填充率/顶点吞吐，1.27M 在
+ * iGPU 上 60fps 需 ~270M vert/s（远超其吞吐）。默认改为 GPU 感知：`hash > 存储 > (核显 ? off : on)`，
+ * 离散机行为逐位不变。
  */
 export type ShellCancelReason = 'user' | 'preference';
+
+import type { GpuClass } from './quality';
 
 /**
  * 各车高精度资产总量（MB，解压后口径）—— HUD 进度文案与菜单恢复文案的**单一真源**。
@@ -40,20 +52,50 @@ function readHashOverride(): boolean | null {
   return m ? m[1].toLowerCase() === 'on' : null;
 }
 
-/** 本地偏好；存储不可用 / 脏值一律回落「允许高精度」 */
-function readPreference(): boolean {
-  if (typeof localStorage === 'undefined') return true;
+/**
+ * 本地偏好；`null` = 无存储值（区分「未设置」与「显式 off」，R137 需要把「未设置」交给
+ * GPU 感知默认）。存储不可用 / 脏值 → `null`（回落默认）。
+ */
+function readStoredPreference(): boolean | null {
+  if (typeof localStorage === 'undefined') return null;
   try {
-    return localStorage.getItem(STORAGE_KEY) !== 'off';
+    const v = localStorage.getItem(STORAGE_KEY);
+    if (v === null) return null;
+    return v !== 'off';
   } catch {
     // Safari 无痕 / 禁用存储：静默降级，不允许把主流程搞崩
-    return true;
+    return null;
   }
 }
 
-/** 当前是否允许下载高精度车模：URL > localStorage > 默认 on */
-export function isHighDetailEnabled(): boolean {
-  return readHashOverride() ?? readPreference();
+/* ───────────────────────── R137 · GPU 类别注入（配置真源） ─────────────────────────
+ * main.ts 在 `createQualitySettings()` 后调用 `setActiveGpuClass(quality.gpuClass)` 注入
+ * 运行时 GPU 类别（`quality.gpuClass = #gpufake ?? detectGpuClass()`，故 DEV 下 `#gpufake`
+ * 仍可 A/B 门控）。默认 'unknown' ⇒ 高精度默认开（离散机/未知行为不变）。
+ */
+let activeGpuClass: GpuClass = 'unknown';
+
+export function setActiveGpuClass(gpu: GpuClass): void {
+  activeGpuClass = gpu;
+}
+
+export function getActiveGpuClass(): GpuClass {
+  return activeGpuClass;
+}
+
+/**
+ * 当前是否允许下载高精度车模：URL > localStorage > GPU 感知默认。
+ * R137：默认 = `gpuClass` 非弱类（`integrated` / `software` 回落程序化车模，
+ * `discrete` / `unknown` 仍开——unknown 不改行为避免误降未识别机）。
+ * 显式 `#highDetail=on` / localStorage='on' 优先级最高，弱类仍可强制开启。
+ */
+export function isHighDetailEnabled(gpuClass: GpuClass = getActiveGpuClass()): boolean {
+  const hash = readHashOverride();
+  if (hash !== null) return hash;
+  const stored = readStoredPreference();
+  if (stored !== null) return stored;
+  // 弱 GPU 类（核显 / 软渲）默认回落程序化车模；离散 / 未知保持高精度
+  return gpuClass !== 'integrated' && gpuClass !== 'software';
 }
 
 /** 写入偏好（调用方：Menu 的停止/恢复按钮；调用方随后按需 location.reload()） */
