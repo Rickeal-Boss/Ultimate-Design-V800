@@ -214,8 +214,14 @@ function applyIntegratedBudget(s: QualitySettings): QualitySettings {
   // 用户裁决「面数可抬高，只要不掉帧跳帧黑帧」⇒ 像素预算继续向流畅倾斜；
   // 1.25x 在 1080p 物理屏上是 2400×1350，视觉仍高于原生 1080p。
   s.pixelRatio = Math.min(window.devicePixelRatio, 1.25);
-  // R43-P0C/B：自适应降档 floor 1 → 0.85（AdaptiveQuality.update 的 `floor` 读本字段）
-  s.minPixelRatio = 0.85;
+  // R43-P0C/B：自适应降档 floor 1 → 0.85；R135：0.85 → 0.8（核显最坏情况像素预算再 −11%）。
+  // 依据：R43 实测帧时与像素数**线性**（gap ≈ 1.96ms/kpx）⇒ 自适应调节器被钉在 floor
+  // 仍超预算（核显最坏帧）时，0.8 比 0.85 多给 6% 线性（−11% 像素）余量：1080p@0.8 =
+  // 1536×864（vs 0.85 = 1632×918），仍属游戏内可接受锐度（R43 已裁决 ≤0.85 是可接受下限）。
+  // 0.85 是 R43 实测裁决值；0.8 是「调节器降到底仍不足 60fps」的二次深水区（R134 授权 defer②）。
+  // ⚠ 只动 floor（调节器降档终点），max 仍 = min(devicePixelRatio, 1.25) 不动；
+  //   floor 只在调节器因 fps<42 连续 2 窗后逐步降档时才触及，不抬升稳态清晰度。
+  s.minPixelRatio = 0.8;
   s.msaaSamples = 2;
   // R134：核显 bloom 分辨率 0.5 → 0.375（= UnrealBloom 自带 1/2 基础上再减至 3/8）。
   // 依据：① 核显 iGPU 每帧填充率是主瓶颈（R43 顶注：帧时与像素数线性，gap≈1.96ms/kpx）；

@@ -3,6 +3,11 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 type GpuClass = 'discrete' | 'integrated' | 'software' | 'unknown';
 let classifyGpuByName: (raw: string) => GpuClass;
 let detectGpuClass: () => GpuClass;
+/** R135：自适应调节器（读 settings.minPixelRatio 作降档 floor） */
+let AdaptiveQuality: new (settings: { pixelRatio: number; minPixelRatio: number }) => {
+  pixelRatio: number;
+  update(dt: number): number;
+};
 let createQualitySettings: (tier?: 'high' | 'medium' | 'low') => {
   gpuClass: GpuClass;
   tier: string;
@@ -38,6 +43,7 @@ beforeAll(async () => {
   classifyGpuByName = mod.classifyGpuByName;
   detectGpuClass = mod.detectGpuClass;
   createQualitySettings = mod.createQualitySettings;
+  AdaptiveQuality = mod.AdaptiveQuality;
 });
 
 describe('R133 · GPU 分类（classifyGpuByName 纯函数）', () => {
@@ -110,7 +116,8 @@ describe('R133 · GPU 分类（classifyGpuByName 纯函数）', () => {
     expect(s.msaaSamples).toBe(2);
     expect(s.shadowMapSize).toBe(768);
     expect(s.pixelRatio).toBe(1.25); // min(devicePixelRatio=2, 1.25)
-    expect(s.minPixelRatio).toBe(0.85);
+    // R135：核显自适应降档 floor 0.85 → 0.8（调节器到底仍超预算的最坏情况余量 −11% 像素）
+    expect(s.minPixelRatio).toBe(0.8);
     expect(s.antialias).toBe(false);
     // R134：核显 bloom 分辨率 0.5 → 0.375（低频软辉光，面积 −44%，亚像素不可辨）
     expect(s.bloomScale).toBe(0.375);
@@ -124,5 +131,22 @@ describe('R133 · GPU 分类（classifyGpuByName 纯函数）', () => {
     expect(s.tier).toBe('high');
     expect(s.bloomScale).toBe(1); // 高几何档默认 bloom 满幅，绝不因核显分支被压
     expect(s.msaaSamples).toBe(4);
+  });
+
+  it('R135 调节器：核显自适应降档被 minPixelRatio=0.8 封底，永不越 0.8', () => {
+    // 用集成档 settings（floor=0.8）构造调节器，喂持续慢帧验证封底行为。
+    // 判据：`fps<42` 连续 2 窗才降 0.125、8s 冷却，floor 读 settings.minPixelRatio。
+    (window as unknown as { location: { hash: string } }).location.hash = '#gpufake=integrated';
+    const settings = createQualitySettings();
+    (window as unknown as { location: { hash: string } }).location.hash = '';
+    expect(settings.minPixelRatio).toBe(0.8); // 集成档 floor 已是 0.8（R135 值）
+    const gov = new AdaptiveQuality(settings); // 起步 = settings.pixelRatio = 1.25
+    // 40 轮 × 2s = 80s 模拟持续慢帧（每轮 40 帧 dt=0.05 ⇒ fps=20<42）。
+    // 降档节奏：2 窗才降 0.125、降后 8s 冷却 ⇒ 每次降档约 6 轮；1.25→0.8 需 4 档 ≈ 26 轮。
+    for (let round = 0; round < 40; round++) {
+      for (let i = 0; i < 40; i++) gov.update(0.05);
+      expect(gov.pixelRatio).toBeGreaterThanOrEqual(0.8); // 核心：永不越 floor
+    }
+    expect(gov.pixelRatio).toBe(0.8); // 恰好封底在 0.8；若 floor 失效会一路掉到 0.75
   });
 });
