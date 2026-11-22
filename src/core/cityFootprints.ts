@@ -942,17 +942,13 @@ export function clampToFootprints(
    *   （gatePier 门墩 / buttressBase 墩 / arcadeCol 柱 / hallBase 殿台基 —— 车斜切入其 z 带
    *   第一帧需横向平滑拉回路内，非纵向深嵌漂移）且车前进 z 为主（sinH≤0.5）且已穿模
    *   （xPenRaw>0.35）时限幅，**不再依赖 zOv<xPenRaw**。
-   *   ⚠ r105 漂移贴墙是 cornerBase/frontBase（角塔基座/前排塔基，车纵向深嵌 z 带）——
-   *   不在入激活域类 ⇒ 保留 zOv<xPenRaw 判据 ⇒ zOv≈2.1>>xPen≈0.53 不触发平滑，单帧消除
-   *   保留（不重演收敛尾部穿模/卡死）。r105 漂移实测命中 kind 恒为 cornerBase/arcadeCol/
-   *   frontBase，其中 arcadeCol 帧 sinH≥0.9>0.5（sinH 判据已排除），故不影响。
-   *   R119 ② 门墩急转 sinH≈0.99>0.5 ⇒ sinH 判据排除，单帧消除保留（穿洞收敛不破）。 */
-  const isEntryKind =
-    xClamp.bestF != null &&
-    (xClamp.bestF.kind === 'gatePier' ||
-      xClamp.bestF.kind === 'buttressBase' ||
-      xClamp.bestF.kind === 'arcadeCol' ||
-      xClamp.bestF.kind === 'hallBase');
+   *   R119 ② 门墩急转 sinH≈0.99>0.5 ⇒ sinH 判据排除，单帧消除保留（穿洞收敛不破）。
+   *   ⚠ R138+ Fix-2 泛化：本条「入激活域类 sinH≤0.5 限幅」现被下方 `sinHAbs<=0.5` 低角项
+   *   全覆盖（含 cornerBase/frontBase/frontWall），isEntryKind 变量已并入低角项移除（行为
+   *   对 gatePier/buttressBase/arcadeCol/hallBase 不变）。r105 漂移曾实测命中 cornerBase/
+   *   frontBase（zOv≈2.1>>xPen≈0.53 需保留单帧消除）——经 R110-R123 连续收敛后 R105 ① 场景
+   *   实测仅命中 arcadeCol（sinH≥0.9>0.5，sinH 判据排除，单帧消除保留），cornerBase/
+   *   frontBase 不再命中 ⇒ 泛化低角平滑不破坏 r105 漂移收敛。 */
   /* R123 fix-1 · 实体无洞类占位盒全 sinH 平滑（R122 展宽副作用修复）。
    *   R122 把主殿飞扶壁 footprint xOuter 13.15→16.65 覆盖整墩对后，墩盒展宽（6.3m）。车斜插
    *   深嵌（sinH>0.5，如 θ=60° sinH=0.866）时车 OBB x 投影几乎整体落入盒 ⇒ xPen 从旧 2.03m
@@ -963,19 +959,37 @@ export function clampToFootprints(
    *   isSolidEntryKind 且 sinH>0.5 ⇒ 原式不平滑。扩展：**非门墩实体横向深嵌**（zOv<xPenRaw，
    *   车 OBB 横向深入 > 纵向深入）恒平滑（覆盖 cornerBase/frontBase 斜插）。门墩（gatePier，
    *   有门洞）保留 sinH 门控（R119 ② 急转 sinH≈0.99 需单帧消除过洞收敛）；r105 漂移纵向
-   *   深嵌（zOv≈2.1>>xPen≈0.53）zOv<xPenRaw=false ⇒ 不触发平滑，单帧消除穿模保留（不重演
-   *   收敛尾部穿模/卡死）；arcadeCol 柱窄（0.60m）自然 xPen≤0.6，zOv 判别亦安全。 */
+   *   深嵌（zOv≈2.1>>xPen≈0.53，**仅 sinH>0.5 斜插**）zOv<xPenRaw=false ⇒ 不触发平滑，
+   *   单帧消除穿模保留（不重演收敛尾部穿模/卡死；sinH≤0.5 直行已被下方 R138+ Fix-2 平滑）；
+   *   arcadeCol 柱窄（0.60m）自然 xPen≤0.6，zOv 判别亦安全。 */
   const isSolidEntryKind =
     xClamp.bestF != null &&
     (xClamp.bestF.kind === 'buttressBase' ||
       xClamp.bestF.kind === 'hallBase' ||
       xClamp.bestF.kind === 'doorLeaf');
   const isGatePierKind = xClamp.bestF != null && xClamp.bestF.kind === 'gatePier';
+  /* R138+ Fix-2 · 直行/近直行贴墙恒平滑（补 R123 fix-1b 未覆盖的「直行空档」）。
+   *   根因（探针实证）：cornerBase/frontBase/frontWall（角塔基座/前排塔基/火盆，均**非**
+   *   isSolidEntryKind 亦**非** isEntryKind）在车直行贴墙（heading=0，sinH=0，车头沿 z 为主）
+   *   时车 OBB 纵向深嵌（zOv≫xPenRaw：cornerBase zOv/xPen=6~7、frontBase=9），原式
+   *   `(!isGatePierKind && zOv < xPenRaw)` 判据为 false（纵向深嵌反向）且 `(sinHAbs<=0.5 &&
+   *   isEntryKind)` 不命中（kind 不在入域类）⇒ xPenSmooth=false ⇒ 单帧推回 = 真实穿透
+   *   0.5~1.05m（>X_Z_PEN_SMOOTH_CAP=0.35）= 贴墙横向 yank（真空气墙）。R123 fix-1b 只覆盖
+   *   sinH>0.5 斜插（zOv<xPenRaw 项），直行贴墙是空档。
+   *   本项：对「sinH≤0.5（车头沿 z 为主）」一律平滑（min(xPenRaw, 0.35)），不再依赖
+   *   zOv<xPenRaw 判别 —— 小突出物火盆（0.9×0.9 方体，车 OBB 在 z 向全罩）zOv≈xPenRaw≈0.9
+   *   精确等值，`zOv>xPenRaw` 严格判据会漏掉（zOv/xPen=1.000），故去 zOv 判别。
+   *   ⚠ 本项仅实际影响 cornerBase/frontBase/frontWall：其余 kind 已被 isSolidEntryKind
+   *   （buttressBase/hallBase/doorLeaf 恒平滑）或 `sinHAbs<=0.5 && isEntryKind`（低角项，
+   *   现被子项覆盖）处理，行为不变。frontWall 主体 xInner=15.5 对合法 1D 车缘
+   *   （≤14.497+1.003=15.5）零穿透 ⇒ 对主墙面为 no-op，只处理探出 0.7m 的火盆（xInner=14.35）。
+   *   最终 clamp 目标（best）不变，仅限单帧推回到 X_Z_PEN_SMOOTH_CAP=0.35（收敛速率，
+   *   车 2~3 帧内收敛到贴界，无残留、无卡死）。 */
   const xPenSmooth =
     xPenRaw > 0.35 &&
     (isSolidEntryKind ||
       (!isGatePierKind && zOv < xPenRaw) ||
-      (sinHAbs <= 0.5 && isEntryKind)); // 车横深嵌（实体无洞 / 非门墩横向深嵌 / 入域类低角）
+      sinHAbs <= 0.5); // 车横深嵌（实体无洞 / 非门墩横向深嵌 / 低角含直行贴墙恒平滑）
   const zPenSmooth = zPenRaw > 0.35 && xPenRaw > zPenRaw; // 车横向深嵌 > 车头纵向深入
   const ax = Math.abs(x);
   // R119 改 a：xClamped 方向感知。远侧（收紧，best < ax）与近侧（外推，best > ax）都需要
