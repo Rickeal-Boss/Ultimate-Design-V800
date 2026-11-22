@@ -217,7 +217,13 @@ function applyIntegratedBudget(s: QualitySettings): QualitySettings {
   // R43-P0C/B：自适应降档 floor 1 → 0.85（AdaptiveQuality.update 的 `floor` 读本字段）
   s.minPixelRatio = 0.85;
   s.msaaSamples = 2;
-  s.bloomScale = 0.5;
+  // R134：核显 bloom 分辨率 0.5 → 0.375（= UnrealBloom 自带 1/2 基础上再减至 3/8）。
+  // 依据：① 核显 iGPU 每帧填充率是主瓶颈（R43 顶注：帧时与像素数线性，gap≈1.96ms/kpx）；
+  //      ② bloom 是低频软辉光（radius .6 / 5 mip blur / 车灯·字标·星环 ≥ threshold .72），
+  //         0.5→0.375 使 bloom 链面积 ×0.5625（−44%），辉光边缘仍 ≥ 数 px 平滑，亚像素不可辨；
+  //      ③ 0.375² ≈ 0.14 全分辨率面积（vs 0.5² = 0.25），mip 链底 ≈ 100×56px，仍充分。
+  // ⚠ 再低（<0.33）大辉光开始可见锯齿，不取；用户「流畅度优先」口径下这是安全降质方向。
+  s.bloomScale = 0.375;
   // R39：high 现默认 1024 → 核显 **768**（ortho 仍 10）⇒ texel 2×10/768 = 0.0260 m
   // （比 0.01953 略粗 33%，是「像素预算档」唯一允许的降质方向），
   // 单次重绘面积只剩改前的 0.14×；且每帧重绘 ⇒ 成本恒定、无重/轻帧交替。

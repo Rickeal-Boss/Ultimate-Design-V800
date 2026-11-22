@@ -3,6 +3,16 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 type GpuClass = 'discrete' | 'integrated' | 'software' | 'unknown';
 let classifyGpuByName: (raw: string) => GpuClass;
 let detectGpuClass: () => GpuClass;
+let createQualitySettings: (tier?: 'high' | 'medium' | 'low') => {
+  gpuClass: GpuClass;
+  tier: string;
+  bloomScale: number;
+  msaaSamples: number;
+  shadowMapSize: number;
+  pixelRatio: number;
+  minPixelRatio: number;
+  antialias: boolean;
+};
 
 /**
  * R133 · Intel Arc 核显误判为独显的修复（承 R43 像素预算）。
@@ -18,11 +28,16 @@ let detectGpuClass: () => GpuClass;
  * ⇒ node 环境须先 stub `window` 再动态导入（静态 import 会因 window 未定义抛错）。
  */
 beforeAll(async () => {
-  vi.stubGlobal('window', { devicePixelRatio: 1, innerWidth: 1920 });
-  vi.stubGlobal('navigator', { userAgent: '', hardwareConcurrency: 4 });
+  vi.stubGlobal('window', {
+    devicePixelRatio: 2,
+    innerWidth: 1920,
+    location: { hash: '' }
+  });
+  vi.stubGlobal('navigator', { userAgent: '', hardwareConcurrency: 8 });
   const mod = await import('../src/config/quality');
   classifyGpuByName = mod.classifyGpuByName;
   detectGpuClass = mod.detectGpuClass;
+  createQualitySettings = mod.createQualitySettings;
 });
 
 describe('R133 · GPU 分类（classifyGpuByName 纯函数）', () => {
@@ -80,5 +95,34 @@ describe('R133 · GPU 分类（classifyGpuByName 纯函数）', () => {
     // node 测试环境无 document.createElement ⇒ 走 catch 分支返回 unknown。
     // 这是「不改档」的安全兜底，不是分类正确性——分类正确性由上方纯函数钉死。
     expect(detectGpuClass()).toBe('unknown');
+  });
+
+  it('R133 集成：Arc 核显走完整 createQualitySettings 路径 ⇒ 套用核显像素预算（含 R134 bloom 0.375）', () => {
+    // 用 `#gpufake=integrated` 短路 detectGpuClass（省 WebGL mock），走真实集成路径：
+    // classify 表 → detectQualityTier('integrated') → 'high'（14 核）→ applyIntegratedBudget。
+    // 断言「核显预算契约」而非散值——防后人改动任一预算键漏检。
+    (window as unknown as { location: { hash: string } }).location.hash = '#gpufake=integrated';
+    const s = createQualitySettings();
+    (window as unknown as { location: { hash: string } }).location.hash = '';
+    expect(s.gpuClass).toBe('integrated');
+    expect(s.tier).toBe('high'); // 分类核显但 CPU 多核 ⇒ 仍高几何档（面数可抬高，P0 流畅）
+    // R133：MSAA 4→2 / bloom 1→0.5 / shadow 1024→768 / DPR≤1.25 / 下限0.85 / antialias off
+    expect(s.msaaSamples).toBe(2);
+    expect(s.shadowMapSize).toBe(768);
+    expect(s.pixelRatio).toBe(1.25); // min(devicePixelRatio=2, 1.25)
+    expect(s.minPixelRatio).toBe(0.85);
+    expect(s.antialias).toBe(false);
+    // R134：核显 bloom 分辨率 0.5 → 0.375（低频软辉光，面积 −44%，亚像素不可辨）
+    expect(s.bloomScale).toBe(0.375);
+  });
+
+  it('R134 守卫：强制离散档（#gpufake=discrete）不走核显预算，bloom 保持 1（不误降离散机）', () => {
+    (window as unknown as { location: { hash: string } }).location.hash = '#gpufake=discrete';
+    const s = createQualitySettings();
+    (window as unknown as { location: { hash: string } }).location.hash = '';
+    expect(s.gpuClass).toBe('discrete');
+    expect(s.tier).toBe('high');
+    expect(s.bloomScale).toBe(1); // 高几何档默认 bloom 满幅，绝不因核显分支被压
+    expect(s.msaaSamples).toBe(4);
   });
 });
