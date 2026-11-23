@@ -1541,6 +1541,100 @@ export function createR7CarAdapter(tier: QualityTier = 'high', paintId: string |
   });
   wireBatchPaintShadow(mergeResult);
 
+  // ---- R143-C7 (i-a)：只把后拱泄漏区 leather-ivory 面换暗色哑光内饰阴影材质 ----
+  // C6 定罪：橙源 = 材质 id `leather-ivory`（舱内菱格米白皮革，程序化 R7 内饰），
+  // 隐藏 9 mesh ⇒ 橙 88.4%(full)/98.1%(ROI) 消失。泄漏可见区（c5_leather x0.903 射线
+  // 交）：world y[0.43,0.705]/z[0.955,1.386]（绕后轮心(0.38,1.488) 极角 a[5.4°,72.2°]/
+  // 径 r[0.124,0.602]），x 平面 ±0.903。r7c7diag 探针：泄漏区面全在一个 384-face
+  // `batch/leather-ivory` 合批 mesh 内（96 面在泄漏区；其余 288 面为座舱米白，保留）。
+  // ⚠ (i-a) 只改泄漏区面（正常被内衬/车身挡，座舱正常内饰不动）；否决 (i-b) 整材质
+  // 换色（会破坏座舱米白观感）。
+  // 实现：面级拆包 —— 对含泄漏区的 leather-ivory 合批 mesh，按面心世界坐标筛选
+  // （world |x|∈[0.85,0.95] / y∈[0.41,0.725] / z∈[0.935,1.406]，包住可见橙 + 2cm 余量），
+  // 拆出为独立暗色 mesh（克隆 leather-ivory 材质、去色 #3a352e、rough0.9/metal0），
+  // 原 mesh 保留非泄漏面（米白）。0 新材质实例泄漏逻辑冲突（新 id r7-leak-shadow，
+  // 不入 CABIN_HIDE / 材质去重签名差异 ⇒ 不并、不随座舱藏）。双面/法线保留（clone）。
+  // ⚠ 关键坑（探针实证）：`batch/leather-ivory` 合批件是**非索引**几何（g.index===null），
+  // 早期实现用 `if (!g.index) return` 跳过 ⇒ 整批被静默跳过、修复空转（archR A/B 0 变化）。
+  // 现按「非索引=顶点连续三元组 / 索引=索引数组」两形态统一遍历，泄漏面从 batch 拆出。
+  // 开关：#r143fix=off 关闭（A/B 对照用）。
+  const r143FixOn =
+    typeof window === 'undefined' || !/(?:^|[#&])r143fix=off/i.test(window.location.hash);
+  if (r143FixOn) {
+    const LEAK = { xmin: 0.85, xmax: 0.95, ymin: 0.41, ymax: 0.725, zmin: 0.935, zmax: 1.406 };
+    const tmpV = new THREE.Vector3();
+    const split: Array<{ mesh: THREE.Mesh; leakIdx: number[]; nonLeakIdx: number[] }> = [];
+    model.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      const arr = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      if (!arr.some((mt) => (mt as { userData?: { sculptMaterial?: { id?: string } } })?.userData?.sculptMaterial?.id === 'leather-ivory')) return;
+      const g = mesh.geometry;
+      // ⚠ R143-C7 关键：`batch/leather-ivory` 是**非索引**几何（batchMerge 产物，
+      // g.index === null）——不能用 g.index 遍历，否则整批被 `!g.index` 跳过（曾致修复静默空转，
+      // archR A/B 0 变化）。改按顶点连续三元组（非索引）/ 索引数组（索引）两种形态访问。
+      if (!g.attributes.position) return;
+      mesh.updateWorldMatrix(true, false);
+      const pos = g.attributes.position;
+      const idxArr = g.index ? (g.index.array as ArrayLike<number>) : null;
+      const triCount = idxArr ? idxArr.length / 3 : Math.floor(pos.count / 3);
+      const leakIdx: number[] = [];
+      const nonLeakIdx: number[] = [];
+      let leakN = 0;
+      for (let f = 0; f < triCount; f += 1) {
+        const a = idxArr ? idxArr[f * 3] : f * 3;
+        const b = idxArr ? idxArr[f * 3 + 1] : f * 3 + 1;
+        const c = idxArr ? idxArr[f * 3 + 2] : f * 3 + 2;
+        let cx = 0, cy = 0, cz = 0;
+        for (const vi of [a, b, c]) {
+          tmpV.fromBufferAttribute(pos, vi).applyMatrix4(mesh.matrixWorld);
+          cx += tmpV.x; cy += tmpV.y; cz += tmpV.z;
+        }
+        cx /= 3; cy /= 3; cz /= 3;
+        const inLeak = Math.abs(cx) >= LEAK.xmin && Math.abs(cx) <= LEAK.xmax &&
+          cy >= LEAK.ymin && cy <= LEAK.ymax && cz >= LEAK.zmin && cz <= LEAK.zmax;
+        const tgt = inLeak ? leakIdx : nonLeakIdx;
+        tgt.push(a, b, c);
+        if (inLeak) leakN += 1;
+      }
+      if (leakN > 0) split.push({ mesh, leakIdx, nonLeakIdx });
+    });
+    let splitN = 0;
+    for (const s of split) {
+      if (s.leakIdx.length === 0) continue;
+      const g = s.mesh.geometry;
+      const srcMat = (Array.isArray(s.mesh.material) ? s.mesh.material[0] : s.mesh.material) as THREE.MeshPhysicalMaterial;
+      const darkMat = srcMat.clone() as THREE.MeshPhysicalMaterial;
+      darkMat.color = new THREE.Color('#3a352e');
+      darkMat.roughness = 0.9;
+      darkMat.metalness = 0.0;
+      if (darkMat.envMapIntensity !== undefined) darkMat.envMapIntensity = 0.15;
+      darkMat.userData = { ...darkMat.userData, sculptMaterial: { id: 'r7-leak-shadow' } };
+      darkMat.name = 'r7-leak-shadow';
+      // 泄漏面 mesh：共享 position/normal/uv，leak index，同局部变换
+      const leakGeo = new THREE.BufferGeometry();
+      leakGeo.setAttribute('position', g.attributes.position);
+      if (g.attributes.normal) leakGeo.setAttribute('normal', g.attributes.normal);
+      if (g.attributes.uv) leakGeo.setAttribute('uv', g.attributes.uv);
+      leakGeo.setIndex(s.leakIdx);
+      leakGeo.computeBoundingSphere();
+      const leakMesh = new THREE.Mesh(leakGeo, darkMat);
+      leakMesh.name = 'r7-leak-shadow';
+      leakMesh.castShadow = false;
+      leakMesh.receiveShadow = true;
+      leakMesh.matrixAutoUpdate = false;
+      leakMesh.matrix.copy(s.mesh.matrix);
+      s.mesh.parent?.add(leakMesh);
+      // 原 mesh 保留非泄漏面（米白）
+      const nonLeakGeo = g.clone();
+      nonLeakGeo.setIndex(s.nonLeakIdx);
+      nonLeakGeo.computeBoundingSphere();
+      s.mesh.geometry = nonLeakGeo;
+      splitN += 1;
+    }
+    if (splitN > 0) console.info(`[R7Adapter] R143-C7 泄漏区 leather-ivory 暗化：${splitN} mesh 拆出 r7-leak-shadow`);
+  }
+
   // ---- R29（外部审查 O1）：阴影 caster 白名单（与 V800Adapter 同构）----
   // 工厂给每个 mesh 都写了 castShadow ?? true ⇒ 130+ 件全部进 shadow pass；
   // 阴影相机正交 ±28m / 2048² ⇒ texel 27.3mm，徽标/齿环/悬浮标/后视镜/内饰
