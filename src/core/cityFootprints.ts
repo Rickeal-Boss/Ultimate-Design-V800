@@ -784,7 +784,7 @@ export function clampToFootprints(
           const nearBound = f.xOuter + dx;
           if (
             nearBound <= corridorCenterHalfWidth(z) &&
-            !nearSideBlocked(nearBound, z, heading, dz, f)
+            !nearSideBlocked(cx < 0 ? -nearBound : nearBound, z, heading, dz, f)
           ) {
             if (nearBound > nearBest) {
               nearBest = nearBound;
