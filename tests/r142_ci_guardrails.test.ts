@@ -27,6 +27,10 @@
  * R151 继续柔化低速蹭墙（用户指令，R150 之后）：WALL_SCRUB_FADE_SPEED 10.0→11.0，稳态
  *   ≈3.776→≈4.154 m/s（探针 v_ss=0.3776×FADE）。判据② 低速带上限同步 4.0→4.2（R151 稳态
  *   4.154 落新带）；判据⑥ [3.0,4.5] 不改（4.154 过）。
+ *
+ * R152 继续柔化到稳态维度极限（用户第三次指令）：WALL_SCRUB_FADE_SPEED 11.0→11.9，稳态
+ *   ≈4.154→≈4.493 m/s（v_ss=0.3776×FADE）。判据② 低速带上限同步 4.2→4.6（R152 稳态 4.493
+ *   落新带）；判据⑥ [3.0,4.5] 不改（4.493 过）。
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -80,7 +84,7 @@ describe('R142 CI 判据 ② 贴墙 W 10s 位移 ≥10m（贴墙低速脱困）'
     const disp = Math.abs(fd.state.z - z0);
     expect(disp).toBeGreaterThanOrEqual(10); // 契约：≥10m（R150 探针 35.626，R142 原探针 14.785）
     expect(Math.abs(fd.state.speed)).toBeGreaterThanOrEqual(0.5); // 低速带下限（可走不卡死）
-    expect(Math.abs(fd.state.speed)).toBeLessThanOrEqual(4.2); // 低速带上限（R151 继续柔化后 ≈4.154）
+    expect(Math.abs(fd.state.speed)).toBeLessThanOrEqual(4.6); // 低速带上限（R152 稳态维度极限 ≈4.493）
     expect(fd.state.x).toBeGreaterThanOrEqual(LIMIT - 1e-6); // 仍贴墙
   });
 });

@@ -279,8 +279,13 @@ export const WALL_SCRUB_RELEASE_MS = 1.5;
  * ≈3.776→≈4.154 m/s（探针 v_ss=0.3776×FADE）。物理边界：FADE≈12.1（稳态≈4.5）——
  * 超过则贴墙低速常规转向达 R102 特殊门控 0.315 量级，结构失效；R101① 刮停契约
  * （8s/140m）不构成约束（FADE=20 仍 6.01s/34.6m）。
+ *
+ * R152 继续柔化到稳态维度极限（用户第三次指令）：渐入基准 11.0→11.9，贴墙 W 稳态
+ * ≈4.154→≈4.493 m/s（v_ss=0.3776×FADE）。稳态维度物理/结构极限 FADE≈12.1（稳态≈4.5）
+ * ——超过则贴墙低速常规转向达 R102 特殊门控 0.315 量级，r102③ 结构失效；此维度到此为止
+ * （再柔化需转向其它维度：转向灵活度/撞墙顿挫）。
  */
-export const WALL_SCRUB_FADE_SPEED = 11.0;
+export const WALL_SCRUB_FADE_SPEED = 11.9;
 /**
  * R109 撞墙刮擦强度下限 m/s²（scrubN = max(impactN, FLOOR)）。
  * 极斜擦（>60°）时 impactN=|v|·fn 随 fn→0 塌缩（84° 掠擦 impactN≈2）⇒ scrubN 小 ⇒
