@@ -15,6 +15,10 @@
  *
  * 红线：本测试只新增，不碰 src/；resolveBounds 函数体 / WALL_* / IMPACT_TAU / 灵魂12 / 摩擦圆
  *       全未动。断言值含裕量，防浮点/版本漂移误报。
+ *
+ * R144 补第 4 条判据：御桥段纯 1D 边界「倒车脱困契约」（见下方 ④）——锁定 R144 方向性 scrub
+ *   渐出 + reverseEscaping 门控（FreeDrive.ts 倒车时墙 scrub 降 30% + 倒车全程保持 18°/s 脱困
+ *   横摆），防「御桥段桥沿倒车+转向卡死」（修复前 10s 位移 0.01m 原地自转不出墙）回归。
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -87,6 +91,60 @@ describe('R142 CI 判据 ③ 2D 接触单帧横移 ≤ X_Z_PEN_SMOOTH_CAP（渲�
       prevX = fd.state.x;
     }
     expect(maxDx).toBeLessThanOrEqual(0.35); // 探针 0.3500（X_Z_PEN_SMOOTH_CAP 设计值）
+  });
+});
+
+/**
+ * R142 CI 判据 ④ 倒车脱困契约（御桥段纯 1D 边界，锁定 R144 方向性 scrub 渐出 + reverseEscaping 门控）：
+ *   · +X 墙正确转向（S+D 使车尾转向路内）10s 位移 ≥5m（探针 25.41m；R144 修复前 0.01m 原地自转不出墙）
+ *   · −X 墙镜像正确转向（S+A）10s 位移 ≥5m（镜像对称，探针 25.41m）
+ *   · 全程（冲墙收敛 + 倒车脱困）单帧 |Δx| ≤ 0.35（X_Z_PEN_SMOOTH_CAP，无瞬移，探针 0.1004）
+ * 背景：R142 ①②③ 只测前进（中线/贴墙 W/2D 横移），未覆盖倒车 ⇒ 补第 4 条锁住 R144 倒车脱困，
+ *       防「御桥段倒车+转向卡死」（曾 10s 位移 0.01m）回归。镜像对称：+X 用 D、−X 用 A（反车
+ *       把车尾转向路内才脱困；转向墙内被墙抵抗 = 物理正确）。
+ */
+function runReverseEscape(side: 1 | -1, steerKey: 'KeyA' | 'KeyD'): { disp: number; maxDx: number } {
+  const IMPACT_Z = -250;
+  const LIMIT = corridorCenterHalfWidth(IMPACT_Z); // 10.997（御桥段纯 1D 边界）
+  const startX = side * (LIMIT - 1.0); // ±9.997（近墙）
+  const heading = Math.PI + Math.asin(0.3) * side; // 斜擦 ±X 墙（+X 用 π+0.305，−X 用 π−0.305）
+  const fd = new FreeDrive({ start: { x: startX, z: IMPACT_Z, heading } });
+  fd.state.speed = 40; // 40 m/s 冲墙收敛（r144_stuck_sim 同口径）
+  let maxDx = 0;
+  let prevX = fd.state.x;
+  const track = () => {
+    const dx = Math.abs(fd.state.x - prevX);
+    if (dx > maxDx) maxDx = dx;
+    prevX = fd.state.x;
+  };
+  fd.press('KeyW', true);
+  for (let i = 0; i < 480; i += 1) {
+    fd.step(DT); // 冲墙 + 刮到贴墙（4s）
+    track();
+  }
+  fd.press('KeyW', false);
+  const x0 = fd.state.x;
+  const z0 = fd.state.z;
+  fd.press('KeyS', true); // 倒车（brakeIn=1）
+  fd.press(steerKey, true); // 正确转向：+X 用 D、−X 用 A（车尾转向路内）
+  for (let i = 0; i < 1200; i += 1) {
+    fd.step(DT); // 10s
+    track();
+  }
+  return { disp: Math.hypot(fd.state.x - x0, fd.state.z - z0), maxDx };
+}
+
+describe('R142 CI 判据 ④ 倒车脱困契约（御桥段纯 1D 边界，R144 方向性 scrub 渐出）', () => {
+  it('+X 墙正确转向（S+D）10s 位移 ≥5m，全程单帧 |Δx| ≤0.35（无瞬移）', () => {
+    const r = runReverseEscape(1, 'KeyD');
+    expect(r.disp).toBeGreaterThanOrEqual(5); // 探针 25.41m（R144 修复前 0.01m）
+    expect(r.maxDx).toBeLessThanOrEqual(0.35); // 探针 0.1004
+  });
+
+  it('−X 墙镜像正确转向（S+A）10s 位移 ≥5m，全程单帧 |Δx| ≤0.35', () => {
+    const r = runReverseEscape(-1, 'KeyA');
+    expect(r.disp).toBeGreaterThanOrEqual(5); // 探针 25.41m（镜像对称）
+    expect(r.maxDx).toBeLessThanOrEqual(0.35); // 探针 0.1004
   });
 });
 

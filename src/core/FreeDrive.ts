@@ -333,6 +333,15 @@ export const WALL_2D_MAX_LATERAL_STEP = 0.30;
  * 上界 140m 仍满足）、r102 脱困平衡点仍在油门可挣脱带宽（净加速 6.08 − 摩擦 2.0 仍为正）。
  */
 export const WALL_TANGENT_FRICTION = 0.25;
+/**
+ * R144 倒车脱困：贴墙主动倒车（S + 已倒车）时墙 scrub 的比例系数（<1 = 渐出）。
+ * 物理语义（R109 头注已明示）：墙静摩擦只阻止「压向墙」，不阻止「背离墙/退出」——
+ * 玩家主动倒车即「背离墙退出」意图，若 scrub 仍按 R101 全向钉速，御桥段纯 1D 边界
+ * 实测 10s 位移 0.01m（车原地自转不出墙，R144 探针）。本系数让倒车时 scrub 降到
+ * R144_REVERSE_SCRUB_FADE 比例（倒车净加速 2.08 可推动，平衡点 ≈2.2 m/s 背墙退出），
+ * 前进（W）不受影响（R142② 蹭墙平衡保留）。值域 (0,1]；撞墙域边界常量，不入灵魂表。
+ */
+export const R144_REVERSE_SCRUB_FADE = 0.3;
 
 /** 场景边界（世界坐标 m） */
 export const BOUNDS = {
@@ -1273,13 +1282,16 @@ export class FreeDrive {
     force -= dir * (dragForce(av) + rollForce());
 
     let vNext = v + (force / MASS) * dt;
+    // R144 倒车脱困：贴墙主动倒车（S + 已倒车 vNext<0）时墙 scrub 渐出（见 R144_REVERSE_SCRUB_FADE
+    // 头注）。前进（W）不受影响（R142② 蹭墙平衡保留）；倒车净加速 2.08 可推动，背墙退出不卡死。
+    const reverseScrubFade = brakeIn > 0 && vNext < 0 ? R144_REVERSE_SCRUB_FADE : 1;
     // R101 撞墙刮擦耗散：作用在电子限速钳位**之前**，语义是「撞墙耗散」非「限速」。
     // 沿运动反方向减 scrub·dt，钳到不反向（沿用下方 :866 口径），油门压不住（12 > 净加速6.08）。
     // ⚠ 主动漂移态（手刹/大侧偏/大动态横摆）不加刮擦：此时轮胎摩擦圆已饱和主导减速，
     //   再叠墙体刮擦=双重惩罚且会干扰漂移模型回归（R37-D 自回正漂移蹭墙场景）。
     //   R101 目标场景（撞后切向滑行）非漂移态 ⇒ 不受此门控影响。
     if (wallScrub > 0 && dir !== 0 && !driftActive) {
-      vNext -= dir * wallScrub * dt;
+      vNext -= dir * wallScrub * reverseScrubFade * dt;
       if (vNext * dir <= 0) vNext = 0;
     }
     // 电子限速：只钳速度、不动 accel（与主线同契约——油门照常有劲）
@@ -1352,11 +1364,17 @@ export class FreeDrive {
       // (转向 + 油门/刹车) ⇒ 给一记与驾驶方向同号的最小横摆率（0.35·maxYawRate≈18°/s），
       // 让车头转离墙 ⇒ f.x 指向路内 ⇒ 前移使 |x| 掉到 halfW−ε ⇒ sideTouch=false
       // ⇒ wallScrubN 清零 ⇒ 彻底脱困。仅低速窗口生效，不改 scrub 公式/几何/摩擦圆。
+      // R144 倒车脱困：倒车（brakeIn>0 且 vAvg<0）时**不受 av<RELEASE_MS 低速门控限制**——
+      //   倒车净加速（2.08）弱，scrub 渐出后倒车速度会过 RELEASE_MS(1.5) 阈值，若门控只在低速
+      //   给转向权限，速度一过 1.5 车就停止转向、沿墙滑行回不了「车尾背离墙」朝向 ⇒ 御桥段 1D
+      //   边界 10s 位移 0.01m 原地自转（R144 探针）。放宽倒车门控让车在倒车全程保持 18°/s 脱困
+      //   横摆，转到「车尾朝路内」后倒车自然清墙（前进门控不变，R142② 蹭墙平衡保留）。
+      const reverseEscaping = brakeIn > 0 && vAvg < 0;
       if (
         wallScrub > 0 &&
         steerIn !== 0 &&
         (throttle > 0 || brakeIn > 0) &&
-        av < WALL_SCRUB_RELEASE_MS
+        (av < WALL_SCRUB_RELEASE_MS || reverseEscaping)
       ) {
         yawRate = steerIn * FREE.maxYawRate * 0.35 * (vAvg >= 0 ? 1 : -1);
         // R129 ②：脱困直写旁路横摆滞后 ⇒ 同步滞后状态，避免脱困结束瞬间横摆回跳。
@@ -1517,8 +1535,9 @@ export class FreeDrive {
     //   不受影响（R110 掠擦语义保留）。WALL_TANGENT_FRICTION 值（0.25）与 WALL_SCRUB_FADE_SPEED
     //   值（4.0）均未动，只改本表达式（非 WALL_SCRUB_* 常量值）。 */
     if (this.wallScrubN > 0 && !driftActive) {
+      // R144：切向摩擦同 × reverseScrubFade（倒车时渐出，与主 scrub 同口径，见 R144 头注）。
       const tangentDecel =
-        WALL_TANGENT_FRICTION * this.wallScrubN * clamp(Math.abs(s.speed) / WALL_SCRUB_FADE_SPEED, 0, 1);
+        WALL_TANGENT_FRICTION * this.wallScrubN * clamp(Math.abs(s.speed) / WALL_SCRUB_FADE_SPEED, 0, 1) * reverseScrubFade;
       const sign = Math.sign(s.speed) || 1;
       const reduced = Math.abs(s.speed) - tangentDecel * dt;
       s.speed = sign * Math.max(0, reduced);
