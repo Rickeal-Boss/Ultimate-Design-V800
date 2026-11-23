@@ -19,6 +19,10 @@
  * R144 补第 4 条判据：御桥段纯 1D 边界「倒车脱困契约」（见下方 ④）——锁定 R144 方向性 scrub
  *   渐出 + reverseEscaping 门控（FreeDrive.ts 倒车时墙 scrub 降 30% + 倒车全程保持 18°/s 脱困
  *   横摆），防「御桥段桥沿倒车+转向卡死」（修复前 10s 位移 0.01m 原地自转不出墙）回归。
+ *
+ * R150 补第 6 条判据：贴墙 W 稳态末速 ∈ [3.0, 4.5]（见下方 ⑥）——锁定 R150 柔化低速蹭墙
+ *   （WALL_SCRUB_FADE_SPEED 4.0→10.0，用户拍板 R142 §0-B），防回退 R109 龟速 1.509 蹭墙回归。
+ *   判据② 低速带上限同步 3.0→4.0（R150 稳态 3.776 落新带，探针位移 14.785→35.626）。
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -70,9 +74,9 @@ describe('R142 CI 判据 ② 贴墙 W 10s 位移 ≥10m（贴墙低速脱困）'
     const z0 = fd.state.z;
     for (let i = 0; i < 1200; i += 1) fd.step(DT); // 10s
     const disp = Math.abs(fd.state.z - z0);
-    expect(disp).toBeGreaterThanOrEqual(10); // 契约：≥10m（探针 14.785）
+    expect(disp).toBeGreaterThanOrEqual(10); // 契约：≥10m（R150 探针 35.626，R142 原探针 14.785）
     expect(Math.abs(fd.state.speed)).toBeGreaterThanOrEqual(0.5); // 低速带下限（可走不卡死）
-    expect(Math.abs(fd.state.speed)).toBeLessThanOrEqual(3.0); // 低速带上限（蹭墙平衡 ~1.5）
+    expect(Math.abs(fd.state.speed)).toBeLessThanOrEqual(4.0); // 低速带上限（R150 柔化后蹭墙平衡 ≈3.776）
     expect(fd.state.x).toBeGreaterThanOrEqual(LIMIT - 1e-6); // 仍贴墙
   });
 });
@@ -145,6 +149,31 @@ describe('R142 CI 判据 ④ 倒车脱困契约（御桥段纯 1D 边界，R144 
     const r = runReverseEscape(-1, 'KeyA');
     expect(r.disp).toBeGreaterThanOrEqual(5); // 探针 25.41m（镜像对称）
     expect(r.maxDx).toBeLessThanOrEqual(0.35); // 探针 0.1004
+  });
+});
+
+/**
+ * R142 CI 判据 ⑥ 低速蹭墙柔化契约（R150）：判据②同场景贴墙 W 10s 稳态末速 ∈ [3.0, 4.5]。
+ * 与判据②互补：判据②锁「位移 ≥10m + 低速带 ≤4.0」，本判据锁「稳态 3-4.5」——防回退
+ * R109 龟速 1.509 蹭墙（柔化前稳态落 <2，玩家仍感「蹭墙太肉」），也防 FADE 过大致稳态
+ * >4.5 飞驰刮墙（FADE=12 探针稳态已 4.531 > 4.5 ⇒ 契约锁 FADE ≲ 10-11）。
+ * 探针 FADE=10 实测稳态 3.776（柔化目标 3-4 中位）。
+ */
+describe('R142 CI 判据 ⑥ 低速蹭墙柔化契约（R150）', () => {
+  it('贴 +X 墙含油门 10s，稳态末速 ∈ [3.0, 4.5]（R150 柔化锁定，防回退 1.509 龟速）', () => {
+    const IMPACT_Z = -250;
+    const LIMIT = corridorCenterHalfWidth(IMPACT_Z); // 10.997
+    const START_X = LIMIT - 0.5;
+    const heading = Math.PI + Math.asin(0.3); // 斜擦 +X 墙且沿 +Z 滑（判据②同口径）
+    const fd = new FreeDrive({ start: { x: START_X, z: IMPACT_Z, heading } });
+    fd.state.speed = 55.56; // 200 km/h 冲进墙
+    for (let i = 0; i < 400; i += 1) fd.step(DT); // 撞墙 + 刮到稳态
+    fd.press('KeyW', true);
+    for (let i = 0; i < 1200; i += 1) fd.step(DT); // 10s
+    const v = Math.abs(fd.state.speed);
+    expect(v).toBeGreaterThanOrEqual(3.0); // 柔化生效：稳态 ≥3.0（探针 3.776，远高于原 1.509）
+    expect(v).toBeLessThanOrEqual(4.5); // 不飞驰：稳态 ≤4.5（FADE=10 探针 3.776，FADE=12 已 4.531）
+    expect(fd.state.x).toBeGreaterThanOrEqual(LIMIT - 1e-6); // 仍贴墙
   });
 });
 

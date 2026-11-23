@@ -93,7 +93,7 @@ describe('R101 wall scrub ① 撞后松油：切向刮擦把车快速刮停（�
 });
 
 describe('R101 wall scrub ② 贴墙含油门：刮擦 > 油门净加速（高速压不住，但低速可走）', () => {
-  it('贴墙(平行)+油门：高速被刮到低速带 1~3 m/s 不再爬升（旧机制会爬到十几 km/h 蹭十几秒）', () => {
+  it('贴墙(平行)+油门：高速被刮到 R150 稳态刮擦带 ~3.8 m/s 不再爬升（旧机制会爬到十几 km/h 蹭十几秒）', () => {
     const heading = headingFor(0.3);
     const fd = driveToWallHeading(heading, 55.56);
     fd.press('KeyW', true); // 含油门：恒扭矩段 motor 净加速 ≈6.08 m/s²，< scrub 12
@@ -105,10 +105,11 @@ describe('R101 wall scrub ② 贴墙含油门：刮擦 > 油门净加速（高�
       peak = Math.max(peak, cur);
       expect(fd.state.x).toBeGreaterThanOrEqual(LIMIT - 1e-6); // 仍贴墙
     }
-    // R109 低速脱困：scrub×clamp(|v|/FADE_SPEED,0,1) 随速渐入 ⇒ 平衡点 ≈2.03 m/s
-    // （不再是旧 R101 的"被钉死到 <2 且 0"）——玩家持续给油可沿墙走、能转向脱困。
+    // R109 低速脱困：scrub×clamp(|v|/FADE_SPEED,0,1) 随速渐入 ⇒ 平衡点 ∝ FADE_SPEED。
+    // R150 柔化低速蹭墙：FADE 4.0→10.0 ⇒ 稳态 1.509→≈3.776 m/s（探针 10s 末速 3.776，
+    // 柔化目标 3-4 中位）——玩家持续给油可沿墙走、能转向脱困（不再是旧 R101 "钉死 <2"）。
     expect(Math.abs(fd.state.speed)).toBeGreaterThan(0.5); // 不再被钉死到 0（脱困）
-    expect(Math.abs(fd.state.speed)).toBeLessThan(3); // 被刮到低速带（不爬升）
+    expect(Math.abs(fd.state.speed)).toBeLessThan(5); // 被刮到 R150 稳态刮擦带（3.776，<5 不爬升）
     expect(peak).toBeLessThan(55.6); // 全程未爬升（含油门也压不住刮擦）
   });
 });

@@ -13,6 +13,11 @@
  *   ⇒ wallScrubN 清零 ⇒ 彻底脱困。不改 scrub 公式/几何/摩擦圆/灵魂 12 参数。
  *
  * 采样点 z=−250（御桥段，车心限恒定 10.997），避开块角过渡区（与 r99/r101 同口径）。
+ *
+ * R150 柔化低速蹭墙（用户拍板，R142 §0-B）：WALL_SCRUB_FADE_SPEED 4.0→10.0，稳态从
+ * R109 的 ≈2.03（实测 1.509）提到 ≈3.776 m/s ⇒ 本测试判据随契约演进：稳态刮擦带上限
+ * 由 <3.0（RELEASE_MS×2）改为 <LOW_BAND_HI=5.0（稳态 3.776 落 2.5-5.0），脱困③常规转向
+ * 量级 0.10→0.245（稳态 3.776），上限 0.15→0.28（仍区分 0.315 特殊门控）。
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -26,6 +31,9 @@ const DT = 1 / 120;
 const IMPACT_Z = -250; // 桥段，limits 恒定，避开块角
 const LIMIT = corridorCenterHalfWidth(IMPACT_Z); // 10.997
 const START_X = LIMIT - 0.5; // 10.497：车心在界内，留 0.5 m 冲进墙触发撞击
+// R150 柔化低速蹭墙：稳态刮擦带上限 m/s（探针稳态 3.776，柔化目标 3-4.5，取 5.0 上限留裕量）。
+// 原 R102「≤3.0 低速带」随 R150 契约演进作废（稳态 3.776 不再落 <3.0 带）。
+const LOW_BAND_HI = 5.0;
 
 // 斜擦 +X 墙且沿 +Z 滑：heading=π+asin(fn) ⇒ f.x=+fn 朝 +X 墙 / f.z 朝 +Z（与 r101 同口径）
 function headingFor(fn: number): number {
@@ -47,17 +55,19 @@ function driveToWallAndPin(): FreeDrive {
     if (fd.state.x >= LIMIT - 1e-9) hit = true; // 已被几何钳到墙 ⇒ 接触
   }
   expect(hit).toBe(true);
-  // 含油门持续 step：R109 speedFade ⇒ scrub 随速渐入，速度被刮到低速带（≈2.03 平衡点）
-  // 并持续贴墙。旧 R102 是「刮到 <0.3 钉停」，R109 修复后不再钉停（低速可走）。
+  // 含油门持续 step：R109 speedFade ⇒ scrub 随速渐入，速度被刮到稳态刮擦带并持续贴墙。
+  // R150 柔化低速蹭墙：渐入基准 4.0→10.0，稳态从 R109 平衡点 ≈2.03（实测 1.509）提到
+  // ≈3.776 m/s（探针 10s 末速 3.776，柔化目标 3-4 中位）。不再钉停（低速可走）。
   fd.press('KeyW', true);
   let lowAt = -1;
   for (let i = 0; i < 1440; i += 1) {
-    // 12 s：足够 55 m/s @ (12−6.08)≈5.9 m/s² 刮到低速带
+    // 12 s：足够 55 m/s @ (12−6.08)≈5.9 m/s² 刮到稳态刮擦带
     fd.step(DT);
-    if (lowAt < 0 && Math.abs(fd.state.speed) < WALL_SCRUB_RELEASE_MS * 2) lowAt = i;
+    if (lowAt < 0 && Math.abs(fd.state.speed) < LOW_BAND_HI) lowAt = i;
   }
-  expect(lowAt).toBeGreaterThanOrEqual(0); // 确实被刮到低速带（<3 m/s）
-  expect(Math.abs(fd.state.speed)).toBeLessThan(WALL_SCRUB_RELEASE_MS * 2); // 处于低速带
+  expect(lowAt).toBeGreaterThanOrEqual(0); // 确实被刮到稳态刮擦带（<LOW_BAND_HI=5.0）
+  expect(Math.abs(fd.state.speed)).toBeGreaterThan(2.5); // R150 柔化生效：稳态明显高于原钉停 1.509
+  expect(Math.abs(fd.state.speed)).toBeLessThan(LOW_BAND_HI); // 仍低速不飞驰（稳态 3.776 ∈ 2.5-5.0）
   expect(fd.state.x).toBeGreaterThanOrEqual(LIMIT - 1e-6); // 仍贴墙
   return fd;
 }
@@ -77,11 +87,11 @@ describe('R102 脱困 ① 贴墙低速 + 油门 + 转向：车头转离墙、wal
   it('KeyD(steerIn=−1)+油门：yawRate 有转向权限（∝|v|，R109 后低速仍可转），车头转离 +X 墙后 x 掉到界内脱困', () => {
     const fd = driveToWallAndPin();
     const heading0 = fd.state.heading;
-    // 按住油门 + 右转（KeyD ⇒ steerIn=−1）：车有 ~2 m/s 速度 ⇒ yawRateFor 有转向权限
+    // 按住油门 + 右转（KeyD ⇒ steerIn=−1）：车有 ~3.776 m/s 稳态 ⇒ yawRateFor 有转向权限
     fd.press('KeyD', true);
     fd.step(DT);
-    // R109：低速带 v≈2.03（不再钉停 0）⇒ 常规 yawRateFor 已有转向（∝|v|），
-    // 不再依赖 R102 的 0.35 特殊门控（av<1.5 不再命中，但车本身能转）。
+    // R150：稳态 v≈3.776（不再钉停 0，R109 柔化后低速带 3-4.5）⇒ 常规 yawRateFor 已有
+    // 转向（∝|v|），不再依赖 R102 的 0.35 特殊门控（av<1.5 不再命中，但车本身能转）。
     expect(fd.state.yawRate).toBeLessThan(0); // KeyD ⇒ 朝路内转向
     expect(Math.abs(fd.state.yawRate)).toBeGreaterThan(0.001); // 有实际转向权限
     // 车头持续转离墙：heading 朝减小方向（f.x 由 +0.3 转向 ≤0 即指向路内）
@@ -125,10 +135,12 @@ describe('R102 脱困 ③ 只给转向不给油门/刹车：不触发脱困特�
     fd.press('KeyD', true); // 只给转向
     for (let i = 0; i < 60; i += 1) {
       fd.step(DT);
-      // R109：v≈2.03（非钉停 0）⇒ 常规 yawRateFor(steer, v) 有 ∝|v| 的**小**转向权限，
+      // R150：v≈3.776 稳态（非钉停 0）⇒ 常规 yawRateFor(steer, v) 有 ∝|v| 的转向权限，
       // 但**不是** R102 的 0.35×maxYawRate≈0.315 特殊脱困权限（门控需油门/刹车同时按下）。
-      // 断言「无 0.315 级权限」——若门控误触发会 ≈0.315，常规量级实测 0.10 ≪ 0.15。
-      expect(Math.abs(fd.state.yawRate)).toBeLessThan(0.15);
+      // 断言「无 0.315 级权限」——若门控误触发会 ≈0.315。R150 柔化后稳态 3.776 的常规转向
+      // 实测峰值 0.245（无油门刮擦滑行，yaw 瞬态在 0.25s 处达峰）⇒ 上限取 0.28（在
+      // 0.245 与门控 0.315 之间留双向裕量，严禁无依据放宽）。
+      expect(Math.abs(fd.state.yawRate)).toBeLessThan(0.28);
       expect(fd.state.x).toBeGreaterThanOrEqual(LIMIT - 0.05); // 不显著离墙（贴墙接触带 5cm 内）
     }
   });
