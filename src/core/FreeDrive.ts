@@ -1445,17 +1445,59 @@ export class FreeDrive {
         //   xPen（恰让车角贴盒内缘），消除收敛瞬态（车角嵌墩 0.3~1.32m 多帧）；未穿模
         //   （xPen≤0.30）时保持 WALL_2D_MAX_LATERAL_STEP 平滑（无瞬移）。R111 修 SAT 后
         //   clamp 触发 = 真接触，推回 = 消除真穿模（非空气墙）。
-        const maxStepX = Math.max(WALL_2D_MAX_LATERAL_STEP, fp.xPen);
-        mainClampDelta = clamp(fp.x - s.x, -maxStepX, maxStepX); // 只收紧 x：z 不动（占位盒 x 对称）
-        s.x += mainClampDelta;
+        // R148-Phase2：持续压入 x 平滑（对称下方 z 平滑）—— 玩家主动转向（steerIn≠0）+ 行驶中
+        //   （|speed|>1）+ **双轴深嵌**（xPen>0.30 且 zPen>0.35：W+A 切角飞扶壁墩实测 xPen=0.403
+        //   /zPen=1.091，zOv≥xPenRaw ⇒ arcadeCol xPenSmooth=false ⇒ 单帧 x-yank 0.386m 残留）⇒
+        //   平滑推回 WALL_2D_MAX_LATERAL_STEP（0.30）。双轴判据排除 r105 漂移（z 纵深远嵌
+        //   zOv≫xPen、x 浅 xPen≤0.30）⇒ 漂移单帧消除保留。门墩 h=90° 过洞 x 钳主导但 z 浅
+        //   （zPen≤0.35）⇒ 不触发，R119 ② 单帧过洞保留。不转向/低速/单轴浅嵌逐位不变。
+        const maxStepX =
+          steerIn !== 0 && Math.abs(s.speed) > 1.0 && fp.xPen > WALL_2D_MAX_LATERAL_STEP && fp.zPen > 0.35
+            ? WALL_2D_MAX_LATERAL_STEP
+            : Math.max(WALL_2D_MAX_LATERAL_STEP, fp.xPen);
+        const dxClamp = clamp(fp.x - s.x, -maxStepX, maxStepX);
         // R113：z 钳（车头先入占位带时 MTV 最小穿透轴 = 世界 z，x 单向钳无法解决）。
         //   与 x 钳同一步长上限（0.30 m/帧 ⇒ 无 z 瞬移）；只收紧（fp.z 是带外缘，钳向它收敛）。
         //   drift 态同样钳 z（位置钳不分层，堵死漂移态沿 z 穿占位带）。
         // R116：z 步长上限动态化（对称 R115 xPen）——车已穿模（fp.zPen>0，车心到 z 钳目标 >0.30）
         //   时单帧推回 zPen（让 z 轴相切，消 z/局部轴穿透收敛瞬态，R116 实测 0.398m 单帧残留）；
         //   未穿模（zPen≤0.30）时保持 WALL_2D_MAX_LATERAL_STEP 平滑（无瞬移）。
-        const maxStepZ = Math.max(WALL_2D_MAX_LATERAL_STEP, fp.zPen);
-        s.z += clamp(fp.z - s.z, -maxStepZ, maxStepZ);
+        // R148-Phase2：持续压入 z 平滑 —— 玩家**主动转向**（steerIn≠0）**且仍在行驶**（|speed|
+        //   > 1.0，车头仍压向 footprint）时车 OBB 沿 z **未平滑深嵌**（fp.zPen>0.35，即
+        //   cityFootprints zPenSmooth 判据 `xPenRaw>zPenRaw` 反向 ⇒ 不平滑 ⇒ R148 残留单帧
+        //   0.4~1.55m 持续锯齿极限环，W+A 切角拱廊柱/飞扶壁墩实测 zPen=0.37~0.55）⇒ 平滑推回
+        //   WALL_2D_MAX_LATERAL_STEP（0.30，与 R120 arcadeCol x 特判同额）。**fp.zPen≤0.35 no-op**
+        //   ：cityFootprints 已平滑到 0.35（zPenSmooth=true，如主殿台基楔入帧 zPen=0.35）或天然浅
+        //   ⇒ 本式不改变轨迹 ⇒ 不触发「gatePier 陡角 x 深嵌（|sinH|>0.5、xPenSmooth=false）」
+        //   的 1.6m x-yank 回归（主殿台基 W+A 0.350→1.592 根因）。**速度门**：|speed|≤1（车已
+        //   被钉停/楔入角，v≈0）不设限 —— 楔入需整额推回清除（否则车留嵌 footprint、撞击链再
+        //   注入新振荡）。不转向时深嵌多为瞬态（传送伪影 z=-1285.5 zPen=0.731 / 高速扫入）⇒ 保留
+        //   R116 单帧清除。只限 z：x 已有 R120 arcadeCol 0.30 特判 / gatePier xPen≤0.30，且门墩
+        //   h=90° 过洞是 x 钳主导（z 小），限 z 不破 R119 ② 单帧过洞。R116 逐位语义：未穿模仍
+        //   0.30、不转向/低速/浅嵌逐位不变。
+        const maxStepZ =
+          steerIn !== 0 && fp.zPen > 0.35 && Math.abs(s.speed) > 1.0
+            ? WALL_2D_MAX_LATERAL_STEP
+            : Math.max(WALL_2D_MAX_LATERAL_STEP, fp.zPen);
+        const dzClamp = clamp(fp.z - s.z, -maxStepZ, maxStepZ);
+        // R148-Phase2 向量上限：持续压入（转向+行驶中，0.4<|speed|<12 排除楔入 v≈0 与高速过洞）
+        //   时单帧推回**向量** ≤ X_Z_PEN_SMOOTH_CAP(0.35) —— 单轴各 0.30 的斜向推回
+        //   hypot(0.30,0.30)=0.42 > 0.35 读作空气墙（r148_verify 残留 0.35~0.40，v=0.56~0.82
+        //   慢转斜压）。0.4 低门：楔入角 v≈0.01~0.16 需整额推回清除（不设向量限）；12 高门：
+        //   门墩 h=90° 高速过洞保留单帧消除（R119 ②）。不转向/低速/高速逐位不变。
+        const persistentPress =
+          steerIn !== 0 && Math.abs(s.speed) > 0.4 && Math.abs(s.speed) < 12;
+        const vecMag = Math.hypot(dxClamp, dzClamp);
+        if (persistentPress && vecMag > 0.35 && vecMag > 1e-9) {
+          const k = 0.35 / vecMag;
+          mainClampDelta = dxClamp * k;
+          s.x += mainClampDelta;
+          s.z += dzClamp * k;
+        } else {
+          mainClampDelta = dxClamp;
+          s.x += dxClamp;
+          s.z += dzClamp;
+        }
         if (driftActive) {
           /* R105 漂移态：位置钳 + 朝向贴墙收敛 + β/横摆回收，**不注入撞击/速度/刮擦**。
            * 2D 把车在建筑占位（柱 11.12 / 墩 11.35 / 基座 14.9）提前拦下后，车到不了前脸 1D 墙，

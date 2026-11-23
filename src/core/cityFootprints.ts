@@ -1004,12 +1004,23 @@ export function clampToFootprints(
    *   车 2~3 帧内收敛到贴界，无残留、无卡死）。 */
   // R140：非门墩实体陡角深嵌恒平滑（cornerBase/frontBase/frontWall；gatePier/arcadeCol 不纳入，
   //   门洞通行 R119 / r105 漂移单帧消除保留）。见上方 isSteepNonEntryKind 定义注释。
+  // R148-Phase2：gatePier 中陡角 x 平滑 —— R119 ② 只保留 |sinH|>0.7（近 90° 过洞急转）单帧消除；
+  //   |sinH|∈(0.5,0.7]（中陡角车斜插门墩）原 `sinHAbs<=0.5` 不平滑 ⇒ xPenSmooth=false ⇒ 单帧
+  //   x-yank（实测 |sinH|=0.554、xPen=1.603m、Δx=-1.592m = 空气墙）。本项把 gatePier 中陡角
+  //   纳入平滑（xPen 限到 X_Z_PEN_SMOOTH_CAP=0.35）。0.7 阈值：90° 过洞 |sinH|≈0.99>0.7 保留
+  //   单帧消除（R119 ② 不破）；0.554<0.7 平滑。仅 gatePier（isGatePierKind）新增，其它 kind
+  //   由原 `sinHAbs<=0.5` 低角项处理，行为不变。R119 ⑧ 门墩斜切末态车缘断言不受影响
+  //   （斜切 |sinH| 低，已平滑）。⚠ 独立成 gatePierSteepSmooth 并在下方 xPenSmoothFinal 合成，
+  //   不并入 xPenSmooth 主体（r139 ⑥ g2 结构断言钉死 xPenSmooth 主体逐位，不可改）。*/
+  const gatePierSteepSmooth = isGatePierKind && sinHAbs > 0.5 && sinHAbs <= 0.7;
   const xPenSmooth =
     xPenRaw > 0.35 &&
     (isSolidEntryKind ||
       isSteepNonEntryKind ||
       (!isGatePierKind && zOv < xPenRaw) ||
       sinHAbs <= 0.5); // 车横深嵌（实体无洞 / 非门墩横向深嵌 / 低角含直行贴墙恒平滑）
+  // R148-Phase2：xPenSmooth 主体 + gatePier 中陡角（0.5<|sinH|≤0.7）平滑（见上方定义）。
+  const xPenSmoothFinal = xPenSmooth || (xPenRaw > 0.35 && gatePierSteepSmooth);
   const zPenSmooth = zPenRaw > 0.35 && xPenRaw > zPenRaw; // 车横向深嵌 > 车头纵向深入
   const ax = Math.abs(x);
   // R119 改 a：xClamped 方向感知。远侧（收紧，best < ax）与近侧（外推，best > ax）都需要
@@ -1044,7 +1055,7 @@ export function clampToFootprints(
     //   单帧推回可收紧到 WALL_2D_MAX_LATERAL_STEP（0.30，与未穿模同额）⇒ 残余 →0.29 且无 yank。
     //   其余 kind 保持 X_Z_PEN_SMOOTH_CAP=0.35（⑧门墩斜切末态车缘 10.0055 断言依赖 0.35，
     //   全局降 0.30 会恶化到 10.2785 破坏 edge≤10.01 ⇒ 必须按 kind 特判，不可全局降）。
-    xPen: xPenSmooth
+    xPen: xPenSmoothFinal
       ? Math.min(xPenRaw, xClamp.kind === 'arcadeCol' ? WALL_2D_MAX_LATERAL_STEP : X_Z_PEN_SMOOTH_CAP)
       : xPenRaw,
     // R116：车心 z 到 z 钳目标距离（FreeDrive 动态步长用）。R119 fix-5 条件限幅：
