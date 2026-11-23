@@ -274,8 +274,13 @@ export const WALL_SCRUB_RELEASE_MS = 1.5;
  * 1.509→≈3.776 m/s（探针 10s 末速 3.776，柔化目标 3-4 中位）；高速 v>10 clamp=1 不变
  * （R101 蹭滑/R106 斜擦契约保留，0.2s 后 8.344≈8.5）。低速不再龟速蹭墙——稳态落
  * 3-4.5 可走带，原「≤3.0 低速带」判据随契约演进作废。
+ *
+ * R151 继续柔化低速蹭墙（用户指令，R150 之后）：渐入基准 10.0→11.0，贴墙 W 稳态
+ * ≈3.776→≈4.154 m/s（探针 v_ss=0.3776×FADE）。物理边界：FADE≈12.1（稳态≈4.5）——
+ * 超过则贴墙低速常规转向达 R102 特殊门控 0.315 量级，结构失效；R101① 刮停契约
+ * （8s/140m）不构成约束（FADE=20 仍 6.01s/34.6m）。
  */
-export const WALL_SCRUB_FADE_SPEED = 10.0;
+export const WALL_SCRUB_FADE_SPEED = 11.0;
 /**
  * R109 撞墙刮擦强度下限 m/s²（scrubN = max(impactN, FLOOR)）。
  * 极斜擦（>60°）时 impactN=|v|·fn 随 fn→0 塌缩（84° 掠擦 impactN≈2）⇒ scrubN 小 ⇒
