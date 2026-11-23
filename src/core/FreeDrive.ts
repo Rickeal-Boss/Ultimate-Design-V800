@@ -1505,7 +1505,13 @@ export class FreeDrive {
           const nxSide = -fp.nx;
           const nzSide = -fp.nz;
           const fSide = forwardOf(s.heading);
-          const fnSide = fp.nz !== 0 ? fSide.z * nzSide : fSide.x * nxSide;
+          // R147 倒车入柱扣速：fnSide 含**实际运动方向**符号 —— 倒车（s.speed<0）时运动方向 =
+          //   -forwardOf，旧式 fnSide=fSide·n 恒 ≤0 ⇒ 倒车入柱 fpImpact=0 不扣速 ⇒ 车速恒 -8 +
+          //   每 14 帧 clamp 单帧推回 0.87m 锯齿极限环（R146 定罪「开阔街心反向振荡」）。乘
+          //   dirSign=sign(s.speed) 使倒车入柱 fnSide>0 ⇒ impactN 扣速 + 下方 wallScrubN 装填
+          //   ⇒ 车减速平滑停柱前；前进（s.speed≥0）dirSign=+1 ⇒ 逐位不变（R110/R113 语义保留）。
+          const dirSign = s.speed < 0 ? -1 : 1;
+          const fnSide = (fp.nz !== 0 ? fSide.z * nzSide : fSide.x * nxSide) * dirSign;
           // 法向入射强度复用 1D side 同口径 |v|·fn；若 1D 已撞出更大 impactN 则保留较大者
           const fpImpact = fnSide > 0 ? Math.abs(s.speed) * fnSide : 0;
           if (fpImpact > (r.impactN ?? 0)) r.impactN = fpImpact;
