@@ -29,11 +29,18 @@
  * 过），脱困③常规转向量级 0.278→0.308（稳态 4.493），上限 0.30→0.315（=特殊门控值，语义
  * 「常规转向未达特殊门控」保留；窗口窄 0.007 是稳态维度极限的代价，浮点漂移可能误报，属
  * 已声明边界），离墙接触带 0.10→0.12（R152 实测漂 0.06-0.08，放宽到 12cm 贴墙接触带）。
+ *
+ * R157-D 几何转向模型（yawRateFor = v·tan(δ)/L，低速满舵常规转向 ∝|v| 且峰值 ~0.62 远超
+ * R102 门控 0.315——几何转向本身更真实）⇒ 脱困③判据随契约演进：常规转向不再「未达 0.315」
+ * （几何模型本就更高），改为验证**几何 ∝|v| + R102 门控未激活**（v<1.35 窗口 yawRate<0.315
+ * 且随 v 单调衰减、无固定 0.315 平台；全程 ≤maxYawRate 灵魂上限）。「不显著离墙」断言移除：
+ * 几何转向会让车头转离墙（x 缓慢降），这是转向的真实物理，脱困语义已由 ①② 锁死。
  */
 import { describe, expect, it } from 'vitest';
 import {
   WALL_SCRUB_CONTACT_EPS,
   WALL_SCRUB_RELEASE_MS,
+  FREE,
   FreeDrive,
   corridorCenterHalfWidth
 } from '../src/core/FreeDrive';
@@ -140,20 +147,34 @@ describe('R102 脱困 ② 无主动操作：不自行脱困（保持 r101 canEsc
 });
 
 describe('R102 脱困 ③ 只给转向不给油门/刹车：不触发脱困特殊门控（但常规转向 ∝|v| 仍在）', () => {
-  it('低速滑行态只按 KeyD、无油门/刹车：无 0.315 特殊权限（常规 yawRateFor 小转向），不触发 R102 门控', () => {
+  it('低速滑行态只按 KeyD、无油门/刹车：常规几何转向 ∝|v|（≤maxYawRate 上限），v 衰减时随 v 同步，不触发 R102 门控', () => {
     const fd = driveToWallAndPin();
     fd.press('KeyW', false); // 松油门
     fd.press('KeyD', true); // 只给转向
-    for (let i = 0; i < 60; i += 1) {
+    // R157-D 几何转向模型（yawRateFor = v·tan(δ)/L）：常规转向率 ∝|v| 且比 R102 时代高
+    // （低速满舵 v≈4.49 时常规峰值 ~0.62，远大于 R102 特殊门控 0.315——几何转向本身更真实，
+    // 低速转向能力保留），但全程 ≤ FREE.maxYawRate（0.9 灵魂上限，几何合规）。
+    // R102 门控（av<1.5 才激活）在 av≥1.5 不参与；v<1.5 窗口几何常规转向 ∝v 已 <0.315，
+    // 若门控误激活会**锁定 0.315 固定平台**（不随 v 变）⇒ 断言末段（v<1.35）yawRate<0.315
+    // 且随 v 单调衰减（几何 ∝|v|，无固定平台）。探针：v 4.49→1.25（140 帧），yaw 峰值 0.6057
+    // →末段 ~0.28 连续穿过 0.315（未锁定 = 门控未激活）。
+    const samples: { v: number; yaw: number }[] = [];
+    for (let i = 0; i < 140; i += 1) {
       fd.step(DT);
-      // R152：v≈4.493 稳态（稳态维度极限，R151 4.154）⇒ 常规 yawRateFor(steer, v) 有 ∝|v| 的转向权限，
-      // 但**不是** R102 的 0.35×maxYawRate≈0.315 特殊脱困权限（门控需油门/刹车同时按下）。
-      // 断言「无 0.315 级权限」——若门控误触发会 ≈0.315。R152 稳态维度极限 4.493 的常规转向
-      // 实测峰值 0.308（无油门刮擦滑行，yaw 瞬态在 0.25s 处达峰）⇒ 上限取 0.315（=特殊门控值，
-      // 语义「常规转向未达特殊门控」保留；窗口窄 0.007 是稳态维度极限的代价，浮点漂移可能误报，
-      // 属已声明边界）。
-      expect(Math.abs(fd.state.yawRate)).toBeLessThan(0.315);
-      expect(fd.state.x).toBeGreaterThanOrEqual(LIMIT - 0.12); // 不显著离墙（贴墙接触带 12cm 内，R152 实测漂 0.06-0.08）
+      const v = Math.abs(fd.state.speed);
+      const yaw = Math.abs(fd.state.yawRate);
+      expect(yaw).toBeLessThanOrEqual(FREE.maxYawRate + 1e-6); // 常规转向不超灵魂上限（几何合规）
+      samples.push({ v, yaw });
+    }
+    const tail = samples.slice(-10);
+    const vTail = tail[tail.length - 1].v;
+    expect(vTail).toBeLessThan(1.35); // v 确已衰减到低速窗口（几何常规 ∝v 此时已 <0.315）
+    expect(tail[tail.length - 1].yaw).toBeLessThan(0.315); // 无 R102 门控固定 0.315 平台（未激活）
+    // 几何 ∝|v|：yaw 峰值出现在中段（转向建角 + v 尚高），此后随 v 衰减单调（无固定平台）
+    const peakIdx = samples.reduce((mi, s, i) => (s.yaw > samples[mi].yaw ? i : mi), 0);
+    expect(peakIdx).toBeGreaterThan(0);
+    for (let i = peakIdx + 1; i < samples.length; i += 1) {
+      expect(samples[i].yaw).toBeLessThan(samples[i - 1].yaw + 1e-6); // 峰值后单调衰减（∝|v|）
     }
   });
 });

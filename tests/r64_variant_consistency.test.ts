@@ -68,8 +68,8 @@ function constructionValues(variantId: string) {
     color: [r, g, b] as const,
     metalness,
     roughness: pp.roughness,
-    clearcoat: 0.7,
-    clearcoatRoughness: 0.12
+    clearcoat: 0.5,
+    clearcoatRoughness: 0.22
   };
 }
 

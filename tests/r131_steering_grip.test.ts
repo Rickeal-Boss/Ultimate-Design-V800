@@ -27,10 +27,11 @@ function latAccelAt(kmh: number): number {
 }
 
 describe('R131 ① 抓地钳位纯函数（yawRateFor）', () => {
-  it('低速不钳（≤refSpeedMs）：全舵 = 运动学目标（低速敏捷不变）', () => {
+  it('低速不钳（≤refSpeedMs）：全舵 = 运动学几何目标（低速敏捷不变）', () => {
     // av < refSpeedMs：cap = gripLat/refSpeedMs（常量 ≥ maxYawRate ⇒ 不钳）
     const ms = 3; // 10.8 km/h
-    const kin = FREE.steerMaxLow * FREE.maxYawRate * (ms / FREE.refSpeedMs);
+    // R157 几何：kin = v·tan(δmax)/L（低速满舵 R=L/tan(δmax)=4.8m）
+    const kin = (ms * Math.tan(FREE.steerMaxLow)) / (FREE.axleFront + FREE.axleRear);
     expect(yawRateFor(FREE.steerMaxLow, ms)).toBeCloseTo(kin, 9);
     // cap 确不钳：cap ≥ maxYawRate ≥ kin
     expect(gripLat / FREE.refSpeedMs).toBeGreaterThanOrEqual(FREE.maxYawRate);
@@ -42,10 +43,11 @@ describe('R131 ① 抓地钳位纯函数（yawRateFor）', () => {
     // 满舵与更大舵角（超抓地点）同横摆率 = 前轮饱和 → 推头（更打舵不增横摆）
     expect(yawRateFor(steerLimitFor(100), ms)).toBeCloseTo(capYaw, 9);
     expect(yawRateFor(0.60, ms)).toBeCloseTo(yawRateFor(steerLimitFor(100), ms), 9);
-    // 未饱和舵角仍线性（抓地限以下舵角有效）
+    // R157 几何：高速 kin=v·tan(δ)/L 随 v 线性增 ⇒ 小舵角(0.10)已超抓地（0.813>cap 0.26）
+    //   = 真实物理（高速任何打舵都很快超抓地 → 前轮饱和推头），latAccel 仍恰 = gripLat。
     const small = 0.10;
-    expect(yawRateFor(small, ms)).toBeCloseTo(small * FREE.maxYawRate, 9);
-    expect(yawRateFor(small, ms)).toBeLessThan(capYaw);
+    expect(yawRateFor(small, ms)).toBeCloseTo(capYaw, 9);
+    expect(Math.abs(yawRateFor(small, ms))).toBeLessThanOrEqual(capYaw);
     // latAccel 恰为抓地上限（平坦）
     expect(Math.abs(yawRateFor(steerLimitFor(100), ms) * ms - gripLat)).toBeLessThan(1e-9);
   });

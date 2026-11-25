@@ -1,9 +1,12 @@
 /**
  * WebGLRenderer + 质量档。
- * antialias 按 quality、pixelRatio ≤ 2、ACESFilmic exposure 0.85、
- * SRGB 输出、PCF 阴影。
- * 注：three r186 已移除 PCFSoftShadowMap（运行时警告并强制回退 PCFShadowMap，
- * 见 WebGLShadowMap.js），故直接显式使用 PCFShadowMap，消除控制台警告。
+ * antialias 按 quality、pixelRatio ≤ 2、ACESFilmic exposure 0.88、
+ * SRGB 输出、VSM 阴影（R166 软边）。
+ * R167：exposure 0.85 → 0.88 —— 补偿 environment.ts 的 fill/rim 进一步收敛
+ * （fill 0.5→0.42 / rim 0.6→0.5，暴风天没有独立 fill/rim，天空散射即 fill），
+ * 把场景亮度拉回 R163 物理重平衡水平（mean luminance ≈112-118）。
+ * 注：three r186 已移除 PCF 软阴影模式（无 radius 支持），软阴影边需 VSMShadowMap
+ * （radius 模糊 + blurSamples）；VSM 需小正 bias 抑制薄遮挡物漏光（见 Lighting.ts）。
  *
  * ── R68 P1-7 · 方向盘高精度移动黑帧「真机定标」钩子 ───────────────────────────
  * 开发线 Phase 1 实证：全库 `webglcontextlost` / `contextrestored` 监听**零命中**；
@@ -63,10 +66,10 @@ export function createRenderer(container: HTMLElement, quality: QualitySettings)
   renderer.setPixelRatio(quality.pixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 0.85;
+  renderer.toneMappingExposure = 0.88;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFShadowMap;
+  renderer.shadowMap.type = THREE.VSMShadowMap;
   container.appendChild(renderer.domElement);
 
   if (R68_GLDIAG_ON && typeof window !== 'undefined') {

@@ -1,6 +1,8 @@
 /**
- * 光照：DirectionalLight 主光（shadow 1024²，正交 ±10 texel 对齐，bias −4e-4 / normalBias .03）
+ * 光照：DirectionalLight 主光（shadow 1024²，正交 ±10 texel 对齐，bias 0.0002 / normalBias .03）
  * + HemisphereLight 环境补光 + 冷调无阴影补光 + rim 轮廓光。texel 对齐移植自原版 pg 的 update。
+ * R166：VSM 软阴影边（radius 6 / blurSamples 12 / bias 0.0002）——云量 0.85 暴风天光下
+ * 阴影边缘应柔（漫射云光无硬边界）；VSM 用小正 bias 抑制薄遮挡物漏光。
  *
  * R26：颜色/强度全部来自 `src/config/environment.ts` 的 ACTIVE_ENV（白石哥特教堂黄金时刻）。
  * **结构不动**：texel 对齐、补光反方位、rim 位置公式都是前几轮实拍验证过的，
@@ -70,8 +72,14 @@ export class Lighting {
     cam.bottom = -this.ortho;
     cam.near = 1;
     cam.far = 160;
-    sun.shadow.bias = -4e-4;
-    sun.shadow.normalBias = 0.03;
+    // R166 · VSM 软阴影：云量 0.85 暴风天光下主光阴影边缘应柔（漫射云光，无硬边界）。
+    // PCFShadowMap 不支持 radius（r186 移除 PCF 软阴影模式），软边需 VSM；
+    // VSM 已知风险=薄遮挡物漏光 ⇒ 用小的正 bias 抑制（PCF 的 -4e-4 不适用 VSM），
+    // radius/blurSamples 控软边幅度（6/12，视觉 A/B 校验后如漏光/彼得潘再调）。
+    sun.shadow.bias = 0.0002;
+    sun.shadow.normalBias = 0.03; // 保留（VSM 不读 normalBias，无副作用）
+    sun.shadow.radius = 6;
+    sun.shadow.blurSamples = 12;
     // R39：**每帧重绘**（结构上等价于 three 默认行为，显式写出以锁死契约：
     // 本文件不再有任何节流路径，任何后续改动都必须保持「每帧成本恒定」）。
     sun.shadow.autoUpdate = true;

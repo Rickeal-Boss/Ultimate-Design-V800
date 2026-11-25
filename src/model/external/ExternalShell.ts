@@ -382,7 +382,7 @@ const R60_PROC_PAINT: Record<string, { color: number; metalness: number; roughne
  * R60 平涂无金属闪：metalness 偏低 + clearcoat 走 R55 的 0.15（当年为压脏 normal 噪点，
  * 程序化路径无脏法线可放大 ⇒ 可安全拉高）。官图是清漆覆盖的金属漆（clearcoat 高光 +
  * 色度更饱和）。R62 在 useProcPaint 分支落 R60 参数**之后**叠加本表：
- *  - clearcoat 抬到 0.7 / clearcoatRoughness 0.12（湿润清漆高光）；
+ *  - clearcoat 抬到 0.5 / clearcoatRoughness 0.22（湿润清漆高光；R162 从 0.7/0.12 降反光）；
  *  - 色度按 chroma 乘子向纯色推（不换色相，只加饱和；white 例外保持暖白）；
  *  - 金属度按 metal 乘子上调（black/gold 明显、purple/green 适度、white 不动）。
  * SwiftShader 色彩偏弱 ⇒ 参数保守起步，`#r62paint=off` 逐位回 R60（不叠加本表）。
@@ -394,15 +394,14 @@ const R62_PROC_PAINT_TWEAK: Record<string, { chroma: number; metal: number }> = 
   purple: { chroma: 1.18, metal: 1.35 },// 星夜紫：加饱和 + 金属
   green: { chroma: 1.18, metal: 1.35 }  // 原厂绿：加饱和 + 金属
 };
-/** 程序化车漆清漆层强度（默认 0.7；`#r62clearcoat=` 可扫参） */
-export const R62_PAINT_CLEARCOAT = r56HashNum('r62clearcoat') ?? 0.7;
-/** 程序化车漆清漆层粗糙度（默认 0.12；`#r62clearcoatrough=` 可扫参） */
-export const R62_PAINT_CLEARCOAT_ROUGH = r56HashNum('r62clearcoatrough') ?? 0.12;
-// R143-F3（未改，仅注释）：顶轨白点与玻璃同源（R62 清漆层 0.7/0.12 反射 env）。本波未降——
-// R62 原提交为贴官图刻意把 clearcoat 抬到 0.7 / roughness 0.12 出「湿润清漆高光」+ 色度饱和，
-// 降到 0.5/0.25 会整体衰减车身漆光泽（整车主导材质），判定属「过度衰减」。且玻璃本波
-// roughness 0.06→0.22 已大幅收敛最尖锐 firefly 源；漆面 0.12 粗糙度本已比玻璃旧值更宽，
-// 白点强度弱一个量级。若 Phase 3 审查线仍见顶轨白点，再单独把 0.7→0.5、0.12→0.25
+/** 程序化车漆清漆层强度（R162 用户反馈「车壳反光刺眼」：0.7→0.5 减清漆层强度；`#r62clearcoat=` 可扫参） */
+export const R62_PAINT_CLEARCOAT = r56HashNum('r62clearcoat') ?? 0.5;
+/** 程序化车漆清漆层粗糙度（R162：0.12→0.22 柔化清漆高光，锐利镜面高光→柔和半光；`#r62clearcoatrough=` 可扫参） */
+export const R62_PAINT_CLEARCOAT_ROUGH = r56HashNum('r62clearcoatrough') ?? 0.22;
+// R143-F3（R162 已下调，仅注释）：顶轨白点与玻璃同源（R62 清漆层 0.5/0.22 反射 env）。R162 已按
+// 用户反馈「车壳反光刺眼」把 clearcoat 0.7→0.5 / roughness 0.12→0.22 降反光（0.5/0.22 保留湿润感，
+// 不属原判定的「0.5/0.25 过度衰减」）。玻璃 roughness 0.06→0.22 已大幅收敛最尖锐 firefly 源。
+// 若审查线仍见顶轨白点，可再单独把 0.5→0.4、0.22→0.25
 // （须同步 r62_wheel_brake.test.ts:130-131 与 r64_variant_consistency.test.ts:71-72/171-172）。
 
 /**
@@ -934,8 +933,8 @@ function r56HashNum(key: string): number | null {
 }
 /** 车身漆面 clearcoat（默认 = R55 的 0.15，观感不变；可用 `#r56clearcoat=` 调优） */
 export const R56_PAINT_CLEARCOAT = r56HashNum('r56clearcoat') ?? 0.15;
-/** 车身漆面 envMapIntensity（默认 = R55 的 0.7，观感不变；可用 `#r56env=` 调优） */
-export const R56_PAINT_ENV = r56HashNum('r56env') ?? 0.7;
+/** 车身漆面 envMapIntensity（R162 用户反馈「车壳反光刺眼」：0.7→0.55 减环境反射；可用 `#r56env=` 调优） */
+export const R56_PAINT_ENV = r56HashNum('r56env') ?? 0.55;
 
 /* ══ R62-P0-1 · 轮毂 / 制动系统材质预设 ════════════════════════════════════
  * 轮外部 GLB 是一体 lathe（胎面橡胶 + 盘面金属无内置材质分组），原把车漆赋整轮
@@ -2393,20 +2392,16 @@ export async function loadExternalShell(
       m.envMapIntensity = 1.0;
       m.needsUpdate = true;
     });
-    // ── R143-F1b（defer）车顶板 paint-upper 残留 fireflies ────────────────────────
-    // 审查打回项①辅修（可选）：车顶板 `paint-upper`（metalness 1.0 / roughness 0.28 全金属暗面）
-    // 在天窗玻璃后方同样产 fireflies（dec_nothin_paintup 93 点 / 射线首击 paint-upper）。
-    // 本波**有意不局部化**：paint-upper 是 body.glb 内**全车共用材质实例**（车顶板 / 车顶扰流
-    // 尾翼 / 尾角 D 柱回包 / 车身下半壳体同实例），改其 roughness 或 envMapIntensity 会全局哑化
-    // 整车漆面（主理人禁）；安全局部化需**按 mesh 克隆材质**（find sculptComponent==='roof-panel'
-    // → clone → 仅该实例 set roughness 0.45），但克隆会脱离 GLB 材质实例共享与 dispose 追踪，
-    // 本波无渲染验证条件（dist 为基线快照禁重建），判定「无法安全局部化」⇒ defer。
-    // 若 Phase 3 审查线仍见车顶板白点，应用如下配方并做渲染 A/B：
-    //   bodyGltf.scene.traverse(o => { const mesh=o as THREE.Mesh; if(!mesh.isMesh) return;
-    //     const c=(mesh.userData as {sculptComponent?: string})?.sculptComponent;
-    //     if(c!=='roof-panel') return; const src=mesh.material as THREE.MeshPhysicalMaterial;
-    //     const m=src.clone(); m.roughness=0.45; m.envMapIntensity=Math.min(m.envMapIntensity,0.7);
-    //     m.needsUpdate=true; mesh.material=m; });
+    // ── R155 撤线：车顶板 paint-upper 局部化改在 createV800Model 落地 ─────────────
+    // R155 初版误落在 bodyGltf（`sculptComponent==='roof-panel'` 找车顶板 mesh）。
+    // 实测（probe-r155 GLTFLoader.parseAsync body.glb）：**body.glb 是单 mesh 单 primitive
+    // 0 材质**（966k tri 几何合并），**无独立 roof-panel/车顶板 mesh** ⇒ R155 配方
+    // 匹配 0 命中、静默 no-op。且 sunroof_pick.json（R143 运行时射线）命中的「车顶板」
+    // **140 tri / paint-upper / metal 1 / rough 0.28 = createV800Model 的 mesh_roof_panel_4**
+    // （sculptComponent.id='roof-panel' 对象），**白点源在程序化模型，不在 body.glb**。
+    // ⇒ R155 局部化改到 createV800Model.ts（mesh_roof_panel_4 构造后 clone 材质）。
+    // 本块删除：bodyGltf 遍历无 target，保留徒增误导。R143-F1b（上方 'glass' 遍历）为
+    // R143 既有，同样 no-op（body.glb 无独立 glass），归属 R143 审计，本波不动。
     // lamp-rear：刹车灯 emissive 随 brakeLevel（适配器 update() 驱动）
     // lamp-front：DRL 常亮冷白，setHeadlights 联动。
     let lampRearMat: THREE.MeshStandardMaterial | null = null;

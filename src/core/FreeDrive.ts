@@ -29,7 +29,7 @@ import { INNER, TOWER } from '../render/scene/r28Layout';
 //   （castleKit 模块加载无 DOM 副作用，r97_bounds_clearance 在 beforeAll 前已 import 同源）。
 // R98：车身回正阻尼抽成独立配置（6/4 → 3.8/3.2），漂移灵魂参数与纵向力不受影响。
 // R126：撞墙「被顶晃动」欠阻尼二阶通道（独立于常态一阶阻尼，只叠加视觉姿态）。
-import { FREE_BODY_DAMPING, FREE_BODY_IMPACT_OSC } from '../config/freeBodyFeel';
+import { FREE_BODY_IMPACT_OSC, FREE_BODY_SUSPENSION } from '../config/freeBodyFeel';
 import { dragForce, motorForce, rollForce } from '../physics/Vehicle';
 import { clamp, damp } from '../util/math';
 // R102：城内地面实体（角塔基座 / 柱础 / 飞扶壁墩 / 殿台基 / 前脸）2D 占位 + 车 OBB 收紧。
@@ -122,8 +122,11 @@ export const FREE = {
   rollMaxRad: (3.5 * Math.PI) / 180,
   /** 视觉俯仰上限 rad（2.0°） */
   pitchMaxRad: (2.0 * Math.PI) / 180,
-  /** 侧倾灵敏度：横向加速度 4.0 m/s² 时打满 3.5° */
-  rollRefMs2: 4.0,
+  /** 侧倾灵敏度：横向加速度 6.0 m/s² 时打满 3.5°（R157：4.0→6.0 重标定——
+   *   R96 的 4.0 让 0.4g 过弯就顶 3.5° 限位（实际大型 SUV 0.4g≈2.5°），偏敏感；
+   *   6.0 ⇒ 0.2g→1.17°/0.41g→2.33°/0.61g→满幅，逐点贴合实际侧倾曲线（悬挂行程）。
+   *   只调灵敏度，rollMaxRad（3.5° 机械限位）不变。 */
+  rollRefMs2: 6.0,
   /** 俯仰灵敏度（与主线 pitchTarget = accel × 0.0045 同系数） */
   pitchPerAccel: 0.0045,
   /** 撞墙时速度的法向衰减系数（1 = 完全吃掉法向分量） */
@@ -409,6 +412,20 @@ export const BOUNDS = {
   hallBounce: 0.8
 } as const;
 
+/**
+ * R161 御桥段擦墙划痕痕迹表面（可行驶侧 x 绝对值，单位 m）。
+ *
+ * ⚠ Step 0 dump 定面（tools/r161_step0_wall_dump.mjs，只读探针）：
+ *   BOUNDS.bridgeHalfW=12.0 是**碰撞车缘安全界**，但御桥段可见栏板内表面
+ *   = makeParapet.ashlar#3 的 x[11.88,12.60]（z∈[−351.5,60]，#4 x[11.95,12.53]、
+ *   #5 x[11.99,12.49] 为上层收进）⇒ 车缘贴 12.0 会嵌进栏板 0.12 m，划痕铺在 12.0
+ *   会埋进墙体不可见。痕迹必须落在**可见栏板内表面 11.88**。其余 P0 段 dump 定面：
+ *   城门带 10.0（makeGate.ashlar#0 门洞侧墙，=tunnelHalfW）、城内前脸 15.50
+ *   （makeInnerCity.ashlar#188 主墙，=cityOpenHalfW）、广场飞扶壁基座 14.90
+ *   （makeInnerCity.ashlar#7133）。御桥段 z∈[60,70] 无栏板（zNear=60），回退 12.0 近似。
+ */
+const WALL_SURF_BRIDGE = 11.88;
+
 /** R120：门墩塔基实体北界（= GATE.z + (GATE.depth+1.2)/2 = −350.9，cityFootprints GATE_PIER_Z_MAX
  * 同源）。由 BOUNDS 派生（BOUNDS 由 GATE 派生：gateFrontZ = GATE.z + depth/2）⇒ 免 import
  * cityFootprints 的 const 成 TDZ 环（cityFootprints 已 import FreeDrive 的 CITY_BLOCK_Z）。
@@ -581,6 +598,34 @@ export interface FreeDriveImpactEvent {
 }
 
 /**
+ * R161 擦墙划痕：FreeDrive 只读接触快照（零物理改动，只读透传）。
+ *
+ * 由 step() 在每步末尾把已算得的 1D 侧墙/端墙（sideTouch/endTouch，:1319/:1320）与
+ * 2D footprint（fp，:1538 局部 const）接触态快照到私有字段，经 {@link wallContact}
+ * getter 只读暴露（与 scrubN getter :1020 同风格，不暴露写权限）。不改碰撞回推/
+ * 边界/scrub 数值/红线常量/FreeDriveImpactEvent 结构。
+ *
+ * 墙面法线约定：nx/nz 指向**可行驶侧**（路内）——与 resolveBounds :865 的 nx
+ * （指向墙外）符号相反；与 2D fp.nx（cityFootprints.ts:1038，指向可行驶侧）同号。
+ */
+export interface FreeDriveWallContact {
+  /** 本步是否正贴墙/在刮擦（sideTouch || endTouch || fp.hit） */
+  touching: boolean;
+  /** 接触墙标识：'side' 1D 侧墙 / 'end' 1D z 端 / '2d' 2D footprint / null 未接触 */
+  kind: 'side' | 'end' | '2d' | null;
+  /** 墙面法线 x（指向可行驶侧，1D 侧墙 = ∓1） */
+  nx: number;
+  /** 墙面法线 z（指向可行驶侧，1D 端墙 = ∓1） */
+  nz: number;
+  /** 接触墙点世界 x（1D 车缘接触线 ±wallSurf；2D footprint xInner 面） */
+  wallX: number;
+  /** 接触墙点世界 z（1D 车心 z；2D 车心钳到 footprint z 域） */
+  wallZ: number;
+  /** 贴墙刮擦强度 m/s（wallScrubN，:978；贴墙期间维持，离墙 0） */
+  strength: number;
+}
+
+/**
  * R127 撞击强度归一化基准 [m/s]：法向入射强度达到此值即满幅（strength=1）。
  * 真源标定：R99/R106 撞墙被顶可感标定 20m/s ≈ 0.8 幅、25m/s（90km/h）满幅封顶；
  * 低速蹭墙（<8m/s）≈ 0.3 幅以下近乎无感，掠擦（fn→0 ⇒ impactN→0）归零 ⇒
@@ -719,12 +764,20 @@ export function steerTauFor(speedKmh: number, returning = false): number {
  */
 export function yawRateFor(steer: number, speedMs: number): number {
   const av = Math.abs(speedMs);
-  const factor = clamp(av / FREE.refSpeedMs, 0, 1);
   const dir = speedMs > 0 ? 1 : speedMs < 0 ? -1 : 0;
-  const kin = steer * FREE.maxYawRate * factor * dir;
+  // R157 运动学几何（替代旧 maxYawRate×factor 近似）：真实转弯半径 R = L/tan(δ_eff)，
+  //   kin = v/R = v·tan(δ_eff)/L（δ_eff = steer 前轮转角，调用方 steerTarget 已按
+  //   steerLimitFor 随速收窄）。低速满舵 R = 3.43/tan(0.62) = 4.8m（实际 V800 最小转弯
+  //   半径量级），替代旧 R = refSpeedMs/(steer·maxYawRate) = 9.86m（偏大 2 倍）。
+  //   参数（maxYawRate/refSpeedMs/steerMaxLow/High/gripLatFactor）全部零改 —— 只改
+  //   函数体（R131 函数体演进先例）。漂移模型（yawDyn）不经此通道。
+  const wheelBase = FREE.axleFront + FREE.axleRear;
+  const kin = dir * ((av * Math.tan(steer)) / wheelBase);
   const gripLat = FREE.tyreMu * 9.81 * FREE.gripLatFactor;
   const cap = gripLat / Math.max(av, FREE.refSpeedMs);
-  return clamp(kin, -cap, cap);
+  // 灵魂上限：几何低速满舵 kin 可达 v·tan(δmax)/L（v=5.5→1.15 > maxYawRate 0.9），
+  // 钳到 ±maxYawRate 保「|yawRate|≤灵魂12 上限」恒成立（r131 关键安全性质）。
+  return clamp(kin, -Math.min(cap, FREE.maxYawRate), Math.min(cap, FREE.maxYawRate));
 }
 
 /**
@@ -869,6 +922,65 @@ export function resolveBounds(
   return { x, z, heading: h, speed: v, kind, impactN, targetHeading };
 }
 
+/**
+ * R156 常态悬挂二阶单步（簧上质量弹簧-阻尼积分，纯函数可单测）。
+ * 目标位移 `target` 驱动弹簧：加速度 = ω²·(target−body) − 2ζω·vel。
+ *   · 目标突变（转向切入/刹车点头）⇒ 质量先冲向目标、过冲回摆（ζ<1）再收敛；
+ *   · 目标恒定 ⇒ 稳态 body=target（幅值标定不变）。
+ *   · 与 R126 撞墙二阶（FREE_BODY_IMPACT_OSC）同构，但常态由目标驱动、撞墙由 impactN 注入。
+ * 返回 [位移, 速度]（下一时刻）。
+ */
+export function stepSuspension(
+  body: number,
+  vel: number,
+  target: number,
+  omega: number,
+  zeta: number,
+  dt: number
+): readonly [number, number] {
+  const acc = omega * omega * (target - body) - 2 * zeta * omega * vel;
+  const nextVel = vel + acc * dt;
+  const nextBody = body + nextVel * dt;
+  return [nextBody, nextVel];
+}
+
+/**
+ * R157 悬挂目标曲线（纯函数可单测）：软区线性 + bump stop 平滑饱和。
+ *
+ * 为什么（取代「线性 × clamp 到 maxRad」）：
+ *   · 线性+clamp 在 |input| ≥ refMs2 时**硬顶** maxRad —— 角速度突变，读作「车身撞限位」；
+ *     真实悬挂的 bump stop 是渐进硬接触（弹簧→缓冲块→打底），侧倾/俯仰在接近限位时
+ *     应**平缓趋饱和**（无 clamp 硬顶）。
+ *   · 曲线分段：|input| ≤ aSoft（=aSoftFrac×refMs2）线性（斜率 maxRad/refMs2，R96 灵敏度）；
+ *     aSoft..aHard smoothstep 过渡到 maxRad；≥ aHard 饱和 maxRad。
+ *   · 标定（R157，rollRefMs2=6.0）：aSoft=0.7×6=4.2（0.43g）、aHard=7.0（0.71g）
+ *     ⇒ 0.2g→1.17°/0.41g→2.45°/0.61g→3.20°/0.82g→3.5°，逐点贴合实际大型 SUV 侧倾曲线
+ *     （悬挂行程 1.2/2.5/3.3/3.5）。
+ * 返回带符号目标（rad）。
+ */
+export function suspensionTarget(
+  input: number,
+  maxRad: number,
+  refMs2: number,
+  aSoftFrac: number,
+  aHard: number
+): number {
+  const a = Math.abs(input);
+  const k = maxRad / refMs2;
+  const aSoft = aSoftFrac * refMs2;
+  let mag: number;
+  if (a <= aSoft) {
+    mag = k * a;
+  } else if (a >= aHard) {
+    mag = maxRad;
+  } else {
+    const t = (a - aSoft) / (aHard - aSoft);
+    const s = t * t * (3 - 2 * t); // smoothstep
+    mag = k * aSoft + (maxRad - k * aSoft) * s;
+  }
+  return Math.sign(input) * mag;
+}
+
 export class FreeDrive {
   readonly state: FreeDriveState;
   /** 事件出口（Game 统一处理 toast / 音效 / 震屏） */
@@ -932,6 +1044,12 @@ export class FreeDrive {
   private rollBody = 0;
   private pitchBody = 0;
   /**
+   * R156 常态悬挂二阶状态：簧上质量角速度 rad/s（rollBody/pitchBody 的时间导数）。
+   *  二阶弹簧-阻尼积分需要速度状态；只在 reset() 清零（积分自洽，无需其它重置点）。
+   */
+  private rollBodyVel = 0;
+  private pitchBodyVel = 0;
+  /**
    * R126 撞墙「被顶晃动」欠阻尼二阶状态：侧倾位移 rad / 角速度 rad/s。
    *  撞墙帧一次性注入角速度（rollGain×impactN），随后弹簧-阻尼二阶积分，过冲回摆一次再稳定。
    */
@@ -943,6 +1061,14 @@ export class FreeDrive {
   /** R102 只读观测口：供测试纯数值断言「贴墙期间 scrub 不被段间跳变误清零」（不暴露写权限） */
   get scrubN(): number {
     return this.wallScrubN;
+  }
+  /**
+   * R161 只读接触快照（只读透传，零物理改动）：Game.frameFree 逐帧读它判断是否
+   * 贴墙刮擦并铺墙痕。由 step() 末尾每步刷新（见 step() 快照点），photoMode/reset/
+   * teleport 清为未接触。只读 getter 不暴露写权限（与 scrubN getter 同风格）。
+   */
+  get wallContact(): FreeDriveWallContact {
+    return this.wallContactSnap;
   }
   /** R126 只读观测口：撞墙「被顶晃动」俯仰位移 rad（供测试断言 osc 本身过零回摆，不暴露写权限） */
   get impactPitchOscValue(): number {
@@ -960,6 +1086,19 @@ export class FreeDrive {
   private wallSideTouchLatch = false;
   /** R102 连续超出 RELEASE_EPS 带的帧计数：超过 WALL_SCRUB_LATCH_FAR_FRAMES 才清 latch */
   private wallSideTouchFarFrames = 0;
+  /**
+   * R161 只读接触快照（每步刷新，见 step() 末尾）。touching=false 为初始/未接触态。
+   * photoMode 提前 return 不刷新，故 photoMode 分支显式清为未接触（见 :1262 附近）。
+   */
+  private wallContactSnap: FreeDriveWallContact = {
+    touching: false,
+    kind: null,
+    nx: 0,
+    nz: 0,
+    wallX: 0,
+    wallZ: 0,
+    strength: 0
+  };
 
   private readonly onKeyDown = (e: KeyboardEvent): void => {
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
@@ -1034,6 +1173,8 @@ export class FreeDrive {
     this.wallSpeedKickFired = false;
     this.rollBody = 0;
     this.pitchBody = 0;
+    this.rollBodyVel = 0;
+    this.pitchBodyVel = 0;
     this.impactRollOsc = 0;
     this.impactRollOscVel = 0;
     this.impactPitchOsc = 0;
@@ -1096,11 +1237,14 @@ export class FreeDrive {
     this.wallSpeedKickFired = false;
     this.rollBody = 0;
     this.pitchBody = 0;
+    this.rollBodyVel = 0;
+    this.pitchBodyVel = 0;
     this.impactRollOsc = 0;
     this.impactRollOscVel = 0;
     this.impactPitchOsc = 0;
     this.impactPitchOscVel = 0;
     this.wallSideTouchLatch = false;
+    this.wallContactSnap = { touching: false, kind: null, nx: 0, nz: 0, wallX: 0, wallZ: 0, strength: 0 };
     this.keys.clear();
     this.emit('reset');
   }
@@ -1128,12 +1272,15 @@ export class FreeDrive {
     this.wallSpeedKickFired = false;
     this.rollBody = 0;
     this.pitchBody = 0;
+    this.rollBodyVel = 0;
+    this.pitchBodyVel = 0;
     this.impactRollOsc = 0;
     this.impactRollOscVel = 0;
     this.impactPitchOsc = 0;
     this.impactPitchOscVel = 0;
     this.wallSideTouchLatch = false;
     this.wallSideTouchFarFrames = 0;
+    this.wallContactSnap = { touching: false, kind: null, nx: 0, nz: 0, wallX: 0, wallZ: 0, strength: 0 };
   }
 
   /** 给 QA 探针的只读快照 */
@@ -1169,12 +1316,16 @@ export class FreeDrive {
     this.wallSpeedKickFired = false;
     this.rollBody = 0;
     this.pitchBody = 0;
+    this.rollBodyVel = 0;
+    this.pitchBodyVel = 0;
     this.impactRollOsc = 0;
     this.impactRollOscVel = 0;
     this.impactPitchOsc = 0;
     this.impactPitchOscVel = 0;
     this.wallSideTouchLatch = false;
     this.wallSideTouchFarFrames = 0;
+    // R161：photoMode 提前 return 不刷新 wallContactSnap，此处显式清为未接触。
+    this.wallContactSnap = { touching: false, kind: null, nx: 0, nz: 0, wallX: 0, wallZ: 0, strength: 0 };
       return;
     }
     const throttle = this.has('KeyW', 'ArrowUp') ? 1 : 0;
@@ -1446,12 +1597,16 @@ export class FreeDrive {
      *   = −344.95+2.7475 = −342.2025，车头一探墩带 2D 钳位即接管；墩带北侧（z>−344.95）
      *   无其它 footprint，扩带只引入「车头探入门楼飞扶壁墩即被收紧」的接管，不改
      *   城内/广场 2D 语义（桥段正常通行 x 中线不碰墩）。 */
+    // R161 2D 接触快照暂存（fp 是 if 块内局部 const，出作用域后不可读，故先存必要字段；
+    // 组合进 wallContactSnap 在 step() 末尾统一完成，零物理改动）。
+    let fp2dSnap: { hit: boolean; nx: number; nz: number; x: number; z: number } | null = null;
     if (nz <= Math.max(GATE_PIER_Z_MAX, GATE_FLY_Z_MAX) + CAR_HALF_L && nz >= BOUNDS.zMin) {
       // R105：去掉外层 !driftActive 门控 —— 漂移态**也做位置钳**（s.x=fp.x），堵死漂移穿模。
       //   旧版整层被 !driftActive 关闭 ⇒ 漂移车能穿进建筑底部 3.5~5.6 m（全量几何扫最大穿模源）。
       //   R103 关掉它的真因是「位置钳 + 撞击/速度/heading 注入」会让 β 永不塌缩，而非位置钳本身；
       //   故此处按 driftActive 分流：漂移态只做位置钳 + 朝向贴墙收敛，不碰撞击/速度/刮擦链路。
       const fp = clampToFootprints(s.x, s.z, s.heading);
+      fp2dSnap = { hit: fp.hit, nx: fp.nx, nz: fp.nz, x: fp.x, z: fp.z };
       let mainClampDelta = 0;
       if (fp.hit) {
         // R110 连续收敛：不再一帧写死 s.x=fp.x（曾单帧钳位 6.34 m = 空气墙/瞬移）。
@@ -1626,7 +1781,7 @@ export class FreeDrive {
     }
     // R100 hall 瞬态（复用 R99 wallImpact 包络，不照搬 side 的速度分解）：
     //   speed 仍取 r.speed=0 ⇒ 正撞彻底停、不二次撞击、z 弹开 0.8m 不变；
-    //   s.accel 保留归零（pitch 走 FREE_BODY_DAMPING.pitch 一阶，不产生俯仰硬切）；
+    //   s.accel 保留归零（pitch 走 FREE_BODY_SUSPENSION 二阶回正，不产生俯仰硬切）；
     //   impactN 注入包络 ⇒ 下方衰减段给 yawRate/roll 一记短暂「被顶一下」冲击；
     //   beta/yawDyn 按 IMPACT_TAU 逐帧收敛 ⇒ 消除 speed<1.5 退出漂移层时的单帧横跳。
     if (r.kind === 'hall') {
@@ -1696,19 +1851,54 @@ export class FreeDrive {
     }
 
     // ---- 视觉姿态（侧倾 × 俯仰）----
-    // 常态一阶阻尼（R98 契约零改）：转向/加减速的侧倾/俯仰目标，独立内部状态 rollBody/pitchBody。
+    // R156 常态悬挂二阶（FREE_BODY_SUSPENSION）：转向/加减速的重心转移按簧上质量
+    // 弹簧-阻尼积分（目标位移驱动），过冲回摆一次再稳定 —— 取代 R98 一阶 damp
+    // （单调逼近、无过冲，读作「车身钉在路上」）。稳态目标公式/灵魂上限
+    // 零改：弹簧稳态响应 = 目标，故稳态侧倾/俯仰幅值逐位不变，只增加过冲回摆动力学。
+    // R157 目标曲线改 bump stop 平滑饱和（suspensionTarget，取代「线性 × clamp」硬顶）。
+    // 与 R126 撞墙二阶（impact*Osc）独立叠加，互不侵蚀。
     const latAccel = yawRate * vAvg;
-    const rollTarget = clamp(
-      (-latAccel * FREE.rollMaxRad) / FREE.rollRefMs2,
-      -FREE.rollMaxRad,
-      FREE.rollMaxRad
+    // R157 侧倾目标：软区线性（R157 rollRefMs2=6.0 重标定）+ bump stop 饱和
+    // （aSoft=0.7×6=4.2 渐入、aHard=7.0 打底）—— 0.2g→1.17°/0.41g→2.45°/0.61g→3.20°/0.82g→3.5°。
+    const rollTarget = suspensionTarget(
+      latAccel,
+      FREE.rollMaxRad,
+      FREE.rollRefMs2,
+      0.7,
+      7.0
     );
-    this.rollBody = damp(this.rollBody, rollTarget, FREE_BODY_DAMPING.roll, dt);
-    const pitchTarget = clamp(s.accel * FREE.pitchPerAccel, -FREE.pitchMaxRad, FREE.pitchMaxRad);
-    this.pitchBody = damp(this.pitchBody, pitchTarget, FREE_BODY_DAMPING.pitch, dt);
+    // 二阶积分：rollBodyVel/rollBody 是簧上质量状态，加速度 = ω²·(target−body) − 2ζω·vel。
+    // 目标突变（转向切入/刹车）⇒ 质量先冲向目标、过冲回摆（ζ=0.45 ⇒ ~20%），再收敛；
+    // 目标恒定 ⇒ 稳态 body=target（幅值标定不变）。FREE_BODY_DAMPING 一阶不再驱动常态。
+    const sus = FREE_BODY_SUSPENSION;
+    [this.rollBody, this.rollBodyVel] = stepSuspension(
+      this.rollBody,
+      this.rollBodyVel,
+      rollTarget,
+      sus.omega,
+      sus.zeta,
+      dt
+    );
+    // R157 俯仰目标：纵向 bump stop 对称饱和（aSoft=0.7×7.756=5.43 渐入、aHard=11 打底，
+    // 满刹 10.79 近饱和）。refMs2 = pitchMaxRad/pitchPerAccel（满幅基准加速度 7.756）。
+    const pitchTarget = suspensionTarget(
+      s.accel,
+      FREE.pitchMaxRad,
+      FREE.pitchMaxRad / FREE.pitchPerAccel,
+      0.7,
+      11.0
+    );
+    [this.pitchBody, this.pitchBodyVel] = stepSuspension(
+      this.pitchBody,
+      this.pitchBodyVel,
+      pitchTarget,
+      sus.omega,
+      sus.zeta,
+      dt
+    );
     // R126 撞墙「被顶晃动」欠阻尼二阶：撞墙帧注入角速度（impactRollOscVel / impactPitchOscVel），
-    //   此处按弹簧-阻尼（FREE_BODY_IMPACT_OSC）积分，过冲回摆一次再稳定。独立于常态一阶
-    //   （osc 不被 rollBody damp 侵蚀、回摆不被常态阻尼抵消），只叠加在最终视觉姿态上。
+    //   此处按弹簧-阻尼（FREE_BODY_IMPACT_OSC）积分，过冲回摆一次再稳定。独立于常态二阶
+    //   （osc 不被 rollBody 弹簧侵蚀、回摆不被常态阻尼抵消），只叠加在最终视觉姿态上。
     //   注入放在姿态积分之前 ⇒ 撞墙帧起就按二阶被顶，清晰可见。紧跟 ±灵魂上限 clamp。
     const osc = FREE_BODY_IMPACT_OSC;
     const rollOscAcc = osc.omega * osc.omega * -this.impactRollOsc - 2 * osc.zeta * osc.omega * this.impactRollOscVel;
@@ -1736,6 +1926,62 @@ export class FreeDrive {
     } else if (r.kind !== 'none' && this.wallCd === 0) {
       this.wallCd = 0.5;
       this.emit({ kind: 'wall', strength: freeImpactStrength(r.impactN ?? 0) });
+    }
+
+    // ---- R161 只读接触快照（零物理改动，只读透传）----
+    // 组合 1D side/end + 2D fp 接触态。优先级：2D（车被 footprint 挡）> 1D side > 1D end
+    // > 未接触。法线均指向**可行驶侧**（与 resolveBounds :865 nx=±1 指向墙外相反；
+    // 与 2D fp.nx cityFootprints.ts:1038 同号）。墙面点 1D = 车缘接触线 ±wallSurf(z)，
+    // 御桥段用 Step0 dump 可见栏板内表面 11.88（WALL_SURF_BRIDGE），其余段用
+    // corridorCenterHalfWidth(z)+车半宽（=车缘接触线，御桥段例外见常量注释）。
+    const sideSign = s.x >= 0 ? 1 : -1; // 车侧符号（1D 墙 |x| 对称）
+    if (fp2dSnap?.hit) {
+      // 2D wallX = fp.x（带符号钳位值，车缘恰贴 footprint xInner 面；FootprintClamp
+      // 不暴露 xInner，用钳位值即车缘实际接触点）。wallZ = fp.z（车心 z 钳位目标）。
+      this.wallContactSnap = {
+        touching: true,
+        kind: '2d',
+        nx: fp2dSnap.nx,
+        nz: fp2dSnap.nz,
+        wallX: fp2dSnap.x,
+        wallZ: fp2dSnap.z,
+        strength: this.wallScrubN
+      };
+    } else if (sideTouch) {
+      const wallSurf =
+        s.z >= BOUNDS.gateFrontZ
+          ? WALL_SURF_BRIDGE
+          : corridorCenterHalfWidth(s.z) + VEHICLE.widthM / 2;
+      this.wallContactSnap = {
+        touching: true,
+        kind: 'side',
+        nx: -sideSign,
+        nz: 0,
+        wallX: sideSign * wallSurf,
+        wallZ: s.z,
+        strength: this.wallScrubN
+      };
+    } else if (endTouch) {
+      const endN = s.z <= BOUNDS.zMin + WALL_SCRUB_CONTACT_EPS ? -1 : 1;
+      this.wallContactSnap = {
+        touching: true,
+        kind: 'end',
+        nx: 0,
+        nz: -endN,
+        wallX: s.x,
+        wallZ: endN < 0 ? BOUNDS.zMin : BOUNDS.zMax,
+        strength: this.wallScrubN
+      };
+    } else {
+      this.wallContactSnap = {
+        touching: false,
+        kind: null,
+        nx: 0,
+        nz: 0,
+        wallX: 0,
+        wallZ: 0,
+        strength: 0
+      };
     }
   }
 

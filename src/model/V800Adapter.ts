@@ -51,6 +51,8 @@ import {
   createGlassBandMaterial
 } from './parts/windowTrim';
 import { createWheelHub, createWheelHubMaterials, type WheelHubSide, WHEEL_HUB_CENTERS } from './parts/wheelHub';
+// R158 · 簧下轮跳位置补偿（轮心贴地，纯函数无 window 依赖，可 node 单测）
+import { wheelSuspensionLocal } from './wheelSuspension';
 // R83 · 高精度轮毂 GLB（默认 OFF，`#r83wheelhub=on` 启用）：开关真源 + 装载器在 wheelHubHi.ts
 import { R83_WHEELHUB_HI_ON, loadWheelHubHi } from './parts/wheelHubHi';
 import { createWheelArchLiner, WHEEL_ARCH_LINER_MATERIAL_ID } from './parts/wheelArchLiner';
@@ -77,6 +79,12 @@ import {
 export interface WheelPivot {
   /** 滚动旋转对象（绕 X 轴） */
   spin: THREE.Object3D;
+  /** R157-C 簧下轮跳：车轮根节点（wheel-fl/fr/rl/rr），悬挂姿态补偿用（抵消车身侧倾/俯仰）。
+   *  可选：仅 V800 提供（R7/Yangwang 构造 WheelPivot 无此字段）。 */
+  pivot?: THREE.Object3D;
+  /** R158 簧下轮跳位置补偿：车轮根节点初始局部位置（model 系，未补偿），轮心贴地用。
+   *  可选：仅 V800 提供。 */
+  basePos?: readonly [number, number, number];
 }
 
 export interface CarLike {
@@ -86,6 +94,8 @@ export interface CarLike {
   readonly wheels: WheelPivot[];
   currentHeat: number;
   spinWheels(dist: number, dt: number): void;
+  /** R157-C 簧下轮跳（可选）：车轮不随车身侧倾/俯仰（簧下贴地）。仅 V800 实现（R7/Yangwang 无）。 */
+  applyWheelSuspension?(roll: number, pitch: number): void;
   setBrakeLights(intensity: number): void;
   flashBrakeSnap(): void;
   setHeadlights(on: boolean): void;
@@ -2353,7 +2363,7 @@ export function createV800CarAdapter(tier: QualityTier = 'high', paintId: string
     const moved = [...pivot.children].filter((c) => c !== hub);
     for (const c of moved) hub.attach(c);
     pivot.updateMatrixWorld(true);
-    wheels.push({ spin: hub });
+    wheels.push({ spin: hub, pivot, basePos: [pivot.position.x, pivot.position.y, pivot.position.z] });
   }
 
   // 注：辐条 InstancedMesh 已从 spec 整体删除（原 4 个系统 80 实例 = 15,360 面，
@@ -5899,6 +5909,27 @@ const R48_LAMP_TONE: boolean =
         // 归一到 ±π，防止 rotation.x 无界增长导致的浮点精度退化
         const next = w.spin.rotation.x - step;
         w.spin.rotation.x = THREE.MathUtils.euclideanModulo(next + Math.PI, Math.PI * 2) - Math.PI;
+      }
+    },
+    applyWheelSuspension(roll: number, pitch: number): void {
+      // R157-C 簧下轮跳（视觉）：车轮不随车身侧倾/俯仰（簧下质量贴地）。
+      // R158 补全位置补偿：轮心世界位置也贴地（不随车身 roll/pitch 平移）。
+      //   · 旋转补偿：pivot.rotation = (-pitch, 0, -roll) —— 车轮世界姿态贴地。
+      //   · 位置补偿（精确四元数）：pivot.position = R_body⁻¹ · R_yaw · basePos，
+      //     R_body=Euler(pitch,π,roll)（车身当前姿态）、R_yaw=Euler(0,π,0)（只基准偏航）、
+      //     basePos=轮心初始局部位置（构造记录）。R_body·pivot.position 的 y 分量
+      //     = R_yaw·basePos 的 y 分量（轮心世界高度恒定=贴地）。
+      //     ⚠ 不能只补 y（小角 y'=by+bx·roll+bz·pitch 会漏 x/z 耦合 → 2 倍漂移），
+      //     须完整四元数（x/y/z 全补）。
+      // 轴一致性：pivot（wheel-fl/fr/rl/rr）无初始 rotation（构造 [0,0,0]，R8 hub 只包子件）。
+      for (const w of wheels) {
+        if (!w.pivot) continue;
+        w.pivot.rotation.z = -roll;
+        w.pivot.rotation.x = -pitch;
+        if (w.basePos) {
+          const loc = wheelSuspensionLocal(roll, pitch, w.basePos);
+          w.pivot.position.set(loc.x, loc.y, loc.z);
+        }
       }
     },
     setBrakeLights(intensity: number): void {

@@ -126,9 +126,9 @@ describe('R62-P0-1 · 刹车盘 + 卡钳新增几何', () => {
 });
 
 describe('R62-P0-2 · 车漆金属化（只动材质，不动几何）', () => {
-  it('程序化车漆叠加 clearcoat 清漆层（默认 0.7 / rough 0.12，可 #r62clearcoat= 扫参）', () => {
-    expect(shell).toContain("export const R62_PAINT_CLEARCOAT = r56HashNum('r62clearcoat') ?? 0.7;");
-    expect(shell).toContain("export const R62_PAINT_CLEARCOAT_ROUGH = r56HashNum('r62clearcoatrough') ?? 0.12;");
+  it('程序化车漆叠加 clearcoat 清漆层（默认 0.5 / rough 0.22，可 #r62clearcoat= 扫参）', () => {
+    expect(shell).toContain("export const R62_PAINT_CLEARCOAT = r56HashNum('r62clearcoat') ?? 0.5;");
+    expect(shell).toContain("export const R62_PAINT_CLEARCOAT_ROUGH = r56HashNum('r62clearcoatrough') ?? 0.22;");
     const proc = slice(shell, 'if (R62_PAINT_ON) {', 'material.needsUpdate = true;');
     expect(proc).toContain('material.clearcoat = R62_PAINT_CLEARCOAT');
     expect(proc).toContain('material.clearcoatRoughness = R62_PAINT_CLEARCOAT_ROUGH');

@@ -376,6 +376,19 @@ const FREE_CAM_MARGIN = 0.8;
  *  · SHAKE_MAX：幅度上限，防 0.8 级注入爆幅（叠加 0.45 → 抖幅上限 0.225m）。 */
 const SHAKE_TAU = 0.18;
 const SHAKE_MAX = 0.45;
+/* R162 · 撞击 shake 攻击斜坡：施加幅度从 0 缓升到 shake 包络（τ=0.04 ≈ 3 帧 @60fps），
+ * 消除撞帧满幅瞬跳「两帧无过渡突兀」。攻击斜坡只作用于施加幅度（shakeAmp），
+ * 包络/取大/衰减语义（SHAKE_TAU/SHAKE_MAX/addShake）不动。 */
+const SHAKE_ATTACK_TAU = 0.04;
+/* R164 · 撞击 FOV punch：碰撞帧视场被"撞"的瞬时冲击（比位置震屏更贴撞击体感）。
+ * FOV_PUNCH_TAU：冲击包络指数回落（τ=0.14 ⇒ 约 200ms 收敛）；
+ * FOV_PUNCH_ATTACK_TAU：施加幅度攻击缓升（τ=0.03 ⇒ ≈2 帧 @60fps），与 SHAKE_ATTACK_TAU 同理防撞帧瞬跳；
+ * FOV_PUNCH_MAX：冲击上限（度），防 0.5×20=10° 封顶；
+ * FOV_PUNCH_DEG_PER_SHAKE：每单位 shake 强度映射的 FOV 度数（撞击强度→视场冲击）。 */
+const FOV_PUNCH_TAU = 0.14;
+const FOV_PUNCH_ATTACK_TAU = 0.03;
+const FOV_PUNCH_MAX = 10;
+const FOV_PUNCH_DEG_PER_SHAKE = 20;
 
 export class CameraRig {
   camera: THREE.PerspectiveCamera;
@@ -385,6 +398,14 @@ export class CameraRig {
    *  R7 接线：Game.ts 需在 R7 模式下传 `new CameraRig(aspect, 'r7')`（主理人兜底接线）。 */
   private isR7: boolean;
   private shake = 0;
+  /** R162 · 施加幅度（攻击缓升用）：shakeAmp 以 SHAKE_ATTACK_TAU 向 shake 包络收敛，
+   *  施加偏移用 shakeAmp 而非 shake ⇒ 撞帧满幅不瞬跳（≈3 帧缓升到包络）。 */
+  private shakeAmp = 0;
+  /** R164 · 撞击 FOV punch：fovBase 为 FOV 收敛基线（punch 不污染 lerp 状态，防二次叠加）；
+   *  fovPunch 为冲击包络（指数回落），fovPunchAmp 为施加幅度（攻击缓升）。 */
+  private fovBase = 55;
+  private fovPunch = 0;
+  private fovPunchAmp = 0;
   private time = 0;
   private offset = new THREE.Vector3(6, 1.6, 6);
   private lookOffset = new THREE.Vector3(0, 0.85, 0);
@@ -453,6 +474,15 @@ export class CameraRig {
   addShake(amount: number): void {
     // R110：保留「取大」合并语义（多源叠加），加幅度上限防爆幅
     this.shake = Math.min(SHAKE_MAX, Math.max(this.shake, amount));
+  }
+
+  /** R164 · 撞击 FOV punch：多源取大合并 + 上限（与 addShake 同语义），
+   *  shakeAmount 与 addShake 同源 ⇒ 调用处并排写 addShake(x); addFovPunch(x)。 */
+  addFovPunch(shakeAmount: number): void {
+    this.fovPunch = Math.min(
+      FOV_PUNCH_MAX,
+      Math.max(this.fovPunch, shakeAmount * FOV_PUNCH_DEG_PER_SHAKE)
+    );
   }
 
   /** 拖拽增量：dx→偏航，dy→俯仰（外部机位为环绕惯例：上拖 = 相机升高俯视）。
@@ -569,6 +599,15 @@ export class CameraRig {
       cam.position.copy(this.flyPos);
       this.shake *= Math.exp(-dt / SHAKE_TAU);
       if (this.shake < 1e-4) this.shake = 0;
+      // R162 · 飞航态不施加偏移，但保持 shakeAmp 跟随包络 ⇒ 退出飞航不残留满幅。
+      this.shakeAmp += (this.shake - this.shakeAmp) * (1 - Math.exp(-dt / SHAKE_ATTACK_TAU));
+      if (this.shakeAmp < 1e-4) this.shakeAmp = 0;
+      // R164 · 飞航态不施加 FOV punch，但保持 fovBase/fovPunchAmp 跟随 ⇒ 退出飞航连续。
+      this.fovBase += (pose.fov - this.fovBase) * Math.min(1, dt * 2);
+      this.fovPunch *= Math.exp(-dt / FOV_PUNCH_TAU);
+      if (this.fovPunch < 1e-4) this.fovPunch = 0;
+      this.fovPunchAmp += (this.fovPunch - this.fovPunchAmp) * (1 - Math.exp(-dt / FOV_PUNCH_ATTACK_TAU));
+      if (this.fovPunchAmp < 1e-4) this.fovPunchAmp = 0;
       cam.lookAt(lookPt);
       if (cam.near !== pose.near) {
         cam.near = pose.near;
@@ -629,13 +668,17 @@ export class CameraRig {
     }
     this.shake *= Math.exp(-dt / SHAKE_TAU);
     if (this.shake < 1e-4) this.shake = 0;
-    if (this.shake > 0) {
+    // R162 · 攻击斜坡：施加幅度以 SHAKE_ATTACK_TAU 向包络收敛（撞帧不从 0 瞬跳满幅）。
+    // 只作用于施加幅度，包络（shake）/取大/衰减语义不动。
+    this.shakeAmp += (this.shake - this.shakeAmp) * (1 - Math.exp(-dt / SHAKE_ATTACK_TAU));
+    if (this.shakeAmp < 1e-4) this.shakeAmp = 0;
+    if (this.shakeAmp > 0) {
       // R110 · 频率降 + 高频项缩幅 + 总幅值减半：主频 23.3→9.0、41.7→17.0、
       // 29.1→10.5、47.9→19.0（≈1.4~3.0Hz，避开被读作僵硬的高频区）；
       // 系数 0.6/0.4 → 0.72/0.28（低主频占比）；总幅值 ×0.5。
       // 配合 SHAKE_MAX=0.45 ⇒ max 抖幅 ≈0.45×0.5=0.225m（旧 0.4m 更柔）。
       const t = this.time;
-      const sh = this.shake;
+      const sh = this.shakeAmp;
       cam.position.x += sh * (Math.sin(t * 9.0) * 0.72 + Math.sin(t * 17.0 + 1.3) * 0.28) * 0.5;
       cam.position.y += sh * (Math.sin(t * 10.5 + 0.7) * 0.72 + Math.sin(t * 19.0 + 2.1) * 0.28) * 0.5;
     }
@@ -658,9 +701,17 @@ export class CameraRig {
       cam.near = pose.near;
       cam.updateProjectionMatrix();
     }
-    const fov = cam.fov + (pose.fov - cam.fov) * Math.min(1, dt * 2);
-    if (Math.abs(fov - cam.fov) > 0.001) {
-      cam.fov = fov;
+    // R164 · 撞击 FOV punch：FOV 用独立基线 fovBase 收敛（punch 不污染 lerp 状态，
+    // 防「lerp 回拉 + 再叠加」二次膨胀），撞击时在基线叠加瞬时冲击 fovPunchAmp；
+    // punch→0 ⇒ cam.fov→fovBase→pose.fov（空闲行为与旧逐位一致）。
+    this.fovBase += (pose.fov - this.fovBase) * Math.min(1, dt * 2);
+    this.fovPunch *= Math.exp(-dt / FOV_PUNCH_TAU);
+    if (this.fovPunch < 1e-4) this.fovPunch = 0;
+    this.fovPunchAmp += (this.fovPunch - this.fovPunchAmp) * (1 - Math.exp(-dt / FOV_PUNCH_ATTACK_TAU));
+    if (this.fovPunchAmp < 1e-4) this.fovPunchAmp = 0;
+    const fovFinal = this.fovBase + this.fovPunchAmp;
+    if (Math.abs(fovFinal - cam.fov) > 0.001) {
+      cam.fov = fovFinal;
       cam.updateProjectionMatrix();
     }
   }

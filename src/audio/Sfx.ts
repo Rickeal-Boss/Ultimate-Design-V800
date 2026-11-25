@@ -432,10 +432,14 @@ export class Sfx {
     this.beep(90, 0.5, 'sine', 0.3); // 闷响
   }
 
-  /** 撞击（strength 0~1） */
+  /** 撞击（strength 0~1）——R165 低频增强：车身面板低频共振 + 低频噪声 body，随强度标定 */
   impact(strength: number): void {
-    this.noiseBurst(0.3 + strength * 0.3, 0.3 + strength * 0.4, 500 + strength * 1500);
-    this.beep(70, 0.4, 'sine', 0.35);
+    // 高频「crunch」：金属/碎片撞击声（R159 口径保留，微降增益给低频让位）
+    this.noiseBurst(0.3 + strength * 0.3, 0.2 + strength * 0.25, 500 + strength * 1500);
+    // R165 · 低频「body」：车身面板共振噪声分量（低通 150→350Hz 随强度——笔记本扬声器可闻的"撞击重量"）
+    this.noiseBurst(0.35 + strength * 0.35, 0.2 + strength * 0.3, 150 + strength * 200);
+    // R165 · 车身低频共振闷响：70→60Hz（更贴车身面板共振，仍处可闻带；50Hz 在笔记本扬声器可闻带边缘），随强度标定
+    this.beep(60, 0.35 + strength * 0.15, 'sine', 0.2 + strength * 0.2);
   }
 
   success(): void {

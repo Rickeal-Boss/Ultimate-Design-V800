@@ -23,7 +23,8 @@ import {
 } from '../config/r51Perf';
 import { World } from '../physics/World';
 import type { VehicleState } from '../physics/Vehicle';
-import { FxSystems, type FxFrameInput } from '../fx';
+import { FxSystems, impactSparkParams, impactDustParams, type FxFrameInput } from '../fx';
+import { R161_SCRATCH_GATE_MS, R161_SCRATCH_STEP_M } from '../config/freeBodyFeel';
 import { cycleViewsFor, CameraRig, isInteriorMode } from '../render/CameraRig';
 import type { CameraMode } from '../render/CameraRig';
 import { Postfx } from '../render/Postfx';
@@ -352,6 +353,16 @@ export class Game {
     speedMs: 0,
     braking: false
   };
+  /**
+   * R161 擦墙划痕铺痕状态（frameFree 逐帧，只读 FreeDrive.wallContact，零物理改动）。
+   * wallTravel：刮擦路径累计距离 m（每 R161_SCRATCH_STEP_M 米铺一段，镜像 skidTravel）。
+   * lastWallTouch：上次接触点（首帧/离墙后 NaN 标记，计算段位移用）。
+   * wallPoint/wallNormal：复用向量（防每帧分配，与 fxInput 同判据）。
+   */
+  private wallTravel = 0;
+  private readonly lastWallTouch = new THREE.Vector3(Number.NaN, 0, 0);
+  private readonly wallPoint = new THREE.Vector3();
+  private readonly wallNormal = new THREE.Vector3();
   /* R39 阴影参与度的判定口径（留档，防后人重踩）：
    * 不用 `sun.shadow.needsUpdate` 翻转（autoUpdate=true 后没人再写它，恒 false）；
    * 也不用包装 `WebGLShadowMap.render` 数 draw call 增量 —— 实测包装器每帧被调 16 次、
@@ -456,6 +467,7 @@ export class Game {
       this.lastImpactStrength = impact.strength;
       this.sfx.impact(impact.strength);
       this.rig.addShake(0.18 * impact.strength);
+      this.rig.addFovPunch(0.18 * impact.strength);
     });
 
     // ---- 车型视角接线 ----
@@ -1218,16 +1230,44 @@ export class Game {
     //   满幅保持 R110 基线不回归（wall 0.12 / hall 0.32），强度缩放 ⇒ 撞得越狠越震、
     //   擦过去（strength≈0）近乎无感（与 R109 刮擦强度衰减一致）；与 crashWorld
     //   撞车 `0.18 × strength` 同一缩放口径。音效加小地板防掠擦静音。
+    // R159 建筑反馈：在音效/震屏（连续强度缩放，R110 基线不变）之上，新增撞击点火花
+    //   粒子，按强度分档（impactSparkParams）——轻擦（<0.15）无粒子防刷屏、中撞缩放、
+    //   重撞（≥0.6）满幅；hall（撞主殿）同级更重。撞击点 = 车头世界坐标（与 crashWorld
+    //   同口径）。音效/震屏保持连续缩放，满幅不回归 R110 上限（0.12 / 0.32）。
+    // R160 建筑反馈：火花之上再补撞击点扬尘+砖石碎片（impactDustParams）——重撞
+    //   （≥0.6）hall 加碎片（chunkRatio 0.3）/wall 轻碎片（0.15），中撞纯尘；与火花
+    //   共用同一撞击点 hit，音效/震屏/震动保持原样不动。
     if (typeof e === 'object') {
+      const s = e.strength;
+      // R159/R160：撞击点火花+扬尘碎片（仅 0.15≤s，轻擦无粒子；共用撞击点 hit）
+      const spark = impactSparkParams(e.kind, s);
+      const dust = impactDustParams(e.kind, s);
+      if (spark || dust) {
+        // R163 撞击点精度：FreeDrive.wallContact 在 step() 末尾（L1941-1976）快照、
+        // onEvent 派发（L1994）在其后 ⇒ 事件触发时 wallContact 已是**当前步**接触态。
+        // 用实际接触点（wallX/wallZ + 法线 nx/nz 沿可行驶侧偏移 0.05 防 z-fight）替代
+        // 车头固定点——侧擦/偏角撞时粒子落在真实接触处而非车鼻；未接触（事件时序异常）
+        // 回退车头点（R159/R160 原口径）。nose-dive（撞墙车头下沉）由 R126 撞墙注入
+        // impactPitchOscVel 已有，不重复实现。
+        const wc = this.freeDrive?.wallContact;
+        const hit = this.car.root.localToWorld(new THREE.Vector3(0, 0.6, -2.7));
+        if (wc && wc.touching && (wc.nx !== 0 || wc.nz !== 0)) {
+          hit.set(wc.wallX + wc.nx * 0.05, 0.6, wc.wallZ + wc.nz * 0.05);
+        }
+        if (spark) this.fx.burstSparks(hit, spark);
+        if (dust) this.fx.burstDust(hit, dust);
+      }
       if (e.kind === 'hall') {
         // 复用挑战模式「撞上主殿」文案（R28 换皮后的用户口径）
         this.hud.showToast('撞上主殿！', true, 1800);
-        this.sfx.impact(Math.max(0.15, 0.6 * e.strength));
-        this.rig.addShake(0.32 * e.strength);
+        this.sfx.impact(Math.max(0.15, 0.6 * s));
+        this.rig.addShake(0.32 * s);
+        this.rig.addFovPunch(0.32 * s);
         vibrate([40, 30, 90]);
       } else {
-        this.sfx.impact(Math.max(0.08, 0.22 * e.strength));
-        this.rig.addShake(0.12 * e.strength);
+        this.sfx.impact(Math.max(0.08, 0.22 * s));
+        this.rig.addShake(0.12 * s);
+        this.rig.addFovPunch(0.12 * s);
       }
       return;
     }
@@ -1284,6 +1324,9 @@ export class Game {
     this.car.root.rotation.y = this.prevFreeHeading + dh * alpha;
     this.car.body.rotation.x = s.pitch;
     this.car.body.rotation.z = s.roll;
+    // R157-C 簧下轮跳（视觉）：车身侧倾/俯仰只作用车体（簧上），车轮反向补偿保持贴地
+    // （簧下质量独立）。V800 实现；R7/Yangwang 未实现（可选链 no-op）。
+    this.car.applyWheelSuspension?.(s.roll, s.pitch);
     // 车轮：弧长 = v·dt（有符号，倒车反转）；前轮转角走适配层既有 setSteer
     this.car.spinWheels(s.speed * dt, dt);
     this.car.setSteer(s.steer);
@@ -1304,6 +1347,27 @@ export class Game {
     fx.brakeIntensity = braking && absSpeed > 3 ? 0.35 : 0;
     fx.speedMs = absSpeed;
     fx.braking = braking && absSpeed > 3;
+
+    // ---- R161 擦墙划痕：贴墙持续刮擦在墙面留痕（只读 wallContact，逐帧铺）----
+    // 门控：touching && strength≥gate（防近零刮擦/静止贴墙刷痕，R159 同风格）。
+    // 接触点 = 墙面点向可行驶侧偏 0.04（防 z-fight），腰高 0.55（车侧划痕高度）。
+    // 每 R161_SCRATCH_STEP_M 米铺一段（镜像 skidTravel 节流）。不碰挑战链路/物理。
+    const wc = fd.wallContact;
+    if (wc.touching && wc.strength >= R161_SCRATCH_GATE_MS) {
+      this.wallPoint.set(wc.wallX + wc.nx * 0.04, 0.55, wc.wallZ + wc.nz * 0.04);
+      if (!Number.isNaN(this.lastWallTouch.x)) {
+        this.wallTravel += this.wallPoint.distanceTo(this.lastWallTouch);
+        if (this.wallTravel >= R161_SCRATCH_STEP_M) {
+          this.fx.emitWallScratch(this.wallPoint, this.wallNormal.set(wc.nx, 0, wc.nz));
+          this.wallTravel = 0;
+        }
+      }
+      this.lastWallTouch.copy(this.wallPoint);
+    } else {
+      this.wallTravel = 0;
+      this.lastWallTouch.set(Number.NaN, 0, 0);
+    }
+
     this.fx.update(dt, fx);
     this.sfx.updateEngine(speedKmh, s.throttle > 0);
     this.sfx.updateWind(absSpeed / (VEHICLE.maxSpeedKmh / MS_TO_KMH));
@@ -1579,6 +1643,7 @@ export class Game {
         this.car.snapPedal();
         this.brakeFlash = 0.85;
         this.rig.addShake(0.35);
+        this.rig.addFovPunch(0.35);
         vibrate([90, 40, 200]);
         this.hud.setRedundancyActive(true);
         this.hud.showToast(
@@ -1635,12 +1700,15 @@ export class Game {
         this.settleTimer = 0;
         this.hud.setRedundancyActive(false);
         this.car.body.rotation.set(0, MODEL_BASE_YAW, 0); // 保留基准偏航 π，只清俯仰/横滚
+        // R157-C：crash 重置车身姿态，车轮悬挂补偿同步回正（防 pivot.rotation 停在 crash 前值）
+        this.car.applyWheelSuspension?.(0, 0);
         this.crashWorld.begin(this.car.root, speedMs); // 主殿实心撞击，无飞散路障块
         this.crashElapsed = 0;
         this.sfx.impact(Math.max(0.3, crashN));
         this.fx.burstSparks(this.car.root.localToWorld(new THREE.Vector3(0, 0.6, -2.7)));
         this.brakeFlash = 0.5;
         this.rig.addShake(0.5 * crashN);
+        this.rig.addFovPunch(0.5 * crashN);
         this.hud.showToast('撞上主殿！', true, 2200);
         vibrate([90, 40, 200]);
         this.pendingResult = { result: event.result, delay: CRASH.resultDelaySeconds };

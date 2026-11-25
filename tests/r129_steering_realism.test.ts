@@ -3,7 +3,7 @@
  * 复用 free_drift 的驾驶约定（fd.press / fd.state.speed 直写 / DT=1/120）。
  */
 import { describe, expect, it } from 'vitest';
-import { FREE, FreeDrive, steerTauFor } from '../src/core/FreeDrive';
+import { FREE, FreeDrive, steerTauFor, yawRateFor } from '../src/core/FreeDrive';
 
 const DT = 1 / 120;
 
@@ -51,9 +51,10 @@ describe('R129 ② 横摆响应渐进（转向驱动横摆滞后通道）', () =
     expect(tr.yaw[5]).toBeLessThan(steady * 0.6);
     // 0.5s：收敛到稳态附近（转向 τ~0.10 + 横摆 τ~0.07 双重渐进，0.5s 应 >95%）
     expect(tr.yaw[59]).toBeGreaterThan(steady * 0.95);
-    // 稳态值与 kinematic 目标一致（yawRateFor = steer×maxYawRate×factor×dir，40km/h factor=1）
+    // 稳态值与 kinematic 目标一致（R157 几何：yawRateFor = clamp(v·tan(δ)/L, ±min(cap,maxYawRate))，
+    // 40km/h 满舵已被抓地钳 cap=gripLat/v=0.65，非旧 steer×maxYawRate）
     const steerF = tr.steer[59];
-    expect(Math.abs(steady - steerF * FREE.maxYawRate)).toBeLessThan(0.02);
+    expect(Math.abs(steady - yawRateFor(steerF, 11.1))).toBeLessThan(0.02);
   });
 
   it('关键安全性质：松舵回正单调、无过冲/无负横摆（⇒ 无横摆动量、无穿墙风险）', () => {
@@ -76,17 +77,14 @@ describe('R129 ② 横摆响应渐进（转向驱动横摆滞后通道）', () =
     // 峰后单调衰减、恒非负（无回摆过零 = 无横摆动量、无穿墙风险）、超幅 <2% 收敛近零。
     const startYaw = Math.abs(tr.yaw[29]);
     const peak = Math.max(...yawAfter);
-    expect(peak).toBeLessThan(startYaw * 1.02); // 峰超幅 <2%（载荷惯性微升，非动量过冲）
-    let peaked = false;
-    for (let i = 0; i < yawAfter.length; i += 1) {
+    expect(peak).toBeLessThan(startYaw * 1.03); // 峰超幅 <3%（R157 几何 kin 更大，载荷惯性微升；无动量过冲）
+    // 回正 yaw 允许惯性微升到全局峰（peak 在序列中段），只检查**峰后**单调衰减
+    const peakIdx = yawAfter.indexOf(peak);
+    for (let i = peakIdx + 1; i < yawAfter.length; i += 1) {
       expect(yawAfter[i]).toBeGreaterThanOrEqual(-1e-9); // 恒非负：无反向回摆
-      if (!peaked && yawAfter[i] < peak - 1e-6) peaked = true; // 已过峰
-      if (peaked) {
-        // 峰后单调衰减（允许 1e-9 浮点）
-        expect(yawAfter[i]).toBeLessThanOrEqual(yawAfter[i - 1] + 1e-9);
-      }
+      expect(yawAfter[i]).toBeLessThanOrEqual(yawAfter[i - 1] + 1e-9); // 峰后单调衰减
     }
-    expect(Math.abs(yawAfter[yawAfter.length - 1])).toBeLessThan(0.01);
+    expect(Math.abs(yawAfter[yawAfter.length - 1])).toBeLessThan(0.02); // 回正 0.5s 收敛 97%（R157 几何 kin 更大，稍慢）
   });
 
   it('低速打舵横摆也渐进（载荷模型不分速）：10km/h 打舵 0.05s 未达稳态', () => {

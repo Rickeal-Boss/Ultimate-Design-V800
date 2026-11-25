@@ -1313,6 +1313,9 @@ export function createZunjieV800LuxuryMPVModel(options: ProceduralModelOptions =
     mesh_roof_panel_4Geometry,
     materialMap["paint-upper"] ?? new THREE.MeshStandardMaterial({ color: 0x888888 })
   );
+  // R155 撤线（车顶板局部化无效）：白点 A/B 实测 A=B=53（R155 前后零变化），
+  // 且截图定罪白点在**深色天窗玻璃**（rough 0.06 暗面），不在白色车顶板（paint=white）。
+  // 车顶板 paint-upper 非白点源（VERDICT §1 消去法 hide paint-upper 未减 + 本实测双重证伪）。
   mesh_roof_panel_4.name = "\u8f66\u9876\u677f";
   if (endpoint_roof_panel_4) {
     mesh_roof_panel_4.position.copy(endpoint_roof_panel_4.midpoint);
@@ -8147,6 +8150,10 @@ export function createZunjieV800LuxuryMPVModel(options: ProceduralModelOptions =
     mesh_sunroof_glass_179Geometry,
     materialMap["glass-dark"] ?? new THREE.MeshStandardMaterial({ color: 0x888888 })
   );
+  // R155 撤线（天窗玻璃降反射无效）：A/B/C 实测白点 53→53→53（R155 前 / 车顶板局部化 /
+  // 天窗玻璃 rough 0.22），截图定罪白点 = 环境反射 fireflies（sky 反射采样高频噪点），
+  // 非单一材质（VERDICT §1 全 hide 无一消除 + 本实测三重证伪：paint-upper 与 glass-dark
+  // 降反射均零效果）。白点本质 = 渲染采样噪点，材质 roughness/env 调参不响应。
   mesh_sunroof_glass_179.name = "\u8f66\u9876\u73bb\u7483\u5929\u7a97";
   if (endpoint_sunroof_glass_179) {
     mesh_sunroof_glass_179.position.copy(endpoint_sunroof_glass_179.midpoint);

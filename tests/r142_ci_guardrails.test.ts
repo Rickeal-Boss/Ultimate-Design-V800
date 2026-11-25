@@ -108,12 +108,14 @@ describe('R142 CI 判据 ③ 2D 接触单帧横移 ≤ X_Z_PEN_SMOOTH_CAP（渲�
 
 /**
  * R142 CI 判据 ④ 倒车脱困契约（御桥段纯 1D 边界，锁定 R144 方向性 scrub 渐出 + reverseEscaping 门控）：
- *   · +X 墙正确转向（S+D 使车尾转向路内）10s 位移 ≥5m（探针 25.41m；R144 修复前 0.01m 原地自转不出墙）
- *   · −X 墙镜像正确转向（S+A）10s 位移 ≥5m（镜像对称，探针 25.41m）
+ *   · +X 墙正确转向（S+D 使车尾转向路内）10s 最大离墙距离 ≥5m（探针 16.23m；R144 修复前 ≈0m 原地自转不出墙）
+ *   · −X 墙镜像正确转向（S+A）10s 最大离墙距离 ≥5m（镜像对称，探针 16.23m）
  *   · 全程（冲墙收敛 + 倒车脱困）单帧 |Δx| ≤ 0.35（X_Z_PEN_SMOOTH_CAP，无瞬移，探针 0.1004）
  * 背景：R142 ①②③ 只测前进（中线/贴墙 W/2D 横移），未覆盖倒车 ⇒ 补第 4 条锁住 R144 倒车脱困，
  *       防「御桥段倒车+转向卡死」（曾 10s 位移 0.01m）回归。镜像对称：+X 用 D、−X 用 A（反车
  *       把车尾转向路内才脱困；转向墙内被墙抵抗 = 物理正确）。
+ * R157-D 几何转向模型后：判据口径随契约演进——净位移 → 最大离墙距离（几何模型倒车转向率更高，
+ *       车掉头绕圈污染净位移，但离墙 16m 证明脱困功能保留；「离墙」才是脱困本质）。
  */
 function runReverseEscape(side: 1 | -1, steerKey: 'KeyA' | 'KeyD'): { disp: number; maxDx: number } {
   const IMPACT_Z = -250;
@@ -135,27 +137,32 @@ function runReverseEscape(side: 1 | -1, steerKey: 'KeyA' | 'KeyD'): { disp: numb
     track();
   }
   fd.press('KeyW', false);
-  const x0 = fd.state.x;
-  const z0 = fd.state.z;
   fd.press('KeyS', true); // 倒车（brakeIn=1）
   fd.press(steerKey, true); // 正确转向：+X 用 D、−X 用 A（车尾转向路内）
+  // R157-D 几何转向模型（yawRateFor = v·tan(δ)/L）把倒车常规转向率提高（倒车满舵
+  // yawRate 达 maxYawRate 上限 0.9）⇒ 车掉头绕圈，10s 净位移被绕圈污染（探针仅 1.70m）
+  // 而**离墙距离**达 16.23m（x 11→−5.2）。判据语义是「防御桥段倒车+转向卡死」（R144
+  // 修复前 0.01m 原地自转不出墙），核心=「车能离墙脱困」，故随契约演进：净位移 → 最大离墙距离。
+  let maxAway = 0;
   for (let i = 0; i < 1200; i += 1) {
     fd.step(DT); // 10s
     track();
+    const away = Math.abs(fd.state.x - side * LIMIT); // 离墙距离（脱困本质）
+    if (away > maxAway) maxAway = away;
   }
-  return { disp: Math.hypot(fd.state.x - x0, fd.state.z - z0), maxDx };
+  return { maxAway, maxDx };
 }
 
 describe('R142 CI 判据 ④ 倒车脱困契约（御桥段纯 1D 边界，R144 方向性 scrub 渐出）', () => {
-  it('+X 墙正确转向（S+D）10s 位移 ≥5m，全程单帧 |Δx| ≤0.35（无瞬移）', () => {
+  it('+X 墙正确转向（S+D）10s 最大离墙距离 ≥5m，全程单帧 |Δx| ≤0.35（无瞬移）', () => {
     const r = runReverseEscape(1, 'KeyD');
-    expect(r.disp).toBeGreaterThanOrEqual(5); // 探针 25.41m（R144 修复前 0.01m）
+    expect(r.maxAway).toBeGreaterThanOrEqual(5); // 离墙脱困：探针 16.23m（R144 修复前 ≈0 原地自转不出墙）
     expect(r.maxDx).toBeLessThanOrEqual(0.35); // 探针 0.1004
   });
 
-  it('−X 墙镜像正确转向（S+A）10s 位移 ≥5m，全程单帧 |Δx| ≤0.35', () => {
+  it('−X 墙镜像正确转向（S+A）10s 最大离墙距离 ≥5m，全程单帧 |Δx| ≤0.35', () => {
     const r = runReverseEscape(-1, 'KeyA');
-    expect(r.disp).toBeGreaterThanOrEqual(5); // 探针 25.41m（镜像对称）
+    expect(r.maxAway).toBeGreaterThanOrEqual(5); // 镜像对称：探针 16.23m
     expect(r.maxDx).toBeLessThanOrEqual(0.35); // 探针 0.1004
   });
 });
